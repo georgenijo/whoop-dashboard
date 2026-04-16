@@ -14,6 +14,8 @@ from whoop.auth import (
     load_tokens,
 )
 from whoop.client import AuthError, fetch_all_parallel
+from whoop.db import init_db, sync_all, get_latest_insight
+from whoop.insights import generate_insight
 
 load_dotenv()
 
@@ -21,6 +23,32 @@ st.set_page_config(page_title="Whoop Dashboard", layout="wide")
 
 CLIENT_ID = os.getenv("WHOOP_CLIENT_ID", "")
 REDIRECT_URI = os.getenv("WHOOP_REDIRECT_URI", "http://localhost:8501")
+DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
+
+# --- Password Gate (cookie-like persistence via query param hash) ---
+
+if DASHBOARD_PASSWORD:
+    import hashlib
+    _auth_hash = hashlib.sha256(DASHBOARD_PASSWORD.encode()).hexdigest()[:16]
+
+    if "authenticated" not in st.session_state:
+        # Check if auth cookie exists in query params
+        if st.query_params.get("auth") == _auth_hash:
+            st.session_state.authenticated = True
+        else:
+            st.session_state.authenticated = False
+
+    if not st.session_state.authenticated:
+        st.title("Whoop Dashboard")
+        pw = st.text_input("Password", type="password")
+        if pw:
+            if pw == DASHBOARD_PASSWORD:
+                st.session_state.authenticated = True
+                st.query_params["auth"] = _auth_hash
+                st.rerun()
+            else:
+                st.error("Wrong password.")
+        st.stop()
 
 
 # --- Auth Flow ---
@@ -76,6 +104,8 @@ with st.sidebar:
 
 # --- Data Fetching ---
 
+init_db()
+
 now = datetime.now(timezone.utc)
 start_dt = now - timedelta(days=days)
 start_iso = start_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
@@ -84,7 +114,9 @@ end_iso = now.strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
 @st.cache_data(ttl=600)
 def fetch_data(_token: str, start: str, end: str) -> dict:
-    return fetch_all_parallel(_token, start, end)
+    data = fetch_all_parallel(_token, start, end)
+    sync_all(data)
+    return data
 
 
 try:
@@ -300,6 +332,23 @@ if not recovery_df.empty and not cycle_df.empty and not sleep_df.empty:
             st.metric("SpO2", "—")
 else:
     st.info("Not enough data for KPIs yet.")
+
+st.markdown("---")
+
+
+# --- AI Insights ---
+
+
+st.subheader("AI Insights")
+insight_box = st.empty()
+if st.button("Generate Fresh Insights"):
+    with st.spinner("Claude is analyzing your data..."):
+        insight = generate_insight(days)
+    insight_box.markdown(insight)
+else:
+    cached_insight = get_latest_insight()
+    if cached_insight:
+        insight_box.markdown(cached_insight)
 
 st.markdown("---")
 
