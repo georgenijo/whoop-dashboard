@@ -55,6 +55,28 @@ def _build_context(days: int = 30) -> str:
                 f"Disturbances={s['disturbances']}{perf}{eff}"
             )
 
+        disturbance_counts = [s["disturbances"] for s in stats["sleep"]]
+        disturb_baseline = sum(disturbance_counts) / len(disturbance_counts) if disturbance_counts else 0
+        gap_lines = []
+        for s in stats["sleep"]:
+            actual_hrs = (s["in_bed_ms"] - s["awake_ms"]) / 3_600_000
+            need_hrs = s["sleep_need_ms"] / 3_600_000
+            if actual_hrs <= 0 or actual_hrs < need_hrs:
+                continue
+            deep_pct = (s["deep_ms"] / 3_600_000) / actual_hrs * 100
+            triggered = []
+            if deep_pct < 15:
+                triggered.append(f"deep={deep_pct:.0f}%")
+            if s.get("efficiency") and s["efficiency"] < 85:
+                triggered.append(f"eff={s['efficiency']:.0f}%")
+            if disturb_baseline > 0 and s["disturbances"] > disturb_baseline * 1.5:
+                triggered.append(f"disturbances={s['disturbances']} (avg={disturb_baseline:.0f})")
+            if triggered:
+                gap_lines.append(f"  {s['date']}: Slept {actual_hrs:.1f}h but {', '.join(triggered)}")
+        if gap_lines:
+            lines.append("\nSLEEP QUALITY GAPS (duration OK but quality degraded):")
+            lines.extend(gap_lines)
+
     if stats["workouts"]:
         lines.append("\nWORKOUTS (newest first):")
         for w in stats["workouts"]:
