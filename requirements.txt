@@ -3,3 +3,4 @@ requests>=2.31
 python-dotenv>=1.0
 plotly>=5.18
 pandas>=2.1
+anthropic>=0.40
