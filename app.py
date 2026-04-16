@@ -1,6 +1,7 @@
 import os
 from datetime import datetime, timedelta, timezone
 
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -15,8 +16,9 @@ from whoop.auth import (
     load_tokens,
 )
 from whoop.client import AuthError, fetch_all_parallel
-from whoop.db import init_db, sync_all, get_latest_insight
+from whoop.db import init_db, sync_all, get_latest_insight, get_workout_history
 from whoop.insights import generate_insight
+from whoop.ots import calculate_overtraining_score
 
 load_dotenv()
 
@@ -186,6 +188,7 @@ def build_recovery_df(records: list) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     if not df.empty:
         df = df.sort_values("date").reset_index(drop=True)
+        df["ans_index"] = df["hrv"] / df["rhr"].replace(0, pd.NA)
     return df
 
 
@@ -276,6 +279,98 @@ def build_workout_df(records: list) -> pd.DataFrame:
     if not df.empty:
         df = df.sort_values("date", ascending=False).reset_index(drop=True)
     return df
+
+
+def compute_rebound_events(df: pd.DataFrame) -> pd.DataFrame:
+    empty = pd.DataFrame(columns=["red_date", "green_date", "days_to_rebound"])
+    if df.empty or len(df) < 2:
+        return empty
+
+    is_red = df["recovery"] < 33
+    streak_start = is_red & ~is_red.shift(1, fill_value=False)
+    start_indices = df.index[streak_start].tolist()
+
+    events = []
+    for idx in start_indices:
+        red_date = df.loc[idx, "date"]
+        subsequent = df[df.index > idx]
+        green_rows = subsequent[subsequent["recovery"] > 66]
+        if green_rows.empty:
+            continue
+        green_date = green_rows.iloc[0]["date"]
+        days_to_rebound = (green_date - red_date).days
+        events.append({"red_date": red_date, "green_date": green_date, "days_to_rebound": days_to_rebound})
+
+    if not events:
+        return empty
+    return pd.DataFrame(events)
+
+
+def detect_cardiac_drift(workout_history: list[dict]) -> dict:
+    if not workout_history:
+        return {}
+
+    df = pd.DataFrame(workout_history)
+    df["date"] = pd.to_datetime(df["date"]).dt.date
+    df = df.dropna(subset=["avg_hr", "duration_sec"])
+
+    if df.empty:
+        return {}
+
+    results = {}
+    for sport, group in df.groupby("sport"):
+        group = group.copy().reset_index(drop=True)
+        median_dur = group["duration_sec"].median()
+        lo, hi = median_dur * 0.75, median_dur * 1.25
+        group = group[(group["duration_sec"] >= lo) & (group["duration_sec"] <= hi)]
+
+        if len(group) < 3:
+            continue
+
+        min_date = group["date"].min()
+        max_date = group["date"].max()
+        date_span = (max_date - min_date).days
+
+        if date_span < 28:
+            continue
+
+        ordinals = np.array([d.toordinal() for d in group["date"]])
+        avg_hrs = group["avg_hr"].values.astype(float)
+
+        coeffs = np.polyfit(ordinals, avg_hrs, 1)
+        slope = coeffs[0]
+        intercept = coeffs[1]
+
+        y_pred = slope * ordinals + intercept
+        y_mean = avg_hrs.mean()
+        ss_res = np.sum((avg_hrs - y_pred) ** 2)
+        ss_tot = np.sum((avg_hrs - y_mean) ** 2)
+
+        if ss_tot == 0:
+            r_squared = 0.0
+            slope = 0.0
+            intercept = float(avg_hrs[0])
+        else:
+            r_squared = 1 - ss_res / ss_tot
+
+        slope_per_28d = slope * 28
+        drift_detected = slope_per_28d > 5.0
+
+        results[sport] = {
+            "sport": sport,
+            "slope": slope,
+            "slope_per_28d": slope_per_28d,
+            "intercept": intercept,
+            "r_squared": r_squared,
+            "drift_detected": drift_detected,
+            "workout_count": len(group),
+            "date_span_days": date_span,
+            "dates": group["date"].tolist(),
+            "avg_hrs": avg_hrs.tolist(),
+            "ordinals": ordinals.tolist(),
+        }
+
+    return results
 
 
 def compute_illness_signal(recovery_df: pd.DataFrame, sleep_df: pd.DataFrame) -> pd.DataFrame:
@@ -432,6 +527,15 @@ apnea_df = build_apnea_df(sleep_df, recovery_df)
 illness_df = compute_illness_signal(recovery_df, sleep_df)
 
 
+@st.cache_data(ttl=600)
+def _cached_workout_history():
+    return get_workout_history()
+
+
+_workout_history = _cached_workout_history()
+drift_results = detect_cardiac_drift(_workout_history)
+
+
 # --- KPI Row ---
 
 st.markdown("---")
@@ -505,6 +609,95 @@ quality_gaps = detect_sleep_quality_gaps(sleep_df)
 if quality_gaps:
     st.subheader("⚠️ Sleep Quality Alerts")
 render_sleep_quality_alerts(quality_gaps)
+
+
+# --- Overtraining Risk ---
+
+
+st.subheader("Overtraining Risk")
+
+
+@st.fragment
+def ots_card():
+    result = calculate_overtraining_score(recovery_df, cycle_df)
+    if result is None:
+        st.info("Overtraining detection needs 7+ days of data.")
+        return
+
+    level = result["level"]
+    if level == "low":
+        st.success(result["label"])
+    elif level == "moderate":
+        st.warning(result["label"])
+    else:
+        st.error(result["label"])
+
+    sparkline_fig = go.Figure()
+    sparkline_fig.add_trace(go.Scatter(
+        x=result["window"]["date"],
+        y=result["window"]["recovery"],
+        mode="lines",
+        line=dict(color=result["color"], width=2),
+    ))
+    sparkline_fig.update_layout(
+        height=100,
+        margin=dict(t=10, b=10, l=10, r=10),
+        xaxis=dict(visible=False),
+        yaxis=dict(visible=False),
+        showlegend=False,
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+    )
+    st.plotly_chart(sparkline_fig, use_container_width=True)
+
+    with st.expander("OTS Details"):
+        slopes = result["slopes"]
+        signals = result["signals"]
+        detail_cols = st.columns(4)
+        with detail_cols[0]:
+            st.metric("HRV Slope", f"{slopes['hrv']:+.2f} ms/day",
+                      delta="firing" if signals["hrv"] else "ok",
+                      delta_color="inverse" if signals["hrv"] else "normal")
+        with detail_cols[1]:
+            st.metric("RHR Slope", f"{slopes['rhr']:+.2f} bpm/day",
+                      delta="firing" if signals["rhr"] else "ok",
+                      delta_color="inverse" if signals["rhr"] else "normal")
+        with detail_cols[2]:
+            st.metric("Recovery Slope", f"{slopes['recovery']:+.2f} %/day",
+                      delta="firing" if signals["recovery"] else "ok",
+                      delta_color="inverse" if signals["recovery"] else "normal")
+        with detail_cols[3]:
+            strain_note = "sustained" if signals["strain_elevated"] else "dropping"
+            st.metric("Strain Slope", f"{slopes['strain']:+.2f} /day", delta=strain_note)
+
+        w = result["window"]
+        norm_fig = go.Figure()
+        for col, color, name in [
+            ("hrv", "#7b61ff", "HRV"),
+            ("rhr", "#ff6b6b", "RHR"),
+            ("recovery", "#00d4aa", "Recovery"),
+            ("strain", "#ffaa00", "Strain"),
+        ]:
+            vals = w[col].values.astype(float)
+            lo, hi = vals.min(), vals.max()
+            normed = (vals - lo) / (hi - lo) if hi != lo else vals * 0
+            norm_fig.add_trace(go.Scatter(
+                x=w["date"], y=normed, mode="lines+markers",
+                name=name, line=dict(color=color, width=2),
+            ))
+        norm_fig.update_layout(
+            title="7-Day Normalized Trends",
+            yaxis_title="Normalized (0–1)",
+            xaxis_title="Date",
+            height=250,
+            margin=dict(t=40, b=40),
+        )
+        st.plotly_chart(norm_fig, use_container_width=True)
+
+
+ots_card()
+
+st.markdown("---")
 
 
 # --- AI Insights ---
@@ -785,6 +978,42 @@ def recovery_charts():
     )
     st.plotly_chart(fig, use_container_width=True)
 
+    ans_data = recovery_df.dropna(subset=["ans_index"])
+    if not ans_data.empty:
+        ans_rolling = ans_data["ans_index"].rolling(7, min_periods=1).mean()
+        ans_mean = ans_data["ans_index"].mean()
+        ans_std = ans_data["ans_index"].std()
+        baseline_upper = ans_mean + ans_std
+        baseline_lower = ans_mean - ans_std
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=ans_data["date"], y=[baseline_lower] * len(ans_data),
+            mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip",
+        ))
+        fig.add_trace(go.Scatter(
+            x=ans_data["date"], y=[baseline_upper] * len(ans_data),
+            mode="lines", line=dict(width=0), fill="tonexty",
+            fillcolor="rgba(123, 97, 255, 0.12)", name="Baseline ±1σ", hoverinfo="skip",
+        ))
+        fig.add_trace(go.Scatter(
+            x=ans_data["date"], y=ans_data["ans_index"],
+            mode="lines+markers", name="ANS Index",
+            line=dict(color="#7b61ff", width=2),
+        ))
+        fig.add_trace(go.Scatter(
+            x=ans_data["date"], y=ans_rolling,
+            mode="lines", name="7d Avg",
+            line=dict(color="#ffaa00", width=2, dash="dash"),
+        ))
+        fig.update_layout(
+            title="Autonomic Balance (HRV/RHR)",
+            yaxis_title="ANS Index",
+            xaxis_title="Date",
+            height=350,
+            margin=dict(t=40, b=40),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
     skin_temp_data = recovery_df.dropna(subset=["skin_temp"])
     if not skin_temp_data.empty:
         fig = go.Figure()
@@ -808,6 +1037,49 @@ def recovery_charts():
 
 
 recovery_charts()
+
+st.markdown("---")
+
+
+# --- Recovery Rebound Rate ---
+
+
+@st.fragment
+def rebound_charts():
+    rebound_df = compute_rebound_events(recovery_df)
+    if rebound_df.empty:
+        st.info("No red → green rebound events in this window. Try extending the history slider.")
+        return
+
+    st.subheader("Recovery Rebound Rate")
+    cols = st.columns(3)
+    with cols[0]:
+        st.metric("Avg Rebound", f"{rebound_df['days_to_rebound'].mean():.1f} days")
+    with cols[1]:
+        st.metric("Fastest Rebound", f"{rebound_df['days_to_rebound'].min()} days")
+    with cols[2]:
+        st.metric("Rebound Events", f"{len(rebound_df)}")
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=rebound_df["red_date"],
+        y=rebound_df["days_to_rebound"],
+        marker_color="#7b61ff",
+        hovertemplate="Red: %{x}<br>Days to green: %{y}<extra></extra>",
+    ))
+    fig.update_layout(
+        title="Recovery Rebound Duration",
+        yaxis_title="Days",
+        xaxis_title="Red Recovery Date",
+        height=300,
+        margin=dict(t=40, b=40),
+        bargap=0.3,
+    )
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption("Rebound = days from first red day (<33%) to first green day (>66%). Lower is better.")
+
+
+rebound_charts()
 
 st.markdown("---")
 
@@ -925,18 +1197,42 @@ def sleep_charts():
 
     resp_data = sleep_df.dropna(subset=["respiratory_rate"])
     if not resp_data.empty:
+        resp_data = resp_data.copy()
+        resp_data["rr_rolling_mean"] = resp_data["respiratory_rate"].rolling(14, min_periods=1).mean()
+        resp_data["rr_upper"] = resp_data["rr_rolling_mean"] + 2.0
+        resp_data["rr_lower"] = resp_data["rr_rolling_mean"] - 2.0
+        resp_data["rr_anomaly"] = (resp_data["respiratory_rate"] - resp_data["rr_rolling_mean"]).abs() > 2.0
         fig = go.Figure()
-        fig.add_trace(
-            go.Scatter(
-                x=resp_data["date"],
-                y=resp_data["respiratory_rate"],
-                mode="lines+markers",
-                name="Respiratory Rate",
-                line=dict(color="#00aaff", width=2),
-            )
-        )
+        fig.add_trace(go.Scatter(
+            x=resp_data["date"], y=resp_data["rr_lower"],
+            mode="lines", line=dict(width=0), showlegend=False, hoverinfo="skip",
+        ))
+        fig.add_trace(go.Scatter(
+            x=resp_data["date"], y=resp_data["rr_upper"],
+            mode="lines", line=dict(width=0), fill="tonexty",
+            fillcolor="rgba(0,170,255,0.12)", name="±2 bpm band", showlegend=True, hoverinfo="skip",
+        ))
+        fig.add_trace(go.Scatter(
+            x=resp_data["date"], y=resp_data["rr_rolling_mean"],
+            mode="lines", name="14-day Avg",
+            line=dict(color="#00aaff", width=1, dash="dash"),
+            hovertemplate="Avg: %{y:.1f} bpm<extra></extra>",
+        ))
+        fig.add_trace(go.Scatter(
+            x=resp_data["date"], y=resp_data["respiratory_rate"],
+            mode="lines+markers", name="Respiratory Rate",
+            line=dict(color="#00aaff", width=2),
+        ))
+        anomalies = resp_data[resp_data["rr_anomaly"]]
+        if not anomalies.empty:
+            fig.add_trace(go.Scatter(
+                x=anomalies["date"], y=anomalies["respiratory_rate"],
+                mode="markers", name="Anomaly",
+                marker=dict(color="#ff4444", size=10, symbol="diamond"),
+                hovertemplate="Anomaly: %{y:.1f} bpm<extra></extra>",
+            ))
         fig.update_layout(
-            title="Respiratory Rate",
+            title="Respiratory Rate (14-day baseline ± 2 bpm)",
             yaxis_title="breaths/min",
             xaxis_title="Date",
             height=300,
@@ -973,6 +1269,72 @@ def sleep_charts():
 
 
 sleep_charts()
+
+st.markdown("---")
+
+
+# --- Deep Sleep Efficiency ---
+
+
+@st.fragment
+def deep_sleep_efficiency_chart():
+    if sleep_df.empty or cycle_df.empty:
+        st.info("Not enough data for deep sleep efficiency.")
+        return
+
+    strain_shifted = cycle_df[["date", "strain"]].copy()
+    strain_shifted["date"] = strain_shifted["date"] + timedelta(days=1)
+
+    merged = pd.merge(sleep_df[["date", "deep_hrs"]], strain_shifted, on="date", how="inner")
+    merged = merged[merged["strain"] > 0]
+    merged = pd.merge(merged, recovery_df[["date", "recovery"]], on="date", how="left")
+    merged["deep_sleep_efficiency"] = merged["deep_hrs"] / merged["strain"]
+
+    if len(merged) < 2:
+        st.info("Not enough matched data for deep sleep efficiency chart.")
+        return
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=merged["strain"],
+        y=merged["deep_hrs"],
+        mode="markers",
+        marker=dict(
+            size=10,
+            color=merged["recovery"],
+            colorscale="RdYlGn",
+            showscale=True,
+            colorbar=dict(title="Recovery"),
+            cmin=0,
+            cmax=100,
+        ),
+        customdata=merged["deep_sleep_efficiency"],
+        hovertemplate="Strain: %{x:.1f}<br>Deep Sleep: %{y:.2f} hrs<br>Efficiency: %{customdata:.2f} hrs/strain<extra></extra>",
+        name="Deep Sleep vs Strain",
+    ))
+
+    z = np.polyfit(merged["strain"], merged["deep_hrs"], 1)
+    p = np.poly1d(z)
+    x_line = np.linspace(merged["strain"].min(), merged["strain"].max(), 50)
+    fig.add_trace(go.Scatter(
+        x=x_line, y=p(x_line),
+        mode="lines", name="Trend",
+        line=dict(color="#888", dash="dash", width=2),
+        hoverinfo="skip",
+    ))
+
+    fig.update_layout(
+        title="Deep Sleep vs. Previous Day Strain",
+        xaxis_title="Previous Day Strain",
+        yaxis_title="Deep Sleep (hrs)",
+        height=350,
+        margin=dict(t=40, b=40),
+        showlegend=False,
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+deep_sleep_efficiency_chart()
 
 st.markdown("---")
 
@@ -1178,3 +1540,138 @@ def strain_workout_section():
 
 
 strain_workout_section()
+
+st.markdown("---")
+
+
+# --- Strain-Recovery Balance ---
+
+
+@st.fragment
+def strain_recovery_balance_section():
+    if recovery_df.empty or cycle_df.empty:
+        st.info("Not enough data for strain-recovery balance chart.")
+        return
+
+    merged = pd.merge(
+        recovery_df[["date", "recovery"]],
+        cycle_df[["date", "strain"]],
+        on="date",
+        how="inner",
+    ).dropna()
+
+    if merged.empty:
+        st.info("Not enough data for strain-recovery balance chart.")
+        return
+
+    merged = merged.sort_values("date").reset_index(drop=True)
+    merged["strain_norm"] = merged["strain"] / 21 * 100
+    merged["delta"] = merged["recovery"] - merged["strain_norm"]
+
+    st.subheader("Strain-Recovery Balance")
+    window = st.select_slider("Balance window (days)", options=[7, 14, 30, 60, 90], value=30)
+    window = min(window, len(merged))
+    windowed = merged.tail(window).copy()
+    windowed["balance"] = windowed["delta"].cumsum()
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=windowed["date"],
+        y=windowed["balance"],
+        mode="lines",
+        name="Balance",
+        line=dict(color="#7b61ff", width=2),
+        fill="tozeroy",
+        fillcolor="rgba(123, 97, 255, 0.15)",
+    ))
+    fig.add_hline(y=0, line_dash="dash", line_color="white", opacity=0.4)
+    fig.update_layout(
+        title="Cumulative Strain-Recovery Balance",
+        yaxis_title="Balance",
+        xaxis_title="Date",
+        height=400,
+        margin=dict(t=40, b=40),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption("Positive = recovery surplus · Negative = recovery debt · Reset each window")
+
+
+strain_recovery_balance_section()
+
+st.markdown("---")
+
+
+# --- Cardiac Drift Detection ---
+
+
+@st.fragment
+def cardiac_drift_section():
+    st.subheader("Cardiac Drift Detection")
+    st.caption(
+        "Tracks average HR trends per sport over similar-duration workouts. "
+        "Drift flagged when avg HR rises >5 bpm over 4 weeks."
+    )
+
+    if not drift_results:
+        st.info("Not enough workout history for drift detection. Need 3+ workouts of similar duration per sport spanning 4+ weeks.")
+        return
+
+    sport = st.selectbox("Sport", options=sorted(drift_results.keys()))
+    res = drift_results[sport]
+
+    slope_per_28d = res["slope_per_28d"]
+    cols = st.columns(4)
+    with cols[0]:
+        st.metric("HR Trend (4 wk)", f"{slope_per_28d:+.1f} bpm",
+                  delta=f"{slope_per_28d:+.1f}", delta_color="inverse")
+    with cols[1]:
+        st.metric("Workouts Analyzed", res["workout_count"])
+    with cols[2]:
+        st.metric("Date Span", f"{res['date_span_days']} days")
+    with cols[3]:
+        st.metric("R²", f"{res['r_squared']:.2f}")
+
+    if res["drift_detected"]:
+        st.warning(f"Cardiac drift detected in {sport}: avg HR rising {slope_per_28d:+.1f} bpm per 4 weeks.")
+
+    import datetime as _dt
+    dates = res["dates"]
+    avg_hrs = res["avg_hrs"]
+    ordinals = res["ordinals"]
+    slope = res["slope"]
+    intercept = res["intercept"]
+
+    min_ord, max_ord = min(ordinals), max(ordinals)
+    trend_y = [intercept + slope * min_ord, intercept + slope * max_ord]
+    trend_x = [_dt.date.fromordinal(min_ord), _dt.date.fromordinal(max_ord)]
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=dates, y=avg_hrs,
+        mode="markers", name="Avg HR",
+        marker=dict(color="#00aaff", size=8),
+    ))
+    trend_color = "#ff6b6b" if res["drift_detected"] else "#00d4aa"
+    fig.add_trace(go.Scatter(
+        x=trend_x, y=trend_y,
+        mode="lines", name="Trend",
+        line=dict(color=trend_color, width=2, dash="dash"),
+    ))
+    if res["drift_detected"]:
+        fig.add_annotation(
+            x=trend_x[1], y=trend_y[1],
+            text="Drift detected",
+            showarrow=True, arrowhead=2,
+            font=dict(color="#ff0000"),
+        )
+    fig.update_layout(
+        title=f"Avg HR Over Time — {sport}",
+        yaxis_title="Avg HR (bpm)",
+        xaxis_title="Date",
+        height=400,
+        margin=dict(t=40, b=40),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+cardiac_drift_section()

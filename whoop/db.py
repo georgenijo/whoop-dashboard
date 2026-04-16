@@ -228,6 +228,16 @@ def get_latest_insight() -> str | None:
     return row["insight"] if row else None
 
 
+def get_workout_history() -> list[dict]:
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT date, sport, duration_sec, avg_hr FROM workouts "
+        "WHERE avg_hr IS NOT NULL AND duration_sec IS NOT NULL ORDER BY date ASC"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 def get_history_stats(days: int = 30) -> dict:
     conn = get_conn()
     stats = {}
