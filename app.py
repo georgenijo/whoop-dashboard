@@ -277,6 +277,66 @@ def build_workout_df(records: list) -> pd.DataFrame:
     return df
 
 
+DEEP_SLEEP_THRESHOLD = 15.0
+EFFICIENCY_THRESHOLD = 85.0
+DISTURBANCE_MULTIPLIER = 1.5
+DISTURBANCE_MIN_PERIODS = 3
+
+
+def detect_sleep_quality_gaps(sleep_df: pd.DataFrame, recent_days: int = 7) -> list:
+    if sleep_df.empty:
+        return []
+
+    df = sleep_df.copy()
+    df["actual_sleep_hrs"] = df["in_bed_hrs"] - df["awake_hrs"]
+    df["rolling_disturb_avg"] = (
+        df["disturbances"].rolling(14, min_periods=DISTURBANCE_MIN_PERIODS).mean().shift(1)
+    )
+
+    cutoff = df["date"].max() - timedelta(days=recent_days)
+    candidates = df[(df["actual_sleep_hrs"] >= df["sleep_need_hrs"]) & (df["date"] >= cutoff)]
+
+    results = []
+    for _, row in candidates.iterrows():
+        actual_hrs = row["actual_sleep_hrs"]
+        if actual_hrs <= 0:
+            continue
+        deep_pct = row["deep_hrs"] / actual_hrs * 100
+        reasons = []
+        if deep_pct < DEEP_SLEEP_THRESHOLD:
+            reasons.append({"metric": "deep_sleep", "value": deep_pct, "threshold": DEEP_SLEEP_THRESHOLD})
+        if pd.notna(row.get("efficiency")) and row["efficiency"] < EFFICIENCY_THRESHOLD:
+            reasons.append({"metric": "efficiency", "value": row["efficiency"], "threshold": EFFICIENCY_THRESHOLD})
+        rolling_avg = row["rolling_disturb_avg"]
+        if pd.notna(rolling_avg) and row["disturbances"] > rolling_avg * DISTURBANCE_MULTIPLIER:
+            reasons.append({"metric": "disturbances", "value": row["disturbances"], "avg": rolling_avg})
+        if reasons:
+            results.append({"date": row["date"], "actual_hrs": actual_hrs, "reasons": reasons})
+
+    results.sort(key=lambda x: x["date"], reverse=True)
+    return results
+
+
+def render_sleep_quality_alerts(gaps: list):
+    if not gaps:
+        return
+    display = gaps[:3]
+    for gap in display:
+        bullets = []
+        for r in gap["reasons"]:
+            if r["metric"] == "deep_sleep":
+                bullets.append(f"Deep sleep only {r['value']:.0f}% (need ≥{r['threshold']:.0f}%)")
+            elif r["metric"] == "efficiency":
+                bullets.append(f"Sleep efficiency {r['value']:.0f}% (need ≥{r['threshold']:.0f}%)")
+            elif r["metric"] == "disturbances":
+                bullets.append(f"Had {int(r['value'])} disturbances (14-day avg: {r['avg']:.0f})")
+        bullet_str = "\n  - ".join(bullets)
+        msg = f"🛏️ **{gap['date']}** — You slept {gap['actual_hrs']:.1f}h (meets your need) but:\n  - {bullet_str}"
+        st.warning(msg)
+    if len(gaps) > 3:
+        st.caption(f"{len(gaps) - 3} more night(s) with quality gaps in this period.")
+
+
 recovery_df = build_recovery_df(data["recovery"])
 cycle_df = build_cycle_df(data["cycles"])
 sleep_df = build_sleep_df(data["sleep"])
@@ -348,6 +408,14 @@ else:
     st.info("Not enough data for KPIs yet.")
 
 st.markdown("---")
+
+
+# --- Sleep Quality Alerts ---
+
+quality_gaps = detect_sleep_quality_gaps(sleep_df)
+if quality_gaps:
+    st.subheader("⚠️ Sleep Quality Alerts")
+render_sleep_quality_alerts(quality_gaps)
 
 
 # --- AI Insights ---
