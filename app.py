@@ -1731,7 +1731,7 @@ tab_dashboard, tab_sleep, tab_chat = st.tabs(["Dashboard", "Sleep Deep Dive", "C
 with tab_dashboard:
     st.markdown("---")
 
-    # --- KPI Row ---
+    # --- KPI Row (always visible) ---
     if not recovery_df.empty and not cycle_df.empty and not sleep_df.empty:
         latest_rec = recovery_df.iloc[-1]
         prev_rec = recovery_df.iloc[-2] if len(recovery_df) > 1 else None
@@ -1794,119 +1794,101 @@ with tab_dashboard:
 
     st.markdown("---")
 
-    # --- Sleep Quality Alerts ---
-    quality_gaps = detect_sleep_quality_gaps(sleep_df)
-    if quality_gaps:
-        st.subheader("⚠️ Sleep Quality Alerts")
-    render_sleep_quality_alerts(quality_gaps)
-
-    # --- Overtraining Risk ---
-    st.subheader("Overtraining Risk")
-    ots_card()
-
-    st.markdown("---")
-
-    # --- AI Insights ---
-    st.subheader("AI Insights")
-    insight_box = st.empty()
-    if st.button("Generate Fresh Insights"):
-        with st.spinner("Claude is analyzing your data..."):
-            insight = generate_insight(days)
-        insight_box.markdown(insight)
-    else:
-        cached_insight = get_latest_insight()
-        if cached_insight:
-            insight_box.markdown(cached_insight)
-
-    st.markdown("---")
-
-    # --- Illness Early Warning ---
-    st.subheader("Illness Early Warning")
-
-    if illness_df.empty or illness_df["rhr_baseline"].isna().all():
-        st.info("Need at least 8 days of data to compute illness baselines.")
-    else:
-        latest = illness_df.iloc[-1]
-        signal_count = int(latest["signal_count"])
-
-        if latest["illness_flag"] and signal_count >= 3:
-            st.error("🔴 High illness risk — 3+ signals elevated. Consider rest and monitor symptoms.")
-        elif latest["illness_flag"] and signal_count == 2:
-            st.warning("🟡 Elevated illness risk — 2 signals elevated. Watch for symptoms over next 24-48h.")
-        elif signal_count == 1:
-            st.info("🟠 One signal slightly elevated — not yet flagged, monitoring.")
+    # --- AI Insights (collapsible, default open) ---
+    with st.expander("AI Insights", expanded=True):
+        insight_box = st.empty()
+        if st.button("Generate Fresh Insights"):
+            with st.spinner("Claude is analyzing your data..."):
+                insight = generate_insight(days)
+            insight_box.markdown(insight)
         else:
-            st.success("🟢 All signals normal.")
+            cached_insight = get_latest_insight()
+            if cached_insight:
+                insight_box.markdown(cached_insight)
 
-        if not latest["has_skin_temp"]:
-            st.caption("⚠️ Signal based on RHR + HRV only (no skin temperature data). Weaker signal.")
+    # --- Recovery (collapsible, default open) ---
+    with st.expander("Recovery", expanded=True):
+        recovery_charts()
 
-        if latest["resp_rate_flag"]:
-            st.caption("📋 Supporting indicator: respiratory rate also elevated above baseline.")
+        st.markdown("---")
+        rebound_charts()
 
-        _ill_cols = st.columns(4)
-        with _ill_cols[0]:
-            if pd.notna(latest["rhr"]) and pd.notna(latest["rhr_dev"]):
-                st.metric("RHR", f"{latest['rhr']:.0f} bpm", delta=f"{latest['rhr_dev']:+.1f}", delta_color="inverse")
+        st.markdown("---")
+        st.subheader("Overtraining Risk")
+        ots_card()
+
+        st.markdown("---")
+        st.subheader("Illness Early Warning")
+
+        if illness_df.empty or illness_df["rhr_baseline"].isna().all():
+            st.info("Need at least 8 days of data to compute illness baselines.")
+        else:
+            latest = illness_df.iloc[-1]
+            signal_count = int(latest["signal_count"])
+
+            if latest["illness_flag"] and signal_count >= 3:
+                st.error("🔴 High illness risk — 3+ signals elevated. Consider rest and monitor symptoms.")
+            elif latest["illness_flag"] and signal_count == 2:
+                st.warning("🟡 Elevated illness risk — 2 signals elevated. Watch for symptoms over next 24-48h.")
+            elif signal_count == 1:
+                st.info("🟠 One signal slightly elevated — not yet flagged, monitoring.")
             else:
-                st.metric("RHR", "—")
-        with _ill_cols[1]:
-            if pd.notna(latest["hrv"]) and pd.notna(latest["hrv_dev"]):
-                st.metric("HRV", f"{latest['hrv']:.1f} ms", delta=f"{latest['hrv_dev']:+.1f}%", delta_color="normal")
-            else:
-                st.metric("HRV", "—")
-        with _ill_cols[2]:
-            if pd.notna(latest["skin_temp"]) and pd.notna(latest["skin_temp_dev"]):
-                st.metric("Skin Temp", f"{latest['skin_temp']:.1f}°C", delta=f"{latest['skin_temp_dev']:+.2f}", delta_color="inverse")
-            else:
-                st.metric("Skin Temp", "—")
-        with _ill_cols[3]:
-            if pd.notna(latest["respiratory_rate"]) and pd.notna(latest["resp_rate_dev"]):
-                st.metric("Resp Rate", f"{latest['respiratory_rate']:.1f} brpm", delta=f"{latest['resp_rate_dev']:+.1f}", delta_color="inverse")
-            else:
-                st.metric("Resp Rate", "—")
+                st.success("🟢 All signals normal.")
 
-    illness_charts()
+            if not latest["has_skin_temp"]:
+                st.caption("⚠️ Signal based on RHR + HRV only (no skin temperature data). Weaker signal.")
 
-    st.markdown("---")
+            if latest["resp_rate_flag"]:
+                st.caption("📋 Supporting indicator: respiratory rate also elevated above baseline.")
 
-    # --- Recovery / HRV / RHR Charts ---
-    recovery_charts()
+            _ill_cols = st.columns(4)
+            with _ill_cols[0]:
+                if pd.notna(latest["rhr"]) and pd.notna(latest["rhr_dev"]):
+                    st.metric("RHR", f"{latest['rhr']:.0f} bpm", delta=f"{latest['rhr_dev']:+.1f}", delta_color="inverse")
+                else:
+                    st.metric("RHR", "—")
+            with _ill_cols[1]:
+                if pd.notna(latest["hrv"]) and pd.notna(latest["hrv_dev"]):
+                    st.metric("HRV", f"{latest['hrv']:.1f} ms", delta=f"{latest['hrv_dev']:+.1f}%", delta_color="normal")
+                else:
+                    st.metric("HRV", "—")
+            with _ill_cols[2]:
+                if pd.notna(latest["skin_temp"]) and pd.notna(latest["skin_temp_dev"]):
+                    st.metric("Skin Temp", f"{latest['skin_temp']:.1f}°C", delta=f"{latest['skin_temp_dev']:+.2f}", delta_color="inverse")
+                else:
+                    st.metric("Skin Temp", "—")
+            with _ill_cols[3]:
+                if pd.notna(latest["respiratory_rate"]) and pd.notna(latest["resp_rate_dev"]):
+                    st.metric("Resp Rate", f"{latest['respiratory_rate']:.1f} brpm", delta=f"{latest['resp_rate_dev']:+.1f}", delta_color="inverse")
+                else:
+                    st.metric("Resp Rate", "—")
 
-    st.markdown("---")
+        illness_charts()
 
-    # --- Recovery Rebound Rate ---
-    rebound_charts()
+    # --- Sleep (collapsible, default open) ---
+    with st.expander("Sleep", expanded=True):
+        quality_gaps = detect_sleep_quality_gaps(sleep_df)
+        if quality_gaps:
+            st.subheader("⚠️ Sleep Quality Alerts")
+        render_sleep_quality_alerts(quality_gaps)
 
-    st.markdown("---")
+        sleep_charts()
 
-    # --- Sleep Charts ---
-    sleep_charts()
+        st.markdown("---")
+        deep_sleep_efficiency_chart()
 
-    st.markdown("---")
+        st.markdown("---")
+        apnea_signal_section()
 
-    # --- Deep Sleep Efficiency ---
-    deep_sleep_efficiency_chart()
+    # --- Strain & Workouts (collapsible, default open) ---
+    with st.expander("Strain & Workouts", expanded=True):
+        strain_workout_section()
 
-    st.markdown("---")
+        st.markdown("---")
+        strain_recovery_balance_section()
 
-    # --- Sleep Apnea Risk Signal ---
-    apnea_signal_section()
-
-    st.markdown("---")
-
-    # --- Strain + Workout Charts ---
-    strain_workout_section()
-
-    st.markdown("---")
-
-    # --- Strain-Recovery Balance ---
-    strain_recovery_balance_section()
-
-    st.markdown("---")
-
-    # --- Cardiac Drift Detection ---
-    cardiac_drift_section()
+        st.markdown("---")
+        cardiac_drift_section()
 
 
 with tab_sleep:
