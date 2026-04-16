@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -277,6 +278,54 @@ def build_workout_df(records: list) -> pd.DataFrame:
     return df
 
 
+def compute_illness_signal(recovery_df: pd.DataFrame, sleep_df: pd.DataFrame) -> pd.DataFrame:
+    if recovery_df.empty:
+        return pd.DataFrame()
+
+    df = recovery_df[["date", "rhr", "hrv", "skin_temp"]].copy()
+    if not sleep_df.empty:
+        df = df.merge(sleep_df[["date", "respiratory_rate"]], on="date", how="left")
+    else:
+        df["respiratory_rate"] = float("nan")
+
+    df = df.sort_values("date").reset_index(drop=True)
+
+    rhr_baseline = df["rhr"].rolling(14, min_periods=7).mean().shift(1)
+    hrv_baseline = df["hrv"].rolling(14, min_periods=7).mean().shift(1)
+    skin_temp_baseline = df["skin_temp"].rolling(14, min_periods=7).mean().shift(1)
+    resp_rate_baseline = df["respiratory_rate"].rolling(14, min_periods=7).mean().shift(1)
+
+    rhr_flag = df["rhr"] > rhr_baseline + 3
+    hrv_flag = df["hrv"] < hrv_baseline * 0.90
+    skin_temp_flag = df["skin_temp"] > skin_temp_baseline + 0.5
+    resp_rate_flag = df["respiratory_rate"] > resp_rate_baseline + 2
+
+    signal_count = (
+        rhr_flag.fillna(False).astype(int)
+        + hrv_flag.fillna(False).astype(int)
+        + skin_temp_flag.fillna(False).astype(int)
+    )
+
+    result = df[["date", "rhr", "hrv", "skin_temp", "respiratory_rate"]].copy()
+    result["rhr_baseline"] = rhr_baseline
+    result["hrv_baseline"] = hrv_baseline
+    result["skin_temp_baseline"] = skin_temp_baseline
+    result["resp_rate_baseline"] = resp_rate_baseline
+    result["rhr_dev"] = df["rhr"] - rhr_baseline
+    result["hrv_dev"] = (df["hrv"] - hrv_baseline) / hrv_baseline * 100
+    result["skin_temp_dev"] = df["skin_temp"] - skin_temp_baseline
+    result["resp_rate_dev"] = df["respiratory_rate"] - resp_rate_baseline
+    result["rhr_flag"] = rhr_flag.fillna(False)
+    result["hrv_flag"] = hrv_flag.fillna(False)
+    result["skin_temp_flag"] = skin_temp_flag.fillna(False)
+    result["resp_rate_flag"] = resp_rate_flag.fillna(False)
+    result["signal_count"] = signal_count
+    result["has_skin_temp"] = df["skin_temp"].notna()
+    result["illness_flag"] = signal_count >= 2
+
+    return result
+
+
 def build_apnea_df(sleep_df: pd.DataFrame, recovery_df: pd.DataFrame) -> pd.DataFrame:
     if sleep_df.empty:
         return pd.DataFrame()
@@ -380,6 +429,7 @@ cycle_df = build_cycle_df(data["cycles"])
 sleep_df = build_sleep_df(data["sleep"])
 workout_df = build_workout_df(data["workouts"])
 apnea_df = build_apnea_df(sleep_df, recovery_df)
+illness_df = compute_illness_signal(recovery_df, sleep_df)
 
 
 # --- KPI Row ---
@@ -470,6 +520,194 @@ else:
     cached_insight = get_latest_insight()
     if cached_insight:
         insight_box.markdown(cached_insight)
+
+st.markdown("---")
+
+
+# --- Illness Early Warning ---
+
+
+st.subheader("Illness Early Warning")
+
+if illness_df.empty or illness_df["rhr_baseline"].isna().all():
+    st.info("Need at least 8 days of data to compute illness baselines.")
+else:
+    latest = illness_df.iloc[-1]
+    signal_count = int(latest["signal_count"])
+
+    if latest["illness_flag"] and signal_count >= 3:
+        st.error("🔴 High illness risk — 3+ signals elevated. Consider rest and monitor symptoms.")
+    elif latest["illness_flag"] and signal_count == 2:
+        st.warning("🟡 Elevated illness risk — 2 signals elevated. Watch for symptoms over next 24-48h.")
+    elif signal_count == 1:
+        st.info("🟠 One signal slightly elevated — not yet flagged, monitoring.")
+    else:
+        st.success("🟢 All signals normal.")
+
+    if not latest["has_skin_temp"]:
+        st.caption("⚠️ Signal based on RHR + HRV only (no skin temperature data). Weaker signal.")
+
+    if latest["resp_rate_flag"]:
+        st.caption("📋 Supporting indicator: respiratory rate also elevated above baseline.")
+
+    _ill_cols = st.columns(4)
+    with _ill_cols[0]:
+        if pd.notna(latest["rhr"]) and pd.notna(latest["rhr_dev"]):
+            st.metric("RHR", f"{latest['rhr']:.0f} bpm", delta=f"{latest['rhr_dev']:+.1f}", delta_color="inverse")
+        else:
+            st.metric("RHR", "—")
+    with _ill_cols[1]:
+        if pd.notna(latest["hrv"]) and pd.notna(latest["hrv_dev"]):
+            st.metric("HRV", f"{latest['hrv']:.1f} ms", delta=f"{latest['hrv_dev']:+.1f}%", delta_color="normal")
+        else:
+            st.metric("HRV", "—")
+    with _ill_cols[2]:
+        if pd.notna(latest["skin_temp"]) and pd.notna(latest["skin_temp_dev"]):
+            st.metric("Skin Temp", f"{latest['skin_temp']:.1f}°C", delta=f"{latest['skin_temp_dev']:+.2f}", delta_color="inverse")
+        else:
+            st.metric("Skin Temp", "—")
+    with _ill_cols[3]:
+        if pd.notna(latest["respiratory_rate"]) and pd.notna(latest["resp_rate_dev"]):
+            st.metric("Resp Rate", f"{latest['respiratory_rate']:.1f} brpm", delta=f"{latest['resp_rate_dev']:+.1f}", delta_color="inverse")
+        else:
+            st.metric("Resp Rate", "—")
+
+
+@st.fragment
+def illness_charts():
+    if illness_df.empty:
+        return
+
+    chart_df = illness_df.dropna(subset=["rhr_baseline"]).reset_index(drop=True)
+    if chart_df.empty:
+        return
+
+    has_skin_temp = chart_df["skin_temp"].notna().any()
+    has_resp_rate = chart_df["respiratory_rate"].notna().any()
+
+    fig = make_subplots(
+        rows=2, cols=2,
+        subplot_titles=["RHR (BPM)", "HRV (ms)", "Skin Temp (°C)", "Resp Rate (brpm)"],
+    )
+
+    rhr_colors = ["#ff0000" if f else "#ff6b6b" for f in chart_df["rhr_flag"]]
+    hrv_colors = ["#ff0000" if f else "#7b61ff" for f in chart_df["hrv_flag"]]
+
+    fig.add_trace(go.Scatter(
+        x=chart_df["date"], y=chart_df["rhr"],
+        mode="lines+markers", name="RHR",
+        line=dict(color="#ff6b6b", width=2),
+        marker=dict(color=rhr_colors),
+        showlegend=False,
+    ), row=1, col=1)
+    fig.add_trace(go.Scatter(
+        x=chart_df["date"], y=chart_df["rhr_baseline"],
+        mode="lines", name="RHR 14d avg",
+        line=dict(color="#ff6b6b", width=1, dash="dash"),
+        showlegend=False,
+    ), row=1, col=1)
+    fig.add_trace(go.Scatter(
+        x=chart_df["date"], y=chart_df["rhr_baseline"] + 3,
+        mode="lines", name="RHR threshold",
+        line=dict(color="red", width=1, dash="dot"),
+        showlegend=False,
+    ), row=1, col=1)
+
+    fig.add_trace(go.Scatter(
+        x=chart_df["date"], y=chart_df["hrv"],
+        mode="lines+markers", name="HRV",
+        line=dict(color="#7b61ff", width=2),
+        marker=dict(color=hrv_colors),
+        showlegend=False,
+    ), row=1, col=2)
+    fig.add_trace(go.Scatter(
+        x=chart_df["date"], y=chart_df["hrv_baseline"],
+        mode="lines", name="HRV 14d avg",
+        line=dict(color="#7b61ff", width=1, dash="dash"),
+        showlegend=False,
+    ), row=1, col=2)
+    fig.add_trace(go.Scatter(
+        x=chart_df["date"], y=chart_df["hrv_baseline"] * 0.90,
+        mode="lines", name="HRV threshold",
+        line=dict(color="red", width=1, dash="dot"),
+        showlegend=False,
+    ), row=1, col=2)
+
+    if has_skin_temp:
+        skin_data = chart_df.dropna(subset=["skin_temp", "skin_temp_baseline"])
+        skin_colors = ["#ff0000" if f else "#ffaa00" for f in skin_data["skin_temp_flag"]]
+        fig.add_trace(go.Scatter(
+            x=skin_data["date"], y=skin_data["skin_temp"],
+            mode="lines+markers", name="Skin Temp",
+            line=dict(color="#ffaa00", width=2),
+            marker=dict(color=skin_colors),
+            showlegend=False,
+        ), row=2, col=1)
+        fig.add_trace(go.Scatter(
+            x=skin_data["date"], y=skin_data["skin_temp_baseline"],
+            mode="lines", name="Skin Temp 14d avg",
+            line=dict(color="#ffaa00", width=1, dash="dash"),
+            showlegend=False,
+        ), row=2, col=1)
+        fig.add_trace(go.Scatter(
+            x=skin_data["date"], y=skin_data["skin_temp_baseline"] + 0.5,
+            mode="lines", name="Skin Temp threshold",
+            line=dict(color="red", width=1, dash="dot"),
+            showlegend=False,
+        ), row=2, col=1)
+    else:
+        fig.add_annotation(
+            text="No skin temperature data",
+            x=0.5, y=0.5, xref="x3 domain", yref="y3 domain",
+            showarrow=False,
+        )
+
+    if has_resp_rate:
+        resp_data = chart_df.dropna(subset=["respiratory_rate", "resp_rate_baseline"])
+        resp_colors = ["#ff0000" if f else "#00aaff" for f in resp_data["resp_rate_flag"]]
+        fig.add_trace(go.Scatter(
+            x=resp_data["date"], y=resp_data["respiratory_rate"],
+            mode="lines+markers", name="Resp Rate",
+            line=dict(color="#00aaff", width=2),
+            marker=dict(color=resp_colors),
+            showlegend=False,
+        ), row=2, col=2)
+        fig.add_trace(go.Scatter(
+            x=resp_data["date"], y=resp_data["resp_rate_baseline"],
+            mode="lines", name="Resp Rate 14d avg",
+            line=dict(color="#00aaff", width=1, dash="dash"),
+            showlegend=False,
+        ), row=2, col=2)
+        fig.add_trace(go.Scatter(
+            x=resp_data["date"], y=resp_data["resp_rate_baseline"] + 2,
+            mode="lines", name="Resp Rate threshold",
+            line=dict(color="red", width=1, dash="dot"),
+            showlegend=False,
+        ), row=2, col=2)
+    else:
+        fig.add_annotation(
+            text="No respiratory rate data",
+            x=0.5, y=0.5, xref="x4 domain", yref="y4 domain",
+            showarrow=False,
+        )
+
+    flagged_dates = chart_df[chart_df["illness_flag"]]["date"].tolist()
+    for d in flagged_dates:
+        fig.add_vrect(
+            x0=pd.Timestamp(d) - pd.Timedelta(hours=12),
+            x1=pd.Timestamp(d) + pd.Timedelta(hours=12),
+            fillcolor="red", opacity=0.15, line_width=0,
+        )
+
+    fig.update_layout(
+        title="Illness Signal — Metrics vs 14-Day Baseline",
+        height=500,
+        margin=dict(t=60, b=40),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+
+illness_charts()
 
 st.markdown("---")
 
