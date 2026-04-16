@@ -151,6 +151,18 @@ def parse_date(iso_str: str) -> datetime:
 profile = data["profile"]
 with st.sidebar:
     st.markdown(f"**{profile['first_name']} {profile['last_name']}**")
+    body = data.get("body")
+    if body:
+        parts = []
+        if body.get("height_meter"):
+            height_cm = round(body["height_meter"] * 100, 1)
+            parts.append(f"**Height:** {height_cm} cm")
+        if body.get("weight_kilogram"):
+            parts.append(f"**Weight:** {round(body['weight_kilogram'], 1)} kg")
+        if body.get("max_heart_rate"):
+            parts.append(f"**Max HR:** {body['max_heart_rate']} bpm")
+        if parts:
+            st.markdown(" · ".join(parts))
 
 
 # --- Build DataFrames ---
@@ -256,6 +268,8 @@ def build_workout_df(records: list) -> pd.DataFrame:
         }
         if s.get("distance_meter") is not None:
             row["distance_m"] = round(s["distance_meter"])
+        if s.get("altitude_gain_meter") is not None:
+            row["altitude_gain_m"] = round(s["altitude_gain_meter"], 1)
         rows.append(row)
     df = pd.DataFrame(rows)
     if not df.empty:
@@ -426,6 +440,27 @@ def recovery_charts():
     )
     st.plotly_chart(fig, use_container_width=True)
 
+    skin_temp_data = recovery_df.dropna(subset=["skin_temp"])
+    if not skin_temp_data.empty:
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=skin_temp_data["date"],
+                y=skin_temp_data["skin_temp"],
+                mode="lines+markers",
+                name="Skin Temp",
+                line=dict(color="#ffaa00", width=2),
+            )
+        )
+        fig.update_layout(
+            title="Skin Temperature",
+            yaxis_title="°C",
+            xaxis_title="Date",
+            height=300,
+            margin=dict(t=40, b=40),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
 
 recovery_charts()
 
@@ -523,14 +558,73 @@ def sleep_charts():
                     line=dict(color="#7b61ff", width=2),
                 )
             )
+        cons_data = sleep_df.dropna(subset=["consistency"])
+        if not cons_data.empty:
+            fig.add_trace(
+                go.Scatter(
+                    x=cons_data["date"],
+                    y=cons_data["consistency"],
+                    mode="lines+markers",
+                    name="Consistency",
+                    line=dict(color="#ffaa00", width=2),
+                )
+            )
         fig.update_layout(
-            title="Sleep Performance & Efficiency",
+            title="Sleep Performance, Efficiency & Consistency",
             yaxis=dict(range=[0, 100], title="%"),
             xaxis_title="Date",
             height=300,
             margin=dict(t=40, b=40),
         )
         st.plotly_chart(fig, use_container_width=True)
+
+    resp_data = sleep_df.dropna(subset=["respiratory_rate"])
+    if not resp_data.empty:
+        fig = go.Figure()
+        fig.add_trace(
+            go.Scatter(
+                x=resp_data["date"],
+                y=resp_data["respiratory_rate"],
+                mode="lines+markers",
+                name="Respiratory Rate",
+                line=dict(color="#00aaff", width=2),
+            )
+        )
+        fig.update_layout(
+            title="Respiratory Rate",
+            yaxis_title="breaths/min",
+            xaxis_title="Date",
+            height=300,
+            margin=dict(t=40, b=40),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=sleep_df["date"],
+            y=sleep_df["disturbances"],
+            name="Disturbances",
+            marker_color="#ff6b6b",
+        )
+    )
+    fig.add_trace(
+        go.Bar(
+            x=sleep_df["date"],
+            y=sleep_df["cycles"],
+            name="Sleep Cycles",
+            marker_color="#7b61ff",
+        )
+    )
+    fig.update_layout(
+        title="Sleep Disturbances & Cycles",
+        barmode="group",
+        yaxis_title="Count",
+        xaxis_title="Date",
+        height=300,
+        margin=dict(t=40, b=40),
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 
 sleep_charts()
@@ -625,6 +719,8 @@ def strain_workout_section():
         ]
         if "distance_m" in workout_df.columns:
             display_cols.append("distance_m")
+        if "altitude_gain_m" in workout_df.columns:
+            display_cols.append("altitude_gain_m")
         st.dataframe(
             workout_df[display_cols],
             use_container_width=True,
