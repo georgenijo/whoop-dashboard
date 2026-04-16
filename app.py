@@ -277,6 +277,44 @@ def build_workout_df(records: list) -> pd.DataFrame:
     return df
 
 
+def build_apnea_df(sleep_df: pd.DataFrame, recovery_df: pd.DataFrame) -> pd.DataFrame:
+    if sleep_df.empty:
+        return pd.DataFrame()
+
+    df = sleep_df.copy().sort_values("date").reset_index(drop=True)
+    df = df.merge(recovery_df[["date", "spo2"]], on="date", how="left")
+
+    total_sleep = df["in_bed_hrs"] - df["awake_hrs"]
+    total_sleep[total_sleep <= 0] = float("nan")
+    df["total_sleep_hrs"] = total_sleep
+    df["deep_sleep_pct"] = df["deep_hrs"] / df["total_sleep_hrs"] * 100
+
+    df["resp_rate_baseline"] = (
+        df["respiratory_rate"].expanding(min_periods=3).mean().shift(1)
+    )
+
+    df["flag_disturbances"] = (df["disturbances"] > 10).astype(int)
+    df["flag_spo2"] = ((df["spo2"] < 95) & df["spo2"].notna()).astype(int)
+    df["flag_resp_rate"] = (
+        (df["respiratory_rate"] > df["resp_rate_baseline"] + 2)
+        & df["respiratory_rate"].notna()
+        & df["resp_rate_baseline"].notna()
+    ).astype(int)
+    df["flag_deep_sleep"] = (
+        (df["deep_sleep_pct"] < 15) & df["deep_sleep_pct"].notna()
+    ).astype(int)
+
+    df["apnea_score"] = (
+        df["flag_disturbances"]
+        + df["flag_spo2"]
+        + df["flag_resp_rate"]
+        + df["flag_deep_sleep"]
+    )
+    df["apnea_score_7d"] = df["apnea_score"].rolling(7, min_periods=1).sum()
+
+    return df
+
+
 DEEP_SLEEP_THRESHOLD = 15.0
 EFFICIENCY_THRESHOLD = 85.0
 DISTURBANCE_MULTIPLIER = 1.5
@@ -341,6 +379,7 @@ recovery_df = build_recovery_df(data["recovery"])
 cycle_df = build_cycle_df(data["cycles"])
 sleep_df = build_sleep_df(data["sleep"])
 workout_df = build_workout_df(data["workouts"])
+apnea_df = build_apnea_df(sleep_df, recovery_df)
 
 
 # --- KPI Row ---
@@ -696,6 +735,110 @@ def sleep_charts():
 
 
 sleep_charts()
+
+st.markdown("---")
+
+
+# --- Sleep Apnea Risk Signal ---
+
+
+@st.fragment
+def apnea_signal_section():
+    st.subheader("Sleep Apnea Risk Signal")
+    st.caption(
+        "⚠️ This is a screening signal for awareness only — not a medical diagnosis. "
+        "Consult a sleep specialist if concerned."
+    )
+
+    if apnea_df.empty:
+        st.info("No sleep data available.")
+        return
+
+    if apnea_df["spo2"].isna().all():
+        st.info("SpO2 data unavailable (requires WHOOP 4.0+). Apnea score uses 3 of 4 indicators.")
+
+    latest = apnea_df.iloc[-1]
+    score = int(latest["apnea_score"])
+    score_label = "Low" if score == 0 else "Moderate" if score <= 2 else "High"
+    rolling_score = int(latest["apnea_score_7d"])
+
+    cutoff = apnea_df["date"].max() - timedelta(days=14)
+    high_nights_14d = int((apnea_df[apnea_df["date"] >= cutoff]["apnea_score"] >= 2).sum())
+
+    cols = st.columns(3)
+    with cols[0]:
+        st.metric("Tonight's Risk Score", f"{score}/4 ({score_label})")
+    with cols[1]:
+        st.metric("7-Night Rolling Score", f"{rolling_score}/28")
+    with cols[2]:
+        st.metric("High-Risk Nights (14d)", f"{high_nights_14d}")
+
+    def bar_color(val):
+        if val <= 3:
+            return "#00d4aa"
+        elif val <= 7:
+            return "#ffaa00"
+        elif val <= 14:
+            return "#ff8c00"
+        else:
+            return "#ff4444"
+
+    colors_7d = [bar_color(v) for v in apnea_df["apnea_score_7d"]]
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=apnea_df["date"],
+            y=apnea_df["apnea_score_7d"],
+            marker_color=colors_7d,
+            name="7-Night Rolling Score",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=apnea_df["date"],
+            y=[7] * len(apnea_df),
+            mode="lines",
+            name="Elevated Threshold",
+            line=dict(color="white", width=1, dash="dash"),
+        )
+    )
+    fig.update_layout(
+        title="7-Night Rolling Apnea Risk Score",
+        yaxis_title="Cumulative Score",
+        xaxis_title="Date",
+        height=350,
+        margin=dict(t=40, b=40),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    fig2 = go.Figure()
+    for col, color, name in [
+        ("flag_disturbances", "#ff6b6b", "Disturbances >10"),
+        ("flag_spo2", "#ffaa00", "SpO2 <95%"),
+        ("flag_resp_rate", "#00aaff", "Resp Rate Elevated"),
+        ("flag_deep_sleep", "#7b61ff", "Deep Sleep <15%"),
+    ]:
+        fig2.add_trace(
+            go.Bar(
+                x=apnea_df["date"],
+                y=apnea_df[col],
+                name=name,
+                marker_color=color,
+            )
+        )
+    fig2.update_layout(
+        title="Nightly Apnea Risk Flags",
+        barmode="stack",
+        yaxis=dict(range=[0, 4], title="Flags"),
+        xaxis_title="Date",
+        height=300,
+        margin=dict(t=40, b=40),
+    )
+    st.plotly_chart(fig2, use_container_width=True)
+
+
+apnea_signal_section()
 
 st.markdown("---")
 
