@@ -49,11 +49,37 @@ def _build_context(days: int = 30) -> str:
             rem_hrs = s["rem_ms"] / 3_600_000
             perf = f", Perf={s['performance']:.0f}%" if s.get("performance") else ""
             eff = f", Eff={s['efficiency']:.0f}%" if s.get("efficiency") else ""
+            rr = f", RespRate={s['respiratory_rate']:.1f}bpm" if s.get("respiratory_rate") else ""
             lines.append(
                 f"  {s['date']}: Slept={actual_hrs:.1f}h (need={need_hrs:.1f}h), "
                 f"Deep={deep_hrs:.1f}h, REM={rem_hrs:.1f}h, "
-                f"Disturbances={s['disturbances']}{perf}{eff}"
+                f"Disturbances={s['disturbances']}{perf}{eff}{rr}"
             )
+
+        rr_values = [s["respiratory_rate"] for s in stats["sleep"] if s.get("respiratory_rate")]
+        rr_baseline = sum(rr_values) / len(rr_values) if rr_values else None
+
+        n_high_disturb = sum(1 for s in stats["sleep"] if s["disturbances"] > 10)
+        n_low_deep = 0
+        n_high_rr = 0
+        for s in stats["sleep"]:
+            actual_ms = s["in_bed_ms"] - s["awake_ms"]
+            if actual_ms > 0:
+                deep_pct = s["deep_ms"] / actual_ms * 100
+                if deep_pct < 15:
+                    n_low_deep += 1
+            if rr_baseline and s.get("respiratory_rate") and s["respiratory_rate"] > rr_baseline + 2:
+                n_high_rr += 1
+
+        n_low_spo2 = sum(
+            1 for r in stats["recovery"]
+            if r.get("spo2") is not None and r["spo2"] < 95
+        )
+        lines.append(
+            f"\n  Apnea screening flags: {n_high_disturb} nights with high disturbances, "
+            f"{n_low_deep} with low deep sleep, {n_high_rr} with elevated resp rate"
+        )
+        lines.append(f"  (Nights with SpO2 <95%: {n_low_spo2} — requires WHOOP 4.0+)")
 
         disturbance_counts = [s["disturbances"] for s in stats["sleep"]]
         disturb_baseline = sum(disturbance_counts) / len(disturbance_counts) if disturbance_counts else 0
