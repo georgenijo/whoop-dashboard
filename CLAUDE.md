@@ -41,3 +41,10 @@ No test suite, linter, or build step is configured.
 - Whoop API base: `https://api.prod.whoop.com/developer`
 - Environment variables: `WHOOP_CLIENT_ID`, `WHOOP_CLIENT_SECRET`, `WHOOP_REDIRECT_URI` (defaults to `http://localhost:8501`)
 - `tokens.json` at project root is the persistent token store (gitignored)
+
+## Roadmap
+
+The project is actively evolving beyond a stateless dashboard:
+
+1. **Database layer** — Adding persistent storage so Whoop data is accumulated over time rather than fetched live each session
+2. **LLM insights layer** — Adding an AI/cloud layer that analyzes stored data to surface patterns, trends, and natural-language health insights
