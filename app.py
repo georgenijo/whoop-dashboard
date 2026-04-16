@@ -225,9 +225,19 @@ def build_sleep_df(records: list) -> pd.DataFrame:
             + sn["need_from_recent_strain_milli"]
             + sn["need_from_recent_nap_milli"]
         )
+        start_dt = parse_date(r["start"])
+        end_dt = parse_date(r["end"])
+        bedtime_h = start_dt.hour + start_dt.minute / 60
+        if bedtime_h < 12:
+            bedtime_h += 24  # normalize midnight-crossers (e.g., 1am → 25)
         rows.append(
             {
-                "date": parse_date(r["start"]).date(),
+                "date": start_dt.date(),
+                "start_time": start_dt,
+                "end_time": end_dt,
+                "bedtime_hour": bedtime_h,
+                "wake_hour": end_dt.hour + end_dt.minute / 60,
+                "is_weekend": start_dt.weekday() >= 5,
                 "in_bed_hrs": ms_to_hours(ss["total_in_bed_time_milli"]),
                 "light_hrs": ms_to_hours(ss["total_light_sleep_time_milli"]),
                 "deep_hrs": ms_to_hours(ss["total_slow_wave_sleep_time_milli"]),
@@ -242,6 +252,32 @@ def build_sleep_df(records: list) -> pd.DataFrame:
                 "cycles": ss["sleep_cycle_count"],
             }
         )
+    df = pd.DataFrame(rows)
+    if not df.empty:
+        df = df.sort_values("date").reset_index(drop=True)
+    return df
+
+
+def build_nap_df(records: list) -> pd.DataFrame:
+    rows = []
+    for r in scored(records):
+        if not r.get("nap"):
+            continue
+        s = r["score"]
+        ss = s["stage_summary"]
+        start = parse_date(r["start"])
+        end = parse_date(r["end"])
+        duration_min = (end - start).total_seconds() / 60
+        rows.append({
+            "date": start.date(),
+            "start_time": start,
+            "end_time": end,
+            "duration_min": round(duration_min, 1),
+            "start_hour": start.hour + start.minute / 60,
+            "sleep_need_reduction_hrs": ms_to_hours(
+                s["sleep_needed"].get("need_from_recent_nap_milli", 0)
+            ),
+        })
     df = pd.DataFrame(rows)
     if not df.empty:
         df = df.sort_values("date").reset_index(drop=True)
@@ -522,6 +558,7 @@ def render_sleep_quality_alerts(gaps: list):
 recovery_df = build_recovery_df(data["recovery"])
 cycle_df = build_cycle_df(data["cycles"])
 sleep_df = build_sleep_df(data["sleep"])
+nap_df = build_nap_df(data["sleep"])
 workout_df = build_workout_df(data["workouts"])
 apnea_df = build_apnea_df(sleep_df, recovery_df)
 illness_df = compute_illness_signal(recovery_df, sleep_df)
@@ -536,85 +573,7 @@ _workout_history = _cached_workout_history()
 drift_results = detect_cardiac_drift(_workout_history)
 
 
-# --- KPI Row ---
-
-st.markdown("---")
-
-if not recovery_df.empty and not cycle_df.empty and not sleep_df.empty:
-    latest_rec = recovery_df.iloc[-1]
-    prev_rec = recovery_df.iloc[-2] if len(recovery_df) > 1 else None
-    latest_cycle = cycle_df.iloc[-1]
-    prev_cycle = cycle_df.iloc[-2] if len(cycle_df) > 1 else None
-    latest_sleep = sleep_df.iloc[-1]
-    prev_sleep = sleep_df.iloc[-2] if len(sleep_df) > 1 else None
-
-    def delta(current, previous, key):
-        if previous is None or pd.isna(current.get(key)) or pd.isna(previous.get(key)):
-            return None
-        return round(current[key] - previous[key], 1)
-
-    cols = st.columns(6)
-    with cols[0]:
-        st.metric(
-            "Recovery",
-            f"{latest_rec['recovery']:.0f}%",
-            delta=delta(latest_rec, prev_rec, "recovery"),
-        )
-    with cols[1]:
-        st.metric(
-            "HRV",
-            f"{latest_rec['hrv']:.1f} ms",
-            delta=delta(latest_rec, prev_rec, "hrv"),
-        )
-    with cols[2]:
-        st.metric(
-            "RHR",
-            f"{latest_rec['rhr']:.0f} bpm",
-            delta=delta(latest_rec, prev_rec, "rhr"),
-            delta_color="inverse",
-        )
-    with cols[3]:
-        perf = latest_sleep.get("performance")
-        perf_str = f"{perf:.0f}%" if perf is not None and not pd.isna(perf) else "—"
-        st.metric(
-            "Sleep Perf",
-            perf_str,
-            delta=delta(latest_sleep, prev_sleep, "performance"),
-        )
-    with cols[4]:
-        st.metric(
-            "Day Strain",
-            f"{latest_cycle['strain']:.1f}",
-            delta=delta(latest_cycle, prev_cycle, "strain"),
-        )
-    with cols[5]:
-        spo2 = latest_rec.get("spo2")
-        if spo2 is not None and not pd.isna(spo2):
-            st.metric(
-                "SpO2",
-                f"{spo2:.1f}%",
-                delta=delta(latest_rec, prev_rec, "spo2"),
-            )
-        else:
-            st.metric("SpO2", "—")
-else:
-    st.info("Not enough data for KPIs yet.")
-
-st.markdown("---")
-
-
-# --- Sleep Quality Alerts ---
-
-quality_gaps = detect_sleep_quality_gaps(sleep_df)
-if quality_gaps:
-    st.subheader("⚠️ Sleep Quality Alerts")
-render_sleep_quality_alerts(quality_gaps)
-
-
-# --- Overtraining Risk ---
-
-
-st.subheader("Overtraining Risk")
+# --- Section Functions ---
 
 
 @st.fragment
@@ -693,77 +652,6 @@ def ots_card():
             margin=dict(t=40, b=40),
         )
         st.plotly_chart(norm_fig, use_container_width=True)
-
-
-ots_card()
-
-st.markdown("---")
-
-
-# --- AI Insights ---
-
-
-st.subheader("AI Insights")
-insight_box = st.empty()
-if st.button("Generate Fresh Insights"):
-    with st.spinner("Claude is analyzing your data..."):
-        insight = generate_insight(days)
-    insight_box.markdown(insight)
-else:
-    cached_insight = get_latest_insight()
-    if cached_insight:
-        insight_box.markdown(cached_insight)
-
-st.markdown("---")
-
-
-# --- Illness Early Warning ---
-
-
-st.subheader("Illness Early Warning")
-
-if illness_df.empty or illness_df["rhr_baseline"].isna().all():
-    st.info("Need at least 8 days of data to compute illness baselines.")
-else:
-    latest = illness_df.iloc[-1]
-    signal_count = int(latest["signal_count"])
-
-    if latest["illness_flag"] and signal_count >= 3:
-        st.error("🔴 High illness risk — 3+ signals elevated. Consider rest and monitor symptoms.")
-    elif latest["illness_flag"] and signal_count == 2:
-        st.warning("🟡 Elevated illness risk — 2 signals elevated. Watch for symptoms over next 24-48h.")
-    elif signal_count == 1:
-        st.info("🟠 One signal slightly elevated — not yet flagged, monitoring.")
-    else:
-        st.success("🟢 All signals normal.")
-
-    if not latest["has_skin_temp"]:
-        st.caption("⚠️ Signal based on RHR + HRV only (no skin temperature data). Weaker signal.")
-
-    if latest["resp_rate_flag"]:
-        st.caption("📋 Supporting indicator: respiratory rate also elevated above baseline.")
-
-    _ill_cols = st.columns(4)
-    with _ill_cols[0]:
-        if pd.notna(latest["rhr"]) and pd.notna(latest["rhr_dev"]):
-            st.metric("RHR", f"{latest['rhr']:.0f} bpm", delta=f"{latest['rhr_dev']:+.1f}", delta_color="inverse")
-        else:
-            st.metric("RHR", "—")
-    with _ill_cols[1]:
-        if pd.notna(latest["hrv"]) and pd.notna(latest["hrv_dev"]):
-            st.metric("HRV", f"{latest['hrv']:.1f} ms", delta=f"{latest['hrv_dev']:+.1f}%", delta_color="normal")
-        else:
-            st.metric("HRV", "—")
-    with _ill_cols[2]:
-        if pd.notna(latest["skin_temp"]) and pd.notna(latest["skin_temp_dev"]):
-            st.metric("Skin Temp", f"{latest['skin_temp']:.1f}°C", delta=f"{latest['skin_temp_dev']:+.2f}", delta_color="inverse")
-        else:
-            st.metric("Skin Temp", "—")
-    with _ill_cols[3]:
-        if pd.notna(latest["respiratory_rate"]) and pd.notna(latest["resp_rate_dev"]):
-            st.metric("Resp Rate", f"{latest['respiratory_rate']:.1f} brpm", delta=f"{latest['resp_rate_dev']:+.1f}", delta_color="inverse")
-        else:
-            st.metric("Resp Rate", "—")
 
 
 @st.fragment
@@ -900,14 +788,6 @@ def illness_charts():
     st.plotly_chart(fig, use_container_width=True)
 
 
-illness_charts()
-
-st.markdown("---")
-
-
-# --- Recovery / HRV / RHR Charts ---
-
-
 @st.fragment
 def recovery_charts():
     if recovery_df.empty:
@@ -1036,14 +916,6 @@ def recovery_charts():
         st.plotly_chart(fig, use_container_width=True)
 
 
-recovery_charts()
-
-st.markdown("---")
-
-
-# --- Recovery Rebound Rate ---
-
-
 @st.fragment
 def rebound_charts():
     rebound_df = compute_rebound_events(recovery_df)
@@ -1077,14 +949,6 @@ def rebound_charts():
     )
     st.plotly_chart(fig, use_container_width=True)
     st.caption("Rebound = days from first red day (<33%) to first green day (>66%). Lower is better.")
-
-
-rebound_charts()
-
-st.markdown("---")
-
-
-# --- Sleep Charts ---
 
 
 @st.fragment
@@ -1268,14 +1132,6 @@ def sleep_charts():
     st.plotly_chart(fig, use_container_width=True)
 
 
-sleep_charts()
-
-st.markdown("---")
-
-
-# --- Deep Sleep Efficiency ---
-
-
 @st.fragment
 def deep_sleep_efficiency_chart():
     if sleep_df.empty or cycle_df.empty:
@@ -1332,14 +1188,6 @@ def deep_sleep_efficiency_chart():
         showlegend=False,
     )
     st.plotly_chart(fig, use_container_width=True)
-
-
-deep_sleep_efficiency_chart()
-
-st.markdown("---")
-
-
-# --- Sleep Apnea Risk Signal ---
 
 
 @st.fragment
@@ -1438,14 +1286,6 @@ def apnea_signal_section():
     st.plotly_chart(fig2, use_container_width=True)
 
 
-apnea_signal_section()
-
-st.markdown("---")
-
-
-# --- Strain + Workout Charts ---
-
-
 @st.fragment
 def strain_workout_section():
     col1, col2 = st.columns(2)
@@ -1539,14 +1379,6 @@ def strain_workout_section():
         )
 
 
-strain_workout_section()
-
-st.markdown("---")
-
-
-# --- Strain-Recovery Balance ---
-
-
 @st.fragment
 def strain_recovery_balance_section():
     if recovery_df.empty or cycle_df.empty:
@@ -1594,14 +1426,6 @@ def strain_recovery_balance_section():
     )
     st.plotly_chart(fig, use_container_width=True)
     st.caption("Positive = recovery surplus · Negative = recovery debt · Reset each window")
-
-
-strain_recovery_balance_section()
-
-st.markdown("---")
-
-
-# --- Cardiac Drift Detection ---
 
 
 @st.fragment
@@ -1674,4 +1498,448 @@ def cardiac_drift_section():
     st.plotly_chart(fig, use_container_width=True)
 
 
-cardiac_drift_section()
+# --- Sleep Deep Dive Sections ---
+
+
+@st.fragment
+def nap_tracker_section():
+    st.subheader("Nap Tracker")
+
+    if nap_df.empty or len(nap_df) < 2:
+        st.info("Not enough nap data for trend charts (need 2+ nap records).")
+        if not nap_df.empty:
+            st.metric("Total Naps", len(nap_df))
+            st.metric("Avg Duration", f"{nap_df['duration_min'].mean():.0f} min")
+        return
+
+    kpi_cols = st.columns(3)
+    with kpi_cols[0]:
+        st.metric("Total Naps", len(nap_df))
+    with kpi_cols[1]:
+        st.metric("Avg Duration", f"{nap_df['duration_min'].mean():.0f} min")
+    with kpi_cols[2]:
+        avg_reduction = nap_df["sleep_need_reduction_hrs"].mean()
+        st.metric("Avg Sleep Need Reduction", f"{avg_reduction:.2f} hrs")
+
+    # Nap timing scatter
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=nap_df["date"],
+        y=nap_df["start_hour"],
+        mode="markers",
+        marker=dict(
+            size=nap_df["duration_min"] / 5,
+            color="#7b61ff",
+            opacity=0.8,
+        ),
+        hovertemplate="Date: %{x}<br>Start: %{y:.1f}h<br>Duration: %{text} min<extra></extra>",
+        text=nap_df["duration_min"].astype(int),
+        name="Nap",
+    ))
+    fig.update_layout(
+        title="Nap Timing (bubble size = duration)",
+        xaxis_title="Date",
+        yaxis_title="Hour of Day",
+        yaxis=dict(tickvals=list(range(8, 22)), ticktext=[f"{h}:00" for h in range(8, 22)]),
+        height=350,
+        margin=dict(t=40, b=40),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Nap impact on next-night sleep
+    if len(nap_df) >= 3 and not sleep_df.empty:
+        nap_dates = set(nap_df["date"].astype(str))
+        sleep_copy = sleep_df.copy()
+        sleep_copy["prev_date"] = (
+            pd.to_datetime(sleep_copy["date"]) - pd.Timedelta(days=1)
+        ).dt.date.astype(str)
+        sleep_copy["had_nap"] = sleep_copy["prev_date"].isin(nap_dates)
+
+        with_nap = sleep_copy[sleep_copy["had_nap"]]
+        without_nap = sleep_copy[~sleep_copy["had_nap"]]
+
+        if not with_nap.empty and not without_nap.empty:
+            st.subheader("Next-Night Sleep After Nap")
+            cmp_cols = st.columns(3)
+            for i, (metric, label, fmt) in enumerate([
+                ("performance", "Sleep Performance", "{:.0f}%"),
+                ("efficiency", "Sleep Efficiency", "{:.0f}%"),
+                ("deep_hrs", "Deep Sleep (hrs)", "{:.2f}"),
+            ]):
+                with cmp_cols[i]:
+                    wn = with_nap[metric].dropna().mean()
+                    wo = without_nap[metric].dropna().mean()
+                    if pd.notna(wn) and pd.notna(wo):
+                        st.metric(
+                            label,
+                            f"After nap: {fmt.format(wn)}",
+                            delta=f"{wn - wo:+.1f} vs no nap",
+                        )
+
+
+@st.fragment
+def bedtime_patterns_section():
+    st.subheader("Bedtime & Wake Time Patterns")
+
+    if sleep_df.empty or len(sleep_df) < 5:
+        st.info("Need 5+ sleep records for bedtime pattern analysis.")
+        return
+
+    df = sleep_df[["date", "bedtime_hour", "wake_hour", "is_weekend",
+                   "in_bed_hrs", "awake_hrs"]].copy()
+    df["actual_sleep_hrs"] = df["in_bed_hrs"] - df["awake_hrs"]
+
+    # Consistency KPIs
+    bt_std = df["bedtime_hour"].std() * 60  # convert to minutes
+    wake_std = df["wake_hour"].std() * 60
+    kpi_cols = st.columns(3)
+    with kpi_cols[0]:
+        st.metric("Bedtime Std Dev", f"{bt_std:.0f} min")
+    with kpi_cols[1]:
+        st.metric("Wake Time Std Dev", f"{wake_std:.0f} min")
+    with kpi_cols[2]:
+        weekend_df = df[df["is_weekend"]]
+        weekday_df = df[~df["is_weekend"]]
+        if not weekend_df.empty and not weekday_df.empty:
+            social_jet_lag = (weekend_df["bedtime_hour"].mean() - weekday_df["bedtime_hour"].mean()) * 60
+            st.metric("Weekend Bedtime Shift", f"{social_jet_lag:+.0f} min")
+
+    # Bedtime + wake scatter with rolling mean
+    df_sorted = df.sort_values("date").reset_index(drop=True)
+    rolling_bt = df_sorted["bedtime_hour"].rolling(7, min_periods=1).mean()
+    rolling_wake = df_sorted["wake_hour"].rolling(7, min_periods=1).mean()
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df_sorted["date"], y=df_sorted["bedtime_hour"],
+        mode="markers", name="Bedtime",
+        marker=dict(color="#7b61ff", size=7, opacity=0.7),
+        hovertemplate="Date: %{x}<br>Bedtime: %{y:.2f}h<extra></extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=df_sorted["date"], y=rolling_bt,
+        mode="lines", name="Bedtime 7d avg",
+        line=dict(color="#7b61ff", width=2, dash="dash"),
+    ))
+    fig.add_trace(go.Scatter(
+        x=df_sorted["date"], y=df_sorted["wake_hour"],
+        mode="markers", name="Wake Time",
+        marker=dict(color="#00d4aa", size=7, opacity=0.7),
+        hovertemplate="Date: %{x}<br>Wake: %{y:.2f}h<extra></extra>",
+    ))
+    fig.add_trace(go.Scatter(
+        x=df_sorted["date"], y=rolling_wake,
+        mode="lines", name="Wake 7d avg",
+        line=dict(color="#00d4aa", width=2, dash="dash"),
+    ))
+
+    def _hour_to_label(h):
+        h_mod = h % 24
+        return f"{int(h_mod):02d}:00"
+
+    tick_range = list(range(int(df_sorted["bedtime_hour"].min()), int(df_sorted["wake_hour"].max()) + 2))
+    fig.update_layout(
+        title="Bedtime & Wake Time Over Time",
+        xaxis_title="Date",
+        yaxis_title="Time of Day",
+        yaxis=dict(
+            tickvals=tick_range,
+            ticktext=[_hour_to_label(h) for h in tick_range],
+        ),
+        height=400,
+        margin=dict(t=40, b=40),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    # Weekend vs weekday comparison
+    if not weekend_df.empty and not weekday_df.empty:
+        st.subheader("Weekday vs Weekend")
+        cmp_cols = st.columns(3)
+        with cmp_cols[0]:
+            wd_bt = weekday_df["bedtime_hour"].mean()
+            we_bt = weekend_df["bedtime_hour"].mean()
+            st.metric("Avg Bedtime", f"WD {_hour_to_label(wd_bt)} / WE {_hour_to_label(we_bt)}")
+        with cmp_cols[1]:
+            wd_wk = weekday_df["wake_hour"].mean()
+            we_wk = weekend_df["wake_hour"].mean()
+            st.metric("Avg Wake", f"WD {_hour_to_label(wd_wk)} / WE {_hour_to_label(we_wk)}")
+        with cmp_cols[2]:
+            wd_sl = weekday_df["actual_sleep_hrs"].mean()
+            we_sl = weekend_df["actual_sleep_hrs"].mean()
+            st.metric("Avg Sleep", f"WD {wd_sl:.1f}h / WE {we_sl:.1f}h")
+
+    # Bedtime deviation vs next-day recovery
+    if not recovery_df.empty:
+        bt_mean = df["bedtime_hour"].mean()
+        df["bt_dev_min"] = (df["bedtime_hour"] - bt_mean) * 60
+        next_day = df[["date", "bt_dev_min"]].copy()
+        next_day["date"] = (
+            pd.to_datetime(next_day["date"]) + pd.Timedelta(days=1)
+        ).dt.date
+        merged = pd.merge(next_day, recovery_df[["date", "recovery"]], on="date", how="inner")
+
+        if len(merged) >= 5:
+            corr = merged["bt_dev_min"].corr(merged["recovery"])
+            fig2 = go.Figure()
+            fig2.add_trace(go.Scatter(
+                x=merged["bt_dev_min"],
+                y=merged["recovery"],
+                mode="markers",
+                marker=dict(color="#ffaa00", size=8, opacity=0.8),
+                hovertemplate="Bedtime dev: %{x:.0f} min<br>Recovery: %{y:.0f}%<extra></extra>",
+            ))
+            z = np.polyfit(merged["bt_dev_min"], merged["recovery"], 1)
+            p = np.poly1d(z)
+            x_line = np.linspace(merged["bt_dev_min"].min(), merged["bt_dev_min"].max(), 50)
+            fig2.add_trace(go.Scatter(
+                x=x_line, y=p(x_line),
+                mode="lines", name="Trend",
+                line=dict(color="#888", dash="dash", width=2),
+                hoverinfo="skip",
+            ))
+            fig2.update_layout(
+                title=f"Bedtime Deviation vs Next-Day Recovery (r={corr:.2f})",
+                xaxis_title="Bedtime Deviation from Personal Mean (min)",
+                yaxis_title="Recovery (%)",
+                height=350,
+                margin=dict(t=40, b=40),
+                showlegend=False,
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+            st.caption(
+                "Negative = earlier than usual · Positive = later than usual. "
+                f"Correlation with next-day recovery: r={corr:.2f}"
+            )
+
+
+# --- Tabs ---
+
+from whoop.chat import run_chat
+
+tab_dashboard, tab_sleep, tab_chat = st.tabs(["Dashboard", "Sleep Deep Dive", "Chat"])
+
+with tab_dashboard:
+    st.markdown("---")
+
+    # --- KPI Row ---
+    if not recovery_df.empty and not cycle_df.empty and not sleep_df.empty:
+        latest_rec = recovery_df.iloc[-1]
+        prev_rec = recovery_df.iloc[-2] if len(recovery_df) > 1 else None
+        latest_cycle = cycle_df.iloc[-1]
+        prev_cycle = cycle_df.iloc[-2] if len(cycle_df) > 1 else None
+        latest_sleep = sleep_df.iloc[-1]
+        prev_sleep = sleep_df.iloc[-2] if len(sleep_df) > 1 else None
+
+        def delta(current, previous, key):
+            if previous is None or pd.isna(current.get(key)) or pd.isna(previous.get(key)):
+                return None
+            return round(current[key] - previous[key], 1)
+
+        cols = st.columns(6)
+        with cols[0]:
+            st.metric(
+                "Recovery",
+                f"{latest_rec['recovery']:.0f}%",
+                delta=delta(latest_rec, prev_rec, "recovery"),
+            )
+        with cols[1]:
+            st.metric(
+                "HRV",
+                f"{latest_rec['hrv']:.1f} ms",
+                delta=delta(latest_rec, prev_rec, "hrv"),
+            )
+        with cols[2]:
+            st.metric(
+                "RHR",
+                f"{latest_rec['rhr']:.0f} bpm",
+                delta=delta(latest_rec, prev_rec, "rhr"),
+                delta_color="inverse",
+            )
+        with cols[3]:
+            perf = latest_sleep.get("performance")
+            perf_str = f"{perf:.0f}%" if perf is not None and not pd.isna(perf) else "—"
+            st.metric(
+                "Sleep Perf",
+                perf_str,
+                delta=delta(latest_sleep, prev_sleep, "performance"),
+            )
+        with cols[4]:
+            st.metric(
+                "Day Strain",
+                f"{latest_cycle['strain']:.1f}",
+                delta=delta(latest_cycle, prev_cycle, "strain"),
+            )
+        with cols[5]:
+            spo2 = latest_rec.get("spo2")
+            if spo2 is not None and not pd.isna(spo2):
+                st.metric(
+                    "SpO2",
+                    f"{spo2:.1f}%",
+                    delta=delta(latest_rec, prev_rec, "spo2"),
+                )
+            else:
+                st.metric("SpO2", "—")
+    else:
+        st.info("Not enough data for KPIs yet.")
+
+    st.markdown("---")
+
+    # --- Sleep Quality Alerts ---
+    quality_gaps = detect_sleep_quality_gaps(sleep_df)
+    if quality_gaps:
+        st.subheader("⚠️ Sleep Quality Alerts")
+    render_sleep_quality_alerts(quality_gaps)
+
+    # --- Overtraining Risk ---
+    st.subheader("Overtraining Risk")
+    ots_card()
+
+    st.markdown("---")
+
+    # --- AI Insights ---
+    st.subheader("AI Insights")
+    insight_box = st.empty()
+    if st.button("Generate Fresh Insights"):
+        with st.spinner("Claude is analyzing your data..."):
+            insight = generate_insight(days)
+        insight_box.markdown(insight)
+    else:
+        cached_insight = get_latest_insight()
+        if cached_insight:
+            insight_box.markdown(cached_insight)
+
+    st.markdown("---")
+
+    # --- Illness Early Warning ---
+    st.subheader("Illness Early Warning")
+
+    if illness_df.empty or illness_df["rhr_baseline"].isna().all():
+        st.info("Need at least 8 days of data to compute illness baselines.")
+    else:
+        latest = illness_df.iloc[-1]
+        signal_count = int(latest["signal_count"])
+
+        if latest["illness_flag"] and signal_count >= 3:
+            st.error("🔴 High illness risk — 3+ signals elevated. Consider rest and monitor symptoms.")
+        elif latest["illness_flag"] and signal_count == 2:
+            st.warning("🟡 Elevated illness risk — 2 signals elevated. Watch for symptoms over next 24-48h.")
+        elif signal_count == 1:
+            st.info("🟠 One signal slightly elevated — not yet flagged, monitoring.")
+        else:
+            st.success("🟢 All signals normal.")
+
+        if not latest["has_skin_temp"]:
+            st.caption("⚠️ Signal based on RHR + HRV only (no skin temperature data). Weaker signal.")
+
+        if latest["resp_rate_flag"]:
+            st.caption("📋 Supporting indicator: respiratory rate also elevated above baseline.")
+
+        _ill_cols = st.columns(4)
+        with _ill_cols[0]:
+            if pd.notna(latest["rhr"]) and pd.notna(latest["rhr_dev"]):
+                st.metric("RHR", f"{latest['rhr']:.0f} bpm", delta=f"{latest['rhr_dev']:+.1f}", delta_color="inverse")
+            else:
+                st.metric("RHR", "—")
+        with _ill_cols[1]:
+            if pd.notna(latest["hrv"]) and pd.notna(latest["hrv_dev"]):
+                st.metric("HRV", f"{latest['hrv']:.1f} ms", delta=f"{latest['hrv_dev']:+.1f}%", delta_color="normal")
+            else:
+                st.metric("HRV", "—")
+        with _ill_cols[2]:
+            if pd.notna(latest["skin_temp"]) and pd.notna(latest["skin_temp_dev"]):
+                st.metric("Skin Temp", f"{latest['skin_temp']:.1f}°C", delta=f"{latest['skin_temp_dev']:+.2f}", delta_color="inverse")
+            else:
+                st.metric("Skin Temp", "—")
+        with _ill_cols[3]:
+            if pd.notna(latest["respiratory_rate"]) and pd.notna(latest["resp_rate_dev"]):
+                st.metric("Resp Rate", f"{latest['respiratory_rate']:.1f} brpm", delta=f"{latest['resp_rate_dev']:+.1f}", delta_color="inverse")
+            else:
+                st.metric("Resp Rate", "—")
+
+    illness_charts()
+
+    st.markdown("---")
+
+    # --- Recovery / HRV / RHR Charts ---
+    recovery_charts()
+
+    st.markdown("---")
+
+    # --- Recovery Rebound Rate ---
+    rebound_charts()
+
+    st.markdown("---")
+
+    # --- Sleep Charts ---
+    sleep_charts()
+
+    st.markdown("---")
+
+    # --- Deep Sleep Efficiency ---
+    deep_sleep_efficiency_chart()
+
+    st.markdown("---")
+
+    # --- Sleep Apnea Risk Signal ---
+    apnea_signal_section()
+
+    st.markdown("---")
+
+    # --- Strain + Workout Charts ---
+    strain_workout_section()
+
+    st.markdown("---")
+
+    # --- Strain-Recovery Balance ---
+    strain_recovery_balance_section()
+
+    st.markdown("---")
+
+    # --- Cardiac Drift Detection ---
+    cardiac_drift_section()
+
+
+with tab_sleep:
+    nap_tracker_section()
+    st.markdown("---")
+    bedtime_patterns_section()
+
+
+with tab_chat:
+    st.subheader("Chat with your Whoop data")
+
+    chips = [
+        "Why was recovery low today?",
+        "Compare this week vs last",
+        "What should I do today?",
+        "Analyze my sleep patterns",
+    ]
+    chip_cols = st.columns(len(chips))
+    for i, chip in enumerate(chips):
+        with chip_cols[i]:
+            if st.button(chip, key=f"chip_{i}"):
+                st.session_state.chat_pending = chip
+
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    for msg in st.session_state.messages:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    user_input = st.chat_input("Ask about your data...")
+
+    if "chat_pending" in st.session_state:
+        user_input = st.session_state.pop("chat_pending")
+
+    if user_input:
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        with st.chat_message("user"):
+            st.markdown(user_input)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Thinking..."):
+                response = run_chat(st.session_state.messages, days)
+            st.markdown(response)
+
+        st.session_state.messages.append({"role": "assistant", "content": response})
