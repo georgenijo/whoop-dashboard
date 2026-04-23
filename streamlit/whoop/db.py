@@ -3,7 +3,7 @@ import os
 import sqlite3
 from datetime import datetime
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "whoop_data.db")
+DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "whoop_data.db")
 
 
 def get_conn() -> sqlite3.Connection:
