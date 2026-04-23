@@ -6,7 +6,7 @@ import time
 
 from whoop.insights import _build_context
 
-LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
+LOG_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logs")
 os.makedirs(LOG_DIR, exist_ok=True)
 
 logging.basicConfig(

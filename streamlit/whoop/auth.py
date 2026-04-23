@@ -14,7 +14,7 @@ load_dotenv()
 AUTH_URL = "https://api.prod.whoop.com/oauth/oauth2/auth"
 TOKEN_URL = "https://api.prod.whoop.com/oauth/oauth2/token"
 SCOPES = "offline read:profile read:recovery read:cycles read:sleep read:workout read:body_measurement"
-TOKEN_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "tokens.json")
+TOKEN_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "tokens.json")
 
 _refresh_lock = threading.Lock()
 

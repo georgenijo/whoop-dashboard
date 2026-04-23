@@ -18,7 +18,7 @@ Personal Whoop data dashboard built with Streamlit and Plotly.
    ```
 5. Run the dashboard:
    ```
-   streamlit run app.py
+   streamlit run streamlit/app.py
    ```
 6. Click "Connect to Whoop" and authorize the app.
 

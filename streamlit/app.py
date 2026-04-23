@@ -23,7 +23,7 @@ from whoop.ots import calculate_overtraining_score
 load_dotenv()
 import logging
 
-_log_dir = os.path.join(os.path.dirname(__file__), "logs")
+_log_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logs")
 os.makedirs(_log_dir, exist_ok=True)
 
 ui_logger = logging.getLogger("whoop.ui")
