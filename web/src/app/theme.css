@@ -1,0 +1,258 @@
+/* =========================================================================
+   Whoop+ Design System — Colors & Type
+   A dark-first, data-dense health analytics aesthetic.
+   ========================================================================= */
+
+/* ------------------------- Fonts -----------------------------------------
+   Primary: Geist + Geist Mono (Vercel, OFL) — geometric, modern,
+   excellent tabular numerals, crisp at small sizes. Loaded in layout.tsx
+   via `next/font/google`; the CSS variables below alias to the Next.js
+   font CSS variables (--font-geist-sans, --font-geist-mono).
+   Whoop's production app uses a proprietary display family; Geist is the
+   best widely-available substitute and is a production-safe choice.
+   ------------------------------------------------------------------------- */
+
+:root {
+  /* =========================================================================
+     COLOR — Core neutrals (dark-first)
+     ========================================================================= */
+  --bg-0: #000000;         /* app background — pure black (Whoop signature) */
+  --bg-1: #0a0a0b;         /* surface 1 — cards */
+  --bg-2: #121214;         /* surface 2 — elevated panels */
+  --bg-3: #1a1a1e;         /* surface 3 — hover, inputs */
+  --bg-4: #242429;         /* surface 4 — pressed, dividers */
+
+  --fg-0: #ffffff;         /* primary foreground */
+  --fg-1: #e7e7ea;         /* body text */
+  --fg-2: #a1a1aa;         /* secondary text, captions */
+  --fg-3: #6b6b74;         /* tertiary, placeholders */
+  --fg-4: #3f3f46;         /* disabled */
+
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.18);
+
+  /* =========================================================================
+     COLOR — Brand (Whoop strain red + signal palette from Plotly charts)
+     ========================================================================= */
+  --brand-strain: #ff0043;     /* Whoop Strain red — primary brand accent */
+  --brand-strain-dim: #cc0036;
+  --brand-strain-glow: rgba(255, 0, 67, 0.35);
+
+  /* =========================================================================
+     COLOR — Metric / Signal (lifted verbatim from the Streamlit dashboard)
+     ========================================================================= */
+  --metric-recovery: #00d4aa;     /* Recovery — teal */
+  --metric-hrv: #7b61ff;           /* HRV — violet */
+  --metric-rhr: #ff6b6b;           /* Resting heart rate — coral */
+  --metric-strain: #ffaa00;        /* Strain — amber */
+  --metric-sleep-deep: #0055ff;    /* Deep sleep — blue */
+  --metric-sleep-rem: #7b61ff;     /* REM — violet */
+  --metric-sleep-light: #00d4aa;   /* Light — teal */
+  --metric-resp: #00aaff;          /* Respiration — cyan */
+  --metric-spo2: #00d4aa;
+  --metric-skin-temp: #ffaa00;
+
+  /* Recovery zones (the stoplight band overlays) */
+  --zone-red: #ff4444;             /* recovery < 33 */
+  --zone-yellow: #ffaa00;          /* 33–66 */
+  --zone-green: #00d4aa;           /* > 66 */
+
+  /* Heart-rate zones (workout HR zone stack) */
+  --hr-zone-0: #666666;
+  --hr-zone-1: #00d4aa;
+  --hr-zone-2: #00aaff;
+  --hr-zone-3: #ffaa00;
+  --hr-zone-4: #ff6b6b;
+  --hr-zone-5: #ff0000;
+
+  /* =========================================================================
+     COLOR — Semantic
+     ========================================================================= */
+  --success: #00d4aa;
+  --warning: #ffaa00;
+  --danger: #ff4444;
+  --info: #00aaff;
+  --ai: #7b61ff;                  /* LLM / insights surface accent */
+
+  /* =========================================================================
+     TYPE — Families
+     ========================================================================= */
+  --font-display: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  --font-sans: var(--font-geist-sans), system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, monospace;
+  --font-numeric: var(--font-geist-sans), system-ui, sans-serif;
+
+  /* =========================================================================
+     TYPE — Scale (data-dense → display)
+     ========================================================================= */
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-base: 14px;
+  --fs-md: 16px;
+  --fs-lg: 18px;
+  --fs-xl: 22px;
+  --fs-2xl: 28px;
+  --fs-3xl: 36px;
+  --fs-4xl: 48px;
+  --fs-metric: 56px;        /* the huge KPI readouts */
+  --fs-metric-lg: 72px;
+  --fs-hero: 88px;
+
+  --lh-tight: 1.05;
+  --lh-snug: 1.2;
+  --lh-normal: 1.4;
+  --lh-loose: 1.6;
+
+  --tracking-tight: -0.02em;
+  --tracking-snug: -0.01em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.02em;
+  --tracking-caps: 0.12em;    /* uppercase eyebrow labels */
+
+  /* =========================================================================
+     SPACING (4px base grid)
+     ========================================================================= */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* =========================================================================
+     RADII — Sharp-biased (Whoop is geometric, not rounded)
+     ========================================================================= */
+  --radius-none: 0;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-pill: 9999px;
+
+  /* =========================================================================
+     SHADOWS & ELEVATION
+     ========================================================================= */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.45);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,0.55);
+  --shadow-glow-strain: 0 0 24px rgba(255, 0, 67, 0.25);
+  --shadow-glow-ai: 0 0 24px rgba(123, 97, 255, 0.28);
+  --shadow-inner: inset 0 1px 0 rgba(255,255,255,0.04);
+
+  /* =========================================================================
+     MOTION
+     ========================================================================= */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+}
+
+/* =========================================================================
+   SEMANTIC TYPE RULES
+   ========================================================================= */
+
+html, body {
+  background: var(--bg-0);
+  color: var(--fg-1);
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5 {
+  font-family: var(--font-display);
+  color: var(--fg-0);
+  font-weight: 600;
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--lh-tight);
+  margin: 0;
+}
+
+h1 { font-size: var(--fs-4xl); font-weight: 700; }
+h2 { font-size: var(--fs-3xl); }
+h3 { font-size: var(--fs-2xl); }
+h4 { font-size: var(--fs-xl); font-weight: 500; letter-spacing: var(--tracking-snug); }
+h5 { font-size: var(--fs-lg); font-weight: 500; letter-spacing: var(--tracking-snug); }
+
+p { margin: 0 0 var(--space-3) 0; color: var(--fg-1); }
+
+small, .caption {
+  font-size: var(--fs-sm);
+  color: var(--fg-2);
+  line-height: var(--lh-normal);
+}
+
+/* Eyebrow / label — the all-caps section tag */
+.eyebrow {
+  font-family: var(--font-sans);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--fg-2);
+}
+
+/* Metric readout — for KPI numbers */
+.metric-value {
+  font-family: var(--font-numeric);
+  font-size: var(--fs-metric);
+  font-weight: 500;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+  color: var(--fg-0);
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-label {
+  font-family: var(--font-sans);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--fg-2);
+}
+
+.metric-delta {
+  font-family: var(--font-numeric);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.metric-delta.up { color: var(--success); }
+.metric-delta.down { color: var(--danger); }
+.metric-delta.flat { color: var(--fg-2); }
+
+/* Monospace data + code */
+code, .mono, .num {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Tabular numerals — for tables */
+.tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Link */
+a {
+  color: var(--fg-0);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border-strong);
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+a:hover { border-bottom-color: var(--brand-strain); }
