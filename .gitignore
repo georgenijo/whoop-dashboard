@@ -3,6 +3,9 @@ tokens.json
 whoop_data.db
 whoop_data.db-wal
 whoop_data.db-shm
+shared/whoop_data.db
+shared/whoop_data.db-wal
+shared/whoop_data.db-shm
 __pycache__/
 *.pyc
 .streamlit/

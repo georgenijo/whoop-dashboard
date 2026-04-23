@@ -3,10 +3,16 @@ import os
 import sqlite3
 from datetime import datetime
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "whoop_data.db")
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+DB_PATH = os.environ.get(
+    "WHOOP_DB_PATH",
+    os.path.join(_REPO_ROOT, "shared", "whoop_data.db"),
+)
+TOKENS_JSON_PATH = os.path.join(_REPO_ROOT, "tokens.json")
 
 
 def get_conn() -> sqlite3.Connection:
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
@@ -74,8 +80,63 @@ def init_db():
             insight TEXT,
             created_at TEXT
         );
+        CREATE TABLE IF NOT EXISTS signals (
+            date TEXT NOT NULL,
+            signal TEXT NOT NULL,
+            value REAL,
+            raw JSON,
+            computed_at TEXT,
+            PRIMARY KEY (date, signal)
+        );
+        CREATE TABLE IF NOT EXISTS tokens (
+            provider TEXT PRIMARY KEY,
+            access_token TEXT NOT NULL,
+            refresh_token TEXT NOT NULL,
+            expires_at REAL NOT NULL,
+            scope TEXT,
+            token_type TEXT,
+            raw JSON,
+            updated_at TEXT
+        );
         """
     )
+    conn.close()
+    _backfill_tokens_from_json()
+
+
+def _backfill_tokens_from_json(provider: str = "whoop") -> None:
+    if not os.path.exists(TOKENS_JSON_PATH):
+        return
+    conn = get_conn()
+    existing = conn.execute(
+        "SELECT 1 FROM tokens WHERE provider = ?", (provider,)
+    ).fetchone()
+    if existing is not None:
+        conn.close()
+        return
+    try:
+        with open(TOKENS_JSON_PATH) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        conn.close()
+        return
+    if "access_token" not in data or "refresh_token" not in data:
+        conn.close()
+        return
+    conn.execute(
+        "INSERT OR REPLACE INTO tokens VALUES (?,?,?,?,?,?,?,?)",
+        (
+            provider,
+            data["access_token"],
+            data["refresh_token"],
+            float(data.get("expires_at", 0)),
+            data.get("scope"),
+            data.get("token_type"),
+            json.dumps(data),
+            datetime.utcnow().isoformat(),
+        ),
+    )
+    conn.commit()
     conn.close()
 
 
@@ -266,3 +327,76 @@ def get_history_stats(days: int = 30) -> dict:
     stats["workouts"] = [dict(r) for r in workouts]
 
     return stats
+
+
+def upsert_signal(
+    date: str,
+    signal: str,
+    value: float | None,
+    raw: dict | None = None,
+    computed_at: str | None = None,
+) -> None:
+    conn = get_conn()
+    conn.execute(
+        "INSERT OR REPLACE INTO signals VALUES (?,?,?,?,?)",
+        (
+            date,
+            signal,
+            value,
+            json.dumps(raw) if raw is not None else None,
+            computed_at or datetime.utcnow().isoformat(),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def save_token(provider: str, data: dict) -> None:
+    conn = get_conn()
+    conn.execute(
+        "INSERT OR REPLACE INTO tokens VALUES (?,?,?,?,?,?,?,?)",
+        (
+            provider,
+            data["access_token"],
+            data["refresh_token"],
+            float(data.get("expires_at", 0)),
+            data.get("scope"),
+            data.get("token_type"),
+            json.dumps(data),
+            datetime.utcnow().isoformat(),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+
+def load_token(provider: str) -> dict | None:
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT access_token, refresh_token, expires_at, scope, token_type, raw "
+        "FROM tokens WHERE provider = ?",
+        (provider,),
+    ).fetchone()
+    conn.close()
+    if row is None:
+        return None
+    data = json.loads(row["raw"]) if row["raw"] else {}
+    data.update(
+        {
+            "access_token": row["access_token"],
+            "refresh_token": row["refresh_token"],
+            "expires_at": row["expires_at"],
+        }
+    )
+    if row["scope"] is not None:
+        data["scope"] = row["scope"]
+    if row["token_type"] is not None:
+        data["token_type"] = row["token_type"]
+    return data
+
+
+def delete_token(provider: str) -> None:
+    conn = get_conn()
+    conn.execute("DELETE FROM tokens WHERE provider = ?", (provider,))
+    conn.commit()
+    conn.close()

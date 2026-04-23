@@ -9,6 +9,8 @@ from urllib.parse import urlencode
 import requests
 from dotenv import load_dotenv
 
+from whoop import db
+
 load_dotenv()
 
 AUTH_URL = "https://api.prod.whoop.com/oauth/oauth2/auth"
@@ -71,6 +73,10 @@ def save_tokens(data: dict) -> None:
     with open(tmp, "w") as f:
         json.dump(data, f)
     os.replace(tmp, TOKEN_FILE)
+    try:
+        db.save_token("whoop", data)
+    except Exception:
+        pass
 
 
 def is_expired(data: dict) -> bool:
@@ -104,6 +110,10 @@ def clear_tokens() -> None:
     try:
         os.remove(TOKEN_FILE)
     except FileNotFoundError:
+        pass
+    try:
+        db.delete_token("whoop")
+    except Exception:
         pass
 
 
