@@ -298,9 +298,9 @@ function CoachInner() {
             onClick={() => send(input)}
             disabled={!input.trim() || loading}
             style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
+              width: 40,
+              height: 40,
+              borderRadius: 10,
               border: "none",
               background: input.trim() && !loading ? "#7b61ff" : "rgba(255,255,255,0.06)",
               color: input.trim() && !loading ? "#fff" : "var(--fg-3)",
@@ -310,7 +310,7 @@ function CoachInner() {
               justifyContent: "center",
               flexShrink: 0,
               transition: "background 150ms",
-              fontSize: 16,
+              fontSize: 18,
             }}
           >
             ↑
