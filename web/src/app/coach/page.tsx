@@ -1,0 +1,311 @@
+"use client";
+
+import { useState, useRef, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { marked } from "marked";
+
+type Message = {
+  role: "user" | "assistant";
+  content: string;
+  streaming?: boolean;
+};
+
+const SUGGESTIONS = [
+  "How is my recovery trending this week?",
+  "What does my sleep quality look like?",
+  "Am I overtraining based on my strain?",
+  "What should I focus on to improve HRV?",
+];
+
+function MessageBubble({ msg }: { msg: Message }) {
+  const isUser = msg.role === "user";
+  const html = !isUser ? (marked.parse(msg.content) as string) : null;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: isUser ? "flex-end" : "flex-start",
+        marginBottom: 12,
+      }}
+    >
+      <div
+        style={{
+          maxWidth: "75%",
+          padding: "10px 14px",
+          borderRadius: isUser ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+          background: isUser ? "#7b61ff" : "rgba(255,255,255,0.06)",
+          border: isUser ? "none" : "1px solid rgba(255,255,255,0.08)",
+          color: "var(--fg-0)",
+          fontFamily: "var(--font-sans)",
+          fontSize: 14,
+          lineHeight: 1.55,
+        }}
+      >
+        {isUser ? (
+          msg.content
+        ) : (
+          <div
+            className="prose-coach"
+            dangerouslySetInnerHTML={{ __html: html ?? "" }}
+          />
+        )}
+        {msg.streaming && (
+          <span
+            style={{
+              display: "inline-block",
+              width: 6,
+              height: 14,
+              background: "#7b61ff",
+              marginLeft: 2,
+              borderRadius: 2,
+              animation: "blink 1s step-end infinite",
+              verticalAlign: "middle",
+            }}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CoachInner() {
+  const searchParams = useSearchParams();
+  const range = searchParams.get("range") ?? "30d";
+  const days = { "7d": 7, "14d": 14, "30d": 30, "90d": 90, "all": 9999 }[range] ?? 30;
+
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const send = useCallback(
+    async (text: string) => {
+      if (!text.trim() || loading) return;
+      const userMsg: Message = { role: "user", content: text };
+      const nextMessages = [...messages, userMsg];
+      setMessages(nextMessages);
+      setInput("");
+      setLoading(true);
+
+      const assistantIdx = nextMessages.length;
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "", streaming: true },
+      ]);
+
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: nextMessages.map((m) => ({
+              role: m.role,
+              content: m.content,
+            })),
+            days,
+          }),
+        });
+
+        if (!res.body) throw new Error("No response body");
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let full = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          full += decoder.decode(value, { stream: true });
+          setMessages((prev) => {
+            const updated = [...prev];
+            updated[assistantIdx] = {
+              role: "assistant",
+              content: full,
+              streaming: true,
+            };
+            return updated;
+          });
+        }
+
+        setMessages((prev) => {
+          const updated = [...prev];
+          updated[assistantIdx] = { role: "assistant", content: full };
+          return updated;
+        });
+      } catch {
+        setMessages((prev) => {
+          const updated = [...prev];
+          updated[assistantIdx] = {
+            role: "assistant",
+            content: "Something went wrong. Try again.",
+          };
+          return updated;
+        });
+      } finally {
+        setLoading(false);
+        inputRef.current?.focus();
+      }
+    },
+    [messages, loading, days]
+  );
+
+  function handleKey(e: React.KeyboardEvent) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      send(input);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "calc(100vh - 56px)",
+        maxWidth: 720,
+        margin: "0 auto",
+      }}
+    >
+      <style>{`
+        @keyframes blink { 50% { opacity: 0 } }
+        .prose-coach h2 { font-size: 13px; font-weight: 600; color: var(--fg-1); margin: 12px 0 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .prose-coach h3 { font-size: 13px; font-weight: 600; color: var(--fg-1); margin: 8px 0 4px; }
+        .prose-coach ul { padding-left: 16px; margin: 4px 0; }
+        .prose-coach li { margin: 3px 0; }
+        .prose-coach p { margin: 6px 0; }
+        .prose-coach strong { color: var(--fg-0); }
+      `}</style>
+
+      <div
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "24px 0 12px",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {messages.length === 0 && (
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 24 }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>💬</div>
+              <div style={{ fontFamily: "var(--font-display)", fontSize: 20, fontWeight: 500, color: "var(--fg-0)", marginBottom: 6 }}>
+                Coach
+              </div>
+              <div style={{ fontFamily: "var(--font-sans)", fontSize: 13, color: "var(--fg-3)" }}>
+                Ask anything about your health data
+              </div>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center", maxWidth: 480 }}>
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => send(s)}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: 20,
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    background: "rgba(255,255,255,0.04)",
+                    color: "var(--fg-1)",
+                    fontFamily: "var(--font-sans)",
+                    fontSize: 13,
+                    cursor: "pointer",
+                    transition: "background 150ms",
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.08)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {messages.map((msg, i) => (
+          <MessageBubble key={i} msg={msg} />
+        ))}
+        <div ref={bottomRef} />
+      </div>
+
+      <div
+        style={{
+          padding: "12px 0 20px",
+          borderTop: "1px solid rgba(255,255,255,0.06)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            alignItems: "flex-end",
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 12,
+            padding: "10px 12px",
+          }}
+        >
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKey}
+            placeholder="Ask about your recovery, sleep, strain…"
+            rows={1}
+            disabled={loading}
+            style={{
+              flex: 1,
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              color: "var(--fg-0)",
+              fontFamily: "var(--font-sans)",
+              fontSize: 14,
+              resize: "none",
+              lineHeight: 1.5,
+              maxHeight: 120,
+              overflow: "auto",
+            }}
+          />
+          <button
+            onClick={() => send(input)}
+            disabled={!input.trim() || loading}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              border: "none",
+              background: input.trim() && !loading ? "#7b61ff" : "rgba(255,255,255,0.06)",
+              color: input.trim() && !loading ? "#fff" : "var(--fg-3)",
+              cursor: input.trim() && !loading ? "pointer" : "default",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              transition: "background 150ms",
+              fontSize: 16,
+            }}
+          >
+            ↑
+          </button>
+        </div>
+        <div style={{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--fg-3)", textAlign: "center", marginTop: 8 }}>
+          Using {range === "all" ? "all-time" : range} data · Enter to send · Shift+Enter for newline
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function CoachPage() {
+  return (
+    <Suspense fallback={null}>
+      <CoachInner />
+    </Suspense>
+  );
+}
