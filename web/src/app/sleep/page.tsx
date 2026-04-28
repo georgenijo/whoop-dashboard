@@ -3,7 +3,7 @@ import TrendChart from "@/components/charts/TrendChart";
 import SleepStagesChart from "@/components/charts/SleepStagesChart";
 import { getOverview, getFullSleepTrend } from "@/lib/db";
 import { msToHoursNumber } from "@/lib/format";
-import { parseDays } from "@/lib/range";
+import { parseDays, formatRangeLabel } from "@/lib/range";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +14,7 @@ export default async function SleepPage({
 }) {
   const { range } = await searchParams;
   const days = parseDays(range);
+  const rangeLabel = formatRangeLabel(range);
   const data = getOverview(days);
   const trend = getFullSleepTrend(days);
 
@@ -40,7 +41,7 @@ export default async function SleepPage({
           <SleepStagesChart rows={trend} />
           <TrendChart
             title="Sleep Duration"
-            subtitle={`${days} days`}
+            subtitle={rangeLabel}
             color="#00d4aa"
             gradientId="sleep-dur"
             data={durationData}
@@ -50,7 +51,7 @@ export default async function SleepPage({
         <div className="col">
           <TrendChart
             title="Sleep Performance"
-            subtitle={`${days} days`}
+            subtitle={rangeLabel}
             color="#7b61ff"
             gradientId="sleep-perf"
             data={perfData}
@@ -58,7 +59,7 @@ export default async function SleepPage({
           />
           <TrendChart
             title="Sleep Need"
-            subtitle={`${days} days`}
+            subtitle={rangeLabel}
             color="#00aaff"
             gradientId="sleep-need"
             data={needData}

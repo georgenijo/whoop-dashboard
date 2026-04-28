@@ -1,7 +1,7 @@
 import KPIStrip from "@/components/overview/KPIStrip";
 import TrendChart from "@/components/charts/TrendChart";
 import { getOverview, getStrainTrend } from "@/lib/db";
-import { parseDays } from "@/lib/range";
+import { parseDays, formatRangeLabel } from "@/lib/range";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +12,7 @@ export default async function StrainPage({
 }) {
   const { range } = await searchParams;
   const days = parseDays(range);
+  const rangeLabel = formatRangeLabel(range);
   const data = getOverview(days);
   const trend = getStrainTrend(days);
 
@@ -36,7 +37,7 @@ export default async function StrainPage({
         <div className="col">
           <TrendChart
             title="Daily Strain"
-            subtitle={`${days} days`}
+            subtitle={rangeLabel}
             color="#ffaa00"
             gradientId="strain"
             data={strainData}
@@ -46,7 +47,7 @@ export default async function StrainPage({
         <div className="col">
           <TrendChart
             title="Average Heart Rate"
-            subtitle={`${days} days`}
+            subtitle={rangeLabel}
             color="#ff6b6b"
             gradientId="avg-hr"
             data={hrData}

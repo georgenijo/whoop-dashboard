@@ -1,7 +1,7 @@
 import KPIStrip from "@/components/overview/KPIStrip";
 import TrendChart from "@/components/charts/TrendChart";
 import { getOverview, getRecoveryTrend } from "@/lib/db";
-import { parseDays } from "@/lib/range";
+import { parseDays, formatRangeLabel } from "@/lib/range";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +12,7 @@ export default async function RecoveryPage({
 }) {
   const { range } = await searchParams;
   const days = parseDays(range);
+  const rangeLabel = formatRangeLabel(range);
   const data = getOverview(days);
   const trend = getRecoveryTrend(days);
 
@@ -38,7 +39,7 @@ export default async function RecoveryPage({
         <div className="col">
           <TrendChart
             title="Recovery score"
-            subtitle={`${days} days`}
+            subtitle={rangeLabel}
             color="#00d4aa"
             gradientId="recovery"
             data={recoveryData}
@@ -46,7 +47,7 @@ export default async function RecoveryPage({
           />
           <TrendChart
             title="HRV"
-            subtitle={`${days} days`}
+            subtitle={rangeLabel}
             color="#7b61ff"
             gradientId="hrv"
             data={hrvData}
@@ -56,7 +57,7 @@ export default async function RecoveryPage({
         <div className="col">
           <TrendChart
             title="Resting Heart Rate"
-            subtitle={`${days} days`}
+            subtitle={rangeLabel}
             color="#ff6b6b"
             gradientId="rhr"
             data={rhrData}
@@ -64,7 +65,7 @@ export default async function RecoveryPage({
           />
           <TrendChart
             title="SpO2"
-            subtitle={`${days} days`}
+            subtitle={rangeLabel}
             color="#00aaff"
             gradientId="spo2"
             data={spo2Data}
