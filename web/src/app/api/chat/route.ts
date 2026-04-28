@@ -1,5 +1,11 @@
-import { spawnSync } from "child_process";
-import { getHealthContext, addChatMessage, addChatLog } from "@/lib/db";
+import { spawn } from "child_process";
+import Anthropic from "@anthropic-ai/sdk";
+import {
+  getHealthContext,
+  addChatMessage,
+  addChatLog,
+  getSetting,
+} from "@/lib/db";
 
 const SYSTEM_PROMPT = `You are a personal health and performance analyst reviewing Whoop biometric data.
 
@@ -12,30 +18,63 @@ Your job:
 
 Keep responses under 400 words. Use markdown formatting.`;
 
+type ChatMessageInput = { role: "user" | "assistant"; content: string };
+
+function runClaudeCli(prompt: string): Promise<{ stdout: string; stderr: string; code: number }> {
+  return new Promise((resolve, reject) => {
+    const cleanEnv: NodeJS.ProcessEnv = { ...process.env };
+    delete cleanEnv.ANTHROPIC_API_KEY;
+    cleanEnv.HOME = "/home/george";
+
+    const child = spawn(
+      "/usr/local/bin/claude",
+      ["-p", prompt, "--dangerously-skip-permissions", "--model", "sonnet"],
+      { env: cleanEnv, stdio: ["ignore", "pipe", "pipe"] }
+    );
+
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("Claude CLI timed out after 180s"));
+    }, 180_000);
+
+    child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString("utf8"); });
+    child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString("utf8"); });
+    child.on("error", (err) => { clearTimeout(timer); reject(err); });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      resolve({ stdout, stderr, code: code ?? -1 });
+    });
+  });
+}
+
+async function runAnthropicSdk(
+  systemPrompt: string,
+  messages: ChatMessageInput[]
+): Promise<string> {
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const response = await client.messages.create({
+    model: "claude-sonnet-4-5-20250929",
+    max_tokens: 1024,
+    system: systemPrompt,
+    messages,
+  });
+  const text = response.content
+    .filter((b) => b.type === "text")
+    .map((b) => (b as { type: "text"; text: string }).text)
+    .join("");
+  return text.trim();
+}
+
 export async function POST(req: Request) {
-  const { messages, days = 30 } = await req.json() as {
-    messages: { role: "user" | "assistant"; content: string }[];
+  const { messages, days = 9999 } = (await req.json()) as {
+    messages: ChatMessageInput[];
     days?: number;
   };
 
   const context = getHealthContext(days);
-
-  // Build conversation history as plain text for the prompt
-  const history = messages
-    .slice(0, -1)
-    .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
-    .join("\n\n");
-
   const lastUser = messages[messages.length - 1].content;
-
-  const prompt = [
-    SYSTEM_PROMPT,
-    `\nCurrent health data:\n${context}`,
-    history ? `\nConversation so far:\n${history}` : "",
-    `\nUser: ${lastUser}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
 
   addChatMessage("user", lastUser);
 
@@ -43,29 +82,35 @@ export async function POST(req: Request) {
   const startMs = Date.now();
   const promptPreview = lastUser.slice(0, 200);
 
+  const useApi =
+    getSetting("use_api_mode") === "1" && !!process.env.ANTHROPIC_API_KEY;
+
   try {
-    // Strip ANTHROPIC_API_KEY so claude CLI uses its OAuth login instead of
-    // trying to authenticate via the (invalid) env var.
-    const cleanEnv: NodeJS.ProcessEnv = { ...process.env };
-    delete cleanEnv.ANTHROPIC_API_KEY;
-    cleanEnv.HOME = "/home/george";
+    let reply: string;
 
-    const result = spawnSync(
-      "/usr/local/bin/claude",
-      ["-p", prompt, "--dangerously-skip-permissions", "--model", "sonnet"],
-      {
-        timeout: 120_000,
-        env: cleanEnv,
-        maxBuffer: 1024 * 1024 * 4,
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "pipe"],
+    if (useApi) {
+      const systemWithContext = `${SYSTEM_PROMPT}\n\nCurrent health data:\n${context}`;
+      reply = await runAnthropicSdk(systemWithContext, messages);
+    } else {
+      const history = messages
+        .slice(0, -1)
+        .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+        .join("\n\n");
+      const prompt = [
+        SYSTEM_PROMPT,
+        `\nCurrent health data:\n${context}`,
+        history ? `\nConversation so far:\n${history}` : "",
+        `\nUser: ${lastUser}`,
+      ]
+        .filter(Boolean)
+        .join("\n");
+      const result = await runClaudeCli(prompt);
+      if (result.code !== 0) {
+        throw new Error(result.stderr || `claude exited ${result.code}`);
       }
-    );
+      reply = result.stdout.trim();
+    }
 
-    if (result.error) throw result.error;
-    if (result.status !== 0) throw new Error(result.stderr || `exit ${result.status}`);
-
-    const reply = result.stdout.trim();
     addChatMessage("assistant", reply);
     addChatLog({
       started_at: startedAt,

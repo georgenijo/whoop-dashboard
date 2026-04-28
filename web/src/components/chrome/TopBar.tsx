@@ -46,6 +46,8 @@ export default function TopBar() {
     router.push(`${pathname}?${params.toString()}`);
   }
 
+  const showRangePicker = pathname !== "/coach" && pathname !== "/logs" && pathname !== "/settings";
+
   return (
     <div className="topbar">
       <div className="title-block">
@@ -53,20 +55,22 @@ export default function TopBar() {
         <div className="date">{subtitle}</div>
       </div>
       <div className="right">
-        <div className="range" role="tablist" aria-label="Time range">
-          {RANGES.map((r) => (
-            <button
-              key={r}
-              className={range === r ? "active" : ""}
-              onClick={() => setRange(r)}
-              type="button"
-              role="tab"
-              aria-selected={range === r}
-            >
-              {r}
-            </button>
-          ))}
-        </div>
+        {showRangePicker && (
+          <div className="range" role="tablist" aria-label="Time range">
+            {RANGES.map((r) => (
+              <button
+                key={r}
+                className={range === r ? "active" : ""}
+                onClick={() => setRange(r)}
+                type="button"
+                role="tab"
+                aria-selected={range === r}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="icon-btn" title="Sync" role="button">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={icon("refresh-cw")} alt="sync" />

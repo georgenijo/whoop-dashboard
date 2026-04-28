@@ -76,6 +76,10 @@ function openWrite(): DB | null {
         days_context INTEGER
       );
       CREATE INDEX IF NOT EXISTS idx_chat_logs_started ON chat_logs(started_at DESC);
+      CREATE TABLE IF NOT EXISTS app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      );
     `);
     return db;
   } catch {
@@ -476,6 +480,28 @@ export function clearChatLogs(): void {
   if (!db) return;
   try {
     db.prepare("DELETE FROM chat_logs").run();
+  } finally {
+    db.close();
+  }
+}
+
+export function getSetting(key: string): string | null {
+  return safeQuery((db) => {
+    if (!hasTable(db, "app_settings")) return null;
+    const row = db
+      .prepare("SELECT value FROM app_settings WHERE key = ?")
+      .get(key) as { value: string } | undefined;
+    return row?.value ?? null;
+  });
+}
+
+export function setSetting(key: string, value: string): void {
+  const db = openWrite();
+  if (!db) return;
+  try {
+    db.prepare(
+      "INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    ).run(key, value);
   } finally {
     db.close();
   }

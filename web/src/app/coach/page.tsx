@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { marked } from "marked";
 
 type Message = {
@@ -71,9 +70,7 @@ function MessageBubble({ msg }: { msg: Message }) {
 }
 
 function CoachInner() {
-  const searchParams = useSearchParams();
-  const range = searchParams.get("range") ?? "30d";
-  const days = { "7d": 7, "14d": 14, "30d": 30, "90d": 90, "all": 9999 }[range] ?? 30;
+  const days = 9999;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -320,7 +317,7 @@ function CoachInner() {
           </button>
         </div>
         <div style={{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--fg-3)", textAlign: "center", marginTop: 8, display: "flex", justifyContent: "center", gap: 12 }}>
-          <span>Using {range === "all" ? "all-time" : range} data · Enter to send · Shift+Enter for newline</span>
+          <span>Enter to send · Shift+Enter for newline</span>
           {messages.length > 0 && (
             <button
               onClick={clearHistory}
@@ -336,9 +333,5 @@ function CoachInner() {
 }
 
 export default function CoachPage() {
-  return (
-    <Suspense fallback={null}>
-      <CoachInner />
-    </Suspense>
-  );
+  return <CoachInner />;
 }
