@@ -169,12 +169,15 @@ function CoachInner() {
 
   return (
     <div
+      className="coach-page"
       style={{
         display: "flex",
         flexDirection: "column",
-        height: "calc(100vh - 56px)",
+        flex: 1,
+        minHeight: 0,
         maxWidth: 720,
         margin: "0 auto",
+        width: "100%",
       }}
     >
       <style>{`
