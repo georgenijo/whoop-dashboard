@@ -1,7 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk";
+import { execSync } from "child_process";
 import { getHealthContext } from "@/lib/db";
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const SYSTEM_PROMPT = `You are a personal health and performance analyst reviewing Whoop biometric data.
 
@@ -21,31 +19,40 @@ export async function POST(req: Request) {
   };
 
   const context = getHealthContext(days);
-  const systemWithContext = `${SYSTEM_PROMPT}\n\nCurrent health data:\n${context}`;
 
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      const anthropicStream = client.messages.stream({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1024,
-        system: systemWithContext,
-        messages,
-      });
+  // Build conversation history as plain text for the prompt
+  const history = messages
+    .slice(0, -1)
+    .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
+    .join("\n\n");
 
-      for await (const event of anthropicStream) {
-        if (
-          event.type === "content_block_delta" &&
-          event.delta.type === "text_delta"
-        ) {
-          controller.enqueue(encoder.encode(event.delta.text));
-        }
+  const lastUser = messages[messages.length - 1].content;
+
+  const prompt = [
+    SYSTEM_PROMPT,
+    `\nCurrent health data:\n${context}`,
+    history ? `\nConversation so far:\n${history}` : "",
+    `\nUser: ${lastUser}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  try {
+    const result = execSync(
+      `claude -p ${JSON.stringify(prompt)} --dangerously-skip-permissions --model sonnet`,
+      {
+        timeout: 120_000,
+        env: { ...process.env, HOME: process.env.HOME ?? "/home/george" },
+        maxBuffer: 1024 * 1024 * 4,
       }
-      controller.close();
-    },
-  });
+    );
 
-  return new Response(stream, {
-    headers: { "Content-Type": "text/plain; charset=utf-8" },
-  });
+    const text = result.toString().trim();
+    return new Response(text, {
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return new Response(`Error: ${msg}`, { status: 500 });
+  }
 }

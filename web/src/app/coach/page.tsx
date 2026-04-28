@@ -112,29 +112,12 @@ function CoachInner() {
           }),
         });
 
-        if (!res.body) throw new Error("No response body");
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let full = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          full += decoder.decode(value, { stream: true });
-          setMessages((prev) => {
-            const updated = [...prev];
-            updated[assistantIdx] = {
-              role: "assistant",
-              content: full,
-              streaming: true,
-            };
-            return updated;
-          });
-        }
+        if (!res.ok) throw new Error(`Server error ${res.status}`);
+        const text = await res.text();
 
         setMessages((prev) => {
           const updated = [...prev];
-          updated[assistantIdx] = { role: "assistant", content: full };
+          updated[assistantIdx] = { role: "assistant", content: text };
           return updated;
         });
       } catch {
