@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { spawnSync } from "child_process";
 import { getHealthContext } from "@/lib/db";
 
 const SYSTEM_PROMPT = `You are a personal health and performance analyst reviewing Whoop biometric data.
@@ -38,17 +38,21 @@ export async function POST(req: Request) {
     .join("\n");
 
   try {
-    const result = execSync(
-      `claude -p ${JSON.stringify(prompt)} --dangerously-skip-permissions --model sonnet`,
+    const result = spawnSync(
+      "claude",
+      ["-p", prompt, "--dangerously-skip-permissions", "--model", "sonnet"],
       {
         timeout: 120_000,
         env: { ...process.env, HOME: process.env.HOME ?? "/home/george" },
         maxBuffer: 1024 * 1024 * 4,
+        encoding: "utf8",
       }
     );
 
-    const text = result.toString().trim();
-    return new Response(text, {
+    if (result.error) throw result.error;
+    if (result.status !== 0) throw new Error(result.stderr || `exit ${result.status}`);
+
+    return new Response(result.stdout.trim(), {
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
   } catch (err) {
