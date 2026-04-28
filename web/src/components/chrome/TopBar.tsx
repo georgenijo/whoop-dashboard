@@ -13,6 +13,7 @@ const TITLES: Record<string, string> = {
   "/strain": "Strain",
   "/workouts": "Workouts",
   "/coach": "Coach",
+  "/logs": "Logs",
   "/history": "History",
   "/settings": "Settings",
 };

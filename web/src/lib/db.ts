@@ -65,6 +65,17 @@ function openWrite(): DB | null {
         created_at TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_chat_messages_id ON chat_messages(id);
+      CREATE TABLE IF NOT EXISTS chat_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at TEXT NOT NULL,
+        prompt_preview TEXT NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        response_length INTEGER NOT NULL,
+        error_message TEXT,
+        days_context INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_chat_logs_started ON chat_logs(started_at DESC);
     `);
     return db;
   } catch {
@@ -411,6 +422,60 @@ export function clearChatMessages(): void {
   if (!db) return;
   try {
     db.prepare("DELETE FROM chat_messages").run();
+  } finally {
+    db.close();
+  }
+}
+
+export type ChatLog = {
+  id: number;
+  started_at: string;
+  prompt_preview: string;
+  duration_ms: number;
+  status: "ok" | "error" | "aborted";
+  response_length: number;
+  error_message: string | null;
+  days_context: number | null;
+};
+
+export function addChatLog(log: Omit<ChatLog, "id">): void {
+  const db = openWrite();
+  if (!db) return;
+  try {
+    db.prepare(
+      "INSERT INTO chat_logs (started_at, prompt_preview, duration_ms, status, response_length, error_message, days_context) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).run(
+      log.started_at,
+      log.prompt_preview,
+      log.duration_ms,
+      log.status,
+      log.response_length,
+      log.error_message,
+      log.days_context
+    );
+  } finally {
+    db.close();
+  }
+}
+
+export function getChatLogs(limit = 200): ChatLog[] {
+  return (
+    safeQuery((db) => {
+      if (!hasTable(db, "chat_logs")) return [] as ChatLog[];
+      return db
+        .prepare(
+          "SELECT id, started_at, prompt_preview, duration_ms, status, response_length, error_message, days_context FROM chat_logs ORDER BY id DESC LIMIT ?"
+        )
+        .all(limit) as ChatLog[];
+    }) ?? []
+  );
+}
+
+export function clearChatLogs(): void {
+  const db = openWrite();
+  if (!db) return;
+  try {
+    db.prepare("DELETE FROM chat_logs").run();
   } finally {
     db.close();
   }

@@ -1,5 +1,5 @@
 import { spawnSync } from "child_process";
-import { getHealthContext, addChatMessage } from "@/lib/db";
+import { getHealthContext, addChatMessage, addChatLog } from "@/lib/db";
 
 const SYSTEM_PROMPT = `You are a personal health and performance analyst reviewing Whoop biometric data.
 
@@ -39,6 +39,10 @@ export async function POST(req: Request) {
 
   addChatMessage("user", lastUser);
 
+  const startedAt = new Date().toISOString();
+  const startMs = Date.now();
+  const promptPreview = lastUser.slice(0, 200);
+
   try {
     // Strip ANTHROPIC_API_KEY so claude CLI uses its OAuth login instead of
     // trying to authenticate via the (invalid) env var.
@@ -63,11 +67,29 @@ export async function POST(req: Request) {
 
     const reply = result.stdout.trim();
     addChatMessage("assistant", reply);
+    addChatLog({
+      started_at: startedAt,
+      prompt_preview: promptPreview,
+      duration_ms: Date.now() - startMs,
+      status: "ok",
+      response_length: reply.length,
+      error_message: null,
+      days_context: days,
+    });
     return new Response(reply, {
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    addChatLog({
+      started_at: startedAt,
+      prompt_preview: promptPreview,
+      duration_ms: Date.now() - startMs,
+      status: "error",
+      response_length: 0,
+      error_message: msg.slice(0, 500),
+      days_context: days,
+    });
     return new Response(`Error: ${msg}`, { status: 500 });
   }
 }

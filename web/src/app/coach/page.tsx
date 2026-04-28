@@ -44,24 +44,25 @@ function MessageBubble({ msg }: { msg: Message }) {
       >
         {isUser ? (
           msg.content
+        ) : msg.streaming && msg.content === "" ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0" }}>
+            <span style={{ display: "flex", gap: 4 }}>
+              {[0, 1, 2].map((i) => (
+                <span key={i} style={{
+                  width: 6, height: 6, borderRadius: "50%",
+                  background: "#7b61ff",
+                  animation: "thinking-dot 1.2s ease-in-out infinite",
+                  animationDelay: `${i * 0.2}s`,
+                  display: "inline-block",
+                }} />
+              ))}
+            </span>
+            <span style={{ fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--fg-3)" }}>Thinking…</span>
+          </div>
         ) : (
           <div
             className="prose-coach"
             dangerouslySetInnerHTML={{ __html: html ?? "" }}
-          />
-        )}
-        {msg.streaming && (
-          <span
-            style={{
-              display: "inline-block",
-              width: 6,
-              height: 14,
-              background: "#7b61ff",
-              marginLeft: 2,
-              borderRadius: 2,
-              animation: "blink 1s step-end infinite",
-              verticalAlign: "middle",
-            }}
           />
         )}
       </div>
@@ -80,6 +81,7 @@ function CoachInner() {
   const [loaded, setLoaded] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     fetch("/api/chat/history")
@@ -115,6 +117,10 @@ function CoachInner() {
       if (inputRef.current) inputRef.current.style.height = "auto";
       setLoading(true);
 
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
       const assistantIdx = nextMessages.length;
       setMessages((prev) => [
         ...prev,
@@ -132,6 +138,7 @@ function CoachInner() {
             })),
             days,
           }),
+          signal: controller.signal,
         });
 
         const text = await res.text();
@@ -143,6 +150,10 @@ function CoachInner() {
           return updated;
         });
       } catch (e) {
+        if (e instanceof DOMException && e.name === "AbortError") {
+          setMessages((prev) => prev.slice(0, assistantIdx));
+          return;
+        }
         const errMsg = e instanceof Error ? e.message : String(e);
         setMessages((prev) => {
           const updated = [...prev];
@@ -182,6 +193,7 @@ function CoachInner() {
     >
       <style>{`
         @keyframes blink { 50% { opacity: 0 } }
+        @keyframes thinking-dot { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.4 } 40% { transform: scale(1); opacity: 1 } }
         .prose-coach h2 { font-size: 13px; font-weight: 600; color: var(--fg-1); margin: 12px 0 4px; text-transform: uppercase; letter-spacing: 0.05em; }
         .prose-coach h3 { font-size: 13px; font-weight: 600; color: var(--fg-1); margin: 8px 0 4px; }
         .prose-coach ul { padding-left: 16px; margin: 4px 0; }
