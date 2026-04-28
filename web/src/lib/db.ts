@@ -73,7 +73,8 @@ function openWrite(): DB | null {
         status TEXT NOT NULL,
         response_length INTEGER NOT NULL,
         error_message TEXT,
-        days_context INTEGER
+        days_context INTEGER,
+        type TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_chat_logs_started ON chat_logs(started_at DESC);
       CREATE TABLE IF NOT EXISTS app_settings (
@@ -81,6 +82,10 @@ function openWrite(): DB | null {
         value TEXT
       );
     `);
+    const cols = db.prepare("PRAGMA table_info(chat_logs)").all() as { name: string }[];
+    if (!cols.some((c) => c.name === "type")) {
+      db.exec("ALTER TABLE chat_logs ADD COLUMN type TEXT");
+    }
     return db;
   } catch {
     return null;
@@ -440,6 +445,7 @@ export type ChatLog = {
   response_length: number;
   error_message: string | null;
   days_context: number | null;
+  type: "cli" | "api" | null;
 };
 
 export function addChatLog(log: Omit<ChatLog, "id">): void {
@@ -447,7 +453,7 @@ export function addChatLog(log: Omit<ChatLog, "id">): void {
   if (!db) return;
   try {
     db.prepare(
-      "INSERT INTO chat_logs (started_at, prompt_preview, duration_ms, status, response_length, error_message, days_context) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO chat_logs (started_at, prompt_preview, duration_ms, status, response_length, error_message, days_context, type) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(
       log.started_at,
       log.prompt_preview,
@@ -455,7 +461,8 @@ export function addChatLog(log: Omit<ChatLog, "id">): void {
       log.status,
       log.response_length,
       log.error_message,
-      log.days_context
+      log.days_context,
+      log.type
     );
   } finally {
     db.close();
@@ -468,7 +475,7 @@ export function getChatLogs(limit = 200): ChatLog[] {
       if (!hasTable(db, "chat_logs")) return [] as ChatLog[];
       return db
         .prepare(
-          "SELECT id, started_at, prompt_preview, duration_ms, status, response_length, error_message, days_context FROM chat_logs ORDER BY id DESC LIMIT ?"
+          "SELECT id, started_at, prompt_preview, duration_ms, status, response_length, error_message, days_context, type FROM chat_logs ORDER BY id DESC LIMIT ?"
         )
         .all(limit) as ChatLog[];
     }) ?? []

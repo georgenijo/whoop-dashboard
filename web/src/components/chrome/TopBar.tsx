@@ -46,7 +46,12 @@ export default function TopBar() {
     router.push(`${pathname}?${params.toString()}`);
   }
 
-  const showRangePicker = pathname !== "/coach" && pathname !== "/logs" && pathname !== "/settings";
+  const showRangePicker =
+    pathname === "/" ||
+    pathname === "/recovery" ||
+    pathname === "/sleep" ||
+    pathname === "/strain" ||
+    pathname === "/workouts";
 
   return (
     <div className="topbar">

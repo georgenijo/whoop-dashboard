@@ -120,6 +120,7 @@ export async function POST(req: Request) {
       response_length: reply.length,
       error_message: null,
       days_context: days,
+      type: useApi ? "api" : "cli",
     });
     return new Response(reply, {
       headers: { "Content-Type": "text/plain; charset=utf-8" },
@@ -134,6 +135,7 @@ export async function POST(req: Request) {
       response_length: 0,
       error_message: msg.slice(0, 500),
       days_context: days,
+      type: useApi ? "api" : "cli",
     });
     return new Response(`Error: ${msg}`, { status: 500 });
   }

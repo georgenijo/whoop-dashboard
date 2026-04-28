@@ -107,6 +107,7 @@ export default function LogsPage() {
                   <th style={{ padding: "10px 16px", textAlign: "left", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Prompt</th>
                   <th style={{ padding: "10px 16px", textAlign: "right", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Duration</th>
                   <th style={{ padding: "10px 16px", textAlign: "right", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Resp</th>
+                  <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Type</th>
                   <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Range</th>
                   <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Status</th>
                 </tr>
@@ -128,8 +129,26 @@ export default function LogsPage() {
                       <td style={{ padding: "10px 16px", textAlign: "right", color: "var(--fg-3)", fontFamily: "var(--font-mono)", fontSize: 12, fontVariantNumeric: "tabular-nums" }}>
                         {log.response_length > 0 ? `${log.response_length}` : "—"}
                       </td>
+                      <td style={{ padding: "10px 16px", textAlign: "center" }}>
+                        {log.type ? (
+                          <span style={{
+                            display: "inline-block",
+                            padding: "2px 8px",
+                            borderRadius: 4,
+                            fontSize: 11,
+                            fontFamily: "var(--font-mono)",
+                            background: log.type === "api" ? "rgba(123,97,255,0.15)" : "rgba(255,255,255,0.06)",
+                            color: log.type === "api" ? "#a08aff" : "var(--fg-2)",
+                            textTransform: "uppercase",
+                          }}>
+                            {log.type}
+                          </span>
+                        ) : (
+                          <span style={{ color: "var(--fg-3)", fontFamily: "var(--font-mono)", fontSize: 12 }}>—</span>
+                        )}
+                      </td>
                       <td style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontFamily: "var(--font-mono)", fontSize: 12 }}>
-                        {log.days_context ? `${log.days_context}d` : "—"}
+                        {log.days_context && log.days_context < 9999 ? `${log.days_context}d` : "all"}
                       </td>
                       <td style={{ padding: "10px 16px", textAlign: "center" }}>
                         <span style={{
