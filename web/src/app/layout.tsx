@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import Sidebar from "@/components/chrome/Sidebar";
 import TopBar from "@/components/chrome/TopBar";
@@ -36,7 +37,9 @@ export default function RootLayout({
         <div className="app">
           <Sidebar />
           <main className="main">
-            <TopBar title="Overview" />
+            <Suspense fallback={null}>
+              <TopBar />
+            </Suspense>
             <div className="content">{children}</div>
           </main>
         </div>

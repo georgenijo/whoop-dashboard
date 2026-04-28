@@ -1,21 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
-type NavItem = { id: string; label: string; icon: string };
+type NavItem = { href: string; label: string; icon: string };
 
 const nav: NavItem[] = [
-  { id: "overview", label: "Overview", icon: "layout-dashboard" },
-  { id: "recovery", label: "Recovery", icon: "activity" },
-  { id: "sleep", label: "Sleep", icon: "moon" },
-  { id: "strain", label: "Strain", icon: "flame" },
-  { id: "workouts", label: "Workouts", icon: "dumbbell" },
+  { href: "/", label: "Overview", icon: "layout-dashboard" },
+  { href: "/recovery", label: "Recovery", icon: "activity" },
+  { href: "/sleep", label: "Sleep", icon: "moon" },
+  { href: "/strain", label: "Strain", icon: "flame" },
+  { href: "/workouts", label: "Workouts", icon: "dumbbell" },
 ];
 
 const secondary: NavItem[] = [
-  { id: "coach", label: "Coach", icon: "sparkles" },
-  { id: "history", label: "History", icon: "calendar" },
-  { id: "settings", label: "Settings", icon: "settings" },
+  { href: "/coach", label: "Coach", icon: "sparkles" },
+  { href: "/history", label: "History", icon: "calendar" },
+  { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
 function icon(name: string) {
@@ -23,8 +24,7 @@ function icon(name: string) {
 }
 
 export default function Sidebar() {
-  // Only Overview is wired in Phase 1; the rest are visual-only placeholders.
-  const [active, setActive] = useState<string>("overview");
+  const pathname = usePathname();
 
   return (
     <aside className="sidebar">
@@ -38,29 +38,27 @@ export default function Sidebar() {
       <div className="sb-nav">
         <div className="sb-group-label">Dashboard</div>
         {nav.map((n) => (
-          <button
-            key={n.id}
-            className={`sb-link ${active === n.id ? "active" : ""}`}
-            onClick={() => setActive(n.id)}
-            type="button"
+          <Link
+            key={n.href}
+            href={n.href}
+            className={`sb-link ${pathname === n.href ? "active" : ""}`}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={icon(n.icon)} alt="" />
             {n.label}
-          </button>
+          </Link>
         ))}
         <div className="sb-group-label">Intelligence</div>
         {secondary.map((n) => (
-          <button
-            key={n.id}
-            className={`sb-link ${active === n.id ? "active" : ""}`}
-            onClick={() => setActive(n.id)}
-            type="button"
+          <Link
+            key={n.href}
+            href={n.href}
+            className={`sb-link ${pathname === n.href ? "active" : ""}`}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={icon(n.icon)} alt="" />
             {n.label}
-          </button>
+          </Link>
         ))}
       </div>
 

@@ -1,41 +1,50 @@
-type Props = {
-  hasData: boolean;
-};
+import { marked } from "marked";
+import { getLatestInsight } from "@/lib/db";
 
-export default function AIInsightCard({ hasData }: Props) {
+function formatInsightDate(date: string): string {
+  const todayStr = new Date().toLocaleDateString("en-CA");
+  const diff = Math.round(
+    (new Date(todayStr).getTime() - new Date(date).getTime()) / (1000 * 60 * 60 * 24)
+  );
+  if (diff <= 0) return "Today";
+  if (diff === 1) return "Yesterday";
+  return `${diff}d ago`;
+}
+
+export default function AIInsightCard({ hasData }: { hasData: boolean }) {
+  const insight = getLatestInsight();
+
   return (
     <div className="ai-card" aria-label="AI insight">
       <div className="ai-head">
         <div className="ai-dot" aria-hidden />
         <span className="ai-tag">AI Insight</span>
-        <span className="ai-when">Coming soon</span>
+        <span className="ai-when">
+          {insight ? formatInsightDate(insight.date) : hasData ? "Not yet generated" : "No data"}
+        </span>
       </div>
-      {hasData ? (
+      {insight ? (
+        <div
+          className="ai-body"
+          dangerouslySetInnerHTML={{ __html: marked.parse(insight.insight) as string }}
+        />
+      ) : hasData ? (
         <>
-          <p>
-            AI-generated daily insight will appear here in a future phase. The Streamlit app
-            already generates insights via the Claude CLI — the port will re-use that pipeline
-            and surface the output in this card.
+          <p>No insight generated yet for today.</p>
+          <p style={{ marginTop: 8, color: "var(--fg-3)", fontSize: 12 }}>
+            Run <code style={{ background: "rgba(123,97,255,0.12)", padding: "1px 6px", borderRadius: 4 }}>python daily_sync.py</code> from the repo root to generate one.
           </p>
-          <h3>What to expect</h3>
-          <ul>
-            <li>A short, clinical read on today&apos;s recovery, HRV, and sleep.</li>
-            <li>Action items grounded in actual data points — no fluff.</li>
-            <li>Flagged anomalies (e.g. RHR elevation, strain debt).</li>
-          </ul>
         </>
       ) : (
         <>
-          <p>
-            Connect Whoop to unlock AI-generated insights about your recovery, sleep, and
-            strain.
-          </p>
-          <h3>First sync</h3>
-          <ul>
-            <li>Authorize via Whoop OAuth.</li>
-            <li>Daily sync populates the local database.</li>
-            <li>Insights surface here after the Phase 2 AI integration.</li>
-          </ul>
+          <p>Connect Whoop to unlock AI-generated insights about your recovery, sleep, and strain.</p>
+          <a
+            href="/api/auth/login"
+            className="empty-state"
+            style={{ textDecoration: "none", border: "none", display: "inline-block", marginTop: 8 }}
+          >
+            <span className="cta">Connect Whoop →</span>
+          </a>
         </>
       )}
     </div>

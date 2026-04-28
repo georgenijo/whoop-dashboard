@@ -1,13 +1,11 @@
-import RecoveryHero from "@/components/overview/RecoveryHero";
 import KPIStrip from "@/components/overview/KPIStrip";
-import RecoveryTrend from "@/components/overview/RecoveryTrend";
-import AIInsightCard from "@/components/overview/AIInsightCard";
-import { getOverview, getRecoveryTrend } from "@/lib/db";
+import TrendChart from "@/components/charts/TrendChart";
+import { getOverview, getStrainTrend } from "@/lib/db";
 import { parseDays } from "@/lib/range";
 
 export const dynamic = "force-dynamic";
 
-export default async function OverviewPage({
+export default async function StrainPage({
   searchParams,
 }: {
   searchParams: Promise<{ range?: string }>;
@@ -15,20 +13,13 @@ export default async function OverviewPage({
   const { range } = await searchParams;
   const days = parseDays(range);
   const data = getOverview(days);
-  const trend = getRecoveryTrend(days);
+  const trend = getStrainTrend(days);
+
+  const strainData = trend.map((r) => ({ date: r.date, value: r.strain }));
+  const hrData = trend.map((r) => ({ date: r.date, value: r.avg_hr }));
 
   return (
     <>
-      <div className="hero">
-        <RecoveryHero
-          score={data.latestRecovery?.recovery_score ?? null}
-          hrv={data.latestRecovery?.hrv ?? null}
-          rhr={data.latestRecovery?.rhr ?? null}
-          updatedAt={data.latestRecovery?.date ?? null}
-        />
-        <AIInsightCard hasData={data.hasData} />
-      </div>
-
       <KPIStrip
         latestRecovery={data.latestRecovery}
         previousRecovery={data.previousRecovery}
@@ -43,9 +34,25 @@ export default async function OverviewPage({
 
       <div className="grid-main">
         <div className="col">
-          <RecoveryTrend rows={trend} />
+          <TrendChart
+            title="Daily Strain"
+            subtitle={`${days} days`}
+            color="#ffaa00"
+            gradientId="strain"
+            data={strainData}
+            unit=""
+          />
         </div>
-        <div className="col">{/* Phase 2 */}</div>
+        <div className="col">
+          <TrendChart
+            title="Average Heart Rate"
+            subtitle={`${days} days`}
+            color="#ff6b6b"
+            gradientId="avg-hr"
+            data={hrData}
+            unit=" bpm"
+          />
+        </div>
       </div>
     </>
   );

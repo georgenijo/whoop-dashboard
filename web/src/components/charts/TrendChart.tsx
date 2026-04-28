@@ -1,0 +1,230 @@
+"use client";
+
+import { useRef, useState, useCallback, useEffect } from "react";
+import { smoothPath } from "@/lib/paths";
+
+function linearRegression(values: number[]): { x1: number; y1: number; x2: number; y2: number } | null {
+  const n = values.length;
+  if (n < 3) return null;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+
+  let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+  for (let i = 0; i < n; i++) {
+    sumX += i; sumY += values[i]; sumXY += i * values[i]; sumX2 += i * i;
+  }
+  const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+  const intercept = (sumY - slope * sumX) / n;
+
+  const yAt = (x: number) => 100 - ((slope * x + intercept - min) / range) * 100;
+  return { x1: 0, y1: yAt(0), x2: 100, y2: yAt(n - 1) };
+}
+
+type DataPoint = { date: string; value: number | null };
+
+type Props = {
+  title: string;
+  subtitle?: string;
+  color: string;
+  gradientId: string;
+  data: DataPoint[];
+  unit?: string;
+};
+
+type Tooltip = {
+  x: number; // px from left of chart-body
+  y: number; // px from top of chart-body
+  date: string;
+  value: number;
+  pct: number; // 0–100 x position for crosshair in SVG coords
+  svgY: number; // 0–100 y for dot
+};
+
+function pickAxis(data: DataPoint[]): string[] {
+  if (data.length === 0) return [];
+  const idx = [0, Math.floor(data.length / 4), Math.floor(data.length / 2), Math.floor((data.length * 3) / 4), data.length - 1];
+  return Array.from(new Set(idx)).map((i) => {
+    const d = new Date(data[i].date + "T00:00:00");
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  });
+}
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr + "T00:00:00").toLocaleDateString("en-US", {
+    weekday: "short", month: "short", day: "numeric",
+  });
+}
+
+export default function TrendChart({ title, subtitle, color, gradientId, data, unit = "" }: Props) {
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [tooltip, setTooltip] = useState<Tooltip | null>(null);
+  const [showTrendline, setShowTrendline] = useState(false);
+
+  useEffect(() => {
+    setShowTrendline(localStorage.getItem("trendline") === "1");
+  }, []);
+
+  const valid = data.filter((d): d is { date: string; value: number } => d.value != null && Number.isFinite(d.value));
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!bodyRef.current || valid.length < 2) return;
+    const rect = bodyRef.current.getBoundingClientRect();
+    const xPct = (e.clientX - rect.left) / rect.width;
+    const idx = Math.round(xPct * (valid.length - 1));
+    const clamped = Math.max(0, Math.min(valid.length - 1, idx));
+    const pt = valid[clamped];
+
+    const min = Math.min(...valid.map((d) => d.value));
+    const max = Math.max(...valid.map((d) => d.value));
+    const range = max - min || 1;
+    const svgY = 100 - ((pt.value - min) / range) * 100;
+    const pct = (clamped / (valid.length - 1)) * 100;
+
+    // tooltip x: keep inside bounds
+    const rawX = (clamped / (valid.length - 1)) * rect.width;
+    const tooltipWidth = 130;
+    const x = Math.min(Math.max(rawX, tooltipWidth / 2), rect.width - tooltipWidth / 2);
+
+    setTooltip({ x, y: (svgY / 100) * rect.height, date: pt.date, value: pt.value, pct, svgY });
+  }, [valid]);
+
+  if (valid.length < 2) {
+    return (
+      <div className="card">
+        <div className="card-head">
+          <div>
+            <div className="card-title">
+              <span className="dot" style={{ background: color, color }} />
+              {title}
+            </div>
+            {subtitle && <div className="card-sub" style={{ marginTop: 4 }}>{subtitle}</div>}
+          </div>
+        </div>
+        <div className="empty-state">
+          <div className="title">Not enough data yet</div>
+          <div className="sub">Sync Whoop to populate this chart</div>
+        </div>
+      </div>
+    );
+  }
+
+  const avg = valid.reduce((a, b) => a + b.value, 0) / valid.length;
+  const latest = valid[valid.length - 1].value;
+  const min = Math.min(...valid.map((d) => d.value));
+  const max = Math.max(...valid.map((d) => d.value));
+  const range = max - min || 1;
+  const trendLine = showTrendline ? linearRegression(valid.map((d) => d.value)) : null;
+
+  const points = valid.map<[number, number]>((d, i) => [
+    (i / (valid.length - 1)) * 100,
+    100 - ((d.value - min) / range) * 100,
+  ]);
+  const linePath = smoothPath(points);
+  const areaPath = `${linePath} L 100,100 L 0,100 Z`;
+  const endY = 100 - ((latest - min) / range) * 100;
+  const axis = pickAxis(valid);
+
+  return (
+    <div className="card">
+      <div className="card-head">
+        <div>
+          <div className="card-title">
+            <span className="dot" style={{ background: color, color }} />
+            {title}
+          </div>
+          {subtitle && (
+            <div className="card-sub" style={{ marginTop: 4 }}>
+              {subtitle} · avg {avg.toFixed(1)}{unit}
+            </div>
+          )}
+        </div>
+        <span className="card-sub">
+          Latest&nbsp;<span style={{ color }}>{latest.toFixed(1)}{unit}</span>
+        </span>
+      </div>
+
+      <div
+        ref={bodyRef}
+        className="chart-body"
+        style={{ position: "relative", cursor: "crosshair" }}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setTooltip(null)}
+      >
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: "100%", height: "100%", display: "block", overflow: "visible" }}>
+          <defs>
+            <linearGradient id={`${gradientId}-area`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+              <stop offset="100%" stopColor={color} stopOpacity="0" />
+            </linearGradient>
+            <linearGradient id={`${gradientId}-line`} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor={color} stopOpacity="0.7" />
+              <stop offset="100%" stopColor={color} />
+            </linearGradient>
+          </defs>
+          <line x1="0" y1="33" x2="100" y2="33" stroke="rgba(255,255,255,0.04)" strokeDasharray="0.3 0.6" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />
+          <line x1="0" y1="66" x2="100" y2="66" stroke="rgba(255,255,255,0.04)" strokeDasharray="0.3 0.6" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />
+          <path d={areaPath} fill={`url(#${gradientId}-area)`} />
+          <path d={linePath} fill="none" stroke={`url(#${gradientId}-line)`} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          <circle cx="100" cy={endY} r="1.2" fill={color} vectorEffect="non-scaling-stroke" style={{ filter: `drop-shadow(0 0 3px ${color})` }} />
+          {trendLine && (
+            <line
+              x1={trendLine.x1} y1={trendLine.y1}
+              x2={trendLine.x2} y2={trendLine.y2}
+              stroke="rgba(255,255,255,0.45)"
+              strokeWidth="0.6"
+              strokeDasharray="2 1.5"
+              vectorEffect="non-scaling-stroke"
+            />
+          )}
+
+          {tooltip && (
+            <>
+              <line
+                x1={tooltip.pct} y1="0" x2={tooltip.pct} y2="100"
+                stroke="rgba(255,255,255,0.12)" strokeWidth="0.3" vectorEffect="non-scaling-stroke"
+              />
+              <circle
+                cx={tooltip.pct} cy={tooltip.svgY} r="1.5"
+                fill={color} stroke="rgba(5,5,10,0.9)" strokeWidth="0.6"
+                vectorEffect="non-scaling-stroke"
+                style={{ filter: `drop-shadow(0 0 4px ${color})` }}
+              />
+            </>
+          )}
+        </svg>
+
+        {tooltip && (
+          <div style={{
+            position: "absolute",
+            top: Math.max(0, tooltip.y - 52),
+            left: tooltip.x,
+            transform: "translateX(-50%)",
+            pointerEvents: "none",
+            background: "rgba(12,12,18,0.92)",
+            border: `1px solid ${color}44`,
+            borderRadius: 8,
+            padding: "6px 10px",
+            backdropFilter: "blur(8px)",
+            boxShadow: `0 4px 16px rgba(0,0,0,0.5), 0 0 0 1px ${color}22`,
+            whiteSpace: "nowrap",
+            zIndex: 10,
+          }}>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--fg-3)", marginBottom: 2 }}>
+              {formatDate(tooltip.date)}
+            </div>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 500, color, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
+              {tooltip.value.toFixed(1)}<span style={{ fontSize: 11, color: "var(--fg-3)", marginLeft: 2 }}>{unit}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="chart-axis">
+        {axis.map((label, i) => (
+          <span key={`${label}-${i}`}>{label}</span>
+        ))}
+      </div>
+    </div>
+  );
+}

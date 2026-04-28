@@ -32,10 +32,21 @@ export type SleepRow = {
   efficiency: number | null;
 };
 
+export type WorkoutRow = {
+  id: string;
+  date: string;
+  sport: string | null;
+  duration_sec: number | null;
+  avg_hr: number | null;
+  max_hr: number | null;
+  strain: number | null;
+  kilojoule: number | null;
+};
+
 function dbPath(): string {
   if (process.env.WHOOP_DB_PATH) return process.env.WHOOP_DB_PATH;
-  // Default: repo-root `whoop_data.db` (matches streamlit/whoop/db.py:6).
-  return path.resolve(process.cwd(), "..", "whoop_data.db");
+  // shared/whoop_data.db at repo root (matches streamlit/whoop/db.py).
+  return path.resolve(process.cwd(), "..", "shared", "whoop_data.db");
 }
 
 /** Open the DB read-only. Returns null if the file doesn't exist yet. */
@@ -182,6 +193,29 @@ export function getSleepTrend(days: number): SleepRow[] {
   );
 }
 
+export function getLatestInsight(): { date: string; insight: string } | null {
+  return safeQuery((db) => {
+    if (!hasTable(db, "insights")) return null;
+    const row = db
+      .prepare("SELECT date, insight FROM insights ORDER BY date DESC LIMIT 1")
+      .get() as { date: string; insight: string } | undefined;
+    return row ?? null;
+  });
+}
+
+export function getWorkouts(limit: number): WorkoutRow[] {
+  return (
+    safeQuery((db) => {
+      if (!hasTable(db, "workouts")) return [];
+      return db
+        .prepare(
+          "SELECT id, date, sport, duration_sec, avg_hr, max_hr, strain, kilojoule FROM workouts ORDER BY date DESC LIMIT ?"
+        )
+        .all(limit) as WorkoutRow[];
+    }) ?? []
+  );
+}
+
 /** Convenience: 30-day sparklines for each KPI. Missing values become nulls. */
 export type Overview = {
   latestRecovery: RecoveryRow | null;
@@ -213,4 +247,17 @@ export function getOverview(days = 30): Overview {
     sleepTrend,
     hasData: !!latestRecovery,
   };
+}
+
+export function getFullSleepTrend(days: number): SleepRow[] {
+  return (
+    safeQuery((db) => {
+      if (!hasTable(db, "sleep")) return [];
+      return db
+        .prepare(
+          "SELECT date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms, sleep_need_ms, performance, efficiency FROM sleep WHERE nap = 0 ORDER BY date DESC LIMIT ?"
+        )
+        .all(days) as SleepRow[];
+    }) ?? []
+  ).reverse();
 }

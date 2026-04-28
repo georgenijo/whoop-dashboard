@@ -1,9 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-const RANGES = ["7d", "14d", "30d", "90d"] as const;
+const RANGES = ["7d", "14d", "30d", "90d", "all"] as const;
 type Range = (typeof RANGES)[number];
+
+const TITLES: Record<string, string> = {
+  "/": "Overview",
+  "/recovery": "Recovery",
+  "/sleep": "Sleep",
+  "/strain": "Strain",
+  "/workouts": "Workouts",
+  "/coach": "Coach",
+  "/history": "History",
+  "/settings": "Settings",
+};
 
 function icon(name: string) {
   return `https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/${name}.svg`;
@@ -19,9 +31,19 @@ function formatToday(): string {
   }).replace(",", " ·");
 }
 
-export default function TopBar({ title }: { title: string }) {
-  const [range, setRange] = useState<Range>("30d");
+export default function TopBar() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const title = TITLES[pathname] ?? "Overview";
+  const range = (searchParams.get("range") as Range) ?? "30d";
   const subtitle = useMemo(formatToday, []);
+
+  function setRange(r: Range) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("range", r);
+    router.push(`${pathname}?${params.toString()}`);
+  }
 
   return (
     <div className="topbar">

@@ -83,6 +83,8 @@ body {
   background: transparent;
   text-align: left;
   width: 100%;
+  text-decoration: none;
+  border-bottom: none;
 }
 .sb-link img { width: 17px; height: 17px; opacity: 0.65; filter: invert(1); transition: opacity var(--dur-base); }
 .sb-link:hover { background: rgba(255,255,255,0.03); color: var(--fg-0); }
@@ -266,6 +268,7 @@ body {
 .kpi:hover {
   border-color: rgba(255,255,255,0.12);
   transform: translateY(-1px);
+  cursor: pointer;
 }
 .kpi::before {
   content: ""; position: absolute; inset: 0;
@@ -365,6 +368,19 @@ body {
 .ai-card ul { margin: 0; padding-left: 18px; }
 .ai-card li { margin: 3px 0; }
 .ai-card li::marker { color: rgba(123,97,255,0.7); }
+
+.ai-body h2 {
+  font-family: var(--font-sans); font-size: 10.5px; font-weight: 600;
+  color: var(--fg-0); margin: 14px 0 6px; text-transform: uppercase;
+  letter-spacing: 0.12em; position: relative;
+}
+.ai-body h2:first-child { margin-top: 0; }
+.ai-body p { font-size: 13px; color: var(--fg-1); line-height: 1.55; margin: 0 0 6px; position: relative; }
+.ai-body ul, .ai-body ol { margin: 0 0 8px; padding-left: 18px; }
+.ai-body li { font-size: 13px; color: var(--fg-1); line-height: 1.55; margin: 3px 0; position: relative; }
+.ai-body li::marker { color: rgba(123,97,255,0.7); }
+.ai-body strong { color: var(--fg-0); font-weight: 600; }
+.ai-body code { background: rgba(123,97,255,0.12); padding: 1px 5px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.9em; }
 
 /* =========================== EMPTY STATE =========================== */
 .empty-state {
