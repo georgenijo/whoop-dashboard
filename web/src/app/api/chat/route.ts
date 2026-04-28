@@ -39,7 +39,7 @@ export async function POST(req: Request) {
 
   try {
     const result = spawnSync(
-      "claude",
+      "/usr/local/bin/claude",
       ["-p", prompt, "--dangerously-skip-permissions", "--model", "sonnet"],
       {
         timeout: 120_000,
