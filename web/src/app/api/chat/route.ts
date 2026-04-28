@@ -43,7 +43,7 @@ export async function POST(req: Request) {
       ["-p", prompt, "--model", "sonnet"],
       {
         timeout: 120_000,
-        env: { ...process.env, HOME: process.env.HOME ?? "/home/george" },
+        env: { ...process.env, HOME: "/home/george" },
         maxBuffer: 1024 * 1024 * 4,
         encoding: "utf8",
       }
