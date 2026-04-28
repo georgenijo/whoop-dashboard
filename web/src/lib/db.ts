@@ -81,6 +81,18 @@ function openWrite(): DB | null {
         key TEXT PRIMARY KEY,
         value TEXT
       );
+      CREATE TABLE IF NOT EXISTS sync_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at TEXT NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        recovery_count INTEGER,
+        sleep_count INTEGER,
+        workouts_count INTEGER,
+        error_message TEXT,
+        source TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_sync_logs_started ON sync_logs(started_at DESC);
     `);
     const cols = db.prepare("PRAGMA table_info(chat_logs)").all() as { name: string }[];
     if (!cols.some((c) => c.name === "type")) {
@@ -490,6 +502,52 @@ export function clearChatLogs(): void {
   } finally {
     db.close();
   }
+}
+
+export type SyncLog = {
+  id: number;
+  started_at: string;
+  duration_ms: number;
+  status: "ok" | "error";
+  recovery_count: number | null;
+  sleep_count: number | null;
+  workouts_count: number | null;
+  error_message: string | null;
+  source: string | null;
+};
+
+export function addSyncLog(log: Omit<SyncLog, "id">): void {
+  const db = openWrite();
+  if (!db) return;
+  try {
+    db.prepare(
+      "INSERT INTO sync_logs (started_at, duration_ms, status, recovery_count, sleep_count, workouts_count, error_message, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run(
+      log.started_at,
+      log.duration_ms,
+      log.status,
+      log.recovery_count,
+      log.sleep_count,
+      log.workouts_count,
+      log.error_message,
+      log.source
+    );
+  } finally {
+    db.close();
+  }
+}
+
+export function getSyncLogs(limit = 200): SyncLog[] {
+  return (
+    safeQuery((db) => {
+      if (!hasTable(db, "sync_logs")) return [] as SyncLog[];
+      return db
+        .prepare(
+          "SELECT id, started_at, duration_ms, status, recovery_count, sleep_count, workouts_count, error_message, source FROM sync_logs ORDER BY id DESC LIMIT ?"
+        )
+        .all(limit) as SyncLog[];
+    }) ?? []
+  );
 }
 
 export function getSetting(key: string): string | null {

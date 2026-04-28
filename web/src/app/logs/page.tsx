@@ -1,4 +1,4 @@
-import { getChatLogs } from "@/lib/db";
+import { getChatLogs, getSyncLogs } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +26,7 @@ function fmtTime(iso: string): string {
 
 export default function LogsPage() {
   const logs = getChatLogs(500);
+  const syncLogs = getSyncLogs(200);
 
   const okLogs = logs.filter((l) => l.status === "ok");
   const avgDur = okLogs.length
@@ -162,6 +163,69 @@ export default function LogsPage() {
                           color: log.status === "ok" ? "#00d4aa" : "#ff6b6b",
                         }}>
                           {log.status}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="card-head" style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+          <div className="card-title">Sync history</div>
+          <span className="card-sub">{syncLogs.length} syncs · most recent first</span>
+        </div>
+
+        {syncLogs.length === 0 ? (
+          <div className="empty-state">
+            <div className="title">No syncs yet</div>
+            <div className="sub">Tap the refresh icon in the top bar to pull fresh Whoop data</div>
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-sans)", fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: "rgba(255,255,255,0.02)", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                  <th style={{ padding: "10px 16px", textAlign: "left", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Time</th>
+                  <th style={{ padding: "10px 16px", textAlign: "right", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Duration</th>
+                  <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Recovery</th>
+                  <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Sleep</th>
+                  <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Workouts</th>
+                  <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Source</th>
+                  <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {syncLogs.map((s) => {
+                  const dur = fmtDuration(s.duration_ms);
+                  const cell = { padding: "10px 16px", textAlign: "center" as const, fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--fg-2)", fontVariantNumeric: "tabular-nums" as const };
+                  return (
+                    <tr key={s.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                      <td style={{ padding: "10px 16px", color: "var(--fg-2)", fontFamily: "var(--font-mono)", fontSize: 12, whiteSpace: "nowrap" }}>
+                        {fmtTime(s.started_at)}
+                      </td>
+                      <td style={{ padding: "10px 16px", textAlign: "right", color: dur.color, fontFamily: "var(--font-mono)", fontSize: 12, fontVariantNumeric: "tabular-nums" }}>
+                        {dur.text}
+                      </td>
+                      <td style={cell}>{s.recovery_count ?? "—"}</td>
+                      <td style={cell}>{s.sleep_count ?? "—"}</td>
+                      <td style={cell}>{s.workouts_count ?? "—"}</td>
+                      <td style={cell}>{s.source ?? "—"}</td>
+                      <td style={{ padding: "10px 16px", textAlign: "center" }}>
+                        <span style={{
+                          display: "inline-block",
+                          padding: "2px 8px",
+                          borderRadius: 4,
+                          fontSize: 11,
+                          fontFamily: "var(--font-mono)",
+                          background: s.status === "ok" ? "rgba(0,212,170,0.15)" : "rgba(255,107,107,0.15)",
+                          color: s.status === "ok" ? "#00d4aa" : "#ff6b6b",
+                        }}>
+                          {s.status}
                         </span>
                       </td>
                     </tr>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 const RANGES = ["7d", "14d", "30d", "90d", "all"] as const;
@@ -39,11 +39,29 @@ export default function TopBar() {
   const title = TITLES[pathname] ?? "Overview";
   const range = (searchParams.get("range") as Range) ?? "30d";
   const subtitle = useMemo(formatToday, []);
+  const [syncing, setSyncing] = useState(false);
 
   function setRange(r: Range) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("range", r);
     router.push(`${pathname}?${params.toString()}`);
+  }
+
+  async function handleSync() {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const r = await fetch("/api/sync", { method: "POST" });
+      const data = await r.json();
+      if (!r.ok) {
+        console.error("Sync failed", data);
+      }
+      router.refresh();
+    } catch (e) {
+      console.error("Sync error", e);
+    } finally {
+      setSyncing(false);
+    }
   }
 
   const showRangePicker =
@@ -76,10 +94,21 @@ export default function TopBar() {
             ))}
           </div>
         )}
-        <div className="icon-btn" title="Sync" role="button">
+        <button
+          type="button"
+          className="icon-btn"
+          title="Sync Whoop data"
+          onClick={handleSync}
+          disabled={syncing}
+          style={{ cursor: syncing ? "wait" : "pointer", opacity: syncing ? 0.6 : 1 }}
+        >
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={icon("refresh-cw")} alt="sync" />
-        </div>
+          <img
+            src={icon("refresh-cw")}
+            alt="sync"
+            style={{ animation: syncing ? "spin 1s linear infinite" : undefined }}
+          />
+        </button>
         <div className="icon-btn" title="Notifications" role="button">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={icon("bell")} alt="notifications" />
