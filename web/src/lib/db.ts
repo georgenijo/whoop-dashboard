@@ -51,6 +51,27 @@ function dbPath(): string {
   return path.resolve(process.cwd(), "..", "shared", "whoop_data.db");
 }
 
+function openWrite(): DB | null {
+  const p = dbPath();
+  if (!existsSync(p)) return null;
+  try {
+    const db = new Database(p, { fileMustExist: true });
+    db.pragma("journal_mode = WAL");
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_chat_messages_id ON chat_messages(id);
+    `);
+    return db;
+  } catch {
+    return null;
+  }
+}
+
 /** Open the DB read-only. Returns null if the file doesn't exist yet. */
 function open(): DB | null {
   const p = dbPath();
@@ -353,4 +374,44 @@ export function getFullSleepTrend(days: number): SleepRow[] {
         .all(days) as SleepRow[];
     }) ?? []
   ).reverse();
+}
+
+export type ChatMessage = {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+};
+
+export function getChatMessages(): ChatMessage[] {
+  return (
+    safeQuery((db) => {
+      if (!hasTable(db, "chat_messages")) return [] as ChatMessage[];
+      return db
+        .prepare("SELECT id, role, content, created_at FROM chat_messages ORDER BY id ASC")
+        .all() as ChatMessage[];
+    }) ?? []
+  );
+}
+
+export function addChatMessage(role: "user" | "assistant", content: string): void {
+  const db = openWrite();
+  if (!db) return;
+  try {
+    db.prepare(
+      "INSERT INTO chat_messages (role, content, created_at) VALUES (?, ?, ?)"
+    ).run(role, content, new Date().toISOString());
+  } finally {
+    db.close();
+  }
+}
+
+export function clearChatMessages(): void {
+  const db = openWrite();
+  if (!db) return;
+  try {
+    db.prepare("DELETE FROM chat_messages").run();
+  } finally {
+    db.close();
+  }
 }

@@ -77,12 +77,33 @@ function CoachInner() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
+    fetch("/api/chat/history")
+      .then((r) => r.json())
+      .then((data) => {
+        setMessages(
+          (data as { id: number; role: string; content: string }[]).map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          }))
+        );
+      })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, []);
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [messages]);
+
+  async function clearHistory() {
+    await fetch("/api/chat/history", { method: "DELETE" });
+    setMessages([]);
+  }
 
   const send = useCallback(
     async (text: string) => {
@@ -174,7 +195,7 @@ function CoachInner() {
           flexDirection: "column",
         }}
       >
-        {messages.length === 0 && (
+        {loaded && messages.length === 0 && (
           <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 24 }}>
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 32, marginBottom: 8 }}>💬</div>
@@ -278,8 +299,16 @@ function CoachInner() {
             ↑
           </button>
         </div>
-        <div style={{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--fg-3)", textAlign: "center", marginTop: 8 }}>
-          Using {range === "all" ? "all-time" : range} data · Enter to send · Shift+Enter for newline
+        <div style={{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--fg-3)", textAlign: "center", marginTop: 8, display: "flex", justifyContent: "center", gap: 12 }}>
+          <span>Using {range === "all" ? "all-time" : range} data · Enter to send · Shift+Enter for newline</span>
+          {messages.length > 0 && (
+            <button
+              onClick={clearHistory}
+              style={{ background: "none", border: "none", color: "var(--fg-3)", cursor: "pointer", fontFamily: "var(--font-sans)", fontSize: 11, padding: 0, textDecoration: "underline" }}
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
     </div>

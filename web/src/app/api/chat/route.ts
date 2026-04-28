@@ -1,5 +1,5 @@
 import { spawnSync } from "child_process";
-import { getHealthContext } from "@/lib/db";
+import { getHealthContext, addChatMessage } from "@/lib/db";
 
 const SYSTEM_PROMPT = `You are a personal health and performance analyst reviewing Whoop biometric data.
 
@@ -37,6 +37,8 @@ export async function POST(req: Request) {
     .filter(Boolean)
     .join("\n");
 
+  addChatMessage("user", lastUser);
+
   try {
     // Strip ANTHROPIC_API_KEY so claude CLI uses its OAuth login instead of
     // trying to authenticate via the (invalid) env var.
@@ -59,7 +61,9 @@ export async function POST(req: Request) {
     if (result.error) throw result.error;
     if (result.status !== 0) throw new Error(result.stderr || `exit ${result.status}`);
 
-    return new Response(result.stdout.trim(), {
+    const reply = result.stdout.trim();
+    addChatMessage("assistant", reply);
+    return new Response(reply, {
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
   } catch (err) {
