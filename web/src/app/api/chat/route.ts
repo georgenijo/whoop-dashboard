@@ -40,7 +40,7 @@ export async function POST(req: Request) {
   try {
     const result = spawnSync(
       "/usr/local/bin/claude",
-      ["-p", prompt, "--dangerously-skip-permissions", "--model", "sonnet"],
+      ["-p", prompt, "--model", "sonnet"],
       {
         timeout: 120_000,
         env: { ...process.env, HOME: process.env.HOME ?? "/home/george" },
