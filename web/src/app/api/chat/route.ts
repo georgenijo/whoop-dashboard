@@ -46,6 +46,7 @@ export async function POST(req: Request) {
         env: { ...process.env, HOME: "/home/george" },
         maxBuffer: 1024 * 1024 * 4,
         encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
       }
     );
 

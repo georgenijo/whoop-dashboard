@@ -120,12 +120,13 @@ function CoachInner() {
           updated[assistantIdx] = { role: "assistant", content: text };
           return updated;
         });
-      } catch {
+      } catch (e) {
+        const errMsg = e instanceof Error ? e.message : String(e);
         setMessages((prev) => {
           const updated = [...prev];
           updated[assistantIdx] = {
             role: "assistant",
-            content: "Something went wrong. Try again.",
+            content: `**Error:** ${errMsg}`,
           };
           return updated;
         });
