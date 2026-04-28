@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 
 type NavItem = { href: string; label: string; icon: string };
 
@@ -25,6 +25,9 @@ function icon(name: string) {
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const range = searchParams.get("range");
+  const withRange = (href: string) => (range ? `${href}?range=${range}` : href);
 
   return (
     <aside className="sidebar">
@@ -40,7 +43,7 @@ export default function Sidebar() {
         {nav.map((n) => (
           <Link
             key={n.href}
-            href={n.href}
+            href={withRange(n.href)}
             className={`sb-link ${pathname === n.href ? "active" : ""}`}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}

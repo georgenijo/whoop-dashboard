@@ -35,7 +35,9 @@ export default function RootLayout({
       <body>
         <div className="aurora" aria-hidden />
         <div className="app">
-          <Sidebar />
+          <Suspense fallback={null}>
+            <Sidebar />
+          </Suspense>
           <main className="main">
             <Suspense fallback={null}>
               <TopBar />
