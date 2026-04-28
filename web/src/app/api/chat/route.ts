@@ -7,7 +7,7 @@ import {
   getSetting,
 } from "@/lib/db";
 
-const SYSTEM_PROMPT = `You are a personal health and performance analyst reviewing Whoop biometric data.
+export const DEFAULT_SYSTEM_PROMPT = `You are a personal health and performance analyst reviewing Whoop biometric data.
 
 Your job:
 1. Identify meaningful patterns and trends (not just restate numbers)
@@ -84,12 +84,13 @@ export async function POST(req: Request) {
 
   const useApi =
     getSetting("use_api_mode") === "1" && !!process.env.ANTHROPIC_API_KEY;
+  const systemPrompt = getSetting("system_prompt") || DEFAULT_SYSTEM_PROMPT;
 
   try {
     let reply: string;
 
     if (useApi) {
-      const systemWithContext = `${SYSTEM_PROMPT}\n\nCurrent health data:\n${context}`;
+      const systemWithContext = `${systemPrompt}\n\nCurrent health data:\n${context}`;
       reply = await runAnthropicSdk(systemWithContext, messages);
     } else {
       const history = messages
@@ -97,7 +98,7 @@ export async function POST(req: Request) {
         .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
         .join("\n\n");
       const prompt = [
-        SYSTEM_PROMPT,
+        systemPrompt,
         `\nCurrent health data:\n${context}`,
         history ? `\nConversation so far:\n${history}` : "",
         `\nUser: ${lastUser}`,

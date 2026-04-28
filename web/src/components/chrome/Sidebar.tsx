@@ -16,7 +16,6 @@ const nav: NavItem[] = [
 const secondary: NavItem[] = [
   { href: "/coach", label: "Coach", icon: "sparkles" },
   { href: "/logs", label: "Logs", icon: "list" },
-  { href: "/history", label: "History", icon: "calendar" },
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 

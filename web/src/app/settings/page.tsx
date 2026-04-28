@@ -82,6 +82,10 @@ export default function SettingsPage() {
   const [useApi, setUseApi] = useState(false);
   const [apiKeyPresent, setApiKeyPresent] = useState(false);
   const [serverLoaded, setServerLoaded] = useState(false);
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [defaultSystemPrompt, setDefaultSystemPrompt] = useState("");
+  const [savedSystemPrompt, setSavedSystemPrompt] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const loaded: Record<string, boolean> = {};
@@ -92,9 +96,17 @@ export default function SettingsPage() {
 
     fetch("/api/settings")
       .then((r) => r.json())
-      .then((d: { use_api_mode: boolean; api_key_present: boolean }) => {
+      .then((d: {
+        use_api_mode: boolean;
+        api_key_present: boolean;
+        system_prompt: string;
+        default_system_prompt: string;
+      }) => {
         setUseApi(d.use_api_mode);
         setApiKeyPresent(d.api_key_present);
+        setSystemPrompt(d.system_prompt);
+        setSavedSystemPrompt(d.system_prompt);
+        setDefaultSystemPrompt(d.default_system_prompt);
       })
       .catch(() => {})
       .finally(() => setServerLoaded(true));
@@ -114,8 +126,26 @@ export default function SettingsPage() {
     });
   }
 
+  async function saveSystemPrompt() {
+    setSaving(true);
+    const r = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ system_prompt: systemPrompt }),
+    });
+    const d = await r.json();
+    setSavedSystemPrompt(d.system_prompt);
+    setSaving(false);
+  }
+
+  function resetSystemPrompt() {
+    setSystemPrompt(defaultSystemPrompt);
+  }
+
+  const promptDirty = systemPrompt !== savedSystemPrompt;
+
   return (
-    <div style={{ maxWidth: 560, display: "flex", flexDirection: "column", gap: 18 }}>
+    <div style={{ maxWidth: 720, display: "flex", flexDirection: "column", gap: 18 }}>
       <div className="card">
         <div className="card-head">
           <div className="card-title">Coach</div>
@@ -136,6 +166,69 @@ export default function SettingsPage() {
               disabled={!serverLoaded || !apiKeyPresent}
             />
           </Row>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-head" style={{ alignItems: "center" }}>
+          <div className="card-title">System prompt</div>
+          <span className="card-sub">Edits apply to the next message</span>
+        </div>
+        <div style={{ paddingTop: 12 }}>
+          <textarea
+            value={systemPrompt}
+            onChange={(e) => setSystemPrompt(e.target.value)}
+            spellCheck={false}
+            style={{
+              width: "100%",
+              minHeight: 220,
+              background: "rgba(0,0,0,0.25)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: 8,
+              padding: "12px 14px",
+              color: "var(--fg-0)",
+              fontFamily: "var(--font-mono)",
+              fontSize: 12,
+              lineHeight: 1.55,
+              resize: "vertical",
+              outline: "none",
+            }}
+          />
+          <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center", justifyContent: "flex-end" }}>
+            <button
+              onClick={resetSystemPrompt}
+              disabled={systemPrompt === defaultSystemPrompt}
+              style={{
+                background: "none",
+                border: "1px solid rgba(255,255,255,0.1)",
+                color: "var(--fg-2)",
+                padding: "6px 14px",
+                borderRadius: 6,
+                fontSize: 12,
+                cursor: systemPrompt === defaultSystemPrompt ? "default" : "pointer",
+                opacity: systemPrompt === defaultSystemPrompt ? 0.4 : 1,
+                fontFamily: "var(--font-sans)",
+              }}
+            >
+              Reset to default
+            </button>
+            <button
+              onClick={saveSystemPrompt}
+              disabled={!promptDirty || saving}
+              style={{
+                background: promptDirty ? "#7b61ff" : "rgba(255,255,255,0.08)",
+                border: "none",
+                color: promptDirty ? "#fff" : "var(--fg-3)",
+                padding: "6px 14px",
+                borderRadius: 6,
+                fontSize: 12,
+                cursor: promptDirty && !saving ? "pointer" : "default",
+                fontFamily: "var(--font-sans)",
+              }}
+            >
+              {saving ? "Saving…" : promptDirty ? "Save changes" : "Saved"}
+            </button>
+          </div>
         </div>
       </div>
 
