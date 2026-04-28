@@ -112,6 +112,7 @@ function CoachInner() {
       const nextMessages = [...messages, userMsg];
       setMessages(nextMessages);
       setInput("");
+      if (inputRef.current) inputRef.current.style.height = "auto";
       setLoading(true);
 
       const assistantIdx = nextMessages.length;
@@ -258,7 +259,11 @@ function CoachInner() {
           <textarea
             ref={inputRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              e.target.style.height = "auto";
+              e.target.style.height = `${e.target.scrollHeight}px`;
+            }}
             onKeyDown={handleKey}
             placeholder="Ask about your recovery, sleep, strain…"
             rows={1}
