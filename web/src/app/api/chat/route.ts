@@ -38,12 +38,18 @@ export async function POST(req: Request) {
     .join("\n");
 
   try {
+    // Strip ANTHROPIC_API_KEY so claude CLI uses its OAuth login instead of
+    // trying to authenticate via the (invalid) env var.
+    const cleanEnv: NodeJS.ProcessEnv = { ...process.env };
+    delete cleanEnv.ANTHROPIC_API_KEY;
+    cleanEnv.HOME = "/home/george";
+
     const result = spawnSync(
       "/usr/local/bin/claude",
       ["-p", prompt, "--model", "sonnet"],
       {
         timeout: 120_000,
-        env: { ...process.env, HOME: "/home/george" },
+        env: cleanEnv,
         maxBuffer: 1024 * 1024 * 4,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],
