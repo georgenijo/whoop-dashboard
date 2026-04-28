@@ -57,7 +57,7 @@ Use shell-runnable checks where possible.
 
 ## Commit message
 
-```
+```text
 type(scope): summary
 
 Body explaining the why, not the what.

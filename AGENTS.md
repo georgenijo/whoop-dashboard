@@ -8,7 +8,7 @@ A personal data hub. Pulls Whoop wearable data today, will pull calendar / nutri
 
 ## Architecture target
 
-```
+```text
 whoop-dashboard/
 ├── apps/
 │   ├── web/                Next.js 16 App Router — UI + API server
@@ -66,7 +66,9 @@ Both web and iOS clients call the same `/api/*` routes on Next.js. Bearer-token 
 
 ## Verification before opening a PR
 
-1. `cd apps/web && npm run build` succeeds.
+1. Build succeeds for the current repo state:
+   - Pre-reorg (Issue #63): `cd web && npm run build`
+   - Post-reorg: `cd apps/web && npm run build`
 2. The acceptance criteria from the issue are all checked off, with command output pasted in the PR description.
 3. `git status` is clean on the task branch.
 4. PR title matches the format from the issue.
