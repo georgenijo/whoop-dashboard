@@ -290,7 +290,9 @@ function CoachInner() {
               fontSize: 14,
               resize: "none",
               lineHeight: 1.5,
+              minHeight: 40,
               maxHeight: 120,
+              padding: "9px 0 10px",
               overflow: "auto",
             }}
           />
