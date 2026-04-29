@@ -30,14 +30,14 @@ def _parse_record_date(record: dict, field: str) -> str | None:
 
 def _synced_dates(data: dict) -> list[str]:
     dates: set[str] = set()
-    for endpoint, field in (
-        ("recovery", "created_at"),
-        ("cycles", "start"),
-        ("sleep", "start"),
-        ("workouts", "start"),
+    for endpoint, field, require_scored in (
+        ("recovery", "created_at", True),
+        ("cycles", "start", True),
+        ("sleep", "start", True),
+        ("workouts", "start", False),
     ):
         for record in data.get(endpoint, []):
-            if record.get("score_state") != "SCORED":
+            if require_scored and record.get("score_state") != "SCORED":
                 continue
             date = _parse_record_date(record, field)
             if date is not None:

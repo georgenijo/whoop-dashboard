@@ -22,13 +22,19 @@ export default async function OverviewPage({
   const days = parseDays(range);
   const data = getOverview(days);
   const trend = getRecoveryTrend(days);
-  const summaryRecovery = getDailySummary("0000-01-01", "9999-12-31").filter(
-    (r) => r.recovery_score != null
+  const summaryByDate = new Map(
+    getDailySummary("0000-01-01", "9999-12-31")
+      .filter((r) => r.recovery_score != null)
+      .map((r) => [r.date, r] as const)
   );
-  const latestSummary = summaryRecovery[summaryRecovery.length - 1];
-  const previousSummary = summaryRecovery[summaryRecovery.length - 2];
-  const latestRecovery = recoveryFromSummary(latestSummary, data.latestRecovery);
-  const previousRecovery = recoveryFromSummary(previousSummary, data.previousRecovery);
+  const latestRecovery = recoveryFromSummary(
+    data.latestRecovery ? summaryByDate.get(data.latestRecovery.date) : undefined,
+    data.latestRecovery
+  );
+  const previousRecovery = recoveryFromSummary(
+    data.previousRecovery ? summaryByDate.get(data.previousRecovery.date) : undefined,
+    data.previousRecovery
+  );
 
   return (
     <>
