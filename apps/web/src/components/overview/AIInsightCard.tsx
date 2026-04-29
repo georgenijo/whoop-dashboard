@@ -32,7 +32,7 @@ export default function AIInsightCard({ hasData }: { hasData: boolean }) {
         <>
           <p>No insight generated yet for today.</p>
           <p style={{ marginTop: 8, color: "var(--fg-3)", fontSize: 12 }}>
-            Run <code style={{ background: "rgba(123,97,255,0.12)", padding: "1px 6px", borderRadius: 4 }}>python daily_sync.py</code> from the repo root to generate one.
+            Run <code style={{ background: "rgba(123,97,255,0.12)", padding: "1px 6px", borderRadius: 4 }}>python sync/daily_sync.py</code> from the repo root to generate one.
           </p>
         </>
       ) : (

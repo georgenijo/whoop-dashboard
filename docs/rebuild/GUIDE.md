@@ -50,7 +50,7 @@ Two spikes + 8 tracked issues.
   - Apply `strokeWidth={1.0}` or `{1.25}` (kit is `1.5` but Recharts doesn't support `vectorEffect="non-scaling-stroke"`)
   - Custom `<GlowEndDot>` component needed for end-dot drop-shadow filter (Recharts' `activeDot` prop doesn't pass SVG filters through)
   - Wrap every Recharts chart in `<ChartFrame mountOnClient>` to dodge SSR -1-dimension warning
-  - Strip nested `@import url(...)` from kit CSS when copying into `web/`; hoist Google Fonts import to top of `globals.css`
+  - Strip nested `@import url(...)` from kit CSS when copying into `apps/web/`; hoist Google Fonts import to top of `globals.css`
   - `create-next-app@latest` resolves to **Next.js 16.2.4** (not 15). Decision: accept 16.x per user direction.
 - **Spike B** (#53) — **Deferred**. Failed to reach OptiPlex from the handoff session (port 22 vs tailscale SSH path confusion). Runbook posted on the issue. Action: user runs manually on OptiPlex when convenient, OR a future local session retries via `/Applications/Tailscale.app/Contents/MacOS/Tailscale ssh george@optiplex`. Blocks #57 only.
 
@@ -62,34 +62,34 @@ Four issues, ordered by dependency. Each should be a separate branch + PR.
 
 ### #54 — Monorepo reorg (start here)
 
-**Goal:** split the repo into `streamlit/`, `web/`, `sync/`, `shared/` without breaking the live Streamlit app on the OptiPlex.
+**Goal:** split the repo into `streamlit/`, `apps/web/`, `sync/`, `shared/` without breaking the live Streamlit app on the OptiPlex.
 
 **Moves:**
 - `app.py` → `streamlit/app.py`
 - `whoop/` → `streamlit/whoop/` **and** `sync/whoop/` (duplicate during migration; `sync/` becomes the canonical copy in Phase 4)
-- `daily_sync.py` → `sync/daily_sync.py`
+- daily sync entry point → `sync/daily_sync.py`
 - `requirements.txt` → `streamlit/requirements.txt` and `sync/requirements.txt` (may have different deps by Phase 4)
 - `.streamlit/` → `streamlit/.streamlit/`
 - `systemd/` → `ops/systemd/` (legacy units live here; Quadlet units land in `ops/quadlet/` later)
 - `tokens.json` → **stays at repo root** for now; moves in #55
-- `whoop_data.db` → **stays at repo root** for now; moves in #55
+- `shared/whoop_data.db` → **stays under `shared/`**
 
 **Creates:**
-- `web/` (empty, for #56)
-- `shared/` (empty, for #55)
+- `apps/web/` (empty, for #56)
+- `shared/` (contains `whoop_data.db`)
 - `ops/quadlet/` (empty, for #57)
 
 **Preserve on OptiPlex:** the live Streamlit `systemd/whoop-dashboard.service` unit references the old path. Update the unit's `WorkingDirectory` to the new `streamlit/` subfolder in a separate follow-up; **do not restart the service in this PR**.
 
-**Verification:** `cd streamlit && python3 -m py_compile app.py whoop/*.py` passes. `pnpm install` in repo root succeeds (creates empty workspace).
+**Verification:** `python3 -m py_compile streamlit/app.py streamlit/whoop/*.py sync/daily_sync.py` passes. `cd apps/web && npm run build` succeeds.
 
 ### #55 — SQLite migration
 
-**Goal:** relocate the DB + add `signals` and `tokens` tables, with WAL mode verified under concurrent readers/writers.
+**Goal:** extend the shared DB with `signals` and `tokens` tables, with WAL mode verified under concurrent readers/writers.
 
-- Move `whoop_data.db` → `shared/whoop_data.db`
-- Update `sync/whoop/db.py` path constant
-- Update `streamlit/app.py` path constant (keep Streamlit working)
+- Keep `shared/whoop_data.db` in place
+- Update `streamlit/whoop/db.py` path handling if schema changes require it
+- Keep `streamlit/app.py` working
 - Add schema migrations:
   - `signals` table: `date TEXT, signal_name TEXT, value REAL, metadata JSON, computed_at TEXT` — written by `sync/`, read by Next.js
   - `tokens` table: `user_id TEXT PRIMARY KEY, access_token TEXT, refresh_token TEXT, expires_at INTEGER` — replaces `tokens.json`
@@ -101,9 +101,9 @@ Four issues, ordered by dependency. Each should be a separate branch + PR.
 
 ### #56 — Next.js scaffold
 
-**Goal:** wire Next.js 16 + Geist + kit CSS into `web/`. No business logic yet — just the foundation.
+**Goal:** wire Next.js 16 + Geist + kit CSS into `apps/web/`. No business logic yet — just the foundation.
 
-**Setup inside `web/`:**
+**Setup inside `apps/web/`:**
 ```bash
 pnpm create next-app@latest . --typescript --tailwind --app --src-dir --import-alias "@/*" --eslint --turbopack --no-git
 pnpm add recharts better-sqlite3
@@ -111,12 +111,12 @@ pnpm add -D @types/better-sqlite3
 ```
 
 **Files to add (key ones):**
-- `web/src/app/colors_and_type.css` — copy from `~/Downloads/Whoop_ Design System/colors_and_type.css` **with nested `@import` stripped**
-- `web/src/app/kit.css` — copy from `~/Downloads/Whoop_ Design System/ui_kits/dashboard/styles.css` **with nested `@import` stripped**
-- `web/src/app/globals.css` — imports Geist fonts from Google Fonts (hoisted to top), then `colors_and_type.css`, then `kit.css`, then `@import "tailwindcss";`
-- `web/src/components/ChartFrame.tsx` — mount-gate wrapper for all Recharts charts (from Spike A learnings)
-- `web/src/components/GlowEndDot.tsx` — custom dot component for chart end-points with drop-shadow filter
-- `web/src/lib/chart-theme.ts` — exports `STROKE_WIDTH = 1.0`, metric colors, gradient stop helpers
+- `apps/web/src/app/colors_and_type.css` — copy from `~/Downloads/Whoop_ Design System/colors_and_type.css` **with nested `@import` stripped**
+- `apps/web/src/app/kit.css` — copy from `~/Downloads/Whoop_ Design System/ui_kits/dashboard/styles.css` **with nested `@import` stripped**
+- `apps/web/src/app/globals.css` — imports Geist fonts from Google Fonts (hoisted to top), then `colors_and_type.css`, then `kit.css`, then `@import "tailwindcss";`
+- `apps/web/src/components/ChartFrame.tsx` — mount-gate wrapper for all Recharts charts (from Spike A learnings)
+- `apps/web/src/components/GlowEndDot.tsx` — custom dot component for chart end-points with drop-shadow filter
+- `apps/web/src/lib/chart-theme.ts` — exports `STROKE_WIDTH = 1.0`, metric colors, gradient stop helpers
 
 **Cloud-agent note:** if you don't have access to `~/Downloads/`, the spike repo at `~/Documents/code/scratch-whoop-spike-a/src/app/` has the stripped CSS files ready to copy. If you don't have access to that either, fetch the CSS verbatim from the design system — the maintainer will paste it into a subsequent message.
 
@@ -127,7 +127,7 @@ pnpm add -D @types/better-sqlite3
 **Only start this once Spike B has a verdict.** If bind-mount works, use it. If not, install CLI in the image and mount only `~/.claude/` for auth.
 
 **Creates:**
-- `web/Containerfile` — multi-stage, Debian-slim, Node 22, Next.js standalone output
+- `apps/web/Containerfile` — multi-stage, Debian-slim, Node 22, Next.js standalone output
 - `ops/quadlet/whoop-web.pod` — pod definition (port 3000 published)
 - `ops/quadlet/whoop-web.container` — Next.js container attached to pod, with bind mounts:
   - `shared/whoop_data.db` → `/data/whoop_data.db`
@@ -136,7 +136,7 @@ pnpm add -D @types/better-sqlite3
 - `ops/quadlet/install.sh` — one-shot to copy Quadlet units into `/etc/containers/systemd/` and `systemctl daemon-reload`
 
 **Verification (OptiPlex only):**
-- `podman build -t whoop-web ./web` succeeds
+- `podman build -t whoop-web ./apps/web` succeeds
 - `podman run --rm whoop-web node -e "console.log('ok')"` prints ok
 - `sudo cp ops/quadlet/*.{pod,container} /etc/containers/systemd/ && sudo systemctl daemon-reload && sudo systemctl start whoop-web.pod` succeeds
 - `curl http://localhost:3000` returns the Next.js default page
@@ -146,7 +146,7 @@ pnpm add -D @types/better-sqlite3
 
 ## Phase 2 — High level
 
-- **AI Insight card** — port `whoop/insights.py` logic to `web/src/lib/claude-spawn.ts` (Node `child_process.spawn('claude', ...)`). Context builder: same SQL queries + string formatting as Python version.
+- **AI Insight card** — port `whoop/insights.py` logic to `apps/web/src/lib/claude-spawn.ts` (Node `child_process.spawn('claude', ...)`). Context builder: same SQL queries + string formatting as Python version.
 - **Chat surface** — port `whoop/chat.py` similarly. Stream responses via Server-Sent Events or Next.js streaming responses.
 - **Sleep Deep Dive tab** — structure only in this phase; individual specialty cards land in Phase 3.
 
@@ -179,7 +179,7 @@ This is the best candidate for agent teams if you want to try them (see `PLAN.md
 
 - Responsive pass (kit is desktop-only — add breakpoints for 768/1024)
 - Empty/error/loading states across all cards
-- Cutover: update Streamlit systemd to stopped+disabled, delete `app.py` + `streamlit/` folder
+- Cutover: update Streamlit systemd to stopped+disabled, then retire `streamlit/`
 - Rewrite `CLAUDE.md` to reflect Next.js architecture
 - Remove `tokens.json` (now in DB)
 
@@ -191,7 +191,7 @@ This is the best candidate for agent teams if you want to try them (see `PLAN.md
 - **Preserve the live Streamlit app on OptiPlex** until Phase 4. Don't restart services, don't move files it depends on without updating its systemd unit.
 - **Don't touch Oura-tagged work** (issues #41–#49). Python-side Oura continues in parallel and lives under `sync/` alongside whoop.
 - **No `--dangerously-skip-permissions`, `--no-verify`, or destructive escapes** without explicit user approval.
-- **Scratch-spike code** at `~/Documents/code/scratch-whoop-spike-a/` is throwaway. Copy learnings into `web/`; do not import the scratch repo as a dep.
+- **Scratch-spike code** at `~/Documents/code/scratch-whoop-spike-a/` is throwaway. Copy learnings into `apps/web/`; do not import the scratch repo as a dep.
 - **Branch per issue, PR to main.** The main branch stays deployable (once Phase 1 is done, `main` should build both Streamlit and Next.js).
 
 ---
@@ -201,5 +201,5 @@ This is the best candidate for agent teams if you want to try them (see `PLAN.md
 - **Plan:** [`PLAN.md`](./PLAN.md) — the why and what
 - **Spike A report:** [`SPIKE_A_REPORT.md`](./SPIKE_A_REPORT.md) — Recharts tuning decisions
 - **Design system (local only):** `~/Downloads/Whoop_ Design System/` — colors, type, kit components (cloud agents: see #56 note for fallback)
-- **Current code:** `app.py`, `whoop/*`, `daily_sync.py` at repo root (moves to `streamlit/` + `sync/` in #54)
+- **Current code:** `streamlit/app.py`, `streamlit/whoop/*`, `sync/daily_sync.py`, and `apps/web/`
 - **CLAUDE.md** — describes the current Streamlit system; rewritten at Phase 4

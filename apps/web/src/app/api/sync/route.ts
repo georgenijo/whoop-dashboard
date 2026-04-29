@@ -23,9 +23,9 @@ function parseCounts(stdout: string): ParsedCounts {
 
 function runSync(): Promise<{ ok: boolean; stdout: string; stderr: string }> {
   return new Promise((resolve) => {
-    const repoRoot = path.resolve(process.cwd(), "..");
+    const repoRoot = path.resolve(process.cwd(), "..", "..");
     const py = path.join(repoRoot, "venv/bin/python");
-    const script = path.join(repoRoot, "daily_sync.py");
+    const script = path.join(repoRoot, "sync", "daily_sync.py");
 
     const child = spawn(py, [script], {
       cwd: repoRoot,

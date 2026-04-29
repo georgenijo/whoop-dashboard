@@ -40,11 +40,11 @@ ssh -i ~/.ssh/id_ed25519 ubuntu@129.80.134.194 \
 | Path | What |
 |---|---|
 | `/home/george/Documents/whoop-dashboard/` | Repo on VM |
-| `/home/george/Documents/whoop-dashboard/web/` | Next.js app (build + run from here) |
-| `/home/george/Documents/whoop-dashboard/web/.env.local` | `ANTHROPIC_API_KEY` lives here. Never expose via web UI |
+| `/home/george/Documents/whoop-dashboard/apps/web/` | Next.js app (build + run from here) |
+| `/home/george/Documents/whoop-dashboard/apps/web/.env.local` | `ANTHROPIC_API_KEY` lives here. Never expose via web UI |
 | `/home/george/Documents/whoop-dashboard/shared/whoop_data.db` | SQLite, WAL mode, shared by sync + web |
 | `/home/george/Documents/whoop-dashboard/tokens.json` | Whoop OAuth tokens (auto-refreshed) |
-| `/home/george/Documents/whoop-dashboard/venv/` | Python venv for `daily_sync.py` + backfill scripts |
+| `/home/george/Documents/whoop-dashboard/venv/` | Python venv for `sync/daily_sync.py` + backfill scripts |
 | `/etc/systemd/system/whoop-web.service` | Service unit |
 
 Local repo (mac): `/Users/georgenijo/Documents/code/whoop-dashboard/`. Same layout.
@@ -53,12 +53,41 @@ Local repo (mac): `/Users/georgenijo/Documents/code/whoop-dashboard/`. Same layo
 
 Runs `next start -p 8501` as `george`, restarts on crash, capped at 512M RAM. Cloudflare tunnel maps `whoop.georgenijo.com` → `localhost:8501`.
 
+The unit file is tracked at `systemd/whoop-web.service` in the repo. `infra/terraform/cloud-init.sh` copies it to `/etc/systemd/system/` on fresh VMs via the `*.service` glob, but it does **not** enable the unit and does **not** install its runtime prereqs — see "Fresh VM provisioning" below before bringing up `whoop-web` on a new box.
+
 ```bash
 sudo systemctl status whoop-web --no-pager | head -10
 sudo systemctl restart whoop-web
 sudo journalctl -u whoop-web -n 100 --no-pager
 sudo journalctl -u whoop-web -f                  # tail live
 ```
+
+## Fresh VM provisioning (`whoop-web` only)
+
+`infra/terraform/cloud-init.sh` provisions Python + venv + the Streamlit unit. It does **not** install Node.js, run `npm ci`, or run `npm run build`. The Next.js app and `whoop-web.service` therefore require manual provisioning on any new VM:
+
+```bash
+# 1. Install Node.js LTS (Ubuntu 22.04+)
+ssh -i ~/.ssh/id_ed25519 ubuntu@<vm-ip> \
+  "curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo bash - \
+   && sudo apt-get install -y nodejs"
+
+# 2. Install deps and build the Next.js app
+ssh -i ~/.ssh/id_ed25519 ubuntu@<vm-ip> \
+  "sudo -u george bash -c 'cd ~/Documents/whoop-dashboard/apps/web && npm ci && npm run build'"
+
+# 3. Drop .env.local with ANTHROPIC_API_KEY (required for Coach API mode)
+ssh -i ~/.ssh/id_ed25519 ubuntu@<vm-ip> \
+  "sudo -u george tee /home/george/Documents/whoop-dashboard/apps/web/.env.local <<'EOF'
+ANTHROPIC_API_KEY=...
+EOF"
+
+# 4. Enable + start the service (cloud-init copies the unit but does not enable it)
+ssh -i ~/.ssh/id_ed25519 ubuntu@<vm-ip> \
+  "sudo systemctl enable --now whoop-web"
+```
+
+If `whoop-web` fails to start (`status` shows `203/EXEC` or `not-found`), the missing piece is almost always one of: `node` not on PATH, `apps/web/node_modules/` empty, or `apps/web/.next/` missing. Re-run steps 1–2 in order.
 
 ## Standard deploy flow
 
@@ -68,7 +97,7 @@ From local mac, after committing changes:
 cd /Users/georgenijo/Documents/code/whoop-dashboard \
   && git push \
   && ssh -i ~/.ssh/id_ed25519 ubuntu@129.80.134.194 \
-     "sudo -u george bash -c 'cd ~/Documents/whoop-dashboard && git pull && cd web && npm run build' \
+     "sudo -u george bash -c 'cd ~/Documents/whoop-dashboard && git pull && cd apps/web && npm run build' \
       && sudo systemctl restart whoop-web"
 ```
 
@@ -81,11 +110,11 @@ ssh -i ~/.ssh/id_ed25519 ubuntu@129.80.134.194 \
   "sudo -u george sqlite3 /home/george/Documents/whoop-dashboard/shared/whoop_data.db '.tables'"
 ```
 
-Tables: `recovery`, `sleep`, `cycles`, `workouts`, `body`, `chat_messages`, `chat_logs`, `app_settings`. `chat_*` and `app_settings` are created on demand by Next.js (`CREATE TABLE IF NOT EXISTS` in `web/src/lib/db.ts`).
+Tables: `recovery`, `sleep`, `cycles`, `workouts`, `body`, `chat_messages`, `chat_logs`, `app_settings`, `sync_logs`. `chat_*`, `app_settings`, and `sync_logs` are created on demand by Next.js (`CREATE TABLE IF NOT EXISTS` in `apps/web/src/lib/db.ts`).
 
 ## Coach / chat backend
 
-`web/src/app/api/chat/route.ts` runs in two modes, toggled in `/settings`:
+`apps/web/src/app/api/chat/route.ts` runs in two modes, toggled in `/settings`:
 - **API mode** — uses `ANTHROPIC_API_KEY` from `.env.local` via `@anthropic-ai/sdk`. Fast (~2-5s).
 - **CLI mode** (default fallback) — spawns `/usr/local/bin/claude -p <prompt>` as a subprocess. Slow (~30-60s).
 
@@ -106,18 +135,18 @@ Whoop API caps at ~180 days per range. Run from the VM:
 
 ```bash
 ssh -i ~/.ssh/id_ed25519 ubuntu@129.80.134.194 \
-  "sudo -u george bash -c 'cd ~/Documents/whoop-dashboard && source venv/bin/activate && python daily_sync.py'"
+  "sudo -u george bash -c 'cd ~/Documents/whoop-dashboard && source venv/bin/activate && python sync/daily_sync.py'"
 ```
 
 For larger backfills, write a one-shot Python script that calls `WhoopClient.fetch_all_parallel()` with explicit `start`/`end` dates and upserts. There's no cron job set up yet — sync is manual or driven by the Streamlit app's "Sync" button.
 
 ## Gotchas
 
-- **Next.js version is custom** — see `web/AGENTS.md`. Don't rely on training-data Next.js patterns; check `node_modules/next/dist/docs/` for the installed version's APIs.
+- **Next.js version is custom** — see `apps/web/AGENTS.md`. Don't rely on training-data Next.js patterns; check `node_modules/next/dist/docs/` for the installed version's APIs.
 - **`useSearchParams` requires Suspense** in this Next build — wrap any client component using it (Sidebar, TopBar both wrapped in `app/layout.tsx`).
 - **Browser cache bites hard.** After deploying CSS or chart changes, always Cmd+Shift+R. If reports of "old behavior" come in, suspect cache before code.
 - **`.terraform/` directories blow up `git push`** (>100MB Terraform binary). Already in `.gitignore`, but if a fresh `terraform init` happens, double-check before staging.
-- **Don't use `git add -A` blindly** — the repo has both `web/src/app/logs/` (intentional) and `logs/` at root (gitignored runtime dir). The gitignore uses `/logs/` (anchored) to avoid masking the app route.
+- **Don't use `git add -A` blindly** — the repo has both `apps/web/src/app/logs/` (intentional) and `logs/` at root (gitignored runtime dir). The gitignore uses `/logs/` (anchored) to avoid masking the app route.
 
 ## Quick reference — common tasks
 
