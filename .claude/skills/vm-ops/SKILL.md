@@ -93,6 +93,17 @@ If `whoop-web` fails to start (`status` shows `203/EXEC` or `not-found`), the mi
 
 From local mac, after committing changes:
 
+**Prerequisite — env-file migration on path-changing deploys.** `apps/web/.env.local` is gitignored, so it never moves when code is reorganized. Any time the working directory of `whoop-web.service` changes (e.g. PR #68 moved `web/` → `apps/web/`), `cp` the file to the new path on the VM **before** building:
+
+```bash
+ssh -i ~/.ssh/id_ed25519 ubuntu@129.80.134.194 \
+  "sudo -u george cp /home/george/Documents/whoop-dashboard/web/.env.local /home/george/Documents/whoop-dashboard/apps/web/.env.local"
+```
+
+Skip this and the symptoms are subtle:
+- `ANTHROPIC_API_KEY` missing → `/settings` API mode toggle grayed out → Coach silently falls back to CLI mode (~30-60s vs ~2s).
+- `WHOOP_CLIENT_ID` / `WHOOP_CLIENT_SECRET` missing → Whoop OAuth flow breaks.
+
 ```bash
 cd /Users/georgenijo/Documents/code/whoop-dashboard \
   && git push \
@@ -101,7 +112,7 @@ cd /Users/georgenijo/Documents/code/whoop-dashboard \
       && sudo systemctl restart whoop-web"
 ```
 
-Build takes ~50s on the VM. After restart, hit `whoop.georgenijo.com` to verify. Hard-refresh the browser (Cmd+Shift+R) — Next chunks are aggressively cached.
+Build takes ~50s on the VM. After restart, hit `whoop.georgenijo.com` to verify — and close any old tabs (see "Browser cache bites hard" gotcha).
 
 ## DB inspection
 
@@ -144,7 +155,7 @@ For larger backfills, write a one-shot Python script that calls `WhoopClient.fet
 
 - **Next.js version is custom** — see `apps/web/AGENTS.md`. Don't rely on training-data Next.js patterns; check `node_modules/next/dist/docs/` for the installed version's APIs.
 - **`useSearchParams` requires Suspense** in this Next build — wrap any client component using it (Sidebar, TopBar both wrapped in `app/layout.tsx`).
-- **Browser cache bites hard.** After deploying CSS or chart changes, always Cmd+Shift+R. If reports of "old behavior" come in, suspect cache before code.
+- **Browser cache bites hard — close old tabs after deploy.** Each `npm run build` regenerates Next.js chunk hashes (visible in DevTools Network tab — filenames like `0257pdz1-imal.js` change every build). Tabs open before the deploy keep requesting old chunk URLs on dynamic imports → 404s → fallback retries → page feels hiccupy/sluggish even though server TTFB is 100-200ms. Cmd+Shift+R sometimes evicts cleanly but not reliably. **Reliable fix: close the old tab and open a new one.** If reports of "old behavior" come in, suspect cache before code.
 - **`.terraform/` directories blow up `git push`** (>100MB Terraform binary). Already in `.gitignore`, but if a fresh `terraform init` happens, double-check before staging.
 - **Don't use `git add -A` blindly** — the repo has both `apps/web/src/app/logs/` (intentional) and `logs/` at root (gitignored runtime dir). The gitignore uses `/logs/` (anchored) to avoid masking the app route.
 
