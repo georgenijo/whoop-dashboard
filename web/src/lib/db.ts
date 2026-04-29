@@ -45,6 +45,14 @@ export type WorkoutRow = {
   kilojoule: number | null;
 };
 
+export type JournalRow = {
+  date: string;
+  title: string | null;
+  content: string | null;
+  mood: string | null;
+  tags: string | null;
+};
+
 function dbPath(): string {
   if (process.env.WHOOP_DB_PATH) return process.env.WHOOP_DB_PATH;
   // shared/whoop_data.db at repo root (matches streamlit/whoop/db.py).
@@ -122,6 +130,21 @@ function hasTable(db: DB, name: string): boolean {
   return !!row;
 }
 
+function hasColumn(db: DB, table: string, column: string): boolean {
+  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  return rows.some((row) => row.name === column);
+}
+
+function dateRangeClause(startDate: string, endDate: string): {
+  clause: string;
+  params: [string, string];
+} {
+  return {
+    clause: "date >= ? AND date <= ?",
+    params: [startDate, endDate],
+  };
+}
+
 function safeQuery<T>(fn: (db: DB) => T): T | null {
   const db = open();
   if (!db) return null;
@@ -172,6 +195,20 @@ export function getRecoveryTrend(days: number): RecoveryRow[] {
   );
 }
 
+export function getRecoveryRange(startDate: string, endDate: string): RecoveryRow[] {
+  return (
+    safeQuery((db) => {
+      if (!hasTable(db, "recovery")) return [];
+      const range = dateRangeClause(startDate, endDate);
+      return db
+        .prepare(
+          `SELECT date, recovery_score, hrv, rhr, spo2, skin_temp FROM recovery WHERE ${range.clause} ORDER BY date ASC`
+        )
+        .all(...range.params) as RecoveryRow[];
+    }) ?? []
+  );
+}
+
 export function getLatestCycle(): CycleRow | null {
   return safeQuery((db) => {
     if (!hasTable(db, "cycles")) return null;
@@ -206,6 +243,20 @@ export function getStrainTrend(days: number): CycleRow[] {
         )
         .all(days) as CycleRow[];
       return rows.reverse();
+    }) ?? []
+  );
+}
+
+export function getStrainRange(startDate: string, endDate: string): CycleRow[] {
+  return (
+    safeQuery((db) => {
+      if (!hasTable(db, "cycles")) return [];
+      const range = dateRangeClause(startDate, endDate);
+      return db
+        .prepare(
+          `SELECT date, strain, kilojoule, avg_hr, max_hr FROM cycles WHERE ${range.clause} ORDER BY date ASC`
+        )
+        .all(...range.params) as CycleRow[];
     }) ?? []
   );
 }
@@ -248,6 +299,20 @@ export function getSleepTrend(days: number): SleepRow[] {
   );
 }
 
+export function getSleepRange(startDate: string, endDate: string): SleepRow[] {
+  return (
+    safeQuery((db) => {
+      if (!hasTable(db, "sleep")) return [];
+      const range = dateRangeClause(startDate, endDate);
+      return db
+        .prepare(
+          `SELECT date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms, sleep_need_ms, performance, efficiency, disturbances, respiratory_rate FROM sleep WHERE nap = 0 AND ${range.clause} ORDER BY date ASC`
+        )
+        .all(...range.params) as SleepRow[];
+    }) ?? []
+  );
+}
+
 export function getLatestInsight(): { date: string; insight: string } | null {
   return safeQuery((db) => {
     if (!hasTable(db, "insights")) return null;
@@ -267,6 +332,42 @@ export function getWorkouts(limit: number): WorkoutRow[] {
           "SELECT id, date, sport, duration_sec, avg_hr, max_hr, strain, kilojoule FROM workouts ORDER BY date DESC LIMIT ?"
         )
         .all(limit) as WorkoutRow[];
+    }) ?? []
+  );
+}
+
+export function getWorkoutsRange(startDate: string, endDate: string): WorkoutRow[] {
+  return (
+    safeQuery((db) => {
+      if (!hasTable(db, "workouts")) return [];
+      const range = dateRangeClause(startDate, endDate);
+      return db
+        .prepare(
+          `SELECT id, date, sport, duration_sec, avg_hr, max_hr, strain, kilojoule FROM workouts WHERE ${range.clause} ORDER BY date ASC`
+        )
+        .all(...range.params) as WorkoutRow[];
+    }) ?? []
+  );
+}
+
+export function getJournalRange(startDate: string, endDate: string): JournalRow[] {
+  return (
+    safeQuery((db) => {
+      if (!hasTable(db, "journal")) return [];
+      const hasTitle = hasColumn(db, "journal", "title");
+      const hasContent = hasColumn(db, "journal", "content");
+      const hasMood = hasColumn(db, "journal", "mood");
+      const hasTags = hasColumn(db, "journal", "tags");
+      const title = hasTitle ? "title" : "NULL AS title";
+      const content = hasContent ? "content" : "NULL AS content";
+      const mood = hasMood ? "mood" : "NULL AS mood";
+      const tags = hasTags ? "tags" : "NULL AS tags";
+      const range = dateRangeClause(startDate, endDate);
+      return db
+        .prepare(
+          `SELECT date, ${title}, ${content}, ${mood}, ${tags} FROM journal WHERE ${range.clause} ORDER BY date ASC`
+        )
+        .all(...range.params) as JournalRow[];
     }) ?? []
   );
 }

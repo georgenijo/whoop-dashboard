@@ -1,79 +1,184 @@
-import { spawn } from "child_process";
 import Anthropic from "@anthropic-ai/sdk";
-import {
-  getHealthContext,
-  addChatMessage,
-  addChatLog,
-  getSetting,
-} from "@/lib/db";
+import type {
+  ContentBlock,
+  ContentBlockParam,
+  MessageParam,
+  TextBlock,
+  ToolResultBlockParam,
+  ToolUseBlock,
+} from "@anthropic-ai/sdk/resources/messages";
+import { addChatMessage, addChatLog } from "@/lib/db";
+import { executeTool, ToolInputError, TOOLS } from "@/lib/coach-tools";
 
-export const DEFAULT_SYSTEM_PROMPT = `You are a personal health and performance analyst reviewing Whoop biometric data.
-
-Your job:
-1. Identify meaningful patterns and trends (not just restate numbers)
-2. Flag anomalies or concerning changes
-3. Give specific, actionable recommendations
-4. Compare recent performance to the user's own baseline (not population averages)
-5. Be direct and concise — no fluff
-
-Keep responses under 400 words. Use markdown formatting.`;
+export const DEFAULT_SYSTEM_PROMPT =
+  "You are a personal health and performance analyst. You have tools to query the user's health data; use them as needed before answering with specific numbers and dates. Be direct, concise, and actionable.";
 
 type ChatMessageInput = { role: "user" | "assistant"; content: string };
 
-function runClaudeCli(prompt: string): Promise<{ stdout: string; stderr: string; code: number }> {
-  return new Promise((resolve, reject) => {
-    const cleanEnv: NodeJS.ProcessEnv = { ...process.env };
-    delete cleanEnv.ANTHROPIC_API_KEY;
-    cleanEnv.HOME = "/home/george";
+const MAX_TOOL_ITERATIONS = 8;
 
-    const child = spawn(
-      "/usr/local/bin/claude",
-      ["-p", prompt, "--dangerously-skip-permissions", "--model", "sonnet"],
-      { env: cleanEnv, stdio: ["ignore", "pipe", "pipe"] }
-    );
+function buildSystemPrompt(): string {
+  const today = new Date().toISOString().slice(0, 10);
+  return `Today's date is ${today}.\n${DEFAULT_SYSTEM_PROMPT}`;
+}
 
-    let stdout = "";
-    let stderr = "";
-    const timer = setTimeout(() => {
-      child.kill("SIGTERM");
-      reject(new Error("Claude CLI timed out after 180s"));
-    }, 180_000);
+function isToolUseBlock(block: unknown): block is ToolUseBlock {
+  return (
+    typeof block === "object" &&
+    block !== null &&
+    "type" in block &&
+    (block as { type: unknown }).type === "tool_use" &&
+    "id" in block &&
+    "name" in block
+  );
+}
 
-    child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString("utf8"); });
-    child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString("utf8"); });
-    child.on("error", (err) => { clearTimeout(timer); reject(err); });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      resolve({ stdout, stderr, code: code ?? -1 });
+function textFromContent(content: ContentBlock[]): string {
+  return content
+    .filter((block): block is TextBlock => {
+      return (
+        block.type === "text" &&
+        "text" in block &&
+        typeof block.text === "string"
+      );
+    })
+    .map((block) => block.text)
+    .join("")
+    .trim();
+}
+
+function toolErrorPayload(err: unknown): string {
+  if (err instanceof ToolInputError) {
+    return JSON.stringify({
+      error: err.message,
+      details: err.details,
     });
+  }
+  return JSON.stringify({
+    error: err instanceof Error ? err.message : String(err),
   });
 }
 
-async function runAnthropicSdk(
-  systemPrompt: string,
-  messages: ChatMessageInput[]
-): Promise<string> {
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-5-20250929",
-    max_tokens: 1024,
-    system: systemPrompt,
-    messages,
+async function executeToolResult(toolUse: ToolUseBlock): Promise<ToolResultBlockParam> {
+  const startMs = Date.now();
+  console.info("[coach] tool_call", {
+    name: toolUse.name,
+    input: toolUse.input,
   });
-  const text = response.content
-    .filter((b) => b.type === "text")
-    .map((b) => (b as { type: "text"; text: string }).text)
-    .join("");
-  return text.trim();
+
+  try {
+    const result = await executeTool(toolUse.name, toolUse.input);
+    const durationMs = Date.now() - startMs;
+    console.info("[coach] tool_result", {
+      name: toolUse.name,
+      input: toolUse.input,
+      duration_ms: durationMs,
+      rows: Array.isArray(result) ? result.length : null,
+      status: "ok",
+    });
+    return {
+      type: "tool_result",
+      tool_use_id: toolUse.id,
+      content: JSON.stringify(result),
+    };
+  } catch (err) {
+    const durationMs = Date.now() - startMs;
+    console.warn("[coach] tool_result", {
+      name: toolUse.name,
+      input: toolUse.input,
+      duration_ms: durationMs,
+      status: "error",
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return {
+      type: "tool_result",
+      tool_use_id: toolUse.id,
+      content: toolErrorPayload(err),
+      is_error: true,
+    };
+  }
+}
+
+async function runAnthropicSdk(messages: ChatMessageInput[]): Promise<string> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error("ANTHROPIC_API_KEY is not configured");
+  }
+
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const conversation: MessageParam[] = messages.map((message) => ({
+    role: message.role,
+    content: message.content,
+  }));
+
+  let response = await client.messages.create({
+    model: "claude-opus-4-7",
+    thinking: { type: "adaptive" },
+    tools: TOOLS,
+    max_tokens: 4096,
+    system: buildSystemPrompt(),
+    messages: conversation,
+  });
+  console.info("[coach] model_response", {
+    stop_reason: response.stop_reason,
+    input_tokens: response.usage.input_tokens,
+    output_tokens: response.usage.output_tokens,
+  });
+
+  let iterations = 0;
+  while (response.stop_reason === "tool_use") {
+    if (iterations >= MAX_TOOL_ITERATIONS) {
+      throw new Error(`Tool-use iteration limit exceeded (${MAX_TOOL_ITERATIONS})`);
+    }
+    iterations += 1;
+
+    const toolUses = response.content.filter(isToolUseBlock);
+    if (toolUses.length === 0) {
+      throw new Error("Claude stopped for tool_use without requesting a tool");
+    }
+
+    conversation.push({
+      role: "assistant",
+      content: response.content as ContentBlockParam[],
+    });
+    conversation.push({
+      role: "user",
+      content: await Promise.all(toolUses.map(executeToolResult)),
+    });
+
+    response = await client.messages.create({
+      model: "claude-opus-4-7",
+      thinking: { type: "adaptive" },
+      tools: TOOLS,
+      max_tokens: 4096,
+      system: buildSystemPrompt(),
+      messages: conversation,
+    });
+    console.info("[coach] model_response", {
+      stop_reason: response.stop_reason,
+      input_tokens: response.usage.input_tokens,
+      output_tokens: response.usage.output_tokens,
+    });
+  }
+
+  if (response.stop_reason !== "end_turn") {
+    throw new Error(`Claude stopped before finishing: ${response.stop_reason}`);
+  }
+
+  return textFromContent(response.content);
 }
 
 export async function POST(req: Request) {
-  const { messages, days = 9999 } = (await req.json()) as {
+  const { messages, days = null } = (await req.json()) as {
     messages: ChatMessageInput[];
-    days?: number;
+    days?: number | null;
   };
 
-  const context = getHealthContext(days);
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return new Response("Error: messages must include at least one item", {
+      status: 400,
+    });
+  }
+
   const lastUser = messages[messages.length - 1].content;
 
   addChatMessage("user", lastUser);
@@ -82,35 +187,8 @@ export async function POST(req: Request) {
   const startMs = Date.now();
   const promptPreview = lastUser.slice(0, 200);
 
-  const useApi =
-    getSetting("use_api_mode") === "1" && !!process.env.ANTHROPIC_API_KEY;
-  const systemPrompt = getSetting("system_prompt") || DEFAULT_SYSTEM_PROMPT;
-
   try {
-    let reply: string;
-
-    if (useApi) {
-      const systemWithContext = `${systemPrompt}\n\nCurrent health data:\n${context}`;
-      reply = await runAnthropicSdk(systemWithContext, messages);
-    } else {
-      const history = messages
-        .slice(0, -1)
-        .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
-        .join("\n\n");
-      const prompt = [
-        systemPrompt,
-        `\nCurrent health data:\n${context}`,
-        history ? `\nConversation so far:\n${history}` : "",
-        `\nUser: ${lastUser}`,
-      ]
-        .filter(Boolean)
-        .join("\n");
-      const result = await runClaudeCli(prompt);
-      if (result.code !== 0) {
-        throw new Error(result.stderr || `claude exited ${result.code}`);
-      }
-      reply = result.stdout.trim();
-    }
+    const reply = await runAnthropicSdk(messages);
 
     addChatMessage("assistant", reply);
     addChatLog({
@@ -121,7 +199,7 @@ export async function POST(req: Request) {
       response_length: reply.length,
       error_message: null,
       days_context: days,
-      type: useApi ? "api" : "cli",
+      type: "api",
     });
     return new Response(reply, {
       headers: { "Content-Type": "text/plain; charset=utf-8" },
@@ -136,7 +214,7 @@ export async function POST(req: Request) {
       response_length: 0,
       error_message: msg.slice(0, 500),
       days_context: days,
-      type: useApi ? "api" : "cli",
+      type: "api",
     });
     return new Response(`Error: ${msg}`, { status: 500 });
   }
