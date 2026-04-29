@@ -47,7 +47,7 @@ Read these files silently before doing anything else:
 - /Users/george-mac-mini/Documents/code/whoop-dashboard/CLAUDE.md — project overview, architecture, conventions
 - /Users/george-mac-mini/Documents/code/whoop-dashboard/README.md — setup and run commands
 
-Also read any file in `whoop/` or the relevant `@st.fragment` section of `app.py` for your work.
+Also read any file in `streamlit/whoop/` or the relevant `@st.fragment` section of `streamlit/app.py` for your work.
 
 ## Your Assignment
 <issue body>
@@ -69,8 +69,8 @@ Also read any file in `whoop/` or the relevant `@st.fragment` section of `app.py
 3. After approval, implement exactly what was planned. No scope creep.
 
 4. Run verification:
-   - python3 -m py_compile app.py whoop/*.py
-   - For dashboard changes, note that the user needs to run `streamlit run app.py` to visually verify; flag this in the PR body if applicable
+   - python3 -m py_compile streamlit/app.py streamlit/whoop/*.py sync/daily_sync.py
+   - For dashboard changes, note that the user needs to run `streamlit run streamlit/app.py` to visually verify; flag this in the PR body if applicable
 
 5. Commit and open a PR:
    git push -u origin issue/<number>-<slug>
@@ -93,7 +93,7 @@ When a sub-agent submits a plan for approval, review it critically as a senior e
 
 **Reject with specific feedback if:**
 - It adds complexity beyond what the issue requires
-- It puts code in the wrong place (e.g., a new `whoop/<thing>.py` module when `app.py` would be consistent, or vice versa)
+- It puts code in the wrong place (e.g., a new `streamlit/whoop/<thing>.py` module when `streamlit/app.py` would be consistent, or vice versa)
 - It skips existing patterns in favor of something novel
 - It's missing verification steps
 - It touches files unrelated to the issue

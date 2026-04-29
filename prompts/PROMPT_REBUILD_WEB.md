@@ -13,7 +13,7 @@ Read these in order:
 ## 2. What you can do
 
 - **Code:** Edit any file in the repo. Write TypeScript, Python, CSS, markdown.
-- **Install + build:** `pnpm install`, `pnpm build`, `pnpm tsc --noEmit` inside `web/`.
+- **Install + build:** `pnpm install`, `pnpm build`, `pnpm tsc --noEmit` inside `apps/web/`.
 - **Test structure:** Run Next.js dev server and verify components render with fixture data.
 - **Type check and lint:** Catch compile errors and obvious bugs before pushing.
 - **Open PRs:** `gh pr create` against `main`.
@@ -44,8 +44,8 @@ You are **not** on the OptiPlex. Anything requiring Podman, systemd, tailscale, 
 
 - **Enter plan mode first.** Design the approach citing `GUIDE.md` and the issue body. Exit for approval.
 - Implement against the issue's spec
-- Type-check: `cd web && pnpm tsc --noEmit`
-- Build: `cd web && pnpm build` (once scaffold exists in #56)
+- Type-check: `cd apps/web && pnpm tsc --noEmit`
+- Build: `cd apps/web && pnpm build` (once scaffold exists in #56)
 - Commit on a feature branch `rebuild/<issue-number>-<slug>`, push, `gh pr create --base main`
 - PR description **must** include:
   - `Closes #<issue>`
@@ -59,7 +59,7 @@ You are **not** on the OptiPlex. Anything requiring Podman, systemd, tailscale, 
 - **Don't touch Oura issues** (#41–#49).
 - **Don't fabricate OptiPlex state.** If you need to know something about the box (Podman version, file contents, service status), ask the user instead of guessing.
 - **No `--dangerously-skip-permissions`, `--no-verify`.**
-- **Leave `app.py`, `whoop/*.py`, `daily_sync.py` running** — Phase 1 **#54 reorg** moves them to `streamlit/` and `sync/`, but does not modify their behavior. The live Streamlit on OptiPlex still needs to work against the old paths until the user updates the systemd unit (which is user-manual work).
+- **Leave `streamlit/app.py`, `streamlit/whoop/*.py`, and `sync/daily_sync.py` running** — the reorg moves them without changing behavior. The live Streamlit on OptiPlex still needs to work until the user updates the systemd unit (which is user-manual work).
 - **Fixture data is OK; mock `claude` CLI is OK.** Don't invent real Whoop API responses.
 
 ## 7. When you're done

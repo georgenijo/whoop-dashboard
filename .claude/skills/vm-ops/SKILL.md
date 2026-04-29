@@ -40,11 +40,11 @@ ssh -i ~/.ssh/id_ed25519 ubuntu@129.80.134.194 \
 | Path | What |
 |---|---|
 | `/home/george/Documents/whoop-dashboard/` | Repo on VM |
-| `/home/george/Documents/whoop-dashboard/web/` | Next.js app (build + run from here) |
-| `/home/george/Documents/whoop-dashboard/web/.env.local` | `ANTHROPIC_API_KEY` lives here. Never expose via web UI |
+| `/home/george/Documents/whoop-dashboard/apps/web/` | Next.js app (build + run from here) |
+| `/home/george/Documents/whoop-dashboard/apps/web/.env.local` | `ANTHROPIC_API_KEY` lives here. Never expose via web UI |
 | `/home/george/Documents/whoop-dashboard/shared/whoop_data.db` | SQLite, WAL mode, shared by sync + web |
 | `/home/george/Documents/whoop-dashboard/tokens.json` | Whoop OAuth tokens (auto-refreshed) |
-| `/home/george/Documents/whoop-dashboard/venv/` | Python venv for `daily_sync.py` + backfill scripts |
+| `/home/george/Documents/whoop-dashboard/venv/` | Python venv for `sync/daily_sync.py` + backfill scripts |
 | `/etc/systemd/system/whoop-web.service` | Service unit |
 
 Local repo (mac): `/Users/georgenijo/Documents/code/whoop-dashboard/`. Same layout.
@@ -68,7 +68,7 @@ From local mac, after committing changes:
 cd /Users/georgenijo/Documents/code/whoop-dashboard \
   && git push \
   && ssh -i ~/.ssh/id_ed25519 ubuntu@129.80.134.194 \
-     "sudo -u george bash -c 'cd ~/Documents/whoop-dashboard && git pull && cd web && npm run build' \
+     "sudo -u george bash -c 'cd ~/Documents/whoop-dashboard && git pull && cd apps/web && npm run build' \
       && sudo systemctl restart whoop-web"
 ```
 
@@ -81,11 +81,11 @@ ssh -i ~/.ssh/id_ed25519 ubuntu@129.80.134.194 \
   "sudo -u george sqlite3 /home/george/Documents/whoop-dashboard/shared/whoop_data.db '.tables'"
 ```
 
-Tables: `recovery`, `sleep`, `cycles`, `workouts`, `body`, `chat_messages`, `chat_logs`, `app_settings`. `chat_*` and `app_settings` are created on demand by Next.js (`CREATE TABLE IF NOT EXISTS` in `web/src/lib/db.ts`).
+Tables: `recovery`, `sleep`, `cycles`, `workouts`, `body`, `chat_messages`, `chat_logs`, `app_settings`. `chat_*` and `app_settings` are created on demand by Next.js (`CREATE TABLE IF NOT EXISTS` in `apps/web/src/lib/db.ts`).
 
 ## Coach / chat backend
 
-`web/src/app/api/chat/route.ts` runs in two modes, toggled in `/settings`:
+`apps/web/src/app/api/chat/route.ts` runs in two modes, toggled in `/settings`:
 - **API mode** — uses `ANTHROPIC_API_KEY` from `.env.local` via `@anthropic-ai/sdk`. Fast (~2-5s).
 - **CLI mode** (default fallback) — spawns `/usr/local/bin/claude -p <prompt>` as a subprocess. Slow (~30-60s).
 
@@ -106,18 +106,18 @@ Whoop API caps at ~180 days per range. Run from the VM:
 
 ```bash
 ssh -i ~/.ssh/id_ed25519 ubuntu@129.80.134.194 \
-  "sudo -u george bash -c 'cd ~/Documents/whoop-dashboard && source venv/bin/activate && python daily_sync.py'"
+  "sudo -u george bash -c 'cd ~/Documents/whoop-dashboard && source venv/bin/activate && python sync/daily_sync.py'"
 ```
 
 For larger backfills, write a one-shot Python script that calls `WhoopClient.fetch_all_parallel()` with explicit `start`/`end` dates and upserts. There's no cron job set up yet — sync is manual or driven by the Streamlit app's "Sync" button.
 
 ## Gotchas
 
-- **Next.js version is custom** — see `web/AGENTS.md`. Don't rely on training-data Next.js patterns; check `node_modules/next/dist/docs/` for the installed version's APIs.
+- **Next.js version is custom** — see `apps/web/AGENTS.md`. Don't rely on training-data Next.js patterns; check `node_modules/next/dist/docs/` for the installed version's APIs.
 - **`useSearchParams` requires Suspense** in this Next build — wrap any client component using it (Sidebar, TopBar both wrapped in `app/layout.tsx`).
 - **Browser cache bites hard.** After deploying CSS or chart changes, always Cmd+Shift+R. If reports of "old behavior" come in, suspect cache before code.
 - **`.terraform/` directories blow up `git push`** (>100MB Terraform binary). Already in `.gitignore`, but if a fresh `terraform init` happens, double-check before staging.
-- **Don't use `git add -A` blindly** — the repo has both `web/src/app/logs/` (intentional) and `logs/` at root (gitignored runtime dir). The gitignore uses `/logs/` (anchored) to avoid masking the app route.
+- **Don't use `git add -A` blindly** — the repo has both `apps/web/src/app/logs/` (intentional) and `logs/` at root (gitignored runtime dir). The gitignore uses `/logs/` (anchored) to avoid masking the app route.
 
 ## Quick reference — common tasks
 

@@ -1,6 +1,6 @@
-# web/
+# apps/web/
 
-Next.js 15 app for the Whoop+ dashboard rebuild (Phase 1).
+Next.js 16 app for the Whoop+ dashboard rebuild (Phase 1).
 
 Runs alongside the legacy Streamlit app (which lives in `streamlit/` and serves
 on port 8501) during the migration window.
@@ -8,7 +8,7 @@ on port 8501) during the migration window.
 ## Setup
 
 ```bash
-cd web
+cd apps/web
 cp .env.local.example .env.local   # fill in WHOOP_CLIENT_ID + WHOOP_CLIENT_SECRET
 pnpm install
 pnpm dev                           # http://localhost:3000
@@ -20,14 +20,11 @@ from this app instead of Streamlit.
 
 ## Data
 
-`src/lib/db.ts` reads from `../whoop_data.db` (repo root) via `better-sqlite3`
-in read-only mode, using the schema defined in `streamlit/whoop/db.py`. If the
-DB is missing or empty (e.g. before the first Whoop sync), the Overview
-renders with muted empty states — no runtime errors.
-
-When the SQLite migration issue ships `shared/whoop_data.db` and a `tokens`
-table, point `WHOOP_DB_PATH` at the new location and swap the tokens
-persistence in `src/lib/auth.ts` from `tokens.json` to the SQLite write.
+`src/lib/db.ts` reads from `../../shared/whoop_data.db` via `better-sqlite3`
+in read-only mode, using the schema defined in `streamlit/whoop/db.py`.
+`WHOOP_DB_PATH` can override that default. If the DB is missing or empty
+(e.g. before the first Whoop sync), the Overview renders with muted empty
+states and no runtime errors.
 
 ## Design tokens
 
