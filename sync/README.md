@@ -1,3 +1,9 @@
 # sync/
 
-Daily Python sync job — migration from `daily_sync.py` coming in a separate issue.
+Daily Python sync job.
+
+Run from the repo root:
+
+```bash
+python sync/daily_sync.py
+```

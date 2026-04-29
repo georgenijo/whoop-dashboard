@@ -62,7 +62,7 @@ export type Session = {
 function dbPath(): string {
   if (process.env.WHOOP_DB_PATH) return process.env.WHOOP_DB_PATH;
   // shared/whoop_data.db at repo root (matches streamlit/whoop/db.py).
-  return path.resolve(process.cwd(), "..", "shared", "whoop_data.db");
+  return path.resolve(process.cwd(), "..", "..", "shared", "whoop_data.db");
 }
 
 function openWrite(): DB | null {

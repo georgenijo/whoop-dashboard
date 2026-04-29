@@ -23,7 +23,7 @@ whoop-dashboard/
 └── .github/                Issue templates, workflows
 ```
 
-Both web and iOS clients call the same `/api/*` routes on Next.js. Bearer-token auth via Sign in with Apple. Sync polls on cron, never invoked from the request path.
+Both web and iOS clients call the same `/api/*` routes on Next.js. Bearer-token auth via Sign in with Apple. Sync polls on cron and can also be manually triggered via `POST /api/sync`.
 
 ## Build / test commands
 
@@ -34,8 +34,6 @@ Both web and iOS clients call the same `/api/*` routes on Next.js. Bearer-token 
 | Sync | `python sync/daily_sync.py` | Pulls Whoop data into shared/whoop_data.db |
 | DB inspect | `sqlite3 shared/whoop_data.db ".schema"` | Read-only check |
 | Lint | (none configured) | — |
-
-(Until issue #1 lands, the paths are `web/` and `daily_sync.py` at repo root. After issue #1 they are `apps/web/` and `sync/daily_sync.py`. Match whichever state the codebase is in when you read this.)
 
 ## Hard rules — never violate
 
@@ -51,7 +49,7 @@ Both web and iOS clients call the same `/api/*` routes on Next.js. Bearer-token 
 
 ## Important environment notes
 
-- The web app reads `shared/whoop_data.db` via `process.cwd() + relative path`. After issue #1 lands, the relative path is `../../shared/whoop_data.db`. The override env var `WHOOP_DB_PATH` is honored if set (production sets it).
+- The web app reads `shared/whoop_data.db` via `process.cwd() + relative path`; from `apps/web`, the relative path is `../../shared/whoop_data.db`. The override env var `WHOOP_DB_PATH` is honored if set (production sets it).
 - This is **Next.js 16** (custom version). APIs differ from public Next.js. Read `apps/web/AGENTS.md` and `apps/web/node_modules/next/dist/docs/` before relying on training-data Next.js knowledge.
 - AI calls use `claude-opus-4-7` with `thinking: { type: "adaptive" }`. Do not downgrade to older models.
 - The Anthropic SDK is preferred over the Claude CLI for production code paths. CLI fallback exists in `apps/web/src/app/api/chat/route.ts` — consider it deprecated.
@@ -66,9 +64,7 @@ Both web and iOS clients call the same `/api/*` routes on Next.js. Bearer-token 
 
 ## Verification before opening a PR
 
-1. Build succeeds for the current repo state:
-   - Pre-reorg (Issue #63): `cd web && npm run build`
-   - Post-reorg: `cd apps/web && npm run build`
+1. Build succeeds for the current repo state: `cd apps/web && npm run build`
 2. The acceptance criteria from the issue are all checked off, with command output pasted in the PR description.
 3. `git status` is clean on the task branch.
 4. PR title matches the format from the issue.

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A personal health analytics dashboard that pulls data from the Whoop wearable API and displays recovery, sleep, strain, and workout metrics. Built with Python, Streamlit, and Plotly.
+A personal health analytics dashboard that pulls data from the Whoop wearable API and displays recovery, sleep, strain, and workout metrics. The legacy UI is built with Python, Streamlit, and Plotly; the current web app is a Next.js App Router app.
 
 ## Commands
 
@@ -16,28 +16,31 @@ pip install -r requirements.txt
 
 # Run
 streamlit run streamlit/app.py   # serves on http://localhost:8501
+cd apps/web && npm run dev       # serves on http://localhost:3000
 ```
 
-No test suite, linter, or build step is configured.
+No Python test suite or linter is configured. The web app build is `cd apps/web && npm run build`.
 
 ## Architecture
 
 ### Repo layout
 
-Phase 1 rebuild carves the repo into discipline-specific subdirs so the legacy Streamlit app, a future Next.js app, and a standalone sync job can live side-by-side:
+The repo is split into discipline-specific subdirs so the legacy Streamlit app, the Next.js app, and the standalone sync job can live side-by-side:
 
 - **`streamlit/`** — legacy Streamlit app (port 8501 during migration)
-- **`web/`** — Next.js 15 app (scaffold in a later phase)
-- **`sync/`** — standalone daily sync job (scaffold in a later phase; `daily_sync.py` still runs from repo root for now)
+- **`apps/web/`** — Next.js 16 app and API server
+- **`sync/`** — standalone daily sync job (`sync/daily_sync.py`)
+- **`shared/`** — shared SQLite data store (`shared/whoop_data.db`)
 
-`tokens.json`, `whoop_data.db`, and `logs/` remain at the repo root so both the Streamlit app and `daily_sync.py` share the same state.
+`tokens.json` remains at the repo root. `shared/whoop_data.db` remains under `shared/` so the Streamlit app, Next.js app, and sync job share the same state.
 
 ### Module layout
 
 - **`streamlit/app.py`** — Single-file Streamlit app: auth flow, data fetching, DataFrame construction, KPI metrics, and all Plotly charts. Uses `@st.fragment` to isolate chart sections and `@st.cache_data(ttl=600)` for a 10-minute fetch cache.
 - **`streamlit/whoop/auth.py`** — OAuth2 flow against `api.prod.whoop.com`. Persists tokens to `tokens.json` (atomic write via tmp+rename). Thread-safe token refresh with `_refresh_lock`. Auto-refreshes tokens 60 seconds before expiry.
 - **`streamlit/whoop/client.py`** — `WhoopClient` REST client wrapping the `/developer/v2` API. Handles pagination (`_get_all` with `nextToken`), raises `AuthError` (401) and `RateLimitError` (429). `fetch_all_parallel()` hits all 6 endpoints concurrently via `ThreadPoolExecutor(max_workers=5)`.
-- **`daily_sync.py`** — repo-root cron entry point for the daily sync. Adds `streamlit/` to `sys.path` so `from whoop.* import …` resolves.
+- **`sync/daily_sync.py`** — cron entry point for the daily sync. Adds repo-root `streamlit/` to `sys.path` so `from whoop.* import …` resolves.
+- **`apps/web/src/lib/db.ts`** — Next.js SQLite access layer. Defaults to `../../shared/whoop_data.db` from `apps/web`, with `WHOOP_DB_PATH` override support.
 
 ### Data flow
 

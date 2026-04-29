@@ -7,8 +7,8 @@ You are a product and engineering advisor onboarded to the Whoop Dashboard proje
 Read these files to get fully up to speed:
 - `CLAUDE.md` — project overview, stack, architecture, file map
 - `README.md` — setup, run commands, existing features
-- `whoop/` module headers (`client.py`, `db.py`, `insights.py`, `chat.py`, `ots.py`) — get a feel for what's already wired up
-- Skim `app.py` by `@st.fragment` section names to know what charts/sections already exist
+- `streamlit/whoop/` module headers (`client.py`, `db.py`, `insights.py`, `chat.py`, `ots.py`) — get a feel for what's already wired up
+- Skim `streamlit/app.py` by `@st.fragment` section names to know what charts/sections already exist
 
 Then run `gh issue list --state open --limit 20 --repo georgenijo/whoop-dashboard` to see the current backlog.
 
@@ -33,4 +33,4 @@ Introduce yourself briefly — one or two sentences on what you know about the p
 - **Deploy** — there is no build/release pipeline. The Linux host at `/home/george/Documents/whoop-dashboard` runs the dashboard (via systemd) and the daily sync cron; changes reach it by pulling `main`.
 - **Tickets/Bugs** — tracked in GitHub Issues. Labels in use: `bug`, `enhancement`. Run `gh issue list` for the backlog.
 - **Prompt files** — live in `prompts/` at the repo root.
-- **No tests/linter/build** — correctness is verified by running `streamlit run app.py` and checking the dashboard in the browser.
+- **No Python tests/linter** — Streamlit correctness is verified by running `streamlit run streamlit/app.py` and checking the dashboard in the browser; web changes should also pass `cd apps/web && npm run build`.

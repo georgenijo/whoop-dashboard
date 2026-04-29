@@ -1,0 +1,18 @@
+[Unit]
+Description=Whoop Dashboard (Next.js)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=george
+WorkingDirectory=/home/george/Documents/whoop-dashboard/apps/web
+ExecStart=/usr/bin/node node_modules/.bin/next start -p 8501
+Restart=always
+RestartSec=5
+MemoryMax=512M
+Environment=NODE_ENV=production
+Environment=PATH=/usr/bin:/usr/local/bin
+
+[Install]
+WantedBy=multi-user.target

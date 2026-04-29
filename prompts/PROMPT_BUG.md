@@ -53,9 +53,9 @@ After confirmation, implement the fix. Stay focused — fix the bug, nothing els
 ## 7. Verify
 
 Before committing:
-- `python3 -m py_compile app.py whoop/*.py` — no syntax errors
-- For dashboard/chart bugs: run `streamlit run app.py` (serves on `http://localhost:8501`) and visually confirm the bug is gone and nothing else regressed
-- For sync/DB bugs: run `python3 daily_sync.py` locally (requires valid `tokens.json`) and confirm expected output
+- `python3 -m py_compile streamlit/app.py streamlit/whoop/*.py sync/daily_sync.py` — no syntax errors
+- For dashboard/chart bugs: run `streamlit run streamlit/app.py` (serves on `http://localhost:8501`) and visually confirm the bug is gone and nothing else regressed
+- For sync/DB bugs: run `python3 sync/daily_sync.py` locally (requires valid `tokens.json`) and confirm expected output
 
 If any check fails, fix before proceeding.
 
