@@ -76,7 +76,7 @@ Four issues, ordered by dependency. Each should be a separate branch + PR.
 
 **Creates:**
 - `apps/web/` (empty, for #56)
-- `shared/` (empty, for #55)
+- `shared/` (contains `whoop_data.db`)
 - `ops/quadlet/` (empty, for #57)
 
 **Preserve on OptiPlex:** the live Streamlit `systemd/whoop-dashboard.service` unit references the old path. Update the unit's `WorkingDirectory` to the new `streamlit/` subfolder in a separate follow-up; **do not restart the service in this PR**.

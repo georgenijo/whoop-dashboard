@@ -20,11 +20,13 @@ from this app instead of Streamlit.
 
 ## Data
 
-`src/lib/db.ts` reads from `../../shared/whoop_data.db` via `better-sqlite3`
-in read-only mode, using the schema defined in `streamlit/whoop/db.py`.
-`WHOOP_DB_PATH` can override that default. If the DB is missing or empty
-(e.g. before the first Whoop sync), the Overview renders with muted empty
-states and no runtime errors.
+`src/lib/db.ts` defaults to `../../shared/whoop_data.db` via `better-sqlite3`;
+`WHOOP_DB_PATH` can override that default. Read-only dashboard queries use the
+schema defined in `streamlit/whoop/db.py`, while app-owned tables such as chat,
+settings, and sync logs are opened read-write. Deployments should not mount the
+DB read-only, or those writes will fail. If the DB is missing or empty (e.g.
+before the first Whoop sync), the Overview renders with muted empty states and
+no runtime errors.
 
 ## Design tokens
 

@@ -98,7 +98,7 @@ When a sub-agent submits a plan for approval, review it critically as a senior e
 - It's missing verification steps
 - It touches files unrelated to the issue
 
-When rejecting, be specific: "This belongs in `whoop/db.py` next to the other `sync_*` functions" or "You're reimplementing `_build_context()` — reuse it." Give the sub-agent exactly what it needs to fix the plan.
+When rejecting, be specific: "This belongs in `streamlit/whoop/db.py` next to the other `sync_*` functions" or "You're reimplementing `_build_context()` — reuse it." Give the sub-agent exactly what it needs to fix the plan.
 
 ## 5. Monitor Implementation
 

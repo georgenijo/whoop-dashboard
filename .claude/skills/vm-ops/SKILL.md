@@ -81,7 +81,7 @@ ssh -i ~/.ssh/id_ed25519 ubuntu@129.80.134.194 \
   "sudo -u george sqlite3 /home/george/Documents/whoop-dashboard/shared/whoop_data.db '.tables'"
 ```
 
-Tables: `recovery`, `sleep`, `cycles`, `workouts`, `body`, `chat_messages`, `chat_logs`, `app_settings`. `chat_*` and `app_settings` are created on demand by Next.js (`CREATE TABLE IF NOT EXISTS` in `apps/web/src/lib/db.ts`).
+Tables: `recovery`, `sleep`, `cycles`, `workouts`, `body`, `chat_messages`, `chat_logs`, `app_settings`, `sync_logs`. `chat_*`, `app_settings`, and `sync_logs` are created on demand by Next.js (`CREATE TABLE IF NOT EXISTS` in `apps/web/src/lib/db.ts`).
 
 ## Coach / chat backend
 

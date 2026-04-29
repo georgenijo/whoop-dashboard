@@ -23,7 +23,7 @@ whoop-dashboard/
 └── .github/                Issue templates, workflows
 ```
 
-Both web and iOS clients call the same `/api/*` routes on Next.js. Bearer-token auth via Sign in with Apple. Sync polls on cron, never invoked from the request path.
+Both web and iOS clients call the same `/api/*` routes on Next.js. Bearer-token auth via Sign in with Apple. Sync polls on cron and can also be manually triggered via `POST /api/sync`.
 
 ## Build / test commands
 

@@ -98,11 +98,11 @@ All 8 issues target the `georgenijo/whoop-dashboard` repo. Create a new `rebuild
 
 ### New files created (Phase 1+)
 
-- `apps/web/package.json`, `apps/web/next.config.ts`, `apps/web/app/**/*` — Next.js 16 App Router scaffold
-- `apps/web/lib/db.ts` — better-sqlite3 wrapper, typed query helpers
-- `apps/web/lib/whoop-client.ts` — TS port of `whoop/client.py`
-- `apps/web/lib/claude-spawn.ts` — `child_process.spawn` wrapper for chat/insights
-- `apps/web/app/api/auth/callback/route.ts` — OAuth callback handler (replaces Streamlit session-state flow)
+- `apps/web/package.json`, `apps/web/next.config.ts`, `apps/web/src/app/**/*` — Next.js 16 App Router scaffold
+- `apps/web/src/lib/db.ts` — better-sqlite3 wrapper, typed query helpers
+- `apps/web/src/lib/whoop-client.ts` — TS port of `whoop/client.py`
+- `apps/web/src/lib/claude-spawn.ts` — `child_process.spawn` wrapper for chat/insights
+- `apps/web/src/app/api/auth/callback/route.ts` — OAuth callback handler (replaces Streamlit session-state flow)
 - `apps/web/Containerfile` — multi-stage Debian-slim → Node 22 → Next.js standalone
 - `/etc/containers/systemd/whoop-web.pod` — Quadlet pod definition
 - `/etc/containers/systemd/whoop-web.container` — Quadlet container definition (bind mounts for SQLite, `/usr/bin/claude`, `/home/george/.claude/`)
