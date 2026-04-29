@@ -6,6 +6,7 @@ import {
   addChatLog,
   getSetting,
 } from "@/lib/db";
+import { requireAuth } from "@/lib/auth";
 
 export const DEFAULT_SYSTEM_PROMPT = `You are a personal health and performance analyst reviewing Whoop biometric data.
 
@@ -68,6 +69,13 @@ async function runAnthropicSdk(
 }
 
 export async function POST(req: Request) {
+  try {
+    await requireAuth(req);
+  } catch (err) {
+    if (err instanceof Response) return err;
+    throw err;
+  }
+
   const { messages, days = 9999 } = (await req.json()) as {
     messages: ChatMessageInput[];
     days?: number;
