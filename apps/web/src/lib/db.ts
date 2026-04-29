@@ -46,6 +46,22 @@ export type WorkoutRow = {
   kilojoule: number | null;
 };
 
+export type DailySummaryRow = {
+  date: string;
+  recovery_score: number | null;
+  hrv_ms: number | null;
+  resting_hr: number | null;
+  sleep_hours: number | null;
+  sleep_efficiency: number | null;
+  sleep_performance: number | null;
+  day_strain: number | null;
+  max_hr: number | null;
+  avg_hr: number | null;
+  kilojoules: number | null;
+  workouts_count: number | null;
+  computed_at: string;
+};
+
 export type User = {
   id: number;
   email: string | null;
@@ -72,6 +88,22 @@ function openWrite(): DB | null {
     const db = new Database(p, { fileMustExist: true });
     db.pragma("journal_mode = WAL");
     db.exec(`
+      CREATE TABLE IF NOT EXISTS daily_summary (
+        date TEXT PRIMARY KEY,
+        recovery_score INTEGER,
+        hrv_ms REAL,
+        resting_hr INTEGER,
+        sleep_hours REAL,
+        sleep_efficiency REAL,
+        sleep_performance INTEGER,
+        day_strain REAL,
+        max_hr INTEGER,
+        avg_hr INTEGER,
+        kilojoules REAL,
+        workouts_count INTEGER,
+        computed_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_daily_summary_date ON daily_summary(date DESC);
       CREATE TABLE IF NOT EXISTS chat_messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         role TEXT NOT NULL,
@@ -342,6 +374,19 @@ export function getWorkouts(limit: number): WorkoutRow[] {
           "SELECT id, date, sport, duration_sec, avg_hr, max_hr, strain, kilojoule FROM workouts ORDER BY date DESC LIMIT ?"
         )
         .all(limit) as WorkoutRow[];
+    }) ?? []
+  );
+}
+
+export function getDailySummary(start: string, end: string): DailySummaryRow[] {
+  return (
+    safeQuery((db) => {
+      if (!hasTable(db, "daily_summary")) return [];
+      return db
+        .prepare(
+          "SELECT date, recovery_score, hrv_ms, resting_hr, sleep_hours, sleep_efficiency, sleep_performance, day_strain, max_hr, avg_hr, kilojoules, workouts_count, computed_at FROM daily_summary WHERE date BETWEEN ? AND ? ORDER BY date ASC"
+        )
+        .all(start, end) as DailySummaryRow[];
     }) ?? []
   );
 }
