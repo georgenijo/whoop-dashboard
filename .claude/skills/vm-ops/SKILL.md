@@ -53,12 +53,41 @@ Local repo (mac): `/Users/georgenijo/Documents/code/whoop-dashboard/`. Same layo
 
 Runs `next start -p 8501` as `george`, restarts on crash, capped at 512M RAM. Cloudflare tunnel maps `whoop.georgenijo.com` → `localhost:8501`.
 
+The unit file is tracked at `systemd/whoop-web.service` in the repo. `infra/terraform/cloud-init.sh` copies it to `/etc/systemd/system/` on fresh VMs via the `*.service` glob, but it does **not** enable the unit and does **not** install its runtime prereqs — see "Fresh VM provisioning" below before bringing up `whoop-web` on a new box.
+
 ```bash
 sudo systemctl status whoop-web --no-pager | head -10
 sudo systemctl restart whoop-web
 sudo journalctl -u whoop-web -n 100 --no-pager
 sudo journalctl -u whoop-web -f                  # tail live
 ```
+
+## Fresh VM provisioning (`whoop-web` only)
+
+`infra/terraform/cloud-init.sh` provisions Python + venv + the Streamlit unit. It does **not** install Node.js, run `npm ci`, or run `npm run build`. The Next.js app and `whoop-web.service` therefore require manual provisioning on any new VM:
+
+```bash
+# 1. Install Node.js LTS (Ubuntu 22.04+)
+ssh -i ~/.ssh/id_ed25519 ubuntu@<vm-ip> \
+  "curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo bash - \
+   && sudo apt-get install -y nodejs"
+
+# 2. Install deps and build the Next.js app
+ssh -i ~/.ssh/id_ed25519 ubuntu@<vm-ip> \
+  "sudo -u george bash -c 'cd ~/Documents/whoop-dashboard/apps/web && npm ci && npm run build'"
+
+# 3. Drop .env.local with ANTHROPIC_API_KEY (required for Coach API mode)
+ssh -i ~/.ssh/id_ed25519 ubuntu@<vm-ip> \
+  "sudo -u george tee /home/george/Documents/whoop-dashboard/apps/web/.env.local <<'EOF'
+ANTHROPIC_API_KEY=...
+EOF"
+
+# 4. Enable + start the service (cloud-init copies the unit but does not enable it)
+ssh -i ~/.ssh/id_ed25519 ubuntu@<vm-ip> \
+  "sudo systemctl enable --now whoop-web"
+```
+
+If `whoop-web` fails to start (`status` shows `203/EXEC` or `not-found`), the missing piece is almost always one of: `node` not on PATH, `apps/web/node_modules/` empty, or `apps/web/.next/` missing. Re-run steps 1–2 in order.
 
 ## Standard deploy flow
 
