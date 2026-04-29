@@ -6,7 +6,7 @@
 
 ## What I built
 
-Next.js 15 App Router (actually **Next.js 16.2.4** — see deviation note below) + Tailwind v4 + Recharts 3.8, with the Whoop+ design system's `colors_and_type.css` and `styles.css` imported verbatim.
+Next.js 16.2.4 App Router + Tailwind v4 + Recharts 3.8, with the Whoop+ design system's `colors_and_type.css` and `styles.css` imported verbatim.
 
 Four components wired with hard-coded data:
 
@@ -46,7 +46,7 @@ Ring + KPI + AI card are all static markup with no chart-library involvement, so
 
 **Recharts close, acceptable — with two known tuning items.**
 
-Framework fit is confirmed. Next.js 15 (App Router) + Tailwind v4 + Recharts is a workable stack for the rebuild. Port effort is low: components are ~50–80 LOC each and the kit CSS works verbatim.
+Framework fit is confirmed. Next.js 16 (App Router) + Tailwind v4 + Recharts is a workable stack for the rebuild. Port effort is low: components are ~50–80 LOC each and the kit CSS works verbatim.
 
 For the 12 time-series charts (recovery, HRV, RHR, sleep duration, sleep stages, sleep performance, daily strain, workout HR zones, ANS, rebound, strain-recovery scatter, cardiac drift, etc.), Recharts is the right choice over inline SVG — visual fidelity is acceptable after:
 
@@ -60,7 +60,7 @@ For the **recovery ring** and **sleep HR ribbon**, keep **inline SVG** as decide
 - **Next.js 16.2.4** installed (not 15). `create-next-app@latest` now resolves to 16.x. Phase 1 Next.js scaffold issue (#56) should either (a) pin `next@15` explicitly if the plan's version discipline matters, or (b) accept 16.x as the new latest stable. 16 uses App Router by default and the APIs used in the spike are unchanged.
 - **Tailwind v4** (not 3). Default from `create-next-app`. Migration tokens + kit CSS import cleanly. No rewrite needed.
 - **SSR + Recharts**: Recharts `ResponsiveContainer` needs a measurable parent DOM; during SSR both dims are 0 and the chart draws -1/-1 and logs a warning. Fixed with a `useEffect(() => setMounted(true), [])` gate in `RecoveryTrendRecharts.tsx` so the chart mounts only post-hydration. This is the standard Recharts + App Router pattern; it should go in a `<ChartFrame>` wrapper component in the rebuild to avoid repeating the pattern at 12 chart sites.
-- **Kit CSS nested @imports**: Tailwind v4 + Turbopack require all `@import` statements at the top of the entry CSS. The kit's `colors_and_type.css` and `styles.css` each have an `@import url(...)` inside them; when globals.css imports those, PostCSS inlines the nested imports past the leading rules and errors. Worked around by stripping both nested imports from the spike's copies (`src/app/colors_and_type.css`, `src/app/kit.css`) and hoisting the Geist font import to the top of `globals.css`. Phase 1 should apply the same hoisting when copying the kit CSS into `web/`.
+- **Kit CSS nested @imports**: Tailwind v4 + Turbopack require all `@import` statements at the top of the entry CSS. The kit's `colors_and_type.css` and `styles.css` each have an `@import url(...)` inside them; when globals.css imports those, PostCSS inlines the nested imports past the leading rules and errors. Worked around by stripping both nested imports from the spike's copies (`src/app/colors_and_type.css`, `src/app/kit.css`) and hoisting the Geist font import to the top of `globals.css`. Phase 1 should apply the same hoisting when copying the kit CSS into `apps/web/`.
 
 ## Recommended Phase 1 action items (for issue #56)
 
@@ -68,7 +68,7 @@ For the **recovery ring** and **sleep HR ribbon**, keep **inline SVG** as decide
 - [ ] Wrap Recharts in a `<ChartFrame mountOnClient>` helper to avoid the SSR -1 warning repeating 12 times.
 - [ ] Set a house `strokeWidth={1.0}` (or `1.25`) for all Recharts line/area series.
 - [ ] Build a reusable `<GlowEndDot color=...>` custom dot component for chart end-dots.
-- [ ] Copy `colors_and_type.css` + `styles.css` into `web/src/app/` with nested `@import`s stripped and hoisted to `globals.css`.
+- [ ] Copy `colors_and_type.css` + `styles.css` into `apps/web/src/app/` with nested `@import`s stripped and hoisted to `globals.css`.
 
 ## Success criteria check
 

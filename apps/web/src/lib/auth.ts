@@ -2,6 +2,7 @@ import "server-only";
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+import { getSessionByToken, getUserById, type User } from "./db";
 
 export const WHOOP_AUTH_URL = "https://api.prod.whoop.com/oauth/oauth2/auth";
 export const WHOOP_TOKEN_URL = "https://api.prod.whoop.com/oauth/oauth2/token";
@@ -86,4 +87,24 @@ export async function saveTokens(tokens: StoredTokens): Promise<void> {
   const tmp = `${p}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(tokens), "utf8");
   await fs.rename(tmp, p);
+}
+
+export async function requireAuth(req: Request): Promise<User> {
+  const header = req.headers.get("authorization");
+  if (!header) {
+    const user = getUserById(1);
+    if (!user) throw new Response("Single-user bootstrap missing", { status: 500 });
+    return user;
+  }
+
+  const token = header.replace(/^Bearer\s+/i, "");
+  const session = getSessionByToken(token);
+  if (!session) throw new Response("Invalid token", { status: 401 });
+  if (new Date(session.expires_at) < new Date()) {
+    throw new Response("Expired token", { status: 401 });
+  }
+
+  const user = getUserById(session.user_id);
+  if (!user) throw new Response("User not found", { status: 401 });
+  return user;
 }

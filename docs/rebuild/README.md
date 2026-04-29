@@ -16,7 +16,7 @@ This folder is the durable, portable record of the Whoop Dashboard rebuild. Anyo
   - `PROMPT_REBUILD.md` — local/OptiPlex session (requires tailscale ssh)
   - `PROMPT_REBUILD_WEB.md` — Claude Code Web session (sandbox-safe)
 - **GitHub issues** labelled `rebuild` track the work: `gh issue list --label rebuild --state open`
-- **Design system** lives outside the repo at `~/Downloads/Whoop_ Design System/` on the maintainer's Mac (not version-controlled here by choice — it's a generated asset). For cloud agents without access: `colors_and_type.css` and the JSX reference kit were copied into the scratch spike repo; relevant extracts land in `web/` during Phase 1.
+- **Design system** lives outside the repo at `~/Downloads/Whoop_ Design System/` on the maintainer's Mac (not version-controlled here by choice — it's a generated asset). For cloud agents without access: `colors_and_type.css` and the JSX reference kit were copied into the scratch spike repo; relevant extracts land in `apps/web/` during Phase 1.
 
 ## How to use this folder
 

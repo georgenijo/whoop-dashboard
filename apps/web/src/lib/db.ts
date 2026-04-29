@@ -1,5 +1,6 @@
 import "server-only";
 import { existsSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import Database, { type Database as DB } from "better-sqlite3";
 
@@ -61,10 +62,23 @@ export type DailySummaryRow = {
   computed_at: string;
 };
 
+export type User = {
+  id: number;
+  email: string | null;
+  name: string | null;
+};
+
+export type Session = {
+  id: number;
+  user_id: number;
+  token: string;
+  expires_at: string;
+};
+
 function dbPath(): string {
   if (process.env.WHOOP_DB_PATH) return process.env.WHOOP_DB_PATH;
   // shared/whoop_data.db at repo root (matches streamlit/whoop/db.py).
-  return path.resolve(process.cwd(), "..", "shared", "whoop_data.db");
+  return path.resolve(process.cwd(), "..", "..", "shared", "whoop_data.db");
 }
 
 function openWrite(): DB | null {
@@ -125,7 +139,23 @@ function openWrite(): DB | null {
         source TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_sync_logs_started ON sync_logs(started_at DESC);
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        apple_sub TEXT UNIQUE,
+        email TEXT,
+        name TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE TABLE IF NOT EXISTS sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        token TEXT UNIQUE NOT NULL,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
     `);
+    db.prepare("INSERT OR IGNORE INTO users (id) VALUES (1)").run();
     const cols = db.prepare("PRAGMA table_info(chat_logs)").all() as { name: string }[];
     if (!cols.some((c) => c.name === "type")) {
       db.exec("ALTER TABLE chat_logs ADD COLUMN type TEXT");
@@ -161,6 +191,51 @@ function safeQuery<T>(fn: (db: DB) => T): T | null {
     return fn(db);
   } catch {
     return null;
+  } finally {
+    db.close();
+  }
+}
+
+function safeWriteQuery<T>(fn: (db: DB) => T): T | null {
+  const db = openWrite();
+  if (!db) return null;
+  try {
+    return fn(db);
+  } finally {
+    db.close();
+  }
+}
+
+export function getUserById(id: number): User | null {
+  return safeWriteQuery((db) => {
+    const row = db
+      .prepare("SELECT id, email, name FROM users WHERE id = ? LIMIT 1")
+      .get(id) as User | undefined;
+    return row ?? null;
+  });
+}
+
+export function getSessionByToken(token: string): Session | null {
+  return safeWriteQuery((db) => {
+    const row = db
+      .prepare("SELECT id, user_id, token, expires_at FROM sessions WHERE token = ? LIMIT 1")
+      .get(token) as Session | undefined;
+    return row ?? null;
+  });
+}
+
+export function createSession(userId: number): { token: string; expiresAt: string } {
+  const db = openWrite();
+  if (!db) throw new Error("Database unavailable");
+  try {
+    const token = randomUUID();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    db.prepare("INSERT INTO sessions (user_id, token, expires_at) VALUES (?, ?, ?)").run(
+      userId,
+      token,
+      expiresAt
+    );
+    return { token, expiresAt };
   } finally {
     db.close();
   }

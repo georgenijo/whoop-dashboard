@@ -2,20 +2,20 @@
 
 ## Context
 
-The Whoop dashboard is currently a single-user Streamlit + Plotly app (`app.py`, ~1,900 lines, 14 specialty signal sections) running on a Linux host (Dell OptiPlex, Ubuntu 24.04) with a daily Whoop sync cron, OAuth2 auth, and SQLite history. Chat and daily insights shell out to the `claude` CLI.
+The Whoop dashboard is currently a single-user Streamlit + Plotly app (`streamlit/app.py`, ~1,900 lines, 14 specialty signal sections) running on a Linux host (Dell OptiPlex, Ubuntu 24.04) with a daily Whoop sync cron, OAuth2 auth, and SQLite history. Chat and daily insights shell out to the `claude` CLI.
 
 The user downloaded a generated "Whoop+ Design System" to `~/Downloads/Whoop_ Design System/` — a dark-first, data-dense aesthetic with aurora backgrounds, glass cards, smoothed bezier charts, Geist typography, violet-glow AI surfaces, and a desktop-only overview layout. The kit ships as plain React + JSX (Babel standalone) explicitly intended to be ported into a production framework, not reproduced inside Streamlit.
 
 Assessment concluded Streamlit cannot faithfully render this design system (framework-level mismatch on aurora, glass cards, smoothed curves, sidebar chrome, AI glow). The user committed to a full rebuild ("Path A"). This plan captures the resulting architecture, phasing, and Phase 0 deliverables.
 
-**Intended outcome:** Replace `app.py` with a Next.js 15 web app running as a Podman pod on the same OptiPlex, preserving all current features (Overview, Sleep Deep Dive, Chat, 14 specialty signals), wired to the existing SQLite DB via a cleaner read/write split.
+**Intended outcome:** Replace `streamlit/app.py` with a Next.js 16 web app running as a Podman pod on the same OptiPlex, preserving all current features (Overview, Sleep Deep Dive, Chat, 14 specialty signals), wired to the existing SQLite DB via a cleaner read/write split.
 
 ## Locked Decisions
 
-1. **Frontend: Next.js 15 (App Router)** — mature, batteries-included, self-hostable. Considered and rejected: TanStack Start (pre-1.0), Vite + React SPA (no API routes = more moving parts).
+1. **Frontend: Next.js 16 (App Router)** — mature, batteries-included, self-hostable. Considered and rejected: TanStack Start (pre-1.0), Vite + React SPA (no API routes = more moving parts).
 2. **Backend: batch split** — Python stays as the data pipeline (daily sync cron + signal computation → writes to SQLite). Next.js is a read-only consumer of SQLite + OAuth entry point + `claude` CLI proxy for chat/insights. No FastAPI, no HTTP hop between TS and Python. Rejected: full TS rewrite (pandas→TS is painful for ~10 signal calcs), FastAPI layer (unnecessary given batch split).
 3. **Charts: Recharts + inline SVG hybrid** — Recharts for the ~12 standard time-series charts (supports smoothed curves via `type="monotone"`, gradient fills via `<linearGradient>`). Inline SVG for the recovery ring and sleep HR ribbon (not charts). Rejected: Plotly React (fights the DS aesthetic), Visx (too low-level for ROI), full inline SVG (no interactivity at 15 charts).
-4. **Repo layout: monorepo, subfolders** — `streamlit/` (legacy, runs during migration), `web/` (new Next.js), `sync/` (daily Python job), `shared/` (SQLite + fixtures). Both services hit the same `shared/whoop_data.db` during cutover. Rejected: new repo (loses memory, issue tracker, dotfiles paths).
+4. **Repo layout: monorepo, subfolders** — `streamlit/` (legacy, runs during migration), `apps/web/` (new Next.js), `sync/` (daily Python job), `shared/` (SQLite + fixtures). Both services hit the same `shared/whoop_data.db` during cutover. Rejected: new repo (loses memory, issue tracker, dotfiles paths).
 5. **Oura track (#41–#49): continue Python-side work, pause UI-only issues** — provider abstraction, schema migration, Oura auth/sync/deploy all live in the Python pipeline, which survives the rebuild unchanged. Only Streamlit-specific Oura UI is paused.
 6. **Deploy: Podman pod + Quadlet** — rootful Podman 4.9.3 is already on the OptiPlex. New `whoop-web.pod` + `whoop-web.container` Quadlet units in `/etc/containers/systemd/`. Cloudflared tunnel (`whoop-tunnel.service` already running) gets a new ingress route to port 3000. Daily Python sync stays as-is (host-level, not containerized).
 
@@ -27,7 +27,7 @@ OptiPlex (Ubuntu 24.04, rootful Podman)
 │     └── pulls Whoop API → computes signals → writes SQLite
 │
 ├── whoop-web.pod (new, Podman Quadlet, port 3000)
-│     └── Next.js 15 container
+│     └── Next.js 16 container
 │           ├── reads SQLite (better-sqlite3)
 │           ├── handles OAuth callback
 │           └── spawns host `claude` via bind-mounted /usr/bin/claude + ~/.claude/
@@ -52,7 +52,7 @@ OptiPlex (Ubuntu 24.04, rootful Podman)
 
 ### Spike A: Framework + chart rendering
 
-Scratch repo. Next.js 15 + Recharts + Geist + `colors_and_type.css` imported verbatim. Build one component from each category:
+Scratch repo. Next.js 16 + Recharts + Geist + `colors_and_type.css` imported verbatim. Build one component from each category:
 - **Recovery ring** (inline SVG — copy Catmull-Rom helper from `ui_kits/dashboard/Metrics.jsx`)
 - **KPI card** with micro-sparkline (match kit exactly)
 - **Recovery trend chart** (Recharts with smoothed curve + gradient area fill — confirm the visual is indistinguishable from the inline-SVG version in the kit)
@@ -75,10 +75,10 @@ All 8 issues target the `georgenijo/whoop-dashboard` repo. Create a new `rebuild
 
 1. **`epic: Next.js rebuild (Whoop+ design system)`** — master tracking issue with task-list referencing #2–#8.
 2. **`rebuild(phase-0): architecture decision record`** — body captures the 6 locked decisions + rationale verbatim from this plan.
-3. **`rebuild(phase-0): spike — Next.js 15 + Recharts + recovery ring`** — Spike A above.
+3. **`rebuild(phase-0): spike — Next.js 16 + Recharts + recovery ring`** — Spike A above.
 4. **`rebuild(phase-0): spike — Claude CLI inside Podman container`** — Spike B above.
-5. **`rebuild(phase-1): monorepo reorg — app.py → streamlit/, scaffold web/ and sync/`**
-6. **`rebuild(phase-1): SQLite migration — move whoop_data.db to shared/, add signals + tokens tables, WAL verified`**
+5. **`rebuild(phase-1): monorepo reorg — streamlit/, apps/web/, sync/, and shared/ layout`**
+6. **`rebuild(phase-1): SQLite migration — extend shared/whoop_data.db with signals + tokens tables, WAL verified`**
 7. **`rebuild(phase-1): Next.js scaffold + Geist fonts + import colors_and_type.css`**
 8. **`rebuild(phase-1): Containerfile + whoop-web.pod Quadlet unit (rootful, bind-mount /usr/bin/claude + ~/.claude/)`**
 
@@ -86,27 +86,27 @@ All 8 issues target the `georgenijo/whoop-dashboard` repo. Create a new `rebuild
 
 ### To be touched in rebuild
 
-- `/Users/george-mac-mini/Documents/code/whoop-dashboard/app.py` — 1,900-line Streamlit entry, moves to `streamlit/app.py` and is eventually retired
-- `/Users/george-mac-mini/Documents/code/whoop-dashboard/whoop/client.py` — Whoop REST client + OAuth refresh; port to TypeScript in Phase 1
-- `/Users/george-mac-mini/Documents/code/whoop-dashboard/whoop/auth.py` — OAuth2 flow; port to Next.js route handlers in Phase 1
-- `/Users/george-mac-mini/Documents/code/whoop-dashboard/whoop/db.py` — SQLite wrapper; schema extended in Phase 1 (add `signals` and `tokens` tables)
-- `/Users/george-mac-mini/Documents/code/whoop-dashboard/whoop/insights.py` — Context builder + `claude` CLI spawn; logic ported to Node in Phase 2
-- `/Users/george-mac-mini/Documents/code/whoop-dashboard/whoop/chat.py` — Same pattern as insights.py; Phase 2
-- `/Users/george-mac-mini/Documents/code/whoop-dashboard/whoop/ots.py` — numpy/pandas signal math; **stays Python** under new batch split, moves to `sync/`
+- `/Users/george-mac-mini/Documents/code/whoop-dashboard/streamlit/app.py` — 1,900-line Streamlit entry, eventually retired
+- `/Users/george-mac-mini/Documents/code/whoop-dashboard/streamlit/whoop/client.py` — Whoop REST client + OAuth refresh; port to TypeScript in Phase 1
+- `/Users/george-mac-mini/Documents/code/whoop-dashboard/streamlit/whoop/auth.py` — OAuth2 flow; port to Next.js route handlers in Phase 1
+- `/Users/george-mac-mini/Documents/code/whoop-dashboard/streamlit/whoop/db.py` — SQLite wrapper; schema extended in Phase 1 (add `signals` and `tokens` tables)
+- `/Users/george-mac-mini/Documents/code/whoop-dashboard/streamlit/whoop/insights.py` — Context builder + `claude` CLI spawn; logic ported to Node in Phase 2
+- `/Users/george-mac-mini/Documents/code/whoop-dashboard/streamlit/whoop/chat.py` — Same pattern as insights.py; Phase 2
+- `/Users/george-mac-mini/Documents/code/whoop-dashboard/streamlit/whoop/ots.py` — numpy/pandas signal math; **stays Python** under new batch split
 - `/Users/george-mac-mini/Documents/code/whoop-dashboard/CLAUDE.md` — rewritten at Phase 4 cutover
 - `/Users/george-mac-mini/Documents/code/whoop-dashboard/requirements.txt` — pared down to sync-only deps in Phase 4
 
 ### New files created (Phase 1+)
 
-- `web/package.json`, `web/next.config.ts`, `web/app/**/*` — Next.js 15 App Router scaffold
-- `web/lib/db.ts` — better-sqlite3 wrapper, typed query helpers
-- `web/lib/whoop-client.ts` — TS port of `whoop/client.py`
-- `web/lib/claude-spawn.ts` — `child_process.spawn` wrapper for chat/insights
-- `web/app/api/auth/callback/route.ts` — OAuth callback handler (replaces Streamlit session-state flow)
-- `web/Containerfile` — multi-stage Debian-slim → Node 22 → Next.js standalone
+- `apps/web/package.json`, `apps/web/next.config.ts`, `apps/web/src/app/**/*` — Next.js 16 App Router scaffold
+- `apps/web/src/lib/db.ts` — better-sqlite3 wrapper, typed query helpers
+- `apps/web/src/lib/whoop-client.ts` — TS port of `whoop/client.py`
+- `apps/web/src/lib/claude-spawn.ts` — `child_process.spawn` wrapper for chat/insights
+- `apps/web/src/app/api/auth/callback/route.ts` — OAuth callback handler (replaces Streamlit session-state flow)
+- `apps/web/Containerfile` — multi-stage Debian-slim → Node 22 → Next.js standalone
 - `/etc/containers/systemd/whoop-web.pod` — Quadlet pod definition
 - `/etc/containers/systemd/whoop-web.container` — Quadlet container definition (bind mounts for SQLite, `/usr/bin/claude`, `/home/george/.claude/`)
-- `shared/whoop_data.db` — relocated SQLite file (was at repo root on both Mac and OptiPlex)
+- `shared/whoop_data.db` — shared SQLite file used by sync and web
 
 ### Reference — design system (read-only, do not modify)
 
@@ -130,8 +130,8 @@ All 8 issues target the `georgenijo/whoop-dashboard` repo. Create a new `rebuild
 - Streamlit still running on port 8501 for regression comparison.
 
 ### Full rebuild success (Phase 4 cutover)
-- All 14 specialty signal sections from `app.py` present in the Next.js app.
-- Streamlit systemd unit stopped and disabled; `app.py` deleted; `requirements.txt` pared to sync-only deps.
+- All 14 specialty signal sections from `streamlit/app.py` present in the Next.js app.
+- Streamlit systemd unit stopped and disabled; `streamlit/` retired; `requirements.txt` pared to sync-only deps.
 - `CLAUDE.md` rewritten to reflect Next.js architecture.
 - Single daily sync cron still writes to SQLite; Next.js reads fresh data the next morning.
 
@@ -141,4 +141,4 @@ All 8 issues target the `georgenijo/whoop-dashboard` repo. Create a new `rebuild
 - **Rootful Podman + SQLite concurrent writers** — Python cron on host writes, Next.js container reads (and writes tokens). WAL mode handles this but needs a ~1h validation test in Phase 1.
 - **Claude CLI subscription/TOS for automated container use** — verified installed on host, bind-mount path likely works; Spike B confirms. Escape hatch: swap to `@anthropic-ai/sdk` (pay-per-token, against stated preference per memory).
 - **Specialty signal design gap** — the Whoop+ DS only provides 6 component patterns. 8–10 specialty signals (illness warning, ANS, rebound, etc.) need design decisions in Phase 3 that extend the kit's vocabulary; budget half a day per signal for design.
-- **Daily sync timer** — recon didn't surface a timer unit for `daily_sync.py`. Before Phase 1, need to confirm whether it runs via cron, systemd timer, or manual invocation. Plan assumes a systemd timer exists or will be created.
+- **Daily sync timer** — recon didn't surface a timer unit for `sync/daily_sync.py`. Before Phase 1, need to confirm whether it runs via cron, systemd timer, or manual invocation. Plan assumes a systemd timer exists or will be created.

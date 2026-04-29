@@ -4,12 +4,15 @@
 import sys
 import os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "streamlit"))
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+sys.path.insert(0, REPO_ROOT)
+sys.path.insert(0, os.path.join(REPO_ROOT, "streamlit"))
 
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 
-load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+load_dotenv(os.path.join(REPO_ROOT, ".env"))
 
 from sync.daily_summary import compute_daily_summary
 from whoop.auth import get_valid_token
