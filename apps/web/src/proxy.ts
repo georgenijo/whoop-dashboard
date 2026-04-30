@@ -25,14 +25,22 @@ export function proxy(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
   const ts = new Date().toISOString();
   const ua = (req.headers.get("user-agent") ?? "").slice(0, 60);
+  const requestHeaders = new Headers(req.headers);
 
   console.log(`[req] ${ts} ${req.method} ${pathname}${req.nextUrl.search} ua="${ua}"`);
 
+  requestHeaders.delete("x-whoop-route-log-route");
+  requestHeaders.delete("x-whoop-route-log-started-at");
+  requestHeaders.delete("x-whoop-route-log-start-ms");
+
   if (!shouldLogRoute(pathname, req.method) || isNextInternalRequest(req)) {
-    return NextResponse.next();
+    return NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
   }
 
-  const requestHeaders = new Headers(req.headers);
   requestHeaders.set("x-whoop-route-log-route", pathname);
   requestHeaders.set("x-whoop-route-log-started-at", ts);
   requestHeaders.set("x-whoop-route-log-start-ms", String(Date.now()));

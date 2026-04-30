@@ -232,6 +232,38 @@ function openWrite(): DB | null {
   }
 }
 
+let routeLogsSchemaReady = false;
+
+function openRouteLogWrite(): DB | null {
+  const p = dbPath();
+  if (!existsSync(p)) return null;
+  try {
+    const db = new Database(p, { fileMustExist: true });
+    try {
+      db.pragma("journal_mode = WAL");
+      if (!routeLogsSchemaReady) {
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS route_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            started_at TEXT NOT NULL,
+            route TEXT NOT NULL,
+            duration_ms INTEGER NOT NULL,
+            status INTEGER NOT NULL
+          );
+          CREATE INDEX IF NOT EXISTS route_logs_started_at_idx ON route_logs(started_at DESC);
+        `);
+        routeLogsSchemaReady = true;
+      }
+      return db;
+    } catch {
+      db.close();
+      return null;
+    }
+  } catch {
+    return null;
+  }
+}
+
 /** Open the DB read-only. Returns null if the file doesn't exist yet. */
 function open(): DB | null {
   const p = dbPath();
@@ -1145,7 +1177,7 @@ export type RouteLog = {
 };
 
 export function addRouteLog(log: Omit<RouteLog, "id">): void {
-  const db = openWrite();
+  const db = openRouteLogWrite();
   if (!db) return;
   try {
     db.prepare(
@@ -1162,7 +1194,7 @@ export function getRouteLogs(limit = 200): RouteLog[] {
       if (!hasTable(db, "route_logs")) return [] as RouteLog[];
       return db
         .prepare(
-          "SELECT id, started_at, route, duration_ms, status FROM route_logs ORDER BY id DESC LIMIT ?"
+          "SELECT id, started_at, route, duration_ms, status FROM route_logs ORDER BY started_at DESC, id DESC LIMIT ?"
         )
         .all(limit) as RouteLog[];
     }) ?? []

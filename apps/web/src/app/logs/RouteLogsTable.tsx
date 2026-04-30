@@ -24,7 +24,6 @@ function fmtTime(iso: string): string {
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
-    timeZone: "America/New_York",
     timeZoneName: "short",
   });
 }
