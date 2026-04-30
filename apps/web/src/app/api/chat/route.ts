@@ -7,7 +7,16 @@ import type {
   ToolResultBlockParam,
   ToolUseBlock,
 } from "@anthropic-ai/sdk/resources/messages";
-import { addChatMessage, addChatLog, getChatConversation } from "@/lib/db";
+import { after } from "next/server";
+import {
+  addChatLog,
+  addChatMessages,
+  createChatThread,
+  getChatThreadById,
+  getChatThreadConversation,
+  setChatThreadTitle,
+  type ChatMessageInsert,
+} from "@/lib/db";
 import { executeTool, ToolInputError, TOOLS } from "@/lib/coach-tools";
 import { requireAuth } from "@/lib/auth";
 
@@ -18,7 +27,6 @@ type ChatMessageInput = { role: "user" | "assistant"; content: string };
 
 type ToolDetail = {
   name: string;
-  input: unknown;
   duration_ms: number;
   rows: number | null;
   status: "ok" | "error";
@@ -40,10 +48,13 @@ type DetailState = {
 const MAX_TOOL_ITERATIONS = 8;
 const MAX_OUTPUT_TOKENS = 16384;
 const COACH_MODEL = "claude-sonnet-4-6";
+const TITLE_MODEL = "claude-haiku-4-5";
+const TITLE_SYSTEM_PROMPT = "You title chat threads. Reply with a 3-6 word title only.";
 
 function buildSystemPrompt(): string {
   const today = new Date().toISOString().slice(0, 10);
-  return `Today's date is ${today}.\n${DEFAULT_SYSTEM_PROMPT}`;
+  return `Today's date is ${today}.
+${DEFAULT_SYSTEM_PROMPT}`;
 }
 
 function isToolUseBlock(block: unknown): block is ToolUseBlock {
@@ -84,13 +95,14 @@ function toolErrorPayload(err: unknown): string {
 }
 
 async function executeToolResult(
+  threadId: number,
   toolUse: ToolUseBlock,
   toolDetails: ToolDetail[]
 ): Promise<ToolResultBlockParam> {
   const startMs = Date.now();
   console.info("[coach] tool_call", {
+    thread_id: threadId,
     name: toolUse.name,
-    input: toolUse.input,
   });
 
   try {
@@ -99,14 +111,13 @@ async function executeToolResult(
     const rows = Array.isArray(result) ? result.length : null;
     toolDetails.push({
       name: toolUse.name,
-      input: toolUse.input,
       duration_ms: durationMs,
       rows,
       status: "ok",
     });
     console.info("[coach] tool_result", {
+      thread_id: threadId,
       name: toolUse.name,
-      input: toolUse.input,
       duration_ms: durationMs,
       rows,
       status: "ok",
@@ -121,15 +132,14 @@ async function executeToolResult(
     const error = err instanceof Error ? err.message : String(err);
     toolDetails.push({
       name: toolUse.name,
-      input: toolUse.input,
       duration_ms: durationMs,
       rows: null,
       status: "error",
       error,
     });
     console.warn("[coach] tool_result", {
+      thread_id: threadId,
       name: toolUse.name,
-      input: toolUse.input,
       duration_ms: durationMs,
       status: "error",
       error,
@@ -143,12 +153,15 @@ async function executeToolResult(
   }
 }
 
-function addUsageTotals(usage: Usage, responseUsage: {
-  input_tokens: number;
-  output_tokens: number;
-  cache_creation_input_tokens?: number | null;
-  cache_read_input_tokens?: number | null;
-}): void {
+function addUsageTotals(
+  usage: Usage,
+  responseUsage: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_creation_input_tokens?: number | null;
+    cache_read_input_tokens?: number | null;
+  }
+): void {
   usage.input_tokens_total += responseUsage.input_tokens;
   usage.output_tokens_total += responseUsage.output_tokens;
   usage.cache_creation_input_tokens_total +=
@@ -158,20 +171,36 @@ function addUsageTotals(usage: Usage, responseUsage: {
   usage.calls += 1;
 }
 
+function chatLogToolSummaries(toolDetails: ToolDetail[]) {
+  return toolDetails.map(({ name, duration_ms, rows, status, error }) => ({
+    name,
+    duration_ms,
+    rows,
+    status,
+    ...(error ? { error: error.slice(0, 200) } : {}),
+  }));
+}
+
 async function runAnthropicSdk(
+  threadId: number,
   newUserText: string,
+  conversation: MessageParam[],
   toolDetails: ToolDetail[],
   usage: Usage,
   detailState: DetailState
-): Promise<{ reply: string; iterations: number }> {
+): Promise<{ reply: string; iterations: number; messages: ChatMessageInsert[] }> {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY is not configured");
   }
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const conversation = getChatConversation() as MessageParam[];
-  conversation.push({ role: "user", content: newUserText });
-  addChatMessage("user", newUserText, [{ type: "text", text: newUserText }]);
+  const messagesToPersist: ChatMessageInsert[] = [
+    {
+      role: "user",
+      content: newUserText,
+      blocks: [{ type: "text", text: newUserText }],
+    },
+  ];
 
   let response = await client.messages.create({
     model: COACH_MODEL,
@@ -183,13 +212,18 @@ async function runAnthropicSdk(
   });
   addUsageTotals(usage, response.usage);
   console.info("[coach] model_response", {
+    thread_id: threadId,
     stop_reason: response.stop_reason,
     input_tokens: response.usage.input_tokens,
     output_tokens: response.usage.output_tokens,
   });
 
   let assistantText = textFromContent(response.content);
-  addChatMessage("assistant", assistantText, response.content);
+  messagesToPersist.push({
+    role: "assistant",
+    content: assistantText,
+    blocks: response.content,
+  });
   conversation.push({
     role: "assistant",
     content: response.content as ContentBlockParam[],
@@ -210,9 +244,13 @@ async function runAnthropicSdk(
     }
 
     const toolResults = await Promise.all(
-      toolUses.map((toolUse) => executeToolResult(toolUse, toolDetails))
+      toolUses.map((toolUse) => executeToolResult(threadId, toolUse, toolDetails))
     );
-    addChatMessage("user", "[tool_result]", toolResults);
+    messagesToPersist.push({
+      role: "user",
+      content: "[tool_result]",
+      blocks: toolResults,
+    });
     conversation.push({
       role: "user",
       content: toolResults,
@@ -228,13 +266,18 @@ async function runAnthropicSdk(
     });
     addUsageTotals(usage, response.usage);
     console.info("[coach] model_response", {
+      thread_id: threadId,
       stop_reason: response.stop_reason,
       input_tokens: response.usage.input_tokens,
       output_tokens: response.usage.output_tokens,
     });
 
     assistantText = textFromContent(response.content);
-    addChatMessage("assistant", assistantText, response.content);
+    messagesToPersist.push({
+      role: "assistant",
+      content: assistantText,
+      blocks: response.content,
+    });
     conversation.push({
       role: "assistant",
       content: response.content as ContentBlockParam[],
@@ -246,94 +289,184 @@ async function runAnthropicSdk(
     const suffix = partial
       ? "\n\n_[response truncated — hit max_tokens cap]_"
       : "_[response truncated before any text was generated — hit max_tokens cap]_";
-    return { reply: `${partial}${suffix}`, iterations };
+    const reply = `${partial}${suffix}`;
+    const finalMessage = messagesToPersist[messagesToPersist.length - 1];
+    if (finalMessage?.role === "assistant") {
+      messagesToPersist[messagesToPersist.length - 1] = {
+        ...finalMessage,
+        content: reply,
+      };
+    }
+    return { reply, iterations, messages: messagesToPersist };
   }
 
   if (response.stop_reason !== "end_turn") {
     throw new Error(`Claude stopped before finishing: ${response.stop_reason}`);
   }
 
-  return { reply: assistantText, iterations };
+  return { reply: assistantText, iterations, messages: messagesToPersist };
+}
+
+async function titleChatThread(threadId: number, firstUserText: string): Promise<void> {
+  if (!process.env.ANTHROPIC_API_KEY) return;
+
+  try {
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const response = await client.messages.create({
+      model: TITLE_MODEL,
+      max_tokens: 30,
+      system: TITLE_SYSTEM_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: `Title this conversation: "${firstUserText}"`,
+        },
+      ],
+    });
+    const title = textFromContent(response.content)
+      .replace(/^['"`]+|['"`]+$/g, "")
+      .trim()
+      .slice(0, 80);
+    if (title) {
+      setChatThreadTitle(threadId, title);
+    }
+  } catch (err) {
+    console.warn("[coach] title_failed", {
+      thread_id: threadId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+function parseThreadId(value: unknown): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : NaN;
+}
+
+function responseWithThreadId(body: BodyInit | null, threadId: number, status = 200): Response {
+  return new Response(body, {
+    status,
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "x-thread-id": String(threadId),
+    },
+  });
 }
 
 export async function POST(req: Request) {
   try {
-    await requireAuth(req);
+    const user = await requireAuth(req);
+    const body = (await req.json()) as {
+      messages: ChatMessageInput[];
+      days?: number | null;
+      thread_id?: number | string | null;
+    };
+
+    if (!Array.isArray(body.messages) || body.messages.length === 0) {
+      return new Response("Error: messages must include at least one item", {
+        status: 400,
+      });
+    }
+
+    const lastMessage = body.messages[body.messages.length - 1];
+    if (
+      !lastMessage ||
+      lastMessage.role !== "user" ||
+      typeof lastMessage.content !== "string" ||
+      !lastMessage.content.trim()
+    ) {
+      return new Response("Error: last message must be a non-empty user message", {
+        status: 400,
+      });
+    }
+    const lastUser = lastMessage.content;
+    const requestedThreadId = parseThreadId(body.thread_id);
+    if (Number.isNaN(requestedThreadId as number)) {
+      return new Response("Error: thread_id must be a positive integer", { status: 400 });
+    }
+
+    const thread = requestedThreadId == null ? createChatThread(user.id) : getChatThreadById(user.id, requestedThreadId);
+    if (!thread) {
+      return new Response("Error: thread not found", { status: 404 });
+    }
+
+    const conversation = getChatThreadConversation(user.id, thread.id) as MessageParam[];
+    const shouldAutoTitle =
+      !thread.title?.trim() &&
+      !conversation.some((message) => message.role === "assistant");
+    conversation.push({ role: "user", content: lastUser });
+
+    const startedAt = new Date().toISOString();
+    const startMs = Date.now();
+    const promptPreview = lastUser.slice(0, 200);
+    const toolDetails: ToolDetail[] = [];
+    const usage: Usage = {
+      input_tokens_total: 0,
+      output_tokens_total: 0,
+      cache_creation_input_tokens_total: 0,
+      cache_read_input_tokens_total: 0,
+      calls: 0,
+    };
+    const detailState: DetailState = { iterations: 0 };
+
+    const buildDetails = () =>
+      JSON.stringify({
+        prompt_chars: lastUser.length,
+        iterations: detailState.iterations,
+        tools: chatLogToolSummaries(toolDetails),
+        usage,
+        thread_id: thread?.id,
+      });
+
+    try {
+      const result = await runAnthropicSdk(
+        thread.id,
+        lastUser,
+        conversation,
+        toolDetails,
+        usage,
+        detailState
+      );
+      const reply = result.reply;
+      detailState.iterations = result.iterations;
+      addChatMessages(thread.id, result.messages);
+      addChatLog({
+        started_at: startedAt,
+        prompt_preview: promptPreview,
+        duration_ms: Date.now() - startMs,
+        status: "ok",
+        response_length: reply.length,
+        error_message: null,
+        days_context: body.days ?? null,
+        type: "api",
+        details: buildDetails(),
+      });
+
+      if (shouldAutoTitle) {
+        after(() => {
+          void titleChatThread(thread!.id, lastUser);
+        });
+      }
+
+      return responseWithThreadId(reply, thread.id);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      addChatLog({
+        started_at: startedAt,
+        prompt_preview: promptPreview,
+        duration_ms: Date.now() - startMs,
+        status: "error",
+        response_length: 0,
+        error_message: msg.slice(0, 500),
+        days_context: body.days ?? null,
+        type: "api",
+        details: buildDetails(),
+      });
+      return responseWithThreadId(`Error: ${msg}`, thread.id, 500);
+    }
   } catch (err) {
     if (err instanceof Response) return err;
     throw err;
-  }
-
-  const { messages, days = null } = (await req.json()) as {
-    messages: ChatMessageInput[];
-    days?: number | null;
-  };
-
-  if (!Array.isArray(messages) || messages.length === 0) {
-    return new Response("Error: messages must include at least one item", {
-      status: 400,
-    });
-  }
-
-  const lastUser = messages[messages.length - 1].content;
-
-  const startedAt = new Date().toISOString();
-  const startMs = Date.now();
-  const promptPreview = lastUser.slice(0, 200);
-  const toolDetails: ToolDetail[] = [];
-  const usage: Usage = {
-    input_tokens_total: 0,
-    output_tokens_total: 0,
-    cache_creation_input_tokens_total: 0,
-    cache_read_input_tokens_total: 0,
-    calls: 0,
-  };
-  const detailState: DetailState = { iterations: 0 };
-
-  const buildDetails = () =>
-    JSON.stringify({
-      full_prompt: lastUser,
-      iterations: detailState.iterations,
-      tools: toolDetails,
-      usage,
-    });
-
-  try {
-    const result = await runAnthropicSdk(
-      lastUser,
-      toolDetails,
-      usage,
-      detailState
-    );
-    const reply = result.reply;
-    detailState.iterations = result.iterations;
-    addChatLog({
-      started_at: startedAt,
-      prompt_preview: promptPreview,
-      duration_ms: Date.now() - startMs,
-      status: "ok",
-      response_length: reply.length,
-      error_message: null,
-      days_context: days,
-      type: "api",
-      details: buildDetails(),
-    });
-    return new Response(reply, {
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    addChatLog({
-      started_at: startedAt,
-      prompt_preview: promptPreview,
-      duration_ms: Date.now() - startMs,
-      status: "error",
-      response_length: 0,
-      error_message: msg.slice(0, 500),
-      days_context: days,
-      type: "api",
-      details: buildDetails(),
-    });
-    return new Response(`Error: ${msg}`, { status: 500 });
   }
 }

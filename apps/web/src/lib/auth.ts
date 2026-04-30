@@ -2,7 +2,7 @@ import "server-only";
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
-import { getSessionByToken, getUserById, type User } from "./db";
+import { getPrimaryUser, getSessionByToken, getUserById, type User } from "./db";
 
 export const WHOOP_AUTH_URL = "https://api.prod.whoop.com/oauth/oauth2/auth";
 export const WHOOP_TOKEN_URL = "https://api.prod.whoop.com/oauth/oauth2/token";
@@ -31,6 +31,14 @@ export function tokensPath(): string {
   if (process.env.WHOOP_TOKENS_PATH) return process.env.WHOOP_TOKENS_PATH;
   // Default: repo-root `tokens.json` (matches streamlit/whoop/auth.py:17).
   return path.resolve(process.cwd(), "..", "tokens.json");
+}
+
+export function getBootstrapUser(): User {
+  const user = getPrimaryUser();
+  if (!user) {
+    throw new Response("Single-user bootstrap missing", { status: 500 });
+  }
+  return user;
 }
 
 export function buildAuthUrl(): string {
@@ -92,9 +100,7 @@ export async function saveTokens(tokens: StoredTokens): Promise<void> {
 export async function requireAuth(req: Request): Promise<User> {
   const header = req.headers.get("authorization");
   if (!header) {
-    const user = getUserById(1);
-    if (!user) throw new Response("Single-user bootstrap missing", { status: 500 });
-    return user;
+    return getBootstrapUser();
   }
 
   const token = header.replace(/^Bearer\s+/i, "");
