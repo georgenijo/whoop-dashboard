@@ -273,7 +273,7 @@ function LogRow({ log }: { log: ChatLogRow }) {
 
 export default function ChatLogsTable({ logs }: { logs: ChatLogRow[] }) {
   return (
-    <div style={{ overflowX: "auto" }}>
+    <div style={{ overflowX: "auto", margin: "0 -14px", padding: "0 14px" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-sans)", fontSize: 13 }}>
         <thead>
           <tr style={{ background: "rgba(255,255,255,0.02)", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
