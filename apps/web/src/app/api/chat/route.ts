@@ -17,6 +17,7 @@ export const DEFAULT_SYSTEM_PROMPT =
 type ChatMessageInput = { role: "user" | "assistant"; content: string };
 
 const MAX_TOOL_ITERATIONS = 8;
+const COACH_MODEL = "claude-sonnet-4-6";
 
 function buildSystemPrompt(): string {
   const today = new Date().toISOString().slice(0, 10);
@@ -112,7 +113,7 @@ async function runAnthropicSdk(messages: ChatMessageInput[]): Promise<string> {
   }));
 
   let response = await client.messages.create({
-    model: "claude-opus-4-7",
+    model: COACH_MODEL,
     thinking: { type: "adaptive" },
     tools: TOOLS,
     max_tokens: 4096,
@@ -147,7 +148,7 @@ async function runAnthropicSdk(messages: ChatMessageInput[]): Promise<string> {
     });
 
     response = await client.messages.create({
-      model: "claude-opus-4-7",
+      model: COACH_MODEL,
       thinking: { type: "adaptive" },
       tools: TOOLS,
       max_tokens: 4096,
