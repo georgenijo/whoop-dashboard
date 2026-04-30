@@ -106,7 +106,10 @@ async function runAnthropicSdk(messages: ChatMessageInput[]): Promise<string> {
     throw new Error("ANTHROPIC_API_KEY is not configured");
   }
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    defaultHeaders: { "anthropic-beta": "extended-cache-ttl-2025-04-11" },
+  });
   const conversation: MessageParam[] = messages.map((message) => ({
     role: message.role,
     content: message.content,
@@ -117,13 +120,19 @@ async function runAnthropicSdk(messages: ChatMessageInput[]): Promise<string> {
     thinking: { type: "adaptive" },
     tools: TOOLS,
     max_tokens: 4096,
-    system: buildSystemPrompt(),
+    system: [{
+      type: "text",
+      text: buildSystemPrompt(),
+      cache_control: { type: "ephemeral", ttl: "1h" },
+    }],
     messages: conversation,
   });
   console.info("[coach] model_response", {
     stop_reason: response.stop_reason,
     input_tokens: response.usage.input_tokens,
     output_tokens: response.usage.output_tokens,
+    cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? 0,
+    cache_read_input_tokens: response.usage.cache_read_input_tokens ?? 0,
   });
 
   let iterations = 0;
@@ -152,13 +161,19 @@ async function runAnthropicSdk(messages: ChatMessageInput[]): Promise<string> {
       thinking: { type: "adaptive" },
       tools: TOOLS,
       max_tokens: 4096,
-      system: buildSystemPrompt(),
+      system: [{
+        type: "text",
+        text: buildSystemPrompt(),
+        cache_control: { type: "ephemeral", ttl: "1h" },
+      }],
       messages: conversation,
     });
     console.info("[coach] model_response", {
       stop_reason: response.stop_reason,
       input_tokens: response.usage.input_tokens,
       output_tokens: response.usage.output_tokens,
+      cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? 0,
+      cache_read_input_tokens: response.usage.cache_read_input_tokens ?? 0,
     });
   }
 
