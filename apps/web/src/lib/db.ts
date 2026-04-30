@@ -171,7 +171,8 @@ function openWrite(): DB | null {
         sleep_count INTEGER,
         workouts_count INTEGER,
         error_message TEXT,
-        source TEXT
+        source TEXT,
+        details TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_sync_logs_started ON sync_logs(started_at DESC);
       CREATE TABLE IF NOT EXISTS users (
@@ -197,6 +198,10 @@ function openWrite(): DB | null {
     }
     if (!cols.some((c) => c.name === "details")) {
       db.exec("ALTER TABLE chat_logs ADD COLUMN details TEXT");
+    }
+    const syncCols = db.prepare("PRAGMA table_info(sync_logs)").all() as { name: string }[];
+    if (!syncCols.some((c) => c.name === "details")) {
+      db.exec("ALTER TABLE sync_logs ADD COLUMN details TEXT");
     }
     const chatCols = db.prepare("PRAGMA table_info(chat_messages)").all() as {
       name: string;
@@ -1082,6 +1087,7 @@ export type SyncLog = {
   workouts_count: number | null;
   error_message: string | null;
   source: string | null;
+  details?: string | null;
 };
 
 export function addSyncLog(log: Omit<SyncLog, "id">): void {
@@ -1089,7 +1095,7 @@ export function addSyncLog(log: Omit<SyncLog, "id">): void {
   if (!db) return;
   try {
     db.prepare(
-      "INSERT INTO sync_logs (started_at, duration_ms, status, recovery_count, sleep_count, workouts_count, error_message, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO sync_logs (started_at, duration_ms, status, recovery_count, sleep_count, workouts_count, error_message, source, details) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(
       log.started_at,
       log.duration_ms,
@@ -1098,7 +1104,8 @@ export function addSyncLog(log: Omit<SyncLog, "id">): void {
       log.sleep_count,
       log.workouts_count,
       log.error_message,
-      log.source
+      log.source,
+      log.details ?? null
     );
   } finally {
     db.close();
@@ -1109,9 +1116,12 @@ export function getSyncLogs(limit = 200): SyncLog[] {
   return (
     safeQuery((db) => {
       if (!hasTable(db, "sync_logs")) return [] as SyncLog[];
+      const detailsSelect = hasColumn(db, "sync_logs", "details")
+        ? "details"
+        : "NULL AS details";
       return db
         .prepare(
-          "SELECT id, started_at, duration_ms, status, recovery_count, sleep_count, workouts_count, error_message, source FROM sync_logs ORDER BY id DESC LIMIT ?"
+          `SELECT id, started_at, duration_ms, status, recovery_count, sleep_count, workouts_count, error_message, source, ${detailsSelect} FROM sync_logs ORDER BY id DESC LIMIT ?`
         )
         .all(limit) as SyncLog[];
     }) ?? []
