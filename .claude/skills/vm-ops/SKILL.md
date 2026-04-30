@@ -181,3 +181,29 @@ ssh -i ~/.ssh/id_ed25519 ubuntu@129.80.134.194 \
 ```
 
 When in doubt: SSH in, look around as `george`, and check `journalctl -u whoop-web` for the real failure mode.
+
+## Troubleshooting
+
+### SSH times out (TCP connect, not auth)
+
+Symptom: `ssh ubuntu@129.80.134.194` hangs and dies with `connect to address ... port 22: Operation timed out`. `curl https://whoop.georgenijo.com` still works (Cloudflare tunnel is unaffected).
+
+Cause: the Oracle VCN security list allowlists SSH ingress to specific `/32` source IPs only. When your home/ISP IP rotates, your new IP is not in the list and TCP connects to port 22 are silently dropped at the cloud edge. The web app keeps working because it uses the outbound Cloudflare tunnel.
+
+Fix:
+
+1. Get your current public IP:
+   ```bash
+   curl -s https://ifconfig.me
+   ```
+2. OCI Console → Networking → Virtual Cloud Networks → `dashboards-vcn` → **Security** tab → click `dashboards-sl` → **Ingress Rules** → **Add Ingress Rules**
+3. Add: Source CIDR `<your-ip>/32`, IP Protocol TCP, Destination Port `22`, description "SSH home (<location>)"
+4. Retry SSH — should connect immediately
+
+Two `/32` slots already exist for known home IPs (Canada + Mass at last check). Stale entries can be deleted, but harmless if left.
+
+Long-term fix to consider: Tailscale/WireGuard mesh, or close port 22 entirely and proxy SSH through the existing Cloudflare tunnel (`cloudflared access ssh`). Either removes the `/32` toil.
+
+### Sync runs slow / insight step takes ~40s
+
+If `daily_sync.py` insight step takes ~40s on a fresh VM, the `streamlit/whoop/insights.py` module is using the legacy `claude` CLI shellout instead of the Anthropic SDK. The fix landed in commit `5096202` (April 2026) — check `head -5 streamlit/whoop/insights.py` shows `import anthropic`, not `import subprocess`. If old code is still on disk, the VM hasn't pulled main.
