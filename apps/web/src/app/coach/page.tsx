@@ -32,6 +32,10 @@ export default async function CoachPage({
       ? getChatThreadById(user.id, requestedThreadId)
       : getLatestChatThread(user.id);
 
+  if (!activeThread && requestedThreadId != null) {
+    activeThread = getLatestChatThread(user.id);
+  }
+
   if (!activeThread) {
     activeThread = createChatThread(user.id);
   }

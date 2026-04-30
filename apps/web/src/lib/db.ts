@@ -681,6 +681,12 @@ export type ChatMessage = {
   created_at: string;
 };
 
+export type ChatMessageInsert = {
+  role: "user" | "assistant";
+  content: string;
+  blocks?: unknown;
+};
+
 function hasChatThread(db: DB, threadId: number, userId?: number): boolean {
   const row =
     userId == null
@@ -952,19 +958,32 @@ export function addChatMessage(
   content: string,
   blocks?: unknown
 ): void {
+  addChatMessages(threadId, [{ role, content, blocks }]);
+}
+
+export function addChatMessages(threadId: number, messages: ChatMessageInsert[]): void {
+  if (messages.length === 0) return;
+
   const db = openWrite();
   if (!db) return;
   try {
-    db.prepare(
+    const insert = db.prepare(
       "INSERT INTO chat_messages (thread_id, role, content, blocks, created_at) VALUES (?, ?, ?, ?, ?)"
-    ).run(
-      threadId,
-      role,
-      content,
-      blocks === undefined ? null : JSON.stringify(blocks),
-      new Date().toISOString()
     );
-    db.prepare("UPDATE chat_threads SET updated_at = datetime('now') WHERE id = ?").run(threadId);
+    const touch = db.prepare("UPDATE chat_threads SET updated_at = datetime('now') WHERE id = ?");
+    const writeTurn = db.transaction((rows: ChatMessageInsert[]) => {
+      for (const message of rows) {
+        insert.run(
+          threadId,
+          message.role,
+          message.content,
+          message.blocks === undefined ? null : JSON.stringify(message.blocks),
+          new Date().toISOString()
+        );
+      }
+      touch.run(threadId);
+    });
+    writeTurn(messages);
   } finally {
     db.close();
   }

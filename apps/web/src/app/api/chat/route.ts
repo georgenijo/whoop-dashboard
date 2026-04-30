@@ -10,11 +10,12 @@ import type {
 import { after } from "next/server";
 import {
   addChatLog,
-  addChatMessage,
+  addChatMessages,
   createChatThread,
   getChatThreadById,
   getChatThreadConversation,
   setChatThreadTitle,
+  type ChatMessageInsert,
 } from "@/lib/db";
 import { executeTool, ToolInputError, TOOLS } from "@/lib/coach-tools";
 import { requireAuth } from "@/lib/auth";
@@ -178,16 +179,24 @@ function addUsageTotals(
 
 async function runAnthropicSdk(
   threadId: number,
+  newUserText: string,
   conversation: MessageParam[],
   toolDetails: ToolDetail[],
   usage: Usage,
   detailState: DetailState
-): Promise<{ reply: string; iterations: number }> {
+): Promise<{ reply: string; iterations: number; messages: ChatMessageInsert[] }> {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY is not configured");
   }
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const messagesToPersist: ChatMessageInsert[] = [
+    {
+      role: "user",
+      content: newUserText,
+      blocks: [{ type: "text", text: newUserText }],
+    },
+  ];
 
   let response = await client.messages.create({
     model: COACH_MODEL,
@@ -206,7 +215,11 @@ async function runAnthropicSdk(
   });
 
   let assistantText = textFromContent(response.content);
-  addChatMessage(threadId, "assistant", assistantText, response.content);
+  messagesToPersist.push({
+    role: "assistant",
+    content: assistantText,
+    blocks: response.content,
+  });
   conversation.push({
     role: "assistant",
     content: response.content as ContentBlockParam[],
@@ -229,7 +242,11 @@ async function runAnthropicSdk(
     const toolResults = await Promise.all(
       toolUses.map((toolUse) => executeToolResult(threadId, toolUse, toolDetails))
     );
-    addChatMessage(threadId, "user", "[tool_result]", toolResults);
+    messagesToPersist.push({
+      role: "user",
+      content: "[tool_result]",
+      blocks: toolResults,
+    });
     conversation.push({
       role: "user",
       content: toolResults,
@@ -252,7 +269,11 @@ async function runAnthropicSdk(
     });
 
     assistantText = textFromContent(response.content);
-    addChatMessage(threadId, "assistant", assistantText, response.content);
+    messagesToPersist.push({
+      role: "assistant",
+      content: assistantText,
+      blocks: response.content,
+    });
     conversation.push({
       role: "assistant",
       content: response.content as ContentBlockParam[],
@@ -264,14 +285,14 @@ async function runAnthropicSdk(
     const suffix = partial
       ? "\n\n_[response truncated — hit max_tokens cap]_"
       : "_[response truncated before any text was generated — hit max_tokens cap]_";
-    return { reply: `${partial}${suffix}`, iterations };
+    return { reply: `${partial}${suffix}`, iterations, messages: messagesToPersist };
   }
 
   if (response.stop_reason !== "end_turn") {
     throw new Error(`Claude stopped before finishing: ${response.stop_reason}`);
   }
 
-  return { reply: assistantText, iterations };
+  return { reply: assistantText, iterations, messages: messagesToPersist };
 }
 
 async function titleChatThread(threadId: number, firstUserText: string): Promise<void> {
@@ -348,9 +369,10 @@ export async function POST(req: Request) {
     }
 
     const conversation = getChatThreadConversation(user.id, thread.id) as MessageParam[];
-    const shouldAutoTitle = !conversation.some((message) => message.role === "assistant");
+    const shouldAutoTitle =
+      !thread.title?.trim() &&
+      !conversation.some((message) => message.role === "assistant");
     conversation.push({ role: "user", content: lastUser });
-    addChatMessage(thread.id, "user", lastUser, [{ type: "text", text: lastUser }]);
 
     const startedAt = new Date().toISOString();
     const startMs = Date.now();
@@ -377,6 +399,7 @@ export async function POST(req: Request) {
     try {
       const result = await runAnthropicSdk(
         thread.id,
+        lastUser,
         conversation,
         toolDetails,
         usage,
@@ -384,6 +407,7 @@ export async function POST(req: Request) {
       );
       const reply = result.reply;
       detailState.iterations = result.iterations;
+      addChatMessages(thread.id, result.messages);
       addChatLog({
         started_at: startedAt,
         prompt_preview: promptPreview,

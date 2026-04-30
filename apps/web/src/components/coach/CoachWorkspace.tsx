@@ -102,6 +102,8 @@ export default function CoachWorkspace({
     let cancelled = false;
 
     async function loadThreads() {
+      if (document.visibilityState === "hidden") return;
+
       try {
         const res = await fetch("/api/threads", { cache: "no-store" });
         if (!res.ok) return;
@@ -114,11 +116,21 @@ export default function CoachWorkspace({
       }
     }
 
+    function refreshWhenVisible() {
+      if (document.visibilityState === "visible") {
+        void loadThreads();
+      }
+    }
+
     void loadThreads();
     const timer = window.setInterval(loadThreads, 5000);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    window.addEventListener("focus", refreshWhenVisible);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.removeEventListener("focus", refreshWhenVisible);
     };
   }, []);
 
