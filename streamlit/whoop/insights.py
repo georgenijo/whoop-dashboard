@@ -1,6 +1,6 @@
-import os
-import subprocess
 from datetime import datetime
+
+import anthropic
 
 from whoop.db import get_history_stats, save_insight
 
@@ -142,29 +142,21 @@ Keep total response under 300 words."""
 
 def generate_insight(days: int = 30) -> str:
     context = _build_context(days)
-    prompt = f"{SYSTEM_PROMPT}\n\nAnalyze my Whoop data and give me insights:\n\n{context}"
+    user_message = f"Analyze my Whoop data and give me insights:\n\n{context}"
 
-    env = dict(os.environ)
-    env["HOME"] = os.path.expanduser("~")
-
-    result = subprocess.run(
-        [
-            "claude",
-            "-p",
-            prompt,
-            "--dangerously-skip-permissions",
-            "--model", "sonnet",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=120,
-        env=env,
-    )
-
-    if result.returncode != 0:
-        return f"Error generating insights: {result.stderr[:500]}"
-
-    insight = result.stdout.strip()
+    try:
+        client = anthropic.Anthropic()
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1024,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_message}],
+        )
+        insight = "".join(
+            block.text for block in response.content if block.type == "text"
+        ).strip()
+    except anthropic.APIError as exc:
+        return f"Error generating insights: {exc}"
 
     today = datetime.utcnow().strftime("%Y-%m-%d")
     save_insight(today, insight)
