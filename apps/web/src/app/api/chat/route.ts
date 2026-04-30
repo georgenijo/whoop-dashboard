@@ -151,7 +151,6 @@ async function runAnthropicSdk(messages: ChatMessageInput[]): Promise<string> {
 
   const client = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
-    defaultHeaders: { "anthropic-beta": "extended-cache-ttl-2025-04-11" },
   });
   const conversation: MessageParam[] = messages.map((message) => ({
     role: message.role,
@@ -166,7 +165,7 @@ async function runAnthropicSdk(messages: ChatMessageInput[]): Promise<string> {
     system: [{
       type: "text",
       text: buildSystemPrompt(),
-      cache_control: { type: "ephemeral", ttl: "1h" },
+      cache_control: { type: "ephemeral" },
     }],
     messages: conversation,
   });
@@ -207,7 +206,7 @@ async function runAnthropicSdk(messages: ChatMessageInput[]): Promise<string> {
       system: [{
         type: "text",
         text: buildSystemPrompt(),
-        cache_control: { type: "ephemeral", ttl: "1h" },
+        cache_control: { type: "ephemeral" },
       }],
       messages: conversation,
     });

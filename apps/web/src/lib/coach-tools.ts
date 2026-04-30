@@ -92,7 +92,7 @@ export const TOOLS: ToolSchema[] = [
       "Query journal rows for a date range when journal data exists. Returns an empty array when no journal table is available.",
     input_schema: DATE_RANGE_SCHEMA,
     strict: true,
-    cache_control: { type: "ephemeral", ttl: "1h" },
+    cache_control: { type: "ephemeral" },
   },
 ];
 
