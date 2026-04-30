@@ -1,5 +1,6 @@
-import { getChatLogs, getSyncLogs } from "@/lib/db";
+import { getChatLogs, getRouteLogs, getSyncLogs } from "@/lib/db";
 import ChatLogsTable from "./ChatLogsTable";
+import RouteLogsTable from "./RouteLogsTable";
 import SyncLogsTable from "./SyncLogsTable";
 
 export const dynamic = "force-dynamic";
@@ -7,6 +8,7 @@ export const dynamic = "force-dynamic";
 export default function LogsPage() {
   const logs = getChatLogs(500);
   const syncLogs = getSyncLogs(200);
+  const routeLogs = getRouteLogs(200);
 
   const okLogs = logs.filter((l) => l.status === "ok");
   const avgDur = okLogs.length
@@ -98,6 +100,22 @@ export default function LogsPage() {
           </div>
         ) : (
           <SyncLogsTable logs={syncLogs} />
+        )}
+      </div>
+
+      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="card-head" style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+          <div className="card-title">Page render history</div>
+          <span className="card-sub">{routeLogs.length} renders · most recent first</span>
+        </div>
+
+        {routeLogs.length === 0 ? (
+          <div className="empty-state">
+            <div className="title">No page renders yet</div>
+            <div className="sub">Refresh a dashboard page to populate this log</div>
+          </div>
+        ) : (
+          <RouteLogsTable logs={routeLogs} />
         )}
       </div>
     </div>
