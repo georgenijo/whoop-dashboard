@@ -140,40 +140,51 @@ def main():
     start = (now - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     end = now.strftime("%Y-%m-%dT%H:%M:%S.000Z")
     details = {"window_days": 7}
+    counts = {"recovery": None, "sleep": None, "workouts": None}
 
-    print(f"Fetching data from {start} to {end}...")
-    fetch_started = time.perf_counter()
-    data, fetch_breakdown, page_counts = _fetch_all_parallel_with_timings(
-        token, start, end
-    )
-    details["fetch_ms"] = _elapsed_ms(fetch_started)
-    details["fetch_breakdown"] = fetch_breakdown
-    details["page_counts"] = page_counts
+    try:
+        print(f"Fetching data from {start} to {end}...")
+        fetch_started = time.perf_counter()
+        try:
+            data, fetch_breakdown, page_counts = _fetch_all_parallel_with_timings(
+                token, start, end
+            )
+        finally:
+            details["fetch_ms"] = _elapsed_ms(fetch_started)
+        details["fetch_breakdown"] = fetch_breakdown
+        details["page_counts"] = page_counts
 
-    sync_started = time.perf_counter()
-    sync_all(data)
-    details["sync_db_ms"] = _elapsed_ms(sync_started)
+        sync_started = time.perf_counter()
+        try:
+            sync_all(data)
+        finally:
+            details["sync_db_ms"] = _elapsed_ms(sync_started)
 
-    counts = {
-        "recovery": len(data.get("recovery", [])),
-        "sleep": len(data.get("sleep", [])),
-        "workouts": len(data.get("workouts", [])),
-    }
-    print(f"Synced: {len(data.get('recovery', []))} recovery, "
-          f"{len(data.get('sleep', []))} sleep, "
-          f"{len(data.get('workouts', []))} workouts")
+        counts = {
+            "recovery": len(data.get("recovery", [])),
+            "sleep": len(data.get("sleep", [])),
+            "workouts": len(data.get("workouts", [])),
+        }
+        print(f"Synced: {len(data.get('recovery', []))} recovery, "
+              f"{len(data.get('sleep', []))} sleep, "
+              f"{len(data.get('workouts', []))} workouts")
 
-    summary_started = time.perf_counter()
-    summary_count = compute_daily_summary(DB_PATH, _synced_dates(data))
-    details["summary_ms"] = _elapsed_ms(summary_started)
-    print(f"Computed daily_summary for {summary_count} dates")
+        summary_started = time.perf_counter()
+        try:
+            summary_count = compute_daily_summary(DB_PATH, _synced_dates(data))
+        finally:
+            details["summary_ms"] = _elapsed_ms(summary_started)
+        print(f"Computed daily_summary for {summary_count} dates")
 
-    print("Generating AI insight...")
-    insight_started = time.perf_counter()
-    insight = generate_insight(30)
-    details["insight_ms"] = _elapsed_ms(insight_started)
-    print(f"Insight saved ({len(insight)} chars)")
-    print(json.dumps({"counts": counts, "details": details}, sort_keys=True))
+        print("Generating AI insight...")
+        insight_started = time.perf_counter()
+        try:
+            insight = generate_insight(30)
+        finally:
+            details["insight_ms"] = _elapsed_ms(insight_started)
+        print(f"Insight saved ({len(insight)} chars)")
+    finally:
+        print(json.dumps({"counts": counts, "details": details}, sort_keys=True))
 
 
 if __name__ == "__main__":

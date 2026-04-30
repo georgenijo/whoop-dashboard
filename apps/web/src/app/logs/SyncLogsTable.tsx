@@ -101,7 +101,8 @@ function fmtTime(iso: string): string {
     second: "2-digit",
     hour12: false,
     timeZone: "America/New_York",
-  }) + " EST";
+    timeZoneName: "short",
+  });
 }
 
 function labelFor(key: string): string {
@@ -135,6 +136,22 @@ function MetricPill({ label, value }: { label: string; value: string | number })
         {value}
       </div>
     </div>
+  );
+}
+
+function StatusBadge({ status }: { status: SyncLogRow["status"] }) {
+  return (
+    <span style={{
+      display: "inline-block",
+      padding: "2px 8px",
+      borderRadius: 4,
+      fontSize: 11,
+      fontFamily: "var(--font-mono)",
+      background: status === "ok" ? "rgba(0,212,170,0.15)" : "rgba(255,107,107,0.15)",
+      color: status === "ok" ? "#00d4aa" : "#ff6b6b",
+    }}>
+      {status}
+    </span>
   );
 }
 
@@ -205,6 +222,7 @@ function LogRow({ log }: { log: SyncLogRow }) {
   const details = useMemo(() => parseDetails(log.details), [log.details]);
   const hasDetails = details !== null;
   const dur = fmtDuration(log.duration_ms);
+  const detailsId = `details-${log.id}`;
   const cell = {
     padding: "10px 16px",
     textAlign: "center" as const,
@@ -235,13 +253,7 @@ function LogRow({ log }: { log: SyncLogRow }) {
 
   return (
     <>
-      <tr
-        onClick={hasDetails ? () => setOpen((value) => !value) : undefined}
-        style={{
-          borderBottom: "1px solid rgba(255,255,255,0.04)",
-          cursor: hasDetails ? "pointer" : "default",
-        }}
-      >
+      <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
         <td style={{ padding: "10px 16px", color: "var(--fg-2)", fontFamily: "var(--font-mono)", fontSize: 12, whiteSpace: "nowrap" }}>
           {fmtTime(log.started_at)}
         </td>
@@ -253,22 +265,33 @@ function LogRow({ log }: { log: SyncLogRow }) {
         <td style={cell}>{log.workouts_count ?? "-"}</td>
         <td style={cell}>{log.source ?? "-"}</td>
         <td style={{ padding: "10px 16px", textAlign: "center" }}>
-          <span style={{
-            display: "inline-block",
-            padding: "2px 8px",
-            borderRadius: 4,
-            fontSize: 11,
-            fontFamily: "var(--font-mono)",
-            background: log.status === "ok" ? "rgba(0,212,170,0.15)" : "rgba(255,107,107,0.15)",
-            color: log.status === "ok" ? "#00d4aa" : "#ff6b6b",
-          }}>
-            {log.status}
-          </span>
+          {hasDetails ? (
+            <button
+              type="button"
+              aria-expanded={open}
+              aria-controls={detailsId}
+              aria-label={`${open ? "Hide" : "Show"} sync timing details for ${fmtTime(log.started_at)}`}
+              onClick={() => setOpen((value) => !value)}
+              style={{
+                background: "transparent",
+                border: 0,
+                borderRadius: 4,
+                color: "inherit",
+                cursor: "pointer",
+                font: "inherit",
+                padding: 0,
+              }}
+            >
+              <StatusBadge status={log.status} />
+            </button>
+          ) : (
+            <StatusBadge status={log.status} />
+          )}
         </td>
       </tr>
       {open && details && (
         <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-          <td colSpan={7} style={{ padding: "14px 20px", background: "rgba(255,255,255,0.02)" }}>
+          <td id={detailsId} colSpan={7} style={{ padding: "14px 20px", background: "rgba(255,255,255,0.02)" }}>
             <div style={{ display: "grid", gridTemplateColumns: "minmax(340px, 1.2fr) minmax(280px, 1fr)", gap: 18, minWidth: 720 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <div>
