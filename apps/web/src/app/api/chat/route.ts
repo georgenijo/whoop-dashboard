@@ -16,6 +16,27 @@ export const DEFAULT_SYSTEM_PROMPT =
 
 type ChatMessageInput = { role: "user" | "assistant"; content: string };
 
+type ToolDetail = {
+  name: string;
+  input: unknown;
+  duration_ms: number;
+  rows: number | null;
+  status: "ok" | "error";
+  error?: string;
+};
+
+type Usage = {
+  input_tokens_total: number;
+  output_tokens_total: number;
+  cache_creation_input_tokens_total: number;
+  cache_read_input_tokens_total: number;
+  calls: number;
+};
+
+type DetailState = {
+  iterations: number;
+};
+
 const MAX_TOOL_ITERATIONS = 8;
 const COACH_MODEL = "claude-sonnet-4-6";
 
@@ -61,7 +82,10 @@ function toolErrorPayload(err: unknown): string {
   });
 }
 
-async function executeToolResult(toolUse: ToolUseBlock): Promise<ToolResultBlockParam> {
+async function executeToolResult(
+  toolUse: ToolUseBlock,
+  toolDetails: ToolDetail[]
+): Promise<ToolResultBlockParam> {
   const startMs = Date.now();
   console.info("[coach] tool_call", {
     name: toolUse.name,
@@ -71,11 +95,19 @@ async function executeToolResult(toolUse: ToolUseBlock): Promise<ToolResultBlock
   try {
     const result = await executeTool(toolUse.name, toolUse.input);
     const durationMs = Date.now() - startMs;
+    const rows = Array.isArray(result) ? result.length : null;
+    toolDetails.push({
+      name: toolUse.name,
+      input: toolUse.input,
+      duration_ms: durationMs,
+      rows,
+      status: "ok",
+    });
     console.info("[coach] tool_result", {
       name: toolUse.name,
       input: toolUse.input,
       duration_ms: durationMs,
-      rows: Array.isArray(result) ? result.length : null,
+      rows,
       status: "ok",
     });
     return {
@@ -85,12 +117,21 @@ async function executeToolResult(toolUse: ToolUseBlock): Promise<ToolResultBlock
     };
   } catch (err) {
     const durationMs = Date.now() - startMs;
+    const error = err instanceof Error ? err.message : String(err);
+    toolDetails.push({
+      name: toolUse.name,
+      input: toolUse.input,
+      duration_ms: durationMs,
+      rows: null,
+      status: "error",
+      error,
+    });
     console.warn("[coach] tool_result", {
       name: toolUse.name,
       input: toolUse.input,
       duration_ms: durationMs,
       status: "error",
-      error: err instanceof Error ? err.message : String(err),
+      error,
     });
     return {
       type: "tool_result",
@@ -101,7 +142,27 @@ async function executeToolResult(toolUse: ToolUseBlock): Promise<ToolResultBlock
   }
 }
 
-async function runAnthropicSdk(messages: ChatMessageInput[]): Promise<string> {
+function addUsageTotals(usage: Usage, responseUsage: {
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_input_tokens?: number | null;
+  cache_read_input_tokens?: number | null;
+}): void {
+  usage.input_tokens_total += responseUsage.input_tokens;
+  usage.output_tokens_total += responseUsage.output_tokens;
+  usage.cache_creation_input_tokens_total +=
+    responseUsage.cache_creation_input_tokens ?? 0;
+  usage.cache_read_input_tokens_total +=
+    responseUsage.cache_read_input_tokens ?? 0;
+  usage.calls += 1;
+}
+
+async function runAnthropicSdk(
+  messages: ChatMessageInput[],
+  toolDetails: ToolDetail[],
+  usage: Usage,
+  detailState: DetailState
+): Promise<{ reply: string; iterations: number }> {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY is not configured");
   }
@@ -120,6 +181,7 @@ async function runAnthropicSdk(messages: ChatMessageInput[]): Promise<string> {
     system: buildSystemPrompt(),
     messages: conversation,
   });
+  addUsageTotals(usage, response.usage);
   console.info("[coach] model_response", {
     stop_reason: response.stop_reason,
     input_tokens: response.usage.input_tokens,
@@ -127,11 +189,13 @@ async function runAnthropicSdk(messages: ChatMessageInput[]): Promise<string> {
   });
 
   let iterations = 0;
+  detailState.iterations = iterations;
   while (response.stop_reason === "tool_use") {
     if (iterations >= MAX_TOOL_ITERATIONS) {
       throw new Error(`Tool-use iteration limit exceeded (${MAX_TOOL_ITERATIONS})`);
     }
     iterations += 1;
+    detailState.iterations = iterations;
 
     const toolUses = response.content.filter(isToolUseBlock);
     if (toolUses.length === 0) {
@@ -144,7 +208,9 @@ async function runAnthropicSdk(messages: ChatMessageInput[]): Promise<string> {
     });
     conversation.push({
       role: "user",
-      content: await Promise.all(toolUses.map(executeToolResult)),
+      content: await Promise.all(
+        toolUses.map((toolUse) => executeToolResult(toolUse, toolDetails))
+      ),
     });
 
     response = await client.messages.create({
@@ -155,6 +221,7 @@ async function runAnthropicSdk(messages: ChatMessageInput[]): Promise<string> {
       system: buildSystemPrompt(),
       messages: conversation,
     });
+    addUsageTotals(usage, response.usage);
     console.info("[coach] model_response", {
       stop_reason: response.stop_reason,
       input_tokens: response.usage.input_tokens,
@@ -166,7 +233,7 @@ async function runAnthropicSdk(messages: ChatMessageInput[]): Promise<string> {
     throw new Error(`Claude stopped before finishing: ${response.stop_reason}`);
   }
 
-  return textFromContent(response.content);
+  return { reply: textFromContent(response.content), iterations };
 }
 
 export async function POST(req: Request) {
@@ -195,9 +262,33 @@ export async function POST(req: Request) {
   const startedAt = new Date().toISOString();
   const startMs = Date.now();
   const promptPreview = lastUser.slice(0, 200);
+  const toolDetails: ToolDetail[] = [];
+  const usage: Usage = {
+    input_tokens_total: 0,
+    output_tokens_total: 0,
+    cache_creation_input_tokens_total: 0,
+    cache_read_input_tokens_total: 0,
+    calls: 0,
+  };
+  const detailState: DetailState = { iterations: 0 };
+
+  const buildDetails = () =>
+    JSON.stringify({
+      full_prompt: lastUser,
+      iterations: detailState.iterations,
+      tools: toolDetails,
+      usage,
+    });
 
   try {
-    const reply = await runAnthropicSdk(messages);
+    const result = await runAnthropicSdk(
+      messages,
+      toolDetails,
+      usage,
+      detailState
+    );
+    const reply = result.reply;
+    detailState.iterations = result.iterations;
 
     addChatMessage("assistant", reply);
     addChatLog({
@@ -209,6 +300,7 @@ export async function POST(req: Request) {
       error_message: null,
       days_context: days,
       type: "api",
+      details: buildDetails(),
     });
     return new Response(reply, {
       headers: { "Content-Type": "text/plain; charset=utf-8" },
@@ -224,6 +316,7 @@ export async function POST(req: Request) {
       error_message: msg.slice(0, 500),
       days_context: days,
       type: "api",
+      details: buildDetails(),
     });
     return new Response(`Error: ${msg}`, { status: 500 });
   }
