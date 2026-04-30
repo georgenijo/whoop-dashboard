@@ -4,54 +4,144 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A personal health analytics dashboard that pulls data from the Whoop wearable API and displays recovery, sleep, strain, and workout metrics. The legacy UI is built with Python, Streamlit, and Plotly; the current web app is a Next.js App Router app.
+Personal health analytics dashboard. Pulls Whoop wearable data into SQLite, renders it in a Next.js app, and exposes an LLM coach that runs tool-use queries against the data. A legacy Streamlit app is bundled but no longer the primary surface.
 
 ## Commands
 
 ```bash
 # Setup
-cp .env.example .env          # then fill in WHOOP_CLIENT_ID and WHOOP_CLIENT_SECRET
+cp .env.example .env          # WHOOP_CLIENT_ID, WHOOP_CLIENT_SECRET, ANTHROPIC_API_KEY
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
+cd apps/web && npm install
 
 # Run
-streamlit run streamlit/app.py   # serves on http://localhost:8501
-cd apps/web && npm run dev       # serves on http://localhost:3000
+cd apps/web && npm run dev    # http://localhost:3000  (active)
+streamlit run streamlit/app.py # http://localhost:8501  (legacy)
+
+# Build
+cd apps/web && npm run build  # production build (Turbopack)
+
+# Manual sync
+python sync/daily_sync.py     # last 7 days, parallel fetch, upsert into SQLite
 ```
 
-No Python test suite or linter is configured. The web app build is `cd apps/web && npm run build`.
+No Python test suite. ESLint is wired via `eslint-config-next`.
 
 ## Architecture
 
 ### Repo layout
 
-The repo is split into discipline-specific subdirs so the legacy Streamlit app, the Next.js app, and the standalone sync job can live side-by-side:
+```
+apps/web/         Next.js 16.2.4 (Turbopack, App Router) — active dashboard + API
+streamlit/        legacy Streamlit + Plotly + pandas
+sync/             daily_sync.py (Whoop pull) + daily_summary.py (per-day rollup)
+shared/           shared SQLite (whoop_data.db, WAL mode)
+tokens.json       Whoop OAuth tokens (gitignored, repo root)
+```
 
-- **`streamlit/`** — legacy Streamlit app (port 8501 during migration)
-- **`apps/web/`** — Next.js 16 app and API server
-- **`sync/`** — standalone daily sync job (`sync/daily_sync.py`)
-- **`shared/`** — shared SQLite data store (`shared/whoop_data.db`)
+### Stack
 
-`tokens.json` remains at the repo root. `shared/whoop_data.db` remains under `shared/` so the Streamlit app, Next.js app, and sync job share the same state.
+- Next.js 16.2.4 — **NOT the Next.js you know.** Read `apps/web/node_modules/next/dist/docs/` before writing code. APIs and conventions diverge from training-data Next.js. `apps/web/AGENTS.md` reinforces this.
+- React 19 · TypeScript · Tailwind 4
+- Recharts 3.8 for charts
+- `@anthropic-ai/sdk` 0.91 for the Coach (Claude Sonnet 4.6, adaptive thinking, no `budget_tokens`)
+- `better-sqlite3` 12 for synchronous DB access from Next.js
+- `marked` 18 + DOMPurify for assistant message rendering
 
-### Module layout
+### Pages
 
-- **`streamlit/app.py`** — Single-file Streamlit app: auth flow, data fetching, DataFrame construction, KPI metrics, and all Plotly charts. Uses `@st.fragment` to isolate chart sections and `@st.cache_data(ttl=600)` for a 10-minute fetch cache.
-- **`streamlit/whoop/auth.py`** — OAuth2 flow against `api.prod.whoop.com`. Persists tokens to `tokens.json` (atomic write via tmp+rename). Thread-safe token refresh with `_refresh_lock`. Auto-refreshes tokens 60 seconds before expiry.
-- **`streamlit/whoop/client.py`** — `WhoopClient` REST client wrapping the `/developer/v2` API. Handles pagination (`_get_all` with `nextToken`), raises `AuthError` (401) and `RateLimitError` (429). `fetch_all_parallel()` hits all 6 endpoints concurrently via `ThreadPoolExecutor(max_workers=5)`.
-- **`sync/daily_sync.py`** — cron entry point for the daily sync. Adds repo-root `streamlit/` to `sys.path` so `from whoop.* import …` resolves.
-- **`apps/web/src/lib/db.ts`** — Next.js SQLite access layer. Defaults to `../../shared/whoop_data.db` from `apps/web`, with `WHOOP_DB_PATH` override support.
+```
+/            Overview — recovery ring, KPI strip, AI insight, trend charts
+/recovery    Recovery score, HRV, RHR
+/sleep       Sleep stages, perf, efficiency, disturbances
+/strain      Daily strain, kJ, HR averages
+/workouts    Per-workout breakdown
+/coach       LLM chat with persistent threads + tool-use
+/logs        Sync history + chat call logs (with details dropdown)
+/settings    Manual sync trigger, token info
+```
+
+### Coach (`apps/web/src/app/api/chat/route.ts`)
+
+Agentic loop. Five tools defined in `src/lib/coach-tools.ts`:
+
+- `query_recovery`, `query_sleep`, `query_strain`, `query_workouts`, `query_journal`
+- All take `start_date` / `end_date` (YYYY-MM-DD), return raw rows from SQLite
+
+Caps:
+- `MAX_TOOL_ITERATIONS = 8` (round-trips, not parallel calls)
+- `MAX_OUTPUT_TOKENS = 16384` (thinking + reply combined)
+- On `stop_reason === "max_tokens"`, returns partial text with truncation marker (no throw)
+
+Conversations are persisted in `chat_messages` keyed by `thread_id`. The model's `tool_use` and `tool_result` content blocks are stored as JSON in the `blocks` column so multi-turn conversations preserve full tool context across reloads. Synthetic `[tool_result]` rows are filtered from UI by `getChatMessages` and `getChatThreads` queries.
+
+Threads have auto-titles via Haiku 4.5 fired in `after()` (Next.js post-response hook), only on first turn of a blank-title thread. Persistence is buffered in memory and committed atomically via `addChatMessages` (uses `db.transaction(fn)`) — failed API calls leave the DB untouched.
+
+### DB layer (`apps/web/src/lib/db.ts`)
+
+- Default path: `../../shared/whoop_data.db` from `apps/web`. Override with `WHOOP_DB_PATH` env var (used in tests).
+- Schema migrations are **lazy ALTERs in `openWrite()`** — every write call ensures schema is current. No manual migration step. Pattern:
+  ```ts
+  if (!cols.some(c => c.name === "details")) {
+    db.exec("ALTER TABLE chat_logs ADD COLUMN details TEXT");
+  }
+  ```
+- Read paths use `safeQuery` (read-only open). Write paths use `safeWriteQuery` or direct `openWrite()`.
+- Lazy-bootstrapped tables: `users`, `sessions`, `chat_threads`, `chat_messages`, `chat_logs`, `sync_logs`, `daily_summary`, `app_settings`, `integrations` (planned).
+
+### Auth
+
+`src/lib/auth.ts` exposes `requireAuth(req)`. With no `Authorization` header, falls back to `getBootstrapUser()` → user_id=1. Single-user today; multi-user is future work.
 
 ### Data flow
 
-1. OAuth callback → token stored in `st.session_state` + `tokens.json`
-2. `fetch_all_parallel()` retrieves profile, body, cycles, recovery, sleep, workouts in parallel
-3. `build_*_df()` functions filter to `SCORED` records, parse dates, convert units (ms→hours, kj→kcal), and produce pandas DataFrames
-4. DataFrames drive KPI metrics (with day-over-day deltas) and Plotly charts
+1. OAuth callback writes tokens to `tokens.json` (atomic tmp+rename, thread-safe refresh in `streamlit/whoop/auth.py`)
+2. `sync/daily_sync.py` runs — pulls last 7 days from Whoop in parallel via `ThreadPoolExecutor(max_workers=5)`, upserts to `recovery`, `cycles`, `sleep`, `workouts`
+3. `compute_daily_summary` builds denormalized per-day rows in `daily_summary`
+4. Web app reads from same SQLite via `db.ts`
+5. Coach tools query the same DB by date range
 
 ### Key conventions
 
-- Only records with `score_state == "SCORED"` are processed; naps are excluded from sleep data
+- Only records with `score_state == "SCORED"` are processed
+- Naps excluded at query time (`WHERE nap = 0`), not at sync — naps still land in DB
 - Whoop API base: `https://api.prod.whoop.com/developer`
-- Environment variables: `WHOOP_CLIENT_ID`, `WHOOP_CLIENT_SECRET`, `WHOOP_REDIRECT_URI` (defaults to `http://localhost:8501`)
-- `tokens.json` at project root is the persistent token store (gitignored)
+- Required env: `WHOOP_CLIENT_ID`, `WHOOP_CLIENT_SECRET`, `ANTHROPIC_API_KEY`
+- Optional env: `WHOOP_REDIRECT_URI`, `WHOOP_DB_PATH`, `WHOOP_TOKENS_PATH`
+- Use Anthropic SDK, not raw HTTP. Default model: `claude-sonnet-4-6` for chat, `claude-haiku-4-5` for titles.
+
+## Deploy
+
+VM (Ubuntu) runs `whoop-web.service` (systemd) on port 8501. Deploy flow:
+
+```bash
+ssh ubuntu@<vm-ip>
+sudo -u george bash -c 'cd /home/george/Documents/whoop-dashboard && git pull origin main'
+sudo -u george bash -c 'cd /home/george/Documents/whoop-dashboard/apps/web && npm ci && npm run build'
+sudo systemctl restart whoop-web
+```
+
+Public domain has an auth gate (302 to login). For VM-side smoke tests, hit `localhost:8501` directly to bypass.
+
+The VM has no `sqlite3` binary — query via `sudo -u george python3 -c "import sqlite3; ..."`.
+
+No cron / systemd timer for `daily_sync.py` yet. All syncs are manual today (via `/api/sync` from Settings or the script directly).
+
+## Issue taxonomy
+
+Labels (case-sensitive):
+- `feature` — user-facing capability
+- `foundation` — infrastructure / prerequisite work
+- `backlog` — low-priority, deferred
+- `bug` — bug fix
+- `codex-ready` — self-contained, ready for AI dispatch
+
+Don't reintroduce `enhancement` or `rebuild` (deprecated).
+
+## Working notes
+
+- Schema migration changes go in `openWrite()`. Add the ALTER right after the relevant `CREATE TABLE` block, gated by a `PRAGMA table_info` check.
+- When changing the API contract (e.g., adding a column to a response), check `apps/web/src/components/` for consumers — there's no shared types layer yet, types are per-file.
+- Avoid Co-Authored-By lines in commit messages (per global ~/.claude/CLAUDE.md).
+- Avoid Claude/Anthropic attribution on PRs, branches, or issue bodies.
