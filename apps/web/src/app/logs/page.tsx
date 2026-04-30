@@ -1,29 +1,8 @@
 import { getChatLogs, getSyncLogs } from "@/lib/db";
 import ChatLogsTable from "./ChatLogsTable";
+import SyncLogsTable from "./SyncLogsTable";
 
 export const dynamic = "force-dynamic";
-
-function fmtDuration(ms: number): { text: string; color: string } {
-  const s = ms / 1000;
-  let color = "var(--fg-2)";
-  if (s < 5) color = "#00d4aa";
-  else if (s < 15) color = "#ffaa00";
-  else color = "#ff6b6b";
-  return { text: s < 1 ? `${ms}ms` : `${s.toFixed(1)}s`, color };
-}
-
-function fmtTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-    timeZone: "America/New_York",
-  }) + " EST";
-}
 
 export default function LogsPage() {
   const logs = getChatLogs(500);
@@ -118,54 +97,7 @@ export default function LogsPage() {
             <div className="sub">Tap the refresh icon in the top bar to pull fresh Whoop data</div>
           </div>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--font-sans)", fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: "rgba(255,255,255,0.02)", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                  <th style={{ padding: "10px 16px", textAlign: "left", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Time</th>
-                  <th style={{ padding: "10px 16px", textAlign: "right", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Duration</th>
-                  <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Recovery</th>
-                  <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Sleep</th>
-                  <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Workouts</th>
-                  <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Source</th>
-                  <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {syncLogs.map((s) => {
-                  const dur = fmtDuration(s.duration_ms);
-                  const cell = { padding: "10px 16px", textAlign: "center" as const, fontFamily: "var(--font-mono)", fontSize: 12, color: "var(--fg-2)", fontVariantNumeric: "tabular-nums" as const };
-                  return (
-                    <tr key={s.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                      <td style={{ padding: "10px 16px", color: "var(--fg-2)", fontFamily: "var(--font-mono)", fontSize: 12, whiteSpace: "nowrap" }}>
-                        {fmtTime(s.started_at)}
-                      </td>
-                      <td style={{ padding: "10px 16px", textAlign: "right", color: dur.color, fontFamily: "var(--font-mono)", fontSize: 12, fontVariantNumeric: "tabular-nums" }}>
-                        {dur.text}
-                      </td>
-                      <td style={cell}>{s.recovery_count ?? "—"}</td>
-                      <td style={cell}>{s.sleep_count ?? "—"}</td>
-                      <td style={cell}>{s.workouts_count ?? "—"}</td>
-                      <td style={cell}>{s.source ?? "—"}</td>
-                      <td style={{ padding: "10px 16px", textAlign: "center" }}>
-                        <span style={{
-                          display: "inline-block",
-                          padding: "2px 8px",
-                          borderRadius: 4,
-                          fontSize: 11,
-                          fontFamily: "var(--font-mono)",
-                          background: s.status === "ok" ? "rgba(0,212,170,0.15)" : "rgba(255,107,107,0.15)",
-                          color: s.status === "ok" ? "#00d4aa" : "#ff6b6b",
-                        }}>
-                          {s.status}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <SyncLogsTable logs={syncLogs} />
         )}
       </div>
     </div>
