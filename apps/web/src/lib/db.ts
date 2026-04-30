@@ -175,6 +175,14 @@ function openWrite(): DB | null {
         details TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_sync_logs_started ON sync_logs(started_at DESC);
+      CREATE TABLE IF NOT EXISTS route_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at TEXT NOT NULL,
+        route TEXT NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        status INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS route_logs_started_at_idx ON route_logs(started_at DESC);
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         apple_sub TEXT UNIQUE,
@@ -219,6 +227,38 @@ function openWrite(): DB | null {
       UPDATE chat_messages SET thread_id = 1 WHERE thread_id IS NULL;
     `);
     return db;
+  } catch {
+    return null;
+  }
+}
+
+let routeLogsSchemaReady = false;
+
+function openRouteLogWrite(): DB | null {
+  const p = dbPath();
+  if (!existsSync(p)) return null;
+  try {
+    const db = new Database(p, { fileMustExist: true });
+    try {
+      db.pragma("journal_mode = WAL");
+      if (!routeLogsSchemaReady) {
+        db.exec(`
+          CREATE TABLE IF NOT EXISTS route_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            started_at TEXT NOT NULL,
+            route TEXT NOT NULL,
+            duration_ms INTEGER NOT NULL,
+            status INTEGER NOT NULL
+          );
+          CREATE INDEX IF NOT EXISTS route_logs_started_at_idx ON route_logs(started_at DESC);
+        `);
+        routeLogsSchemaReady = true;
+      }
+      return db;
+    } catch {
+      db.close();
+      return null;
+    }
   } catch {
     return null;
   }
@@ -1124,6 +1164,39 @@ export function getSyncLogs(limit = 200): SyncLog[] {
           `SELECT id, started_at, duration_ms, status, recovery_count, sleep_count, workouts_count, error_message, source, ${detailsSelect} FROM sync_logs ORDER BY id DESC LIMIT ?`
         )
         .all(limit) as SyncLog[];
+    }) ?? []
+  );
+}
+
+export type RouteLog = {
+  id: number;
+  started_at: string;
+  route: string;
+  duration_ms: number;
+  status: number;
+};
+
+export function addRouteLog(log: Omit<RouteLog, "id">): void {
+  const db = openRouteLogWrite();
+  if (!db) return;
+  try {
+    db.prepare(
+      "INSERT INTO route_logs (started_at, route, duration_ms, status) VALUES (?, ?, ?, ?)"
+    ).run(log.started_at, log.route, log.duration_ms, log.status);
+  } finally {
+    db.close();
+  }
+}
+
+export function getRouteLogs(limit = 200): RouteLog[] {
+  return (
+    safeQuery((db) => {
+      if (!hasTable(db, "route_logs")) return [] as RouteLog[];
+      return db
+        .prepare(
+          "SELECT id, started_at, route, duration_ms, status FROM route_logs ORDER BY started_at DESC, id DESC LIMIT ?"
+        )
+        .all(limit) as RouteLog[];
     }) ?? []
   );
 }
