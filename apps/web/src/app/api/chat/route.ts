@@ -38,6 +38,7 @@ type DetailState = {
 };
 
 const MAX_TOOL_ITERATIONS = 8;
+const MAX_OUTPUT_TOKENS = 16384;
 const COACH_MODEL = "claude-sonnet-4-6";
 
 function buildSystemPrompt(): string {
@@ -177,7 +178,7 @@ async function runAnthropicSdk(
     model: COACH_MODEL,
     thinking: { type: "adaptive" },
     tools: TOOLS,
-    max_tokens: 4096,
+    max_tokens: MAX_OUTPUT_TOKENS,
     system: buildSystemPrompt(),
     messages: conversation,
   });
@@ -217,7 +218,7 @@ async function runAnthropicSdk(
       model: COACH_MODEL,
       thinking: { type: "adaptive" },
       tools: TOOLS,
-      max_tokens: 4096,
+      max_tokens: MAX_OUTPUT_TOKENS,
       system: buildSystemPrompt(),
       messages: conversation,
     });
@@ -227,6 +228,14 @@ async function runAnthropicSdk(
       input_tokens: response.usage.input_tokens,
       output_tokens: response.usage.output_tokens,
     });
+  }
+
+  if (response.stop_reason === "max_tokens") {
+    const partial = textFromContent(response.content);
+    const suffix = partial
+      ? "\n\n_[response truncated — hit max_tokens cap]_"
+      : "_[response truncated before any text was generated — hit max_tokens cap]_";
+    return { reply: `${partial}${suffix}`, iterations };
   }
 
   if (response.stop_reason !== "end_turn") {
