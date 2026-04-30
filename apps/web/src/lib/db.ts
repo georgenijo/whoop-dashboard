@@ -116,6 +116,7 @@ function openWrite(): DB | null {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         role TEXT NOT NULL,
         content TEXT NOT NULL,
+        blocks TEXT,
         created_at TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_chat_messages_id ON chat_messages(id);
@@ -171,6 +172,12 @@ function openWrite(): DB | null {
     }
     if (!cols.some((c) => c.name === "details")) {
       db.exec("ALTER TABLE chat_logs ADD COLUMN details TEXT");
+    }
+    const chatCols = db.prepare("PRAGMA table_info(chat_messages)").all() as {
+      name: string;
+    }[];
+    if (!chatCols.some((c) => c.name === "blocks")) {
+      db.exec("ALTER TABLE chat_messages ADD COLUMN blocks TEXT");
     }
     return db;
   } catch {
@@ -645,19 +652,69 @@ export function getChatMessages(): ChatMessage[] {
     safeQuery((db) => {
       if (!hasTable(db, "chat_messages")) return [] as ChatMessage[];
       return db
-        .prepare("SELECT id, role, content, created_at FROM chat_messages ORDER BY id ASC")
+        .prepare(
+          "SELECT id, role, content, created_at FROM chat_messages WHERE content != '[tool_result]' ORDER BY id ASC"
+        )
         .all() as ChatMessage[];
     }) ?? []
   );
 }
 
-export function addChatMessage(role: "user" | "assistant", content: string): void {
+export function getChatConversation(): {
+  role: "user" | "assistant";
+  content: unknown;
+}[] {
+  return (
+    safeWriteQuery((db) => {
+      if (!hasTable(db, "chat_messages")) {
+        return [] as { role: "user" | "assistant"; content: unknown }[];
+      }
+      const rows = db
+        .prepare("SELECT role, content, blocks FROM chat_messages ORDER BY id ASC")
+        .all() as {
+          role: "user" | "assistant";
+          content: string;
+          blocks: string | null;
+        }[];
+      return rows.map((row) => {
+        if (row.blocks !== null) {
+          try {
+            return {
+              role: row.role,
+              content: JSON.parse(row.blocks),
+            };
+          } catch {
+            return {
+              role: row.role,
+              content: row.content,
+            };
+          }
+        }
+        return {
+          role: row.role,
+          content: row.content,
+        };
+      });
+    }) ?? []
+  );
+}
+
+export function addChatMessage(
+  role: "user" | "assistant",
+  content: string,
+  blocks?: unknown
+): void {
   const db = openWrite();
   if (!db) return;
   try {
     db.prepare(
-      "INSERT INTO chat_messages (role, content, created_at) VALUES (?, ?, ?)"
-    ).run(role, content, new Date().toISOString());
+      "INSERT INTO chat_messages (role, content, blocks, created_at) VALUES (?, ?, ?, ?)"
+    ).run(
+      role,
+      content,
+      blocks === undefined ? null : JSON.stringify(blocks),
+      new Date().toISOString()
+    );
   } finally {
     db.close();
   }

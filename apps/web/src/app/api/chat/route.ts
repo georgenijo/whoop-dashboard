@@ -7,7 +7,7 @@ import type {
   ToolResultBlockParam,
   ToolUseBlock,
 } from "@anthropic-ai/sdk/resources/messages";
-import { addChatMessage, addChatLog } from "@/lib/db";
+import { addChatMessage, addChatLog, getChatConversation } from "@/lib/db";
 import { executeTool, ToolInputError, TOOLS } from "@/lib/coach-tools";
 import { requireAuth } from "@/lib/auth";
 
@@ -158,7 +158,7 @@ function addUsageTotals(usage: Usage, responseUsage: {
 }
 
 async function runAnthropicSdk(
-  messages: ChatMessageInput[],
+  newUserText: string,
   toolDetails: ToolDetail[],
   usage: Usage,
   detailState: DetailState
@@ -168,10 +168,9 @@ async function runAnthropicSdk(
   }
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const conversation: MessageParam[] = messages.map((message) => ({
-    role: message.role,
-    content: message.content,
-  }));
+  const conversation = getChatConversation() as MessageParam[];
+  conversation.push({ role: "user", content: newUserText });
+  addChatMessage("user", newUserText, [{ type: "text", text: newUserText }]);
 
   let response = await client.messages.create({
     model: COACH_MODEL,
@@ -188,6 +187,13 @@ async function runAnthropicSdk(
     output_tokens: response.usage.output_tokens,
   });
 
+  let assistantText = textFromContent(response.content);
+  addChatMessage("assistant", assistantText, response.content);
+  conversation.push({
+    role: "assistant",
+    content: response.content as ContentBlockParam[],
+  });
+
   let iterations = 0;
   detailState.iterations = iterations;
   while (response.stop_reason === "tool_use") {
@@ -202,15 +208,13 @@ async function runAnthropicSdk(
       throw new Error("Claude stopped for tool_use without requesting a tool");
     }
 
-    conversation.push({
-      role: "assistant",
-      content: response.content as ContentBlockParam[],
-    });
+    const toolResults = await Promise.all(
+      toolUses.map((toolUse) => executeToolResult(toolUse, toolDetails))
+    );
+    addChatMessage("user", "[tool_result]", toolResults);
     conversation.push({
       role: "user",
-      content: await Promise.all(
-        toolUses.map((toolUse) => executeToolResult(toolUse, toolDetails))
-      ),
+      content: toolResults,
     });
 
     response = await client.messages.create({
@@ -227,13 +231,20 @@ async function runAnthropicSdk(
       input_tokens: response.usage.input_tokens,
       output_tokens: response.usage.output_tokens,
     });
+
+    assistantText = textFromContent(response.content);
+    addChatMessage("assistant", assistantText, response.content);
+    conversation.push({
+      role: "assistant",
+      content: response.content as ContentBlockParam[],
+    });
   }
 
   if (response.stop_reason !== "end_turn") {
     throw new Error(`Claude stopped before finishing: ${response.stop_reason}`);
   }
 
-  return { reply: textFromContent(response.content), iterations };
+  return { reply: assistantText, iterations };
 }
 
 export async function POST(req: Request) {
@@ -256,8 +267,6 @@ export async function POST(req: Request) {
   }
 
   const lastUser = messages[messages.length - 1].content;
-
-  addChatMessage("user", lastUser);
 
   const startedAt = new Date().toISOString();
   const startMs = Date.now();
@@ -282,15 +291,13 @@ export async function POST(req: Request) {
 
   try {
     const result = await runAnthropicSdk(
-      messages,
+      lastUser,
       toolDetails,
       usage,
       detailState
     );
     const reply = result.reply;
     detailState.iterations = result.iterations;
-
-    addChatMessage("assistant", reply);
     addChatLog({
       started_at: startedAt,
       prompt_preview: promptPreview,
