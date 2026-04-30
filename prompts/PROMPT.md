@@ -7,8 +7,8 @@ You are starting a new session on the Whoop Dashboard project. Follow these step
 Read these files silently:
 - `CLAUDE.md` — project overview, architecture, key conventions (may already be loaded)
 - `README.md` — setup, features, run commands
-- Any file in `whoop/` relevant to your ticket (`auth.py`, `client.py`, `db.py`, `insights.py`, `chat.py`, `ots.py`)
-- The relevant sections of `app.py` — it is ~2000 lines but organized by `@st.fragment` section, so grep for the section name rather than reading end-to-end
+- Any file in `streamlit/whoop/` relevant to your ticket (`auth.py`, `client.py`, `db.py`, `insights.py`, `chat.py`, `ots.py`)
+- The relevant sections of `streamlit/app.py` — it is ~2000 lines but organized by `@st.fragment` section, so grep for the section name rather than reading end-to-end
 
 ## 2. Health Check (silent)
 
@@ -32,13 +32,13 @@ Do not write any code until the user approves the plan.
 
 After approval, implement exactly what was planned. No scope creep — do not refactor surrounding code, add comments to unchanged code, or introduce features not in the ticket.
 
-**For dashboard/chart changes:** Run `streamlit run app.py` locally (serves on `http://localhost:8501`) and visually verify the new section renders correctly with real data. Check that KPI deltas, chart axes, and any new metrics look right before committing. If you cannot test the UI, say so explicitly rather than claiming success.
+**For dashboard/chart changes:** Run `streamlit run streamlit/app.py` locally (serves on `http://localhost:8501`) and visually verify the new section renders correctly with real data. Check that KPI deltas, chart axes, and any new metrics look right before committing. If you cannot test the UI, say so explicitly rather than claiming success.
 
 ## 6. Verify
 
 Before committing, run:
-- `python3 -m py_compile app.py whoop/*.py` — no syntax errors
-- `python3 -c "import ast; [ast.parse(open(f).read()) for f in ['app.py'] + __import__('glob').glob('whoop/*.py')]"` — parses clean
+- `python3 -m py_compile streamlit/app.py streamlit/whoop/*.py sync/daily_sync.py` — no syntax errors
+- `python3 -c "import ast, glob; [ast.parse(open(f).read()) for f in ['streamlit/app.py', 'sync/daily_sync.py'] + glob.glob('streamlit/whoop/*.py')]"` — parses clean
 
 If any check fails, fix the issue before proceeding. This repo has no test suite or linter — correctness is verified by running the app.
 

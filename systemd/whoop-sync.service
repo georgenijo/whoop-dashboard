@@ -6,5 +6,5 @@ After=network-online.target
 Type=oneshot
 User=george
 WorkingDirectory=/home/george/Documents/whoop-dashboard
-ExecStart=/home/george/Documents/whoop-dashboard/venv/bin/python daily_sync.py
+ExecStart=/home/george/Documents/whoop-dashboard/venv/bin/python sync/daily_sync.py
 Environment=PATH=/home/george/Documents/whoop-dashboard/venv/bin:/usr/bin

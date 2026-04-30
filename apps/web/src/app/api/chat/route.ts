@@ -9,6 +9,7 @@ import type {
 } from "@anthropic-ai/sdk/resources/messages";
 import { addChatMessage, addChatLog } from "@/lib/db";
 import { executeTool, ToolInputError, TOOLS } from "@/lib/coach-tools";
+import { requireAuth } from "@/lib/auth";
 
 export const DEFAULT_SYSTEM_PROMPT =
   "You are a personal health and performance analyst. You have tools to query the user's health data; use them as needed before answering with specific numbers and dates. Be direct, concise, and actionable.";
@@ -168,6 +169,13 @@ async function runAnthropicSdk(messages: ChatMessageInput[]): Promise<string> {
 }
 
 export async function POST(req: Request) {
+  try {
+    await requireAuth(req);
+  } catch (err) {
+    if (err instanceof Response) return err;
+    throw err;
+  }
+
   const { messages, days = null } = (await req.json()) as {
     messages: ChatMessageInput[];
     days?: number | null;
