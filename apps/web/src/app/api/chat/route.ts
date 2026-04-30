@@ -27,7 +27,6 @@ type ChatMessageInput = { role: "user" | "assistant"; content: string };
 
 type ToolDetail = {
   name: string;
-  input: unknown;
   duration_ms: number;
   rows: number | null;
   status: "ok" | "error";
@@ -104,7 +103,6 @@ async function executeToolResult(
   console.info("[coach] tool_call", {
     thread_id: threadId,
     name: toolUse.name,
-    input: toolUse.input,
   });
 
   try {
@@ -113,7 +111,6 @@ async function executeToolResult(
     const rows = Array.isArray(result) ? result.length : null;
     toolDetails.push({
       name: toolUse.name,
-      input: toolUse.input,
       duration_ms: durationMs,
       rows,
       status: "ok",
@@ -121,7 +118,6 @@ async function executeToolResult(
     console.info("[coach] tool_result", {
       thread_id: threadId,
       name: toolUse.name,
-      input: toolUse.input,
       duration_ms: durationMs,
       rows,
       status: "ok",
@@ -136,7 +132,6 @@ async function executeToolResult(
     const error = err instanceof Error ? err.message : String(err);
     toolDetails.push({
       name: toolUse.name,
-      input: toolUse.input,
       duration_ms: durationMs,
       rows: null,
       status: "error",
@@ -145,7 +140,6 @@ async function executeToolResult(
     console.warn("[coach] tool_result", {
       thread_id: threadId,
       name: toolUse.name,
-      input: toolUse.input,
       duration_ms: durationMs,
       status: "error",
       error,
@@ -175,6 +169,16 @@ function addUsageTotals(
   usage.cache_read_input_tokens_total +=
     responseUsage.cache_read_input_tokens ?? 0;
   usage.calls += 1;
+}
+
+function chatLogToolSummaries(toolDetails: ToolDetail[]) {
+  return toolDetails.map(({ name, duration_ms, rows, status, error }) => ({
+    name,
+    duration_ms,
+    rows,
+    status,
+    ...(error ? { error: error.slice(0, 200) } : {}),
+  }));
 }
 
 async function runAnthropicSdk(
@@ -285,7 +289,15 @@ async function runAnthropicSdk(
     const suffix = partial
       ? "\n\n_[response truncated — hit max_tokens cap]_"
       : "_[response truncated before any text was generated — hit max_tokens cap]_";
-    return { reply: `${partial}${suffix}`, iterations, messages: messagesToPersist };
+    const reply = `${partial}${suffix}`;
+    const finalMessage = messagesToPersist[messagesToPersist.length - 1];
+    if (finalMessage?.role === "assistant") {
+      messagesToPersist[messagesToPersist.length - 1] = {
+        ...finalMessage,
+        content: reply,
+      };
+    }
+    return { reply, iterations, messages: messagesToPersist };
   }
 
   if (response.stop_reason !== "end_turn") {
@@ -357,13 +369,24 @@ export async function POST(req: Request) {
       });
     }
 
-    const lastUser = body.messages[body.messages.length - 1].content;
+    const lastMessage = body.messages[body.messages.length - 1];
+    if (
+      !lastMessage ||
+      lastMessage.role !== "user" ||
+      typeof lastMessage.content !== "string" ||
+      !lastMessage.content.trim()
+    ) {
+      return new Response("Error: last message must be a non-empty user message", {
+        status: 400,
+      });
+    }
+    const lastUser = lastMessage.content;
     const requestedThreadId = parseThreadId(body.thread_id);
     if (Number.isNaN(requestedThreadId as number)) {
       return new Response("Error: thread_id must be a positive integer", { status: 400 });
     }
 
-    let thread = requestedThreadId == null ? createChatThread(user.id) : getChatThreadById(user.id, requestedThreadId);
+    const thread = requestedThreadId == null ? createChatThread(user.id) : getChatThreadById(user.id, requestedThreadId);
     if (!thread) {
       return new Response("Error: thread not found", { status: 404 });
     }
@@ -389,9 +412,9 @@ export async function POST(req: Request) {
 
     const buildDetails = () =>
       JSON.stringify({
-        full_prompt: lastUser,
+        prompt_chars: lastUser.length,
         iterations: detailState.iterations,
-        tools: toolDetails,
+        tools: chatLogToolSummaries(toolDetails),
         usage,
         thread_id: thread?.id,
       });

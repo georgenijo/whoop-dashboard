@@ -36,7 +36,7 @@ export function tokensPath(): string {
 export function getBootstrapUser(): User {
   const user = getPrimaryUser();
   if (!user) {
-    throw new Error("Single-user bootstrap missing");
+    throw new Response("Single-user bootstrap missing", { status: 500 });
   }
   return user;
 }

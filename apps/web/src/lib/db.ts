@@ -687,6 +687,10 @@ export type ChatMessageInsert = {
   blocks?: unknown;
 };
 
+function visibleChatMessageClause(alias: string): string {
+  return `${alias}.content != '[tool_result]' AND NOT (${alias}.role = 'assistant' AND ${alias}.blocks LIKE '%"type":"tool_use"%')`;
+}
+
 function hasChatThread(db: DB, threadId: number, userId?: number): boolean {
   const row =
     userId == null
@@ -705,6 +709,8 @@ export function getChatThreads(userId: number): ChatThreadSummary[] {
   return (
     safeWriteQuery((db) => {
       if (!hasTable(db, "chat_threads")) return [] as ChatThreadSummary[];
+      const visibleM = visibleChatMessageClause("m");
+      const visibleM2 = visibleChatMessageClause("m2");
       return db
         .prepare(`
           SELECT
@@ -715,13 +721,13 @@ export function getChatThreads(userId: number): ChatThreadSummary[] {
             (
               SELECT m2.content
               FROM chat_messages m2
-              WHERE m2.thread_id = t.id AND m2.content != '[tool_result]'
+              WHERE m2.thread_id = t.id AND ${visibleM2}
               ORDER BY m2.id DESC
               LIMIT 1
             ) AS last_preview
           FROM chat_threads t
           LEFT JOIN chat_messages m
-            ON m.thread_id = t.id AND m.content != '[tool_result]'
+            ON m.thread_id = t.id AND ${visibleM}
           WHERE t.user_id = ?
           GROUP BY t.id
           ORDER BY t.updated_at DESC, t.id DESC
@@ -802,13 +808,19 @@ export function deleteChatThread(threadId: number, userId: number): boolean {
   const db = openWrite();
   if (!db) return false;
   try {
-    const thread = db
-      .prepare("SELECT id FROM chat_threads WHERE id = ? AND user_id = ? LIMIT 1")
-      .get(threadId, userId) as { id: number } | undefined;
-    if (!thread) return false;
-    db.prepare("DELETE FROM chat_messages WHERE thread_id = ?").run(threadId);
-    db.prepare("DELETE FROM chat_threads WHERE id = ? AND user_id = ?").run(threadId, userId);
-    return true;
+    const getThread = db.prepare(
+      "SELECT id FROM chat_threads WHERE id = ? AND user_id = ? LIMIT 1"
+    );
+    const deleteMessages = db.prepare("DELETE FROM chat_messages WHERE thread_id = ?");
+    const deleteThread = db.prepare("DELETE FROM chat_threads WHERE id = ? AND user_id = ?");
+    const removeThread = db.transaction(() => {
+      const thread = getThread.get(threadId, userId) as { id: number } | undefined;
+      if (!thread) return false;
+      deleteMessages.run(threadId);
+      deleteThread.run(threadId, userId);
+      return true;
+    });
+    return removeThread() as boolean;
   } finally {
     db.close();
   }
@@ -836,6 +848,8 @@ export function getChatThreadSummary(userId: number, threadId: number): ChatThre
   return (
     safeWriteQuery((db) => {
       if (!hasTable(db, "chat_threads")) return null;
+      const visibleM = visibleChatMessageClause("m");
+      const visibleM2 = visibleChatMessageClause("m2");
       const row = db
         .prepare(
           `
@@ -847,13 +861,13 @@ export function getChatThreadSummary(userId: number, threadId: number): ChatThre
             (
               SELECT m2.content
               FROM chat_messages m2
-              WHERE m2.thread_id = t.id AND m2.content != '[tool_result]'
+              WHERE m2.thread_id = t.id AND ${visibleM2}
               ORDER BY m2.id DESC
               LIMIT 1
             ) AS last_preview
           FROM chat_threads t
           LEFT JOIN chat_messages m
-            ON m.thread_id = t.id AND m.content != '[tool_result]'
+            ON m.thread_id = t.id AND ${visibleM}
           WHERE t.id = ? AND t.user_id = ?
           GROUP BY t.id
           LIMIT 1
@@ -872,9 +886,10 @@ export function getChatThreadMessages(userId: number, threadId: number): ChatMes
         return [] as ChatMessage[];
       }
       if (!hasChatThread(db, threadId, userId)) return [] as ChatMessage[];
+      const visibleMessage = visibleChatMessageClause("chat_messages");
       return db
         .prepare(
-          "SELECT id, role, content, created_at FROM chat_messages WHERE thread_id = ? AND content != '[tool_result]' ORDER BY id ASC"
+          `SELECT id, role, content, created_at FROM chat_messages WHERE thread_id = ? AND ${visibleMessage} ORDER BY id ASC`
         )
         .all(threadId) as ChatMessage[];
     }) ?? []

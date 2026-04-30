@@ -710,7 +710,7 @@ body {
   font-size: 14px;
   line-height: 1.55;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: break-word;
 }
 
 .coach-message.user {

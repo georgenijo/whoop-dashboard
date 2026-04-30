@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
 type ThreadSummary = {
   id: number;
   title: string | null;
@@ -31,6 +33,21 @@ function formatRelativeTime(value: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.round(hours / 24);
   return `${days}d ago`;
+}
+
+function getFocusableElements(root: HTMLElement): HTMLElement[] {
+  return Array.from(
+    root.querySelectorAll<HTMLElement>(
+      [
+        "a[href]",
+        "button:not([disabled])",
+        "textarea:not([disabled])",
+        "input:not([disabled])",
+        "select:not([disabled])",
+        '[tabindex]:not([tabindex="-1"])',
+      ].join(",")
+    )
+  ).filter((element) => !element.getAttribute("aria-hidden"));
 }
 
 function ThreadList({
@@ -89,6 +106,66 @@ export default function ThreadSidebar({
   onSelectThread,
   onDeleteThread,
 }: ThreadSidebarProps) {
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+
+    previousFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const drawer = drawerRef.current;
+    if (!drawer) return;
+
+    const focusableElements = getFocusableElements(drawer);
+    (focusableElements[0] ?? drawer).focus();
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onMobileOpenChange(false);
+        return;
+      }
+
+      if (event.key !== "Tab" || !drawer) return;
+
+      const elements = getFocusableElements(drawer);
+      if (elements.length === 0) {
+        event.preventDefault();
+        drawer.focus();
+        return;
+      }
+
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      const active = document.activeElement;
+
+      if (!drawer.contains(active)) {
+        event.preventDefault();
+        first.focus();
+        return;
+      }
+
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+        return;
+      }
+
+      if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previousFocusRef.current?.focus();
+      previousFocusRef.current = null;
+    };
+  }, [mobileOpen, onMobileOpenChange]);
+
   return (
     <>
       <aside className="coach-sidebar">
@@ -125,7 +202,13 @@ export default function ThreadSidebar({
             onClick={() => onMobileOpenChange(false)}
             aria-hidden
           />
-          <div className="bn-drawer coach-drawer" role="dialog" aria-label="Threads">
+          <div
+            ref={drawerRef}
+            className="bn-drawer coach-drawer"
+            role="dialog"
+            aria-label="Threads"
+            tabIndex={-1}
+          >
             <div className="bn-drawer-handle" />
             <button
               type="button"

@@ -1,5 +1,6 @@
 "use client";
 
+import DOMPurify from "dompurify";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { marked } from "marked";
@@ -49,7 +50,9 @@ function formatCount(n: number): string {
 
 function MessageBubble({ msg }: { msg: ComposerMessage }) {
   const isUser = msg.role === "user";
-  const html = !isUser ? (marked.parse(msg.content) as string) : null;
+  const html = !isUser
+    ? DOMPurify.sanitize(marked.parse(msg.content) as string)
+    : null;
 
   return (
     <div className={`coach-message-row ${isUser ? "user" : "assistant"}`}>
@@ -90,7 +93,6 @@ export default function CoachWorkspace({
   );
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [loaded, setLoaded] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -133,17 +135,6 @@ export default function CoachWorkspace({
       window.removeEventListener("focus", refreshWhenVisible);
     };
   }, []);
-
-  useEffect(() => {
-    setMessages(
-      initialMessages.map((message) => ({
-        role: message.role,
-        content: message.content,
-      }))
-    );
-    setThreadId(initialThreadId);
-    setLoaded(true);
-  }, [initialMessages, initialThreadId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -224,10 +215,7 @@ export default function CoachWorkspace({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: nextMessages.map((message) => ({
-            role: message.role,
-            content: message.content,
-          })),
+          messages: [{ role: userMsg.role, content: userMsg.content }],
           thread_id: threadId,
           days: 9999,
         }),
@@ -312,7 +300,7 @@ export default function CoachWorkspace({
 
         <section className="coach-chat">
           <div className="coach-messages">
-            {loaded && messages.length === 0 && (
+            {messages.length === 0 && (
               <div className="coach-empty">
                 <div className="coach-empty-mark">Coach</div>
                 <div className="coach-empty-title">Ask anything about your health data</div>
