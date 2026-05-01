@@ -623,17 +623,17 @@ body {
 }
 
 .coach-thread-row {
+  position: relative;
   display: flex;
-  align-items: stretch;
-  gap: 8px;
 }
 
 .coach-thread-item {
   flex: 1;
   align-items: flex-start;
   flex-direction: column;
-  gap: 4px;
-  min-height: 72px;
+  gap: 2px;
+  min-height: 0;
+  padding: 10px 36px 10px 12px;
 }
 
 .coach-thread-title {
@@ -644,39 +644,40 @@ body {
   max-width: 100%;
 }
 
-.coach-thread-meta,
-.coach-thread-preview {
+.coach-thread-meta {
   font-size: 11px;
   line-height: 1.35;
   color: var(--fg-3);
   max-width: 100%;
 }
 
-.coach-thread-preview {
-  color: var(--fg-2);
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-}
-
 .coach-thread-delete {
-  width: 36px;
-  min-width: 36px;
-  border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.06);
-  background: rgba(255,255,255,0.02);
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 0;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.coach-thread-delete:hover {
+  opacity: 1;
+  background: rgba(255,255,255,0.06);
 }
 
 .coach-thread-delete img {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   filter: invert(1);
-  opacity: 0.65;
 }
 
 .coach-chat {
@@ -818,7 +819,7 @@ body {
 
 .coach-input-shell {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 10px;
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.08);

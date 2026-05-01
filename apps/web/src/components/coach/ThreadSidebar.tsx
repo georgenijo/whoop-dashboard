@@ -77,9 +77,6 @@ function ThreadList({
                 {formatRelativeTime(thread.updated_at)}
                 {thread.message_count ? ` · ${thread.message_count} messages` : ""}
               </span>
-              <span className="coach-thread-preview">
-                {thread.last_preview?.trim() || "No messages yet"}
-              </span>
             </button>
             <button
               type="button"
