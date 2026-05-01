@@ -1,6 +1,8 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useChatSend } from "./useChatSend";
+import { useChatSend, type ChatMessage } from "./useChatSend";
+
+const emptyMessages: ChatMessage[] = [];
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -24,7 +26,7 @@ describe("useChatSend", () => {
     vi.stubGlobal("fetch", vi.fn(() => reply.promise));
 
     const { result } = renderHook(() =>
-      useChatSend({ initialMessages: [], threadId: 1, setThreadId, refreshThreads })
+      useChatSend({ initialMessages: emptyMessages, threadId: 1, setThreadId, refreshThreads })
     );
 
     let sendPromise: Promise<void> = Promise.resolve();
@@ -52,7 +54,7 @@ describe("useChatSend", () => {
     expect(refreshThreads).toHaveBeenCalledOnce();
   });
 
-  it("aborts the prior in-flight request when send is invoked again", async () => {
+  it("aborts and replaces the prior in-flight request when send is invoked again", async () => {
     const requests: {
       signal: AbortSignal;
       resolve: (value: Response) => void;
@@ -73,7 +75,7 @@ describe("useChatSend", () => {
 
     const { result } = renderHook(() =>
       useChatSend({
-        initialMessages: [],
+        initialMessages: emptyMessages,
         threadId: 1,
         setThreadId: vi.fn(),
         refreshThreads: vi.fn(async () => []),
@@ -84,16 +86,76 @@ describe("useChatSend", () => {
     let secondSend: Promise<void> = Promise.resolve();
     act(() => {
       firstSend = result.current.send("First");
+    });
+
+    await waitFor(() => expect(result.current.loading).toBe(true));
+    act(() => {
       secondSend = result.current.send("Second");
     });
 
     await waitFor(() => expect(requests).toHaveLength(2));
     expect(requests[0].signal.aborted).toBe(true);
     expect(requests[1].signal.aborted).toBe(false);
+    expect(result.current.messages).toEqual([
+      { role: "user", content: "Second" },
+      { role: "assistant", content: "", streaming: true },
+    ]);
 
     await act(async () => {
       requests[1].resolve(new Response("Second reply"));
       await Promise.allSettled([firstSend, secondSend]);
     });
+
+    expect(result.current.messages).toEqual([
+      { role: "user", content: "Second" },
+      { role: "assistant", content: "Second reply" },
+    ]);
+  });
+
+  it("resets local state and aborts in-flight work when the thread changes", async () => {
+    const requests: { signal: AbortSignal; reject: (reason?: unknown) => void }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+        const signal = init?.signal as AbortSignal;
+        return new Promise<Response>((_resolve, reject) => {
+          requests.push({ signal, reject });
+          signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
+        });
+      })
+    );
+
+    const threadOneMessages: ChatMessage[] = [
+      { id: 1, role: "user", content: "Old thread", created_at: "2026-05-01T12:00:00.000Z" },
+    ];
+    const threadTwoMessages: ChatMessage[] = [
+      { id: 2, role: "assistant", content: "New thread", created_at: "2026-05-01T12:01:00.000Z" },
+    ];
+    const props = {
+      setThreadId: vi.fn(),
+      refreshThreads: vi.fn(async () => []),
+    };
+    const { result, rerender } = renderHook(
+      ({ threadId, initialMessages }: { threadId: number; initialMessages: ChatMessage[] }) =>
+        useChatSend({ ...props, threadId, initialMessages }),
+      { initialProps: { threadId: 1, initialMessages: threadOneMessages } }
+    );
+
+    let sendPromise: Promise<void> = Promise.resolve();
+    act(() => {
+      result.current.setInput("draft");
+      sendPromise = result.current.send("Pending");
+    });
+    await waitFor(() => expect(requests).toHaveLength(1));
+
+    rerender({ threadId: 2, initialMessages: threadTwoMessages });
+
+    await waitFor(() =>
+      expect(result.current.messages).toEqual([{ role: "assistant", content: "New thread" }])
+    );
+    expect(result.current.input).toBe("");
+    expect(result.current.loading).toBe(false);
+    expect(requests[0].signal.aborted).toBe(true);
+    await Promise.allSettled([sendPromise]);
   });
 });

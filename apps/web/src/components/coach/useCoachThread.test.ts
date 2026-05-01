@@ -20,6 +20,7 @@ const initialThreads: ThreadSummary[] = [
     last_preview: null,
   },
 ];
+const initialMessages = [];
 
 describe("useCoachThread", () => {
   beforeEach(() => {
@@ -28,7 +29,7 @@ describe("useCoachThread", () => {
 
   it("composes thread, message, and UI state without throwing", () => {
     const { result, unmount } = renderHook(() =>
-      useCoachThread(1, initialThreads, [])
+      useCoachThread(1, initialThreads, initialMessages)
     );
 
     expect(result.current.threadId).toBe(1);
