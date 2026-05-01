@@ -1,5 +1,5 @@
 import { getSetting, setSetting } from "@/lib/db";
-import { DEFAULT_SYSTEM_PROMPT } from "@/app/api/chat/route";
+import { DEFAULT_SYSTEM_PROMPT } from "@/lib/coach/prompts";
 
 export async function GET() {
   return Response.json({
