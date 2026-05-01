@@ -70,6 +70,17 @@ export type DailySummaryRow = {
   computed_at: string;
 };
 
+export type InsightRow = {
+  date: string;
+  insight: string;
+  created_at: string | null;
+};
+
+export type SettingLock = {
+  key: string;
+  value: string;
+};
+
 export type User = {
   id: number;
   email: string | null;
@@ -162,6 +173,11 @@ function openWrite(): DB | null {
         key TEXT PRIMARY KEY,
         value TEXT
       );
+      CREATE TABLE IF NOT EXISTS insights (
+        date TEXT PRIMARY KEY,
+        insight TEXT,
+        created_at TEXT
+      );
       CREATE TABLE IF NOT EXISTS sync_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         started_at TEXT NOT NULL,
@@ -210,6 +226,10 @@ function openWrite(): DB | null {
     const syncCols = db.prepare("PRAGMA table_info(sync_logs)").all() as { name: string }[];
     if (!syncCols.some((c) => c.name === "details")) {
       db.exec("ALTER TABLE sync_logs ADD COLUMN details TEXT");
+    }
+    const insightCols = db.prepare("PRAGMA table_info(insights)").all() as { name: string }[];
+    if (!insightCols.some((c) => c.name === "created_at")) {
+      db.exec("ALTER TABLE insights ADD COLUMN created_at TEXT");
     }
     const chatCols = db.prepare("PRAGMA table_info(chat_messages)").all() as {
       name: string;
@@ -510,14 +530,77 @@ export function getSleepRange(startDate: string, endDate: string): SleepRow[] {
   );
 }
 
-export function getLatestInsight(): { date: string; insight: string } | null {
+function rawTimestampMs(row: { date: string | null; raw: string | null }): number | null {
+  if (row.raw) {
+    try {
+      const parsed = JSON.parse(row.raw) as Record<string, unknown>;
+      for (const field of ["updated_at", "created_at", "end", "start"]) {
+        const value = parsed[field];
+        if (typeof value !== "string") continue;
+        const ms = Date.parse(value);
+        if (Number.isFinite(ms)) return ms;
+      }
+    } catch {
+      // Fall back to the stored row date below.
+    }
+  }
+
+  if (!row.date) return null;
+  const ms = Date.parse(`${row.date}T00:00:00.000Z`);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function latestTableTimestampMs(
+  db: DB,
+  table: "recovery" | "cycles" | "sleep",
+  where = ""
+): number | null {
+  if (!hasTable(db, table)) return null;
+  const rawSelect = hasColumn(db, table, "raw") ? "raw" : "NULL AS raw";
+  const row = db
+    .prepare(`SELECT date, ${rawSelect} FROM ${table} ${where} ORDER BY date DESC LIMIT 1`)
+    .get() as { date: string | null; raw: string | null } | undefined;
+  return row ? rawTimestampMs(row) : null;
+}
+
+export function getLatestWhoopDataTimestamp(): string | null {
+  return safeQuery((db) => {
+    const sleepWhere = hasTable(db, "sleep") && hasColumn(db, "sleep", "nap")
+      ? "WHERE COALESCE(nap, 0) = 0"
+      : "";
+    const timestamps = [
+      latestTableTimestampMs(db, "recovery"),
+      latestTableTimestampMs(db, "cycles"),
+      latestTableTimestampMs(db, "sleep", sleepWhere),
+    ].filter((ms): ms is number => ms !== null);
+    if (timestamps.length === 0) return null;
+    return new Date(Math.max(...timestamps)).toISOString();
+  });
+}
+
+export function getLatestInsight(): InsightRow | null {
   return safeQuery((db) => {
     if (!hasTable(db, "insights")) return null;
+    const createdAt = hasColumn(db, "insights", "created_at")
+      ? "created_at"
+      : "NULL AS created_at";
     const row = db
-      .prepare("SELECT date, insight FROM insights ORDER BY date DESC LIMIT 1")
-      .get() as { date: string; insight: string } | undefined;
+      .prepare(`SELECT date, insight, ${createdAt} FROM insights ORDER BY date DESC LIMIT 1`)
+      .get() as InsightRow | undefined;
     return row ?? null;
   });
+}
+
+export function saveInsight(date: string, insight: string): void {
+  const db = openWrite();
+  if (!db) return;
+  try {
+    db.prepare(
+      "INSERT INTO insights (date, insight, created_at) VALUES (?, ?, ?) ON CONFLICT(date) DO UPDATE SET insight = excluded.insight, created_at = excluded.created_at"
+    ).run(date, insight, new Date().toISOString());
+  } finally {
+    db.close();
+  }
 }
 
 export function getWorkouts(limit: number): WorkoutRow[] {
@@ -1209,6 +1292,66 @@ export function getSetting(key: string): string | null {
       .get(key) as { value: string } | undefined;
     return row?.value ?? null;
   });
+}
+
+function settingLockExpiresMs(value: string | null): number | null {
+  if (!value) return null;
+  try {
+    const parsed = JSON.parse(value) as { expires_at?: unknown };
+    if (typeof parsed.expires_at !== "string") return null;
+    const ms = Date.parse(parsed.expires_at);
+    return Number.isFinite(ms) ? ms : null;
+  } catch {
+    return null;
+  }
+}
+
+export function isSettingLockActive(key: string): boolean {
+  const value = getSetting(key);
+  const expiresMs = settingLockExpiresMs(value);
+  return expiresMs !== null && expiresMs > Date.now();
+}
+
+export function acquireSettingLock(key: string, ttlMs: number): SettingLock | null {
+  const db = openWrite();
+  if (!db) return null;
+  try {
+    const nowMs = Date.now();
+    const value = JSON.stringify({
+      token: randomUUID(),
+      acquired_at: new Date(nowMs).toISOString(),
+      expires_at: new Date(nowMs + ttlMs).toISOString(),
+    });
+    const select = db.prepare("SELECT value FROM app_settings WHERE key = ?");
+    const upsert = db.prepare(
+      "INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    );
+    const acquire = db.transaction(() => {
+      const row = select.get(key) as { value: string | null } | undefined;
+      const expiresMs = settingLockExpiresMs(row?.value ?? null);
+      if (expiresMs !== null && expiresMs > nowMs) return false;
+      upsert.run(key, value);
+      return true;
+    });
+    return (acquire.immediate() as boolean) ? { key, value } : null;
+  } catch {
+    return null;
+  } finally {
+    db.close();
+  }
+}
+
+export function releaseSettingLock(lock: SettingLock): void {
+  const db = openWrite();
+  if (!db) return;
+  try {
+    db.prepare("DELETE FROM app_settings WHERE key = ? AND value = ?").run(
+      lock.key,
+      lock.value
+    );
+  } finally {
+    db.close();
+  }
 }
 
 export function setSetting(key: string, value: string): void {

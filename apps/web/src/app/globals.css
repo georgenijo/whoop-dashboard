@@ -376,6 +376,11 @@ body {
   font-family: var(--font-sans); font-size: 10px; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.14em; color: var(--ai);
 }
+.ai-refreshing {
+  font-family: var(--font-mono); font-size: 10px; color: var(--fg-2);
+  padding: 3px 7px; border: 1px solid rgba(123,97,255,0.24);
+  border-radius: var(--radius-pill); background: rgba(123,97,255,0.08);
+}
 .ai-when { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--fg-3); }
 .ai-card h3 {
   font-family: var(--font-sans); font-size: 10.5px; font-weight: 600;

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Daily cron job: fetch Whoop data, sync to SQLite, generate AI insight."""
+"""Daily cron job: fetch Whoop data and sync to SQLite."""
 
 import concurrent.futures
 import json
@@ -21,7 +21,6 @@ from sync.daily_summary import compute_daily_summary
 from whoop.auth import get_valid_token
 from whoop.client import WhoopClient
 from whoop.db import DB_PATH, init_db, sync_all
-from whoop.insights import generate_insight
 
 
 def _parse_record_date(record: dict, field: str) -> str | None:
@@ -175,14 +174,6 @@ def main():
         finally:
             details["summary_ms"] = _elapsed_ms(summary_started)
         print(f"Computed daily_summary for {summary_count} dates")
-
-        print("Generating AI insight...")
-        insight_started = time.perf_counter()
-        try:
-            insight = generate_insight(30)
-        finally:
-            details["insight_ms"] = _elapsed_ms(insight_started)
-        print(f"Insight saved ({len(insight)} chars)")
     finally:
         print(json.dumps({"counts": counts, "details": details}, sort_keys=True))
 

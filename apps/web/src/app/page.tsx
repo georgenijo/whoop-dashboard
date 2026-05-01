@@ -1,7 +1,9 @@
+import { after } from "next/server";
 import RecoveryHero from "@/components/overview/RecoveryHero";
 import KPIStrip from "@/components/overview/KPIStrip";
 import RecoveryTrend from "@/components/overview/RecoveryTrend";
 import AIInsightCard from "@/components/overview/AIInsightCard";
+import AIInsightRefreshWatcher from "@/components/overview/AIInsightRefreshWatcher";
 import {
   getDailySummary,
   getOverview,
@@ -9,6 +11,11 @@ import {
   type DailySummaryRow,
   type RecoveryRow,
 } from "@/lib/db";
+import {
+  acquireInsightRegenerationLock,
+  getInsightStatus,
+  regenerateInsight,
+} from "@/lib/insights";
 import { parseDays } from "@/lib/range";
 
 export const dynamic = "force-dynamic";
@@ -35,6 +42,13 @@ export default async function OverviewPage({
     data.previousRecovery ? summaryByDate.get(data.previousRecovery.date) : undefined,
     data.previousRecovery
   );
+  const insightStatus = getInsightStatus(data.hasData);
+  const insightLock = acquireInsightRegenerationLock(insightStatus);
+  const insightRefreshing = insightStatus.isRegenerating || insightLock !== null;
+
+  if (insightLock !== null) {
+    after(() => regenerateInsight(insightLock));
+  }
 
   return (
     <>
@@ -45,8 +59,13 @@ export default async function OverviewPage({
           rhr={latestRecovery?.rhr ?? null}
           updatedAt={latestRecovery?.date ?? null}
         />
-        <AIInsightCard hasData={data.hasData} />
+        <AIInsightCard
+          hasData={data.hasData}
+          insight={insightStatus.insight}
+          refreshing={insightRefreshing}
+        />
       </div>
+      {insightStatus.isStale && insightRefreshing ? <AIInsightRefreshWatcher /> : null}
 
       <KPIStrip
         latestRecovery={latestRecovery}
