@@ -1,4 +1,5 @@
 import "server-only";
+import type { Tool, ToolResultBlockParam, ToolUseBlock } from "@anthropic-ai/sdk/resources/messages";
 import {
   getJournalRange,
   getRecoveryRange,
@@ -6,7 +7,6 @@ import {
   getStrainRange,
   getWorkoutsRange,
 } from "@/lib/db";
-import type { Tool } from "@anthropic-ai/sdk/resources/messages";
 
 export type CoachToolName =
   | "query_recovery"
@@ -26,14 +26,8 @@ type ToolSchema = Tool & {
   input_schema: {
     type: "object";
     properties: {
-      start_date: {
-        type: "string";
-        description: string;
-      };
-      end_date: {
-        type: "string";
-        description: string;
-      };
+      start_date: { type: "string"; description: string };
+      end_date: { type: "string"; description: string };
     };
     required: ["start_date", "end_date"];
     additionalProperties: false;
@@ -158,10 +152,7 @@ function parseDateRangeInput(input: unknown): DateRangeInput {
   return { start_date: startDate, end_date: endDate };
 }
 
-export async function executeTool(
-  name: string,
-  input: unknown
-): Promise<unknown> {
+export async function executeTool(name: string, input: unknown): Promise<unknown> {
   const { start_date: startDate, end_date: endDate } = parseDateRangeInput(input);
 
   switch (name) {
@@ -182,4 +173,97 @@ export async function executeTool(
         available_tools: TOOLS.map((tool) => tool.name),
       });
   }
+}
+
+export type ToolDetail = {
+  name: string;
+  input: unknown;
+  duration_ms: number;
+  rows: number | null;
+  status: "ok" | "error";
+  error?: string;
+};
+
+function toolErrorPayload(err: unknown): string {
+  if (err instanceof ToolInputError) {
+    return JSON.stringify({
+      error: err.message,
+      details: err.details,
+    });
+  }
+  return JSON.stringify({
+    error: err instanceof Error ? err.message : String(err),
+  });
+}
+
+export async function executeToolResult(
+  threadId: number,
+  toolUse: ToolUseBlock,
+  toolDetails: ToolDetail[]
+): Promise<ToolResultBlockParam> {
+  const startMs = Date.now();
+  console.info("[coach] tool_call", {
+    thread_id: threadId,
+    name: toolUse.name,
+  });
+
+  try {
+    const result = await executeTool(toolUse.name, toolUse.input);
+    const durationMs = Date.now() - startMs;
+    const rows = Array.isArray(result) ? result.length : null;
+    toolDetails.push({
+      name: toolUse.name,
+      input: toolUse.input,
+      duration_ms: durationMs,
+      rows,
+      status: "ok",
+    });
+    console.info("[coach] tool_result", {
+      thread_id: threadId,
+      name: toolUse.name,
+      duration_ms: durationMs,
+      rows,
+      status: "ok",
+    });
+    return {
+      type: "tool_result",
+      tool_use_id: toolUse.id,
+      content: JSON.stringify(result),
+    };
+  } catch (err) {
+    const durationMs = Date.now() - startMs;
+    const error = err instanceof Error ? err.message : String(err);
+    toolDetails.push({
+      name: toolUse.name,
+      input: toolUse.input,
+      duration_ms: durationMs,
+      rows: null,
+      status: "error",
+      error,
+    });
+    console.warn("[coach] tool_result", {
+      thread_id: threadId,
+      name: toolUse.name,
+      duration_ms: durationMs,
+      status: "error",
+      error,
+    });
+    return {
+      type: "tool_result",
+      tool_use_id: toolUse.id,
+      content: toolErrorPayload(err),
+      is_error: true,
+    };
+  }
+}
+
+export function chatLogToolSummaries(toolDetails: ToolDetail[]) {
+  return toolDetails.map(({ name, input, duration_ms, rows, status, error }) => ({
+    name,
+    input,
+    duration_ms,
+    rows,
+    status,
+    ...(error ? { error: error.slice(0, 200) } : {}),
+  }));
 }
