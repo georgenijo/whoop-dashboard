@@ -42,7 +42,9 @@ export default async function OverviewPage({
     data.previousRecovery ? summaryByDate.get(data.previousRecovery.date) : undefined,
     data.previousRecovery
   );
-  const insightStatus = getInsightStatus(data.hasData);
+  const hasInsightData =
+    data.latestRecovery !== null || data.latestCycle !== null || data.latestSleep !== null;
+  const insightStatus = getInsightStatus(hasInsightData);
   const insightLock = acquireInsightRegenerationLock(insightStatus);
   const insightRefreshing = insightStatus.isRegenerating || insightLock !== null;
 
@@ -60,7 +62,7 @@ export default async function OverviewPage({
           updatedAt={latestRecovery?.date ?? null}
         />
         <AIInsightCard
-          hasData={data.hasData}
+          hasData={hasInsightData}
           insight={insightStatus.insight}
           refreshing={insightRefreshing}
         />
