@@ -875,7 +875,7 @@ body {
   font-size: 13px;
   font-weight: 600;
   color: var(--fg-1);
-  margin: 12px 0 4px;
+  margin: 10px 0 2px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -883,17 +883,41 @@ body {
   font-size: 13px;
   font-weight: 600;
   color: var(--fg-1);
-  margin: 8px 0 4px;
+  margin: 8px 0 2px;
 }
-.prose-coach ul {
-  padding-left: 16px;
-  margin: 4px 0;
+.prose-coach ul,
+.prose-coach ol {
+  padding-left: 18px;
+  margin: 2px 0;
 }
 .prose-coach li {
-  margin: 3px 0;
+  margin: 1px 0;
+}
+.prose-coach li > p {
+  margin: 0;
 }
 .prose-coach p {
-  margin: 6px 0;
+  margin: 4px 0;
+}
+.prose-coach hr {
+  border: 0;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  margin: 8px 0;
+}
+.prose-coach table {
+  margin: 4px 0;
+  border-collapse: collapse;
+}
+.prose-coach th,
+.prose-coach td {
+  padding: 2px 12px 2px 0;
+  text-align: left;
+}
+.prose-coach > *:first-child {
+  margin-top: 0;
+}
+.prose-coach > *:last-child {
+  margin-bottom: 0;
 }
 .prose-coach strong {
   color: var(--fg-0);
