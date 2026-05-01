@@ -7,6 +7,8 @@ import type {
   TextBlock,
   ToolUseBlock,
 } from "@anthropic-ai/sdk/resources/messages";
+
+const CACHE_EPHEMERAL = { type: "ephemeral" } as const;
 import { type ChatMessageInsert } from "@/lib/db";
 import { COACH_MODEL, buildSystemPrompt } from "./prompts";
 import { TOOLS, executeToolResult, type ToolDetail } from "./tools";
@@ -49,6 +51,30 @@ export function textFromContent(content: ContentBlock[]): string {
     .map((block) => block.text)
     .join("")
     .trim();
+}
+
+function withCacheBreakpoint(messages: MessageParam[]): MessageParam[] {
+  if (messages.length === 0) return messages;
+  const out = messages.slice();
+  const last = out[out.length - 1];
+  if (typeof last.content === "string") {
+    out[out.length - 1] = {
+      ...last,
+      content: [
+        { type: "text", text: last.content, cache_control: CACHE_EPHEMERAL },
+      ],
+    };
+    return out;
+  }
+  if (!Array.isArray(last.content) || last.content.length === 0) return out;
+  const blocks = last.content.slice() as ContentBlockParam[];
+  const tail = blocks[blocks.length - 1];
+  blocks[blocks.length - 1] = {
+    ...tail,
+    cache_control: CACHE_EPHEMERAL,
+  } as ContentBlockParam;
+  out[out.length - 1] = { ...last, content: blocks };
+  return out;
 }
 
 function addUsageTotals(
@@ -96,7 +122,7 @@ export async function runAnthropicSdk(
     tools: TOOLS,
     max_tokens: MAX_OUTPUT_TOKENS,
     system: buildSystemPrompt(),
-    messages: conversation,
+    messages: withCacheBreakpoint(conversation),
   });
   addUsageTotals(usage, response.usage);
   console.info("[coach] model_response", {
