@@ -153,17 +153,19 @@ export function getOverview(days = 30): Overview {
   const strainTrend = getStrainTrend(days);
   const sleepTrend = getSleepTrend(days);
   const latestRecovery = getLatestRecovery();
+  const latestCycle = getLatestCycle();
+  const latestSleep = getLatestSleep();
   return {
     latestRecovery,
     previousRecovery: getPreviousRecovery(),
-    latestCycle: getLatestCycle(),
+    latestCycle,
     previousCycle: getPreviousCycle(),
-    latestSleep: getLatestSleep(),
+    latestSleep,
     previousSleep: getPreviousSleep(),
     recoveryTrend,
     strainTrend,
     sleepTrend,
-    hasData: !!latestRecovery,
+    hasData: Boolean(latestRecovery || latestCycle || latestSleep),
   };
 }
 
@@ -186,10 +188,16 @@ export function getHealthContext(days = 30): string {
         `  ${r.date}: Recovery=${r.recovery_score?.toFixed(0)}%, HRV=${r.hrv?.toFixed(1)}ms, RHR=${r.rhr?.toFixed(0)}bpm${spo2}${temp}`
       );
     }
-    const scores = recovery.map((r) => r.recovery_score ?? 0).filter(Boolean);
-    const hrvs = recovery.map((r) => r.hrv ?? 0).filter(Boolean);
-    const rhrs = recovery.map((r) => r.rhr ?? 0).filter(Boolean);
-    if (scores.length)
+    const scores = recovery
+      .map((r) => r.recovery_score)
+      .filter((v): v is number => v != null);
+    const hrvs = recovery
+      .map((r) => r.hrv)
+      .filter((v): v is number => v != null);
+    const rhrs = recovery
+      .map((r) => r.rhr)
+      .filter((v): v is number => v != null);
+    if (scores.length && hrvs.length && rhrs.length)
       lines.push(
         `\n  Averages: Recovery=${(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)}%, HRV=${(hrvs.reduce((a, b) => a + b, 0) / hrvs.length).toFixed(1)}ms, RHR=${(rhrs.reduce((a, b) => a + b, 0) / rhrs.length).toFixed(1)}bpm`
       );
@@ -220,7 +228,7 @@ export function getHealthContext(days = 30): string {
   const sleep = safeQuery((db) => {
     if (!hasTable(db, "sleep")) return [] as FullSleepRow[];
     return db.prepare(
-      "SELECT date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms, sleep_need_ms, performance, efficiency, disturbances, respiratory_rate FROM sleep WHERE nap = 0 ORDER BY date DESC LIMIT ?"
+      "SELECT date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms, sleep_need_ms, performance, efficiency, disturbances, respiratory_rate FROM sleep WHERE COALESCE(nap, 0) = 0 ORDER BY date DESC LIMIT ?"
     ).all(days) as FullSleepRow[];
   }) ?? [];
 

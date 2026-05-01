@@ -16,6 +16,7 @@ export function openWrite(): DB | null {
   if (!existsSync(p)) return null;
   try {
     const db = new Database(p, { fileMustExist: true });
+    db.pragma("foreign_keys = ON");
     db.pragma("journal_mode = WAL");
     db.exec(`
       CREATE TABLE IF NOT EXISTS daily_summary (
