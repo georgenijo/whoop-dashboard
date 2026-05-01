@@ -137,16 +137,6 @@ export function openWrite(): DB | null {
       db.exec("ALTER TABLE chat_messages ADD COLUMN thread_id INTEGER REFERENCES chat_threads(id)");
     }
     db.exec("CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id, id)");
-    const orphan = db
-      .prepare("SELECT COUNT(*) AS n FROM chat_messages WHERE thread_id IS NULL")
-      .get() as { n: number } | undefined;
-    if (orphan && orphan.n > 0) {
-      db.exec(`
-        INSERT OR IGNORE INTO chat_threads (id, user_id, title)
-        VALUES (1, 1, 'Legacy chat');
-        UPDATE chat_messages SET thread_id = 1 WHERE thread_id IS NULL;
-      `);
-    }
     return db;
   } catch {
     return null;
