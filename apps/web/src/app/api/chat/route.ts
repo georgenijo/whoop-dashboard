@@ -27,6 +27,7 @@ type ChatMessageInput = { role: "user" | "assistant"; content: string };
 
 type ToolDetail = {
   name: string;
+  input: unknown;
   duration_ms: number;
   rows: number | null;
   status: "ok" | "error";
@@ -111,6 +112,7 @@ async function executeToolResult(
     const rows = Array.isArray(result) ? result.length : null;
     toolDetails.push({
       name: toolUse.name,
+      input: toolUse.input,
       duration_ms: durationMs,
       rows,
       status: "ok",
@@ -132,6 +134,7 @@ async function executeToolResult(
     const error = err instanceof Error ? err.message : String(err);
     toolDetails.push({
       name: toolUse.name,
+      input: toolUse.input,
       duration_ms: durationMs,
       rows: null,
       status: "error",
@@ -172,8 +175,9 @@ function addUsageTotals(
 }
 
 function chatLogToolSummaries(toolDetails: ToolDetail[]) {
-  return toolDetails.map(({ name, duration_ms, rows, status, error }) => ({
+  return toolDetails.map(({ name, input, duration_ms, rows, status, error }) => ({
     name,
+    input,
     duration_ms,
     rows,
     status,
