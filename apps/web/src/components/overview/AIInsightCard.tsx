@@ -1,5 +1,5 @@
 import { marked } from "marked";
-import { getLatestInsight } from "@/lib/db";
+import type { InsightRow } from "@/lib/db";
 
 function formatInsightDate(date: string): string {
   const todayStr = new Date().toLocaleDateString("en-CA");
@@ -11,14 +11,21 @@ function formatInsightDate(date: string): string {
   return `${diff}d ago`;
 }
 
-export default function AIInsightCard({ hasData }: { hasData: boolean }) {
-  const insight = getLatestInsight();
-
+export default function AIInsightCard({
+  hasData,
+  insight,
+  refreshing,
+}: {
+  hasData: boolean;
+  insight: InsightRow | null;
+  refreshing: boolean;
+}) {
   return (
     <div className="ai-card" aria-label="AI insight">
       <div className="ai-head">
         <div className="ai-dot" aria-hidden />
         <span className="ai-tag">AI Insight</span>
+        {refreshing ? <span className="ai-refreshing">Refreshing...</span> : null}
         <span className="ai-when">
           {insight ? formatInsightDate(insight.date) : hasData ? "Not yet generated" : "No data"}
         </span>
@@ -30,10 +37,7 @@ export default function AIInsightCard({ hasData }: { hasData: boolean }) {
         />
       ) : hasData ? (
         <>
-          <p>No insight generated yet for today.</p>
-          <p style={{ marginTop: 8, color: "var(--fg-3)", fontSize: 12 }}>
-            Run <code style={{ background: "rgba(123,97,255,0.12)", padding: "1px 6px", borderRadius: 4 }}>python sync/daily_sync.py</code> from the repo root to generate one.
-          </p>
+          <p>{refreshing ? "Generating your latest insight..." : "No insight generated yet."}</p>
         </>
       ) : (
         <>
