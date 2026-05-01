@@ -112,9 +112,7 @@ function DetailMetric({ label, value }: { label: string; value: string | number 
 function LogRow({ log }: { log: ChatLogRow }) {
   const [open, setOpen] = useState(false);
   const details = useMemo(() => parseDetails(log.details), [log.details]);
-  const hasDetails = Boolean(
-    details && ((details.tools?.length ?? 0) > 0 || details.full_prompt)
-  );
+  const hasDetails = details !== null;
   const dur = fmtDuration(log.duration_ms);
   const usage = details?.usage;
 

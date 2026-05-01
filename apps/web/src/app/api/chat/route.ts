@@ -412,6 +412,7 @@ export async function POST(req: Request) {
 
     const buildDetails = () =>
       JSON.stringify({
+        full_prompt: lastUser,
         prompt_chars: lastUser.length,
         iterations: detailState.iterations,
         tools: chatLogToolSummaries(toolDetails),
