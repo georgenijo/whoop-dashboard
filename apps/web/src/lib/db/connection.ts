@@ -14,8 +14,9 @@ export function dbPath(): string {
 export function openWrite(): DB | null {
   const p = dbPath();
   if (!existsSync(p)) return null;
+  let db: DB | null = null;
   try {
-    const db = new Database(p, { fileMustExist: true });
+    db = new Database(p, { fileMustExist: true });
     db.pragma("foreign_keys = ON");
     db.pragma("journal_mode = WAL");
     db.exec(`
@@ -139,6 +140,7 @@ export function openWrite(): DB | null {
     db.exec("CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id, id)");
     return db;
   } catch {
+    db?.close();
     return null;
   }
 }
