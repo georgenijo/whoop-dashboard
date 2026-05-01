@@ -203,6 +203,8 @@ export function safeWriteQuery<T>(fn: (db: DB) => T): T | null {
   if (!db) return null;
   try {
     return fn(db);
+  } catch {
+    return null;
   } finally {
     db.close();
   }

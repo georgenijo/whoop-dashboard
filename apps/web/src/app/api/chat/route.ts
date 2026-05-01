@@ -17,11 +17,16 @@ async function parseChatRequest(req: Request): Promise<{
   requestedThreadId: number | null;
   days: number | null;
 }> {
-  const body = (await req.json()) as {
+  let body: {
     messages: ChatMessageInput[];
     days?: number | null;
     thread_id?: number | string | null;
   };
+  try {
+    body = await req.json();
+  } catch {
+    throw new Response("Error: request body must be valid JSON", { status: 400 });
+  }
 
   if (!Array.isArray(body.messages) || body.messages.length === 0) {
     throw new Response("Error: messages must include at least one item", { status: 400 });

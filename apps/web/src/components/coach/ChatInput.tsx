@@ -1,6 +1,6 @@
 "use client";
 
-import type { KeyboardEvent, RefObject } from "react";
+import { useEffect, type KeyboardEvent, type RefObject } from "react";
 
 type Props = {
   input: string;
@@ -19,6 +19,12 @@ export default function ChatInput({
   onSubmit,
   onKeyDown,
 }: Props) {
+  useEffect(() => {
+    if (input === "" && inputRef.current) {
+      inputRef.current.style.height = "auto";
+    }
+  }, [input, inputRef]);
+
   return (
     <div className="coach-composer">
       <div className="coach-input-shell">
@@ -41,6 +47,7 @@ export default function ChatInput({
           className="coach-send"
           onClick={onSubmit}
           disabled={!input.trim() || loading}
+          aria-label="Send message"
         >
           ↑
         </button>
