@@ -135,19 +135,12 @@ async function streamMessage(
     signal: options.signal,
     headers: { "anthropic-beta": "extended-cache-ttl-2025-04-11" },
   });
+  const paramsJson = JSON.stringify(params);
   console.info("[coach] stream_request_debug", {
     thread_id: threadId,
-    system_blocks: Array.isArray(params.system) ? params.system.length : "string",
-    system_has_cache: Array.isArray(params.system)
-      ? params.system.some((b) => "cache_control" in b)
-      : false,
-    tool_count: params.tools?.length ?? 0,
-    tools_with_cache: (params.tools ?? []).filter((t) => "cache_control" in t).length,
-    last_msg_has_cache: (() => {
-      const last = params.messages[params.messages.length - 1];
-      if (!last || typeof last.content === "string") return false;
-      return Array.isArray(last.content) && last.content.some((b) => typeof b === "object" && b !== null && "cache_control" in b);
-    })(),
+    body_bytes: paramsJson.length,
+    cache_control_count: (paramsJson.match(/cache_control/g) ?? []).length,
+    ttl_count: (paramsJson.match(/"ttl":/g) ?? []).length,
   });
   for await (const event of stream) {
     emitStreamProgress(event, options);
