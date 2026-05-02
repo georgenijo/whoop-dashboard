@@ -131,7 +131,10 @@ async function streamMessage(
   usage: Usage,
   options: RunAnthropicOptions
 ): Promise<Message> {
-  const stream = client.messages.stream(params, { signal: options.signal });
+  const stream = client.messages.stream(params, {
+    signal: options.signal,
+    headers: { "anthropic-beta": "extended-cache-ttl-2025-04-11" },
+  });
   for await (const event of stream) {
     emitStreamProgress(event, options);
   }
