@@ -17,7 +17,7 @@ export function buildSystemPrompt(): TextBlockParam[] {
     {
       type: "text",
       text: DEFAULT_SYSTEM_PROMPT,
-      cache_control: { type: "ephemeral" },
+      cache_control: { type: "ephemeral", ttl: "1h" },
     },
   ];
 }
