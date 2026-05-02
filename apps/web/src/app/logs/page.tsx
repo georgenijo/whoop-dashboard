@@ -1,5 +1,6 @@
 import { getChatLogs, getRouteLogs, getSyncLogs } from "@/lib/db";
 import ChatLogsTable from "./ChatLogsTable";
+import CollapsibleCard from "./CollapsibleCard";
 import RouteLogsTable from "./RouteLogsTable";
 import SyncLogsTable from "./SyncLogsTable";
 
@@ -71,12 +72,7 @@ export default function LogsPage() {
         </div>
       </div>
 
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        <div className="card-head" style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-          <div className="card-title">Chat request log</div>
-          <span className="card-sub">{logs.length} entries · most recent first</span>
-        </div>
-
+      <CollapsibleCard title="Chat request log" sub={`${logs.length} entries · most recent first`} defaultOpen={false}>
         {logs.length === 0 ? (
           <div className="empty-state">
             <div className="title">No chat requests yet</div>
@@ -85,14 +81,9 @@ export default function LogsPage() {
         ) : (
           <ChatLogsTable logs={logs} />
         )}
-      </div>
+      </CollapsibleCard>
 
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        <div className="card-head" style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-          <div className="card-title">Sync history</div>
-          <span className="card-sub">{syncLogs.length} syncs · most recent first</span>
-        </div>
-
+      <CollapsibleCard title="Sync history" sub={`${syncLogs.length} syncs · most recent first`} defaultOpen>
         {syncLogs.length === 0 ? (
           <div className="empty-state">
             <div className="title">No syncs yet</div>
@@ -101,14 +92,9 @@ export default function LogsPage() {
         ) : (
           <SyncLogsTable logs={syncLogs} />
         )}
-      </div>
+      </CollapsibleCard>
 
-      <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        <div className="card-head" style={{ padding: "16px 20px", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-          <div className="card-title">Page render history</div>
-          <span className="card-sub">{routeLogs.length} renders · most recent first</span>
-        </div>
-
+      <CollapsibleCard title="Page render history" sub={`${routeLogs.length} renders · most recent first`} defaultOpen>
         {routeLogs.length === 0 ? (
           <div className="empty-state">
             <div className="title">No page renders yet</div>
@@ -117,7 +103,7 @@ export default function LogsPage() {
         ) : (
           <RouteLogsTable logs={routeLogs} />
         )}
-      </div>
+      </CollapsibleCard>
     </div>
   );
 }
