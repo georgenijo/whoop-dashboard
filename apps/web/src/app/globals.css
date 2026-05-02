@@ -715,7 +715,6 @@ body {
   font-family: var(--font-sans);
   font-size: 14px;
   line-height: 1.55;
-  white-space: pre-wrap;
   overflow-wrap: break-word;
 }
 
@@ -723,6 +722,7 @@ body {
   border-radius: 14px 14px 4px 14px;
   background: #7b61ff;
   color: #fff;
+  white-space: pre-wrap;
 }
 
 .coach-message.assistant {
