@@ -26,7 +26,7 @@ export default function CollapsibleCard({ title, sub, defaultOpen, children }: C
           marginBottom: 0,
           padding: "16px 20px",
           border: 0,
-          borderBottom: "1px solid rgba(255,255,255,0.05)",
+          borderBottom: open ? "1px solid rgba(255,255,255,0.05)" : 0,
           background: "transparent",
           color: "inherit",
           cursor: "pointer",
