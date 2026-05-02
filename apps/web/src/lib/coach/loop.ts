@@ -11,6 +11,8 @@ import { type ChatMessageInsert } from "@/lib/db";
 import { COACH_MODEL, buildSystemPrompt } from "./prompts";
 import { TOOLS, executeToolResult, type ToolDetail } from "./tools";
 
+const CACHE_EPHEMERAL = { type: "ephemeral", ttl: "1h" } as const;
+
 export const MAX_TOOL_ITERATIONS = 8;
 export const MAX_OUTPUT_TOKENS = 16384;
 
@@ -51,6 +53,30 @@ export function textFromContent(content: ContentBlock[]): string {
     .trim();
 }
 
+function withCacheBreakpoint(messages: MessageParam[]): MessageParam[] {
+  if (messages.length === 0) return messages;
+  const out = messages.slice();
+  const last = out[out.length - 1];
+  if (typeof last.content === "string") {
+    out[out.length - 1] = {
+      ...last,
+      content: [
+        { type: "text", text: last.content, cache_control: CACHE_EPHEMERAL },
+      ],
+    };
+    return out;
+  }
+  if (!Array.isArray(last.content) || last.content.length === 0) return out;
+  const blocks = last.content.slice() as ContentBlockParam[];
+  const tail = blocks[blocks.length - 1];
+  blocks[blocks.length - 1] = {
+    ...tail,
+    cache_control: CACHE_EPHEMERAL,
+  } as ContentBlockParam;
+  out[out.length - 1] = { ...last, content: blocks };
+  return out;
+}
+
 function addUsageTotals(
   usage: Usage,
   responseUsage: {
@@ -82,6 +108,7 @@ export async function runAnthropicSdk(
   }
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const systemPrompt = buildSystemPrompt();
   const messagesToPersist: ChatMessageInsert[] = [
     {
       role: "user",
@@ -95,8 +122,8 @@ export async function runAnthropicSdk(
     thinking: { type: "adaptive" },
     tools: TOOLS,
     max_tokens: MAX_OUTPUT_TOKENS,
-    system: buildSystemPrompt(),
-    messages: conversation,
+    system: systemPrompt,
+    messages: withCacheBreakpoint(conversation),
   });
   addUsageTotals(usage, response.usage);
   console.info("[coach] model_response", {
@@ -104,6 +131,8 @@ export async function runAnthropicSdk(
     stop_reason: response.stop_reason,
     input_tokens: response.usage.input_tokens,
     output_tokens: response.usage.output_tokens,
+    cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? 0,
+    cache_read_input_tokens: response.usage.cache_read_input_tokens ?? 0,
   });
 
   let assistantText = textFromContent(response.content);
@@ -149,8 +178,8 @@ export async function runAnthropicSdk(
       thinking: { type: "adaptive" },
       tools: TOOLS,
       max_tokens: MAX_OUTPUT_TOKENS,
-      system: buildSystemPrompt(),
-      messages: conversation,
+      system: systemPrompt,
+      messages: withCacheBreakpoint(conversation),
     });
     addUsageTotals(usage, response.usage);
     console.info("[coach] model_response", {
@@ -158,6 +187,8 @@ export async function runAnthropicSdk(
       stop_reason: response.stop_reason,
       input_tokens: response.usage.input_tokens,
       output_tokens: response.usage.output_tokens,
+      cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? 0,
+      cache_read_input_tokens: response.usage.cache_read_input_tokens ?? 0,
     });
 
     assistantText = textFromContent(response.content);
