@@ -4,6 +4,7 @@ import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { addChatLog, addChatMessages, setChatThreadTitle } from "@/lib/db";
 import {
   type DetailState,
+  type RunAnthropicOptions,
   type Usage,
   runAnthropicSdk,
   textFromContent,
@@ -15,7 +16,8 @@ export async function runAndPersistCoachTurn(
   thread: { id: number },
   lastUser: string,
   conversation: MessageParam[],
-  days: number | null
+  days: number | null,
+  options: RunAnthropicOptions = {}
 ): Promise<string> {
   const startedAt = new Date().toISOString();
   const startMs = Date.now();
@@ -47,7 +49,8 @@ export async function runAndPersistCoachTurn(
       conversation,
       toolDetails,
       usage,
-      detailState
+      detailState,
+      options
     );
     detailState.iterations = result.iterations;
     addChatMessages(thread.id, result.messages);

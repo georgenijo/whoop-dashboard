@@ -185,6 +185,17 @@ export type ToolDetail = {
   error?: string;
 };
 
+export type ToolProgressHandlers = {
+  onToolUseStart?: (event: { name: string; input: unknown }) => void;
+  onToolUseEnd?: (event: {
+    name: string;
+    duration_ms: number;
+    rows: number | null;
+    status: "ok" | "error";
+    error?: string;
+  }) => void;
+};
+
 function toolErrorPayload(err: unknown): string {
   if (err instanceof ToolInputError) {
     return JSON.stringify({
@@ -200,43 +211,32 @@ function toolErrorPayload(err: unknown): string {
 export async function executeToolResult(
   threadId: number,
   toolUse: ToolUseBlock,
-  toolDetails: ToolDetail[]
+  toolDetails: ToolDetail[],
+  progress?: ToolProgressHandlers
 ): Promise<ToolResultBlockParam> {
   const startMs = Date.now();
+  progress?.onToolUseStart?.({ name: toolUse.name, input: toolUse.input });
   console.info("[coach] tool_call", {
     thread_id: threadId,
     name: toolUse.name,
   });
 
+  let result: unknown;
   try {
-    const result = await executeTool(toolUse.name, toolUse.input);
-    const durationMs = Date.now() - startMs;
-    const rows = Array.isArray(result) ? result.length : null;
-    toolDetails.push({
-      name: toolUse.name,
-      input: toolUse.input,
-      duration_ms: durationMs,
-      rows,
-      status: "ok",
-    });
-    console.info("[coach] tool_result", {
-      thread_id: threadId,
-      name: toolUse.name,
-      duration_ms: durationMs,
-      rows,
-      status: "ok",
-    });
-    return {
-      type: "tool_result",
-      tool_use_id: toolUse.id,
-      content: JSON.stringify(result),
-    };
+    result = await executeTool(toolUse.name, toolUse.input);
   } catch (err) {
     const durationMs = Date.now() - startMs;
     const error = err instanceof Error ? err.message : String(err);
     toolDetails.push({
       name: toolUse.name,
       input: toolUse.input,
+      duration_ms: durationMs,
+      rows: null,
+      status: "error",
+      error,
+    });
+    progress?.onToolUseEnd?.({
+      name: toolUse.name,
       duration_ms: durationMs,
       rows: null,
       status: "error",
@@ -256,6 +256,34 @@ export async function executeToolResult(
       is_error: true,
     };
   }
+
+  const durationMs = Date.now() - startMs;
+  const rows = Array.isArray(result) ? result.length : null;
+  toolDetails.push({
+    name: toolUse.name,
+    input: toolUse.input,
+    duration_ms: durationMs,
+    rows,
+    status: "ok",
+  });
+  progress?.onToolUseEnd?.({
+    name: toolUse.name,
+    duration_ms: durationMs,
+    rows,
+    status: "ok",
+  });
+  console.info("[coach] tool_result", {
+    thread_id: threadId,
+    name: toolUse.name,
+    duration_ms: durationMs,
+    rows,
+    status: "ok",
+  });
+  return {
+    type: "tool_result",
+    tool_use_id: toolUse.id,
+    content: JSON.stringify(result),
+  };
 }
 
 export function chatLogToolSummaries(toolDetails: ToolDetail[]) {

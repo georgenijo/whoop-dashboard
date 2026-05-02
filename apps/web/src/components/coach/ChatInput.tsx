@@ -6,6 +6,7 @@ type Props = {
   input: string;
   setInput: (value: string) => void;
   loading: boolean;
+  progressLabel?: string | null;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   onSubmit: () => void;
   onKeyDown: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
@@ -15,6 +16,7 @@ export default function ChatInput({
   input,
   setInput,
   loading,
+  progressLabel,
   inputRef,
   onSubmit,
   onKeyDown,
@@ -54,7 +56,7 @@ export default function ChatInput({
       </div>
       <div className="coach-footer">
         <span>Enter to send · Shift+Enter for newline</span>
-        <span>{loading ? "Thinking..." : " "}</span>
+        <span>{loading ? progressLabel ?? "Thinking..." : " "}</span>
       </div>
     </div>
   );
