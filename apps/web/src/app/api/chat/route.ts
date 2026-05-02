@@ -5,6 +5,12 @@ import { requireAuth } from "@/lib/auth";
 import { runAndPersistCoachTurn, titleChatThread } from "@/lib/coach/persistence";
 
 type ChatMessageInput = { role: "user" | "assistant"; content: string };
+type ChatSseEvent =
+  | "tool_use_start"
+  | "tool_use_end"
+  | "text_delta"
+  | "done"
+  | "error";
 
 function parseThreadId(value: unknown): number | null {
   if (value === undefined || value === null || value === "") return null;
@@ -54,11 +60,17 @@ async function parseChatRequest(req: Request): Promise<{
   };
 }
 
-function responseWithThreadId(body: BodyInit | null, threadId: number, status = 200): Response {
+function encodeSse(event: ChatSseEvent, data: unknown): Uint8Array {
+  const encoder = new TextEncoder();
+  return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
+function chatStreamResponse(body: BodyInit, threadId: number): Response {
   return new Response(body, {
-    status,
     headers: {
-      "Content-Type": "text/plain; charset=utf-8",
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-transform",
+      "Connection": "keep-alive",
       "x-thread-id": String(threadId),
     },
   });
@@ -83,18 +95,73 @@ export async function POST(req: Request) {
       !conversation.some((message) => message.role === "assistant");
     conversation.push({ role: "user", content: lastUser });
 
-    try {
-      const reply = await runAndPersistCoachTurn(thread, lastUser, conversation, days);
-      if (shouldAutoTitle) {
-        after(() => {
-          void titleChatThread(thread.id, lastUser);
-        });
-      }
-      return responseWithThreadId(reply, thread.id);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return responseWithThreadId(`Error: ${msg}`, thread.id, 500);
-    }
+    const abortController = new AbortController();
+    const relayAbort = () => abortController.abort();
+    req.signal.addEventListener("abort", relayAbort, { once: true });
+
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const send = (event: ChatSseEvent, data: unknown) => {
+          if (!abortController.signal.aborted) {
+            controller.enqueue(encodeSse(event, data));
+          }
+        };
+        const close = () => {
+          try {
+            controller.close();
+          } catch {
+            // The client may have already closed the connection.
+          }
+        };
+
+        try {
+          const reply = await runAndPersistCoachTurn(thread, lastUser, conversation, days, {
+            signal: abortController.signal,
+            onTextDelta: (text) => send("text_delta", { text }),
+            onToolUseStart: ({ name, input }) => send("tool_use_start", { name, input }),
+            onToolUseEnd: ({ name, duration_ms, rows, status, error }) =>
+              send("tool_use_end", {
+                name,
+                duration_ms,
+                rows,
+                status,
+                ...(error ? { error } : {}),
+              }),
+          });
+
+          if (abortController.signal.aborted) {
+            close();
+            return;
+          }
+
+          send("done", { reply });
+          if (shouldAutoTitle) {
+            after(() => {
+              void titleChatThread(thread.id, lastUser);
+            });
+          }
+          close();
+        } catch (err) {
+          if (!abortController.signal.aborted) {
+            const msg = err instanceof Error ? err.message : String(err);
+            try {
+              send("error", { message: msg });
+            } catch {
+              // Nothing useful to send once the SSE response is gone.
+            }
+          }
+          close();
+        } finally {
+          req.signal.removeEventListener("abort", relayAbort);
+        }
+      },
+      cancel() {
+        abortController.abort();
+        req.signal.removeEventListener("abort", relayAbort);
+      },
+    });
+
+    return chatStreamResponse(stream, thread.id);
   } catch (err) {
     if (err instanceof Response) return err;
     throw err;

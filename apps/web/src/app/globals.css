@@ -757,6 +757,46 @@ body {
   color: var(--fg-3);
 }
 
+.coach-tool-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(123, 97, 255, 0.28);
+  background: rgba(123, 97, 255, 0.12);
+  color: var(--fg-1);
+  font-size: 12px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.coach-tool-progress.done {
+  border-color: rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
+  color: var(--fg-2);
+}
+
+.coach-tool-progress-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #7b61ff;
+  flex-shrink: 0;
+  animation: coach-thinking-dot 1.2s ease-in-out infinite;
+}
+
+.coach-tool-progress.done .coach-tool-progress-dot {
+  animation: none;
+  opacity: 0.75;
+}
+
+.prose-coach + .coach-tool-progress {
+  margin-top: 8px;
+}
+
 .coach-empty {
   min-height: 100%;
   display: flex;

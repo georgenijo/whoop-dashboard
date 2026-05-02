@@ -3,13 +3,16 @@ import Anthropic from "@anthropic-ai/sdk";
 import type {
   ContentBlock,
   ContentBlockParam,
+  Message,
+  MessageCreateParamsBase,
   MessageParam,
+  MessageStreamEvent,
   TextBlock,
   ToolUseBlock,
 } from "@anthropic-ai/sdk/resources/messages";
 import { type ChatMessageInsert } from "@/lib/db";
 import { COACH_MODEL, buildSystemPrompt } from "./prompts";
-import { TOOLS, executeToolResult, type ToolDetail } from "./tools";
+import { TOOLS, executeToolResult, type ToolDetail, type ToolProgressHandlers } from "./tools";
 
 const CACHE_EPHEMERAL = { type: "ephemeral", ttl: "1h" } as const;
 
@@ -26,6 +29,14 @@ export type Usage = {
 
 export type DetailState = {
   iterations: number;
+};
+
+export type CoachStreamHandlers = ToolProgressHandlers & {
+  onTextDelta?: (text: string) => void;
+};
+
+export type RunAnthropicOptions = CoachStreamHandlers & {
+  signal?: AbortSignal;
 };
 
 function isToolUseBlock(block: unknown): block is ToolUseBlock {
@@ -95,13 +106,57 @@ function addUsageTotals(
   usage.calls += 1;
 }
 
+function emitStreamProgress(
+  event: MessageStreamEvent,
+  handlers?: CoachStreamHandlers
+): void {
+  if (event.type !== "content_block_delta") return;
+
+  switch (event.delta.type) {
+    case "text_delta":
+      handlers?.onTextDelta?.(event.delta.text);
+      break;
+    case "thinking_delta":
+    case "signature_delta":
+    case "input_json_delta":
+    case "citations_delta":
+      break;
+  }
+}
+
+async function streamMessage(
+  client: Anthropic,
+  params: MessageCreateParamsBase,
+  threadId: number,
+  usage: Usage,
+  options: RunAnthropicOptions
+): Promise<Message> {
+  const stream = client.messages.stream(params, { signal: options.signal });
+  for await (const event of stream) {
+    emitStreamProgress(event, options);
+  }
+
+  const response = await stream.finalMessage();
+  addUsageTotals(usage, response.usage);
+  console.info("[coach] model_response", {
+    thread_id: threadId,
+    stop_reason: response.stop_reason,
+    input_tokens: response.usage.input_tokens,
+    output_tokens: response.usage.output_tokens,
+    cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? 0,
+    cache_read_input_tokens: response.usage.cache_read_input_tokens ?? 0,
+  });
+  return response;
+}
+
 export async function runAnthropicSdk(
   threadId: number,
   newUserText: string,
   conversation: MessageParam[],
   toolDetails: ToolDetail[],
   usage: Usage,
-  detailState: DetailState
+  detailState: DetailState,
+  options: RunAnthropicOptions = {}
 ): Promise<{ reply: string; iterations: number; messages: ChatMessageInsert[] }> {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY is not configured");
@@ -120,23 +175,20 @@ export async function runAnthropicSdk(
     },
   ];
 
-  let response = await client.messages.create({
-    model: COACH_MODEL,
-    thinking: { type: "adaptive" },
-    tools: TOOLS,
-    max_tokens: MAX_OUTPUT_TOKENS,
-    system: systemPrompt,
-    messages: withCacheBreakpoint(conversation),
-  });
-  addUsageTotals(usage, response.usage);
-  console.info("[coach] model_response", {
-    thread_id: threadId,
-    stop_reason: response.stop_reason,
-    input_tokens: response.usage.input_tokens,
-    output_tokens: response.usage.output_tokens,
-    cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? 0,
-    cache_read_input_tokens: response.usage.cache_read_input_tokens ?? 0,
-  });
+  let response = await streamMessage(
+    client,
+    {
+      model: COACH_MODEL,
+      thinking: { type: "adaptive" },
+      tools: TOOLS,
+      max_tokens: MAX_OUTPUT_TOKENS,
+      system: systemPrompt,
+      messages: withCacheBreakpoint(conversation),
+    },
+    threadId,
+    usage,
+    options
+  );
 
   let assistantText = textFromContent(response.content);
   messagesToPersist.push({
@@ -164,7 +216,7 @@ export async function runAnthropicSdk(
     }
 
     const toolResults = await Promise.all(
-      toolUses.map((toolUse) => executeToolResult(threadId, toolUse, toolDetails))
+      toolUses.map((toolUse) => executeToolResult(threadId, toolUse, toolDetails, options))
     );
     messagesToPersist.push({
       role: "user",
@@ -176,23 +228,20 @@ export async function runAnthropicSdk(
       content: toolResults,
     });
 
-    response = await client.messages.create({
-      model: COACH_MODEL,
-      thinking: { type: "adaptive" },
-      tools: TOOLS,
-      max_tokens: MAX_OUTPUT_TOKENS,
-      system: systemPrompt,
-      messages: withCacheBreakpoint(conversation),
-    });
-    addUsageTotals(usage, response.usage);
-    console.info("[coach] model_response", {
-      thread_id: threadId,
-      stop_reason: response.stop_reason,
-      input_tokens: response.usage.input_tokens,
-      output_tokens: response.usage.output_tokens,
-      cache_creation_input_tokens: response.usage.cache_creation_input_tokens ?? 0,
-      cache_read_input_tokens: response.usage.cache_read_input_tokens ?? 0,
-    });
+    response = await streamMessage(
+      client,
+      {
+        model: COACH_MODEL,
+        thinking: { type: "adaptive" },
+        tools: TOOLS,
+        max_tokens: MAX_OUTPUT_TOKENS,
+        system: systemPrompt,
+        messages: withCacheBreakpoint(conversation),
+      },
+      threadId,
+      usage,
+      options
+    );
 
     assistantText = textFromContent(response.content);
     messagesToPersist.push({

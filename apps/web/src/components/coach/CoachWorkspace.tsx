@@ -37,6 +37,7 @@ export default function CoachWorkspace({
     input,
     setInput,
     loading,
+    progressLabel,
     mobileOpen,
     setMobileOpen,
     inputRef,
@@ -102,6 +103,7 @@ export default function CoachWorkspace({
             input={input}
             setInput={setInput}
             loading={loading}
+            progressLabel={progressLabel}
             inputRef={inputRef}
             onSubmit={() => void send(input)}
             onKeyDown={handleKeyDown}
