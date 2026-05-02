@@ -107,7 +107,10 @@ export async function runAnthropicSdk(
     throw new Error("ANTHROPIC_API_KEY is not configured");
   }
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    defaultHeaders: { "anthropic-beta": "extended-cache-ttl-2025-04-11" },
+  });
   const systemPrompt = buildSystemPrompt();
   const messagesToPersist: ChatMessageInsert[] = [
     {
