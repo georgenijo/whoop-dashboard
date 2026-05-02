@@ -135,13 +135,6 @@ async function streamMessage(
     signal: options.signal,
     headers: { "anthropic-beta": "extended-cache-ttl-2025-04-11" },
   });
-  const paramsJson = JSON.stringify(params);
-  console.info("[coach] stream_request_debug", {
-    thread_id: threadId,
-    body_bytes: paramsJson.length,
-    cache_control_count: (paramsJson.match(/cache_control/g) ?? []).length,
-    ttl_count: (paramsJson.match(/"ttl":/g) ?? []).length,
-  });
   for await (const event of stream) {
     emitStreamProgress(event, options);
   }
