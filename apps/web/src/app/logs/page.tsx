@@ -83,7 +83,7 @@ export default function LogsPage() {
         )}
       </CollapsibleCard>
 
-      <CollapsibleCard title="Sync history" sub={`${syncLogs.length} syncs · most recent first`} defaultOpen>
+      <CollapsibleCard title="Sync history" sub={`${syncLogs.length} syncs · most recent first`} defaultOpen={false}>
         {syncLogs.length === 0 ? (
           <div className="empty-state">
             <div className="title">No syncs yet</div>
@@ -94,7 +94,7 @@ export default function LogsPage() {
         )}
       </CollapsibleCard>
 
-      <CollapsibleCard title="Page render history" sub={`${routeLogs.length} renders · most recent first`} defaultOpen>
+      <CollapsibleCard title="Page render history" sub={`${routeLogs.length} renders · most recent first`} defaultOpen={false}>
         {routeLogs.length === 0 ? (
           <div className="empty-state">
             <div className="title">No page renders yet</div>
