@@ -217,6 +217,24 @@ function TimingBars({ steps }: { steps: TimingStep[] }) {
   );
 }
 
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      style={{
+        width: 14,
+        height: 14,
+        color: "var(--fg-3)",
+        transform: open ? "rotate(90deg)" : "rotate(0deg)",
+        transition: "transform var(--dur-base)",
+      }}
+    >
+      <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
 function LogRow({ log }: { log: SyncLogRow }) {
   const [open, setOpen] = useState(false);
   const details = useMemo(() => parseDetails(log.details), [log.details]);
@@ -253,7 +271,15 @@ function LogRow({ log }: { log: SyncLogRow }) {
 
   return (
     <>
-      <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+      <tr
+        onClick={hasDetails ? () => setOpen((value) => !value) : undefined}
+        aria-expanded={hasDetails ? open : undefined}
+        aria-controls={hasDetails ? detailsId : undefined}
+        style={{
+          borderBottom: "1px solid rgba(255,255,255,0.04)",
+          cursor: hasDetails ? "pointer" : "default",
+        }}
+      >
         <td style={{ padding: "10px 16px", color: "var(--fg-2)", fontFamily: "var(--font-mono)", fontSize: 12, whiteSpace: "nowrap" }}>
           {fmtTime(log.started_at)}
         </td>
@@ -265,33 +291,15 @@ function LogRow({ log }: { log: SyncLogRow }) {
         <td style={cell}>{log.workouts_count ?? "-"}</td>
         <td style={cell}>{log.source ?? "-"}</td>
         <td style={{ padding: "10px 16px", textAlign: "center" }}>
-          {hasDetails ? (
-            <button
-              type="button"
-              aria-expanded={open}
-              aria-controls={detailsId}
-              aria-label={`${open ? "Hide" : "Show"} sync timing details for ${fmtTime(log.started_at)}`}
-              onClick={() => setOpen((value) => !value)}
-              style={{
-                background: "transparent",
-                border: 0,
-                borderRadius: 4,
-                color: "inherit",
-                cursor: "pointer",
-                font: "inherit",
-                padding: 0,
-              }}
-            >
-              <StatusBadge status={log.status} />
-            </button>
-          ) : (
-            <StatusBadge status={log.status} />
-          )}
+          <StatusBadge status={log.status} />
+        </td>
+        <td style={{ padding: "10px 8px", textAlign: "center", width: 32 }}>
+          {hasDetails ? <Chevron open={open} /> : null}
         </td>
       </tr>
       {open && details && (
         <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-          <td id={detailsId} colSpan={7} style={{ padding: "14px 20px", background: "rgba(255,255,255,0.02)" }}>
+          <td id={detailsId} colSpan={8} style={{ padding: "14px 20px", background: "rgba(255,255,255,0.02)" }}>
             <div style={{ display: "grid", gridTemplateColumns: "minmax(340px, 1.2fr) minmax(280px, 1fr)", gap: 18, minWidth: 720 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <div>
@@ -365,6 +373,7 @@ export default function SyncLogsTable({ logs }: { logs: SyncLogRow[] }) {
             <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", fontWeight: 500 }}>Workouts</th>
             <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", fontWeight: 500 }}>Source</th>
             <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", fontWeight: 500 }}>Status</th>
+            <th style={{ padding: "10px 8px", width: 32 }} aria-hidden="true" />
           </tr>
         </thead>
         <tbody>

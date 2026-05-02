@@ -109,17 +109,38 @@ function DetailMetric({ label, value }: { label: string; value: string | number 
   );
 }
 
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 16 16"
+      style={{
+        width: 14,
+        height: 14,
+        color: "var(--fg-3)",
+        transform: open ? "rotate(90deg)" : "rotate(0deg)",
+        transition: "transform var(--dur-base)",
+      }}
+    >
+      <path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
 function LogRow({ log }: { log: ChatLogRow }) {
   const [open, setOpen] = useState(false);
   const details = useMemo(() => parseDetails(log.details), [log.details]);
   const hasDetails = details !== null;
   const dur = fmtDuration(log.duration_ms);
   const usage = details?.usage;
+  const detailsId = `chat-details-${log.id}`;
 
   return (
     <>
       <tr
         onClick={hasDetails ? () => setOpen((value) => !value) : undefined}
+        aria-expanded={hasDetails ? open : undefined}
+        aria-controls={hasDetails ? detailsId : undefined}
         style={{
           borderBottom: "1px solid rgba(255,255,255,0.04)",
           cursor: hasDetails ? "pointer" : "default",
@@ -171,10 +192,13 @@ function LogRow({ log }: { log: ChatLogRow }) {
             {log.status}
           </span>
         </td>
+        <td style={{ padding: "10px 8px", textAlign: "center", width: 32 }}>
+          {hasDetails ? <Chevron open={open} /> : null}
+        </td>
       </tr>
       {open && hasDetails && (
         <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-          <td colSpan={7} style={{ padding: "14px 20px", background: "rgba(255,255,255,0.02)" }}>
+          <td id={detailsId} colSpan={8} style={{ padding: "14px 20px", background: "rgba(255,255,255,0.02)" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 620 }}>
               <div>
                 <div style={{ color: "var(--fg-3)", fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
@@ -282,6 +306,7 @@ export default function ChatLogsTable({ logs }: { logs: ChatLogRow[] }) {
             <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Type</th>
             <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Range</th>
             <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Status</th>
+            <th style={{ padding: "10px 8px", width: 32 }} aria-hidden="true" />
           </tr>
         </thead>
         <tbody>
