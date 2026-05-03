@@ -1,7 +1,9 @@
 import KPIStrip from "@/components/overview/KPIStrip";
 import TrendChart from "@/components/charts/TrendChart";
 import SleepStagesChart from "@/components/charts/SleepStagesChart";
-import { getOverview, getFullSleepTrend } from "@/lib/db";
+import ApneaRiskCard from "@/components/charts/ApneaRiskCard";
+import { getOverview, getFullSleepTrend, getRecoveryTrend } from "@/lib/db";
+import { computeApneaSignal } from "@/lib/analytics/apnea";
 import { msToHoursNumber } from "@/lib/format";
 import { parseDays, formatRangeLabel } from "@/lib/range";
 
@@ -17,6 +19,8 @@ export default async function SleepPage({
   const rangeLabel = formatRangeLabel(range);
   const data = getOverview(days);
   const trend = getFullSleepTrend(days);
+  const recoveryTrend = getRecoveryTrend(days);
+  const apneaRows = computeApneaSignal(trend, recoveryTrend);
 
   const durationData = trend.map((r) => ({ date: r.date, value: msToHoursNumber(r.in_bed_ms) }));
   const needData = trend.map((r) => ({ date: r.date, value: msToHoursNumber(r.sleep_need_ms) }));
@@ -67,6 +71,8 @@ export default async function SleepPage({
           />
         </div>
       </div>
+
+      <ApneaRiskCard rows={apneaRows} />
     </>
   );
 }
