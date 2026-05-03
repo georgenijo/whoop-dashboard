@@ -1,5 +1,6 @@
 import KPIStrip from "@/components/overview/KPIStrip";
 import TrendChart from "@/components/charts/TrendChart";
+import HRVTrend from "@/components/charts/HRVTrend";
 import OvertrainingCard from "@/components/recovery/OvertrainingCard";
 import IllnessSignalCard from "@/components/recovery/IllnessSignalCard";
 import {
@@ -28,7 +29,7 @@ export default async function RecoveryPage({
   const otsCycles = getStrainTrend(7);
 
   const recoveryData = trend.map((r) => ({ date: r.date, value: r.recovery_score }));
-  const hrvData = trend.map((r) => ({ date: r.date, value: r.hrv }));
+  const hrvSeries = trend.map((r) => ({ date: r.date, hrv: r.hrv }));
   const rhrData = trend.map((r) => ({ date: r.date, value: r.rhr }));
   const spo2Data = trend.map((r) => ({ date: r.date, value: r.spo2 }));
 
@@ -70,14 +71,7 @@ export default async function RecoveryPage({
             data={recoveryData}
             unit="%"
           />
-          <TrendChart
-            title="HRV"
-            subtitle={rangeLabel}
-            color="#7b61ff"
-            gradientId="hrv"
-            data={hrvData}
-            unit=" ms"
-          />
+          <HRVTrend subtitle={rangeLabel} data={hrvSeries} />
         </div>
         <div className="col">
           <TrendChart
