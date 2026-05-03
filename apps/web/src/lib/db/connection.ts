@@ -20,6 +20,59 @@ export function openWrite(): DB | null {
     db.pragma("foreign_keys = ON");
     db.pragma("journal_mode = WAL");
     db.exec(`
+      -- KEEP IN SYNC WITH streamlit/whoop/db.py:22-101 (Python init_db schema)
+      CREATE TABLE IF NOT EXISTS recovery (
+        date TEXT PRIMARY KEY,
+        recovery_score REAL,
+        hrv REAL,
+        rhr REAL,
+        spo2 REAL,
+        skin_temp REAL,
+        raw JSON
+      );
+      CREATE TABLE IF NOT EXISTS cycles (
+        date TEXT PRIMARY KEY,
+        strain REAL,
+        kilojoule REAL,
+        avg_hr INTEGER,
+        max_hr INTEGER,
+        raw JSON
+      );
+      CREATE TABLE IF NOT EXISTS sleep (
+        date TEXT PRIMARY KEY,
+        in_bed_ms INTEGER,
+        light_ms INTEGER,
+        deep_ms INTEGER,
+        rem_ms INTEGER,
+        awake_ms INTEGER,
+        sleep_need_ms INTEGER,
+        performance REAL,
+        efficiency REAL,
+        consistency REAL,
+        respiratory_rate REAL,
+        disturbances INTEGER,
+        cycles INTEGER,
+        nap BOOLEAN,
+        raw JSON
+      );
+      CREATE TABLE IF NOT EXISTS workouts (
+        id TEXT PRIMARY KEY,
+        date TEXT,
+        sport TEXT,
+        duration_sec REAL,
+        avg_hr INTEGER,
+        max_hr INTEGER,
+        strain REAL,
+        kilojoule REAL,
+        distance_m REAL,
+        zone_0_ms INTEGER,
+        zone_1_ms INTEGER,
+        zone_2_ms INTEGER,
+        zone_3_ms INTEGER,
+        zone_4_ms INTEGER,
+        zone_5_ms INTEGER,
+        raw JSON
+      );
       CREATE TABLE IF NOT EXISTS daily_summary (
         date TEXT PRIMARY KEY,
         recovery_score INTEGER,
