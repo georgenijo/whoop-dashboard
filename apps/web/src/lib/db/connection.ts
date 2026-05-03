@@ -93,7 +93,8 @@ export function openWrite(): DB | null {
         started_at TEXT NOT NULL,
         route TEXT NOT NULL,
         duration_ms INTEGER NOT NULL,
-        status INTEGER NOT NULL
+        status INTEGER NOT NULL,
+        details TEXT
       );
       CREATE INDEX IF NOT EXISTS route_logs_started_at_idx ON route_logs(started_at DESC);
       CREATE TABLE IF NOT EXISTS users (
@@ -123,6 +124,10 @@ export function openWrite(): DB | null {
     const syncCols = db.prepare("PRAGMA table_info(sync_logs)").all() as { name: string }[];
     if (!syncCols.some((c) => c.name === "details")) {
       db.exec("ALTER TABLE sync_logs ADD COLUMN details TEXT");
+    }
+    const routeCols = db.prepare("PRAGMA table_info(route_logs)").all() as { name: string }[];
+    if (!routeCols.some((c) => c.name === "details")) {
+      db.exec("ALTER TABLE route_logs ADD COLUMN details TEXT");
     }
     const insightCols = db.prepare("PRAGMA table_info(insights)").all() as { name: string }[];
     if (!insightCols.some((c) => c.name === "created_at")) {

@@ -19,10 +19,15 @@ function openRouteLogWrite(): DB | null {
             started_at TEXT NOT NULL,
             route TEXT NOT NULL,
             duration_ms INTEGER NOT NULL,
-            status INTEGER NOT NULL
+            status INTEGER NOT NULL,
+            details TEXT
           );
           CREATE INDEX IF NOT EXISTS route_logs_started_at_idx ON route_logs(started_at DESC);
         `);
+        const cols = db.prepare("PRAGMA table_info(route_logs)").all() as { name: string }[];
+        if (!cols.some((c) => c.name === "details")) {
+          db.exec("ALTER TABLE route_logs ADD COLUMN details TEXT");
+        }
         routeLogsSchemaReady = true;
       }
       return db;
@@ -150,6 +155,7 @@ export type RouteLog = {
   route: string;
   duration_ms: number;
   status: number;
+  details?: string | null;
 };
 
 export function addRouteLog(log: Omit<RouteLog, "id">): void {
@@ -157,8 +163,8 @@ export function addRouteLog(log: Omit<RouteLog, "id">): void {
   if (!db) return;
   try {
     db.prepare(
-      "INSERT INTO route_logs (started_at, route, duration_ms, status) VALUES (?, ?, ?, ?)"
-    ).run(log.started_at, log.route, log.duration_ms, log.status);
+      "INSERT INTO route_logs (started_at, route, duration_ms, status, details) VALUES (?, ?, ?, ?, ?)"
+    ).run(log.started_at, log.route, log.duration_ms, log.status, log.details ?? null);
   } finally {
     db.close();
   }
@@ -168,9 +174,12 @@ export function getRouteLogs(limit = 200): RouteLog[] {
   return (
     safeQuery((db) => {
       if (!hasTable(db, "route_logs")) return [] as RouteLog[];
+      const detailsSelect = hasColumn(db, "route_logs", "details")
+        ? "details"
+        : "NULL AS details";
       return db
         .prepare(
-          "SELECT id, started_at, route, duration_ms, status FROM route_logs ORDER BY started_at DESC, id DESC LIMIT ?"
+          `SELECT id, started_at, route, duration_ms, status, ${detailsSelect} FROM route_logs ORDER BY started_at DESC, id DESC LIMIT ?`
         )
         .all(limit) as RouteLog[];
     }) ?? []
