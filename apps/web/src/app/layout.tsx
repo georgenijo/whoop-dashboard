@@ -41,6 +41,7 @@ export default async function RootLayout({
   const route = requestHeaders.get("x-whoop-route-log-route");
   const startedAt = requestHeaders.get("x-whoop-route-log-started-at");
   const startMs = Number(requestHeaders.get("x-whoop-route-log-start-ms"));
+  const details = requestHeaders.get("x-whoop-route-log-details");
 
   if (route && startedAt && Number.isFinite(startMs)) {
     after(() => {
@@ -50,6 +51,7 @@ export default async function RootLayout({
           route,
           duration_ms: Math.max(0, Date.now() - startMs),
           status: 200,
+          details,
         });
       } catch {
         // Route timing must never affect the rendered page.
