@@ -273,13 +273,15 @@ export function deleteSleepAndRecompute(sleepId: string): string | null {
   const db = openWrite();
   if (!db) return null;
   try {
-    const row = db
-      .prepare("SELECT date FROM sleep WHERE json_extract(raw, '$.id') = ? LIMIT 1")
-      .get(sleepId) as { date: string } | undefined;
-    if (!row) return null;
-    db.prepare("DELETE FROM sleep WHERE json_extract(raw, '$.id') = ?").run(sleepId);
-    _recomputeInDb(db, row.date);
-    return row.date;
+    return db.transaction(() => {
+      const row = db
+        .prepare("SELECT date FROM sleep WHERE json_extract(raw, '$.id') = ? LIMIT 1")
+        .get(sleepId) as { date: string } | undefined;
+      if (!row) return null;
+      db.prepare("DELETE FROM sleep WHERE json_extract(raw, '$.id') = ?").run(sleepId);
+      _recomputeInDb(db, row.date);
+      return row.date;
+    })();
   } finally {
     db.close();
   }
@@ -289,13 +291,15 @@ export function deleteWorkoutAndRecompute(workoutId: string): string | null {
   const db = openWrite();
   if (!db) return null;
   try {
-    const row = db
-      .prepare("SELECT date FROM workouts WHERE id = ? LIMIT 1")
-      .get(workoutId) as { date: string } | undefined;
-    if (!row) return null;
-    db.prepare("DELETE FROM workouts WHERE id = ?").run(workoutId);
-    _recomputeInDb(db, row.date);
-    return row.date;
+    return db.transaction(() => {
+      const row = db
+        .prepare("SELECT date FROM workouts WHERE id = ? LIMIT 1")
+        .get(workoutId) as { date: string } | undefined;
+      if (!row) return null;
+      db.prepare("DELETE FROM workouts WHERE id = ?").run(workoutId);
+      _recomputeInDb(db, row.date);
+      return row.date;
+    })();
   } finally {
     db.close();
   }
@@ -305,17 +309,19 @@ export function deleteRecoveryAndRecompute(sleepId: string): string | null {
   const db = openWrite();
   if (!db) return null;
   try {
-    const row = db
-      .prepare(
-        "SELECT date FROM recovery WHERE json_extract(raw, '$.sleep_id') = ? LIMIT 1",
-      )
-      .get(sleepId) as { date: string } | undefined;
-    if (!row) return null;
-    db.prepare(
-      "DELETE FROM recovery WHERE json_extract(raw, '$.sleep_id') = ?",
-    ).run(sleepId);
-    _recomputeInDb(db, row.date);
-    return row.date;
+    return db.transaction(() => {
+      const row = db
+        .prepare(
+          "SELECT date FROM recovery WHERE json_extract(raw, '$.sleep_id') = ? LIMIT 1",
+        )
+        .get(sleepId) as { date: string } | undefined;
+      if (!row) return null;
+      db.prepare(
+        "DELETE FROM recovery WHERE json_extract(raw, '$.sleep_id') = ?",
+      ).run(sleepId);
+      _recomputeInDb(db, row.date);
+      return row.date;
+    })();
   } finally {
     db.close();
   }

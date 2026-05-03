@@ -187,8 +187,10 @@ export async function POST(req: Request) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     // 404 from Whoop = resource permanently absent; discard silently, don't retry.
-    // Everything else = transient (upstream error, network, timeout, recovery list miss,
-    // auth failure) → 502 so Whoop retries up to 5×.
+    // Everything else → 502 so Whoop retries up to 5× with backoff. This intentionally
+    // includes non-upstream errors (DB lock, record-shape mismatch) on the assumption
+    // that a bounded retry window (5× ~1hr) is preferable to silently discarding data.
+    // Worst case: a code bug causes 5 retries before giving up. Acceptable trade-off.
     const isHandledMiss = err instanceof WhoopNotFoundError;
     logWebhook({
       startedAt,
