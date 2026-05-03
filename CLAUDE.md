@@ -128,6 +128,31 @@ The VM has no `sqlite3` binary — query via `sudo -u george python3 -c "import 
 
 No cron / systemd timer for `daily_sync.py` yet. All syncs are manual today (via `/api/sync` from Settings or the script directly).
 
+## Local verification (live testing)
+
+Worktrees created via `git worktree add` don't carry `shared/whoop_data.db`, `tokens.json`, or `.env` — those live only in the main worktree. Use the **`whoop-dev` skill** at `~/.claude/skills/whoop-dev/` to spin up a dev server in any worktree against a snapshot of the production DB. Pairs with `claude-in-chrome` MCP for headless render/behavior verification.
+
+```bash
+# Up: snapshots shared DB → /tmp/whoop-dev-<port>.db, starts dev, returns JSON
+RESULT=$(bash ~/.claude/skills/whoop-dev/bin/up.sh <worktree-path> [--seed <scenario>])
+URL=$(echo "$RESULT"  | jq -r .url)
+PORT=$(echo "$RESULT" | jq -r .port)
+
+# Drive Chrome via mcp__claude-in-chrome__* against $URL/<route>, run inline JS checks.
+
+# Down: kill, remove temp DB + log, drop from state
+bash ~/.claude/skills/whoop-dev/bin/down.sh --port $PORT
+```
+
+Seed scenarios (in `bin/seed.sh`): `sync-skip` (sync_logs ok row -2min), `sync-skip-old` (-10min), `sync-empty`. Add new scenarios as needed — append a case to `seed.sh` and a row to the SKILL.md table.
+
+Use this whenever typecheck + lint alone won't catch the bug:
+- UI render correctness (chart paths, tooltip values, layout)
+- Behavior under specific DB state (cooldown gates, empty data, stale tokens)
+- API route response shape after a code change
+
+Don't use it for VM debugging (use `vm-ops`) or anything needing a real Whoop API call (this skill doesn't copy `tokens.json`).
+
 ## Issue taxonomy
 
 Labels (case-sensitive):
