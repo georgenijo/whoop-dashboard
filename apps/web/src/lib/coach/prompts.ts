@@ -9,9 +9,11 @@ export const DEFAULT_SYSTEM_PROMPT =
 
 export const TITLE_SYSTEM_PROMPT = "You title chat threads. Reply with a 3-6 word title only.";
 
-export function buildSystemPrompt(): TextBlockParam[] {
-  // en-CA locale formats as YYYY-MM-DD; uses server's local timezone.
-  const today = new Intl.DateTimeFormat("en-CA").format(new Date());
+const COACH_TIME_ZONE = "America/New_York";
+
+export function buildSystemPrompt(now = new Date()): TextBlockParam[] {
+  // en-CA locale formats as YYYY-MM-DD.
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: COACH_TIME_ZONE }).format(now);
   return [
     { type: "text", text: `Today's date is ${today}.` },
     {
