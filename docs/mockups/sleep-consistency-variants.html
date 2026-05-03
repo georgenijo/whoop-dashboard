@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Sleep Consistency — Display Variants</title>
+<style>
+  :root {
+    --fg-0: #fff;
+    --fg-1: rgba(255,255,255,0.9);
+    --fg-2: rgba(255,255,255,0.65);
+    --fg-3: rgba(255,255,255,0.4);
+    --bg: #05050a;
+    --gold: #ffaa00;
+    --green: #00d4aa;
+    --yellow: #ffaa00;
+    --red: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: #05050a;
+    color: var(--fg-1);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    margin: 0;
+    padding: 32px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .card {
+    background: linear-gradient(135deg, rgba(255,255,255,0.035), rgba(255,255,255,0.01));
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 16px;
+    padding: 22px 24px;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.05) inset;
+    min-height: 320px;
+  }
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .variant-label {
+    font-size: 11px; color: var(--fg-3); text-transform: uppercase;
+    letter-spacing: 0.1em; font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .card-title {
+    font-size: 15px; font-weight: 600; color: var(--fg-0);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .card-sub {
+    font-size: 11px; color: var(--fg-3); font-family: "SF Mono", monospace;
+    margin-top: 4px;
+  }
+  .latest-pill {
+    font-family: "SF Mono", monospace; font-size: 12px; color: var(--fg-2);
+  }
+  .latest-pill strong { color: var(--gold); margin-left: 6px; }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--gold); display: inline-block;
+  }
+  .axis-label {
+    font-size: 10px; font-family: "SF Mono", monospace; fill: rgba(255,255,255,0.4);
+  }
+  /* Variant 1 baseline (matches what's live) */
+  /* Variant-specific overrides below */
+  .big-num {
+    font-family: -apple-system, sans-serif; font-size: 64px; font-weight: 700;
+    color: var(--gold); line-height: 1;
+  }
+  .big-num .unit { font-size: 18px; color: var(--fg-3); margin-left: 4px; font-weight: 400; }
+  .band-pill {
+    display: inline-block; padding: 4px 12px; border-radius: 999px;
+    font-size: 11px; font-family: "SF Mono", monospace;
+    text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600;
+  }
+  .band-pill.moderate { background: rgba(255,170,0,0.15); color: var(--yellow); }
+  .band-pill.strong { background: rgba(0,212,170,0.15); color: var(--green); }
+  .band-pill.weak { background: rgba(255,107,107,0.15); color: var(--red); }
+  .heatmap {
+    display: grid; grid-template-columns: repeat(15, 1fr); gap: 4px;
+  }
+  .heatcell {
+    aspect-ratio: 1; border-radius: 3px; min-width: 18px;
+    position: relative;
+  }
+  .heatcell:hover::after {
+    content: attr(data-tip);
+    position: absolute; bottom: 110%; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.9); color: var(--fg-0); font-size: 10px;
+    padding: 4px 6px; border-radius: 4px; white-space: nowrap;
+    font-family: "SF Mono", monospace;
+  }
+  .legend {
+    display: flex; gap: 12px; align-items: center; font-size: 10px;
+    color: var(--fg-3); font-family: "SF Mono", monospace; margin-top: 12px;
+  }
+  .legend-swatch { width: 12px; height: 12px; border-radius: 3px; }
+  h1 { font-weight: 600; margin: 0 0 4px; }
+  .page-sub { color: var(--fg-3); font-size: 13px; margin-bottom: 32px; font-family: "SF Mono", monospace; }
+</style>
+</head>
+<body>
+
+<h1>Sleep Consistency — display variants</h1>
+<p class="page-sub">Same data, seven ways to render it. Pick one. Or mix.</p>
+
+<div class="grid">
+
+  <!-- ============ VARIANT 1: current (baseline) ============ -->
+  <div class="card">
+    <div class="variant-label">1 · current (live)</div>
+    <div class="card-head">
+      <div>
+        <div class="card-title"><span class="dot"></span>Sleep Consistency</div>
+        <div class="card-sub">30 days · avg 62.2%</div>
+      </div>
+      <div class="latest-pill">Latest <strong>61.0%</strong></div>
+    </div>
+    <svg viewBox="0 0 600 200" style="width:100%; height:200px;">
+      <defs>
+        <linearGradient id="grad1" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="#ffaa00" stop-opacity="0.4"/>
+          <stop offset="100%" stop-color="#ffaa00" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <path id="line1" fill="url(#grad1)" stroke="#ffaa00" stroke-width="2"/>
+    </svg>
+    <div style="font-size:11px; color:var(--fg-3); margin-top:8px;">→ "%" reads like "% of perfect" — misleading.</div>
+  </div>
+
+  <!-- ============ VARIANT 2: /100 unit ============ -->
+  <div class="card">
+    <div class="variant-label">2 · drop %, use /100</div>
+    <div class="card-head">
+      <div>
+        <div class="card-title"><span class="dot"></span>Sleep Consistency</div>
+        <div class="card-sub">30 days · avg 62.2 / 100</div>
+      </div>
+      <div class="latest-pill">Latest <strong>61 / 100</strong></div>
+    </div>
+    <svg viewBox="0 0 600 200" style="width:100%; height:200px;">
+      <defs>
+        <linearGradient id="grad2" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="#ffaa00" stop-opacity="0.4"/>
+          <stop offset="100%" stop-color="#ffaa00" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <path id="line2" fill="url(#grad2)" stroke="#ffaa00" stroke-width="2"/>
+    </svg>
+    <div style="font-size:11px; color:var(--fg-3); margin-top:8px;">→ Same chart, fixed unit. One-line code change.</div>
+  </div>
+
+  <!-- ============ VARIANT 3: big number + band + sparkline ============ -->
+  <div class="card">
+    <div class="variant-label">3 · big number + band + sparkline</div>
+    <div class="card-head">
+      <div>
+        <div class="card-title"><span class="dot"></span>Sleep Consistency</div>
+        <div class="card-sub">4-day rolling · last 30 days</div>
+      </div>
+    </div>
+    <div style="display:flex; align-items:flex-end; gap:24px; margin-top:8px;">
+      <div>
+        <div class="big-num">61<span class="unit">/100</span></div>
+        <div style="margin-top:8px;"><span class="band-pill moderate">moderate</span></div>
+      </div>
+      <svg viewBox="0 0 300 80" style="flex:1; height:80px;">
+        <defs>
+          <linearGradient id="grad3" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stop-color="#ffaa00" stop-opacity="0.5"/>
+            <stop offset="100%" stop-color="#ffaa00" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+        <path id="line3" fill="url(#grad3)" stroke="#ffaa00" stroke-width="2"/>
+      </svg>
+    </div>
+    <div style="font-size:11px; color:var(--fg-3); margin-top:14px;">→ Glanceable. Categorical band tells the story; chart is supporting.</div>
+  </div>
+
+  <!-- ============ VARIANT 4: bars with zone bands ============ -->
+  <div class="card">
+    <div class="variant-label">4 · bars + zone bands</div>
+    <div class="card-head">
+      <div>
+        <div class="card-title"><span class="dot"></span>Sleep Consistency</div>
+        <div class="card-sub">30 days · per-day score</div>
+      </div>
+      <div class="latest-pill">Latest <strong>61</strong></div>
+    </div>
+    <svg viewBox="0 0 600 200" style="width:100%; height:200px;">
+      <!-- zone bands -->
+      <rect x="0" y="0" width="600" height="40" fill="rgba(0,212,170,0.05)"/>
+      <rect x="0" y="40" width="600" height="80" fill="rgba(255,170,0,0.05)"/>
+      <rect x="0" y="120" width="600" height="80" fill="rgba(255,107,107,0.05)"/>
+      <line x1="0" y1="40" x2="600" y2="40" stroke="rgba(0,212,170,0.2)" stroke-dasharray="2,4"/>
+      <line x1="0" y1="120" x2="600" y2="120" stroke="rgba(255,170,0,0.2)" stroke-dasharray="2,4"/>
+      <text x="595" y="20" text-anchor="end" class="axis-label">strong (≥80)</text>
+      <text x="595" y="84" text-anchor="end" class="axis-label">moderate</text>
+      <text x="595" y="160" text-anchor="end" class="axis-label">weak (&lt;40)</text>
+      <g id="bars4"></g>
+    </svg>
+    <div style="font-size:11px; color:var(--fg-3); margin-top:8px;">→ Zones make the meaning of the number obvious without a legend.</div>
+  </div>
+
+  <!-- ============ VARIANT 5: calendar heatmap ============ -->
+  <div class="card">
+    <div class="variant-label">5 · calendar heatmap (30d)</div>
+    <div class="card-head">
+      <div>
+        <div class="card-title"><span class="dot"></span>Sleep Consistency</div>
+        <div class="card-sub">30 days · darker = lower</div>
+      </div>
+      <div class="latest-pill">Latest <strong>61</strong></div>
+    </div>
+    <div class="heatmap" id="heat5"></div>
+    <div class="legend">
+      <span>0</span>
+      <span class="legend-swatch" style="background:#3a1d00;"></span>
+      <span class="legend-swatch" style="background:#7a4d00;"></span>
+      <span class="legend-swatch" style="background:#cc8800;"></span>
+      <span class="legend-swatch" style="background:#ffaa00;"></span>
+      <span>100</span>
+    </div>
+    <div style="font-size:11px; color:var(--fg-3); margin-top:8px;">→ Pattern view. Spot drift without staring at line shape.</div>
+  </div>
+
+  <!-- ============ VARIANT 6: gauge + 7d + 30d compare ============ -->
+  <div class="card">
+    <div class="variant-label">6 · radial gauge + 7d vs 30d</div>
+    <div class="card-head">
+      <div>
+        <div class="card-title"><span class="dot"></span>Sleep Consistency</div>
+        <div class="card-sub">7d trending vs 30d baseline</div>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:32px; margin-top:8px;">
+      <svg viewBox="0 0 160 160" style="width:140px; height:140px;">
+        <circle cx="80" cy="80" r="65" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="12"/>
+        <circle cx="80" cy="80" r="65" fill="none" stroke="#ffaa00" stroke-width="12"
+          stroke-dasharray="408" stroke-dashoffset="159" stroke-linecap="round"
+          transform="rotate(-90 80 80)"/>
+        <text x="80" y="78" text-anchor="middle" font-size="36" font-weight="700" fill="#ffaa00">61</text>
+        <text x="80" y="100" text-anchor="middle" font-size="10" font-family="SF Mono,monospace" fill="rgba(255,255,255,0.4)">/ 100</text>
+      </svg>
+      <div style="display:flex; flex-direction:column; gap:14px; font-family:'SF Mono',monospace; font-size:13px;">
+        <div>
+          <div style="color:var(--fg-3); font-size:10px; text-transform:uppercase;">7-day avg</div>
+          <div style="color:var(--fg-0); font-size:18px; margin-top:2px;">58.4 <span style="color:var(--red); font-size:11px;">↓ 3.8</span></div>
+        </div>
+        <div>
+          <div style="color:var(--fg-3); font-size:10px; text-transform:uppercase;">30-day avg</div>
+          <div style="color:var(--fg-0); font-size:18px; margin-top:2px;">62.2</div>
+        </div>
+        <div>
+          <div style="color:var(--fg-3); font-size:10px; text-transform:uppercase;">band</div>
+          <div style="margin-top:4px;"><span class="band-pill moderate">moderate</span></div>
+        </div>
+      </div>
+    </div>
+    <div style="font-size:11px; color:var(--fg-3); margin-top:14px;">→ Compares recent to baseline. Catches drift early.</div>
+  </div>
+
+  <!-- ============ VARIANT 7: bed/wake timeline (HUMAN READABLE) ============ -->
+  <div class="card" style="grid-column: span 2;">
+    <div class="variant-label">7 · bed/wake timeline — the actually-readable version</div>
+    <div class="card-head">
+      <div>
+        <div class="card-title"><span class="dot"></span>Sleep Schedule (last 14 days)</div>
+        <div class="card-sub">Bedtime range 11:15pm → 2:00am · Wake range 7:42am → 10:18am · Whoop consistency 61/100</div>
+      </div>
+    </div>
+    <svg viewBox="0 0 800 360" style="width:100%; height:360px;">
+      <defs>
+        <linearGradient id="sleepBar" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0%" stop-color="#7b61ff"/>
+          <stop offset="100%" stop-color="#00aaff"/>
+        </linearGradient>
+      </defs>
+      <!-- hour grid: x-axis from 8pm (-4h) → 12pm noon (+12h) = 16h total -->
+      <!-- map 0..16h to 80..760 px -->
+      <g id="hourGrid"></g>
+      <!-- hour labels -->
+      <g id="hourLabels"></g>
+      <!-- per-day rows -->
+      <g id="dayRows"></g>
+      <!-- target band overlay (avg bedtime ± 30min, avg wake ± 30min) -->
+      <g id="targetBand"></g>
+    </svg>
+    <div style="display:flex; gap:24px; margin-top:16px; font-family:'SF Mono',monospace; font-size:11px; color:var(--fg-2); flex-wrap:wrap;">
+      <div><span style="display:inline-block; width:10px; height:10px; background:linear-gradient(90deg,#7b61ff,#00aaff); border-radius:2px; vertical-align:middle; margin-right:6px;"></span>sleep window</div>
+      <div><span style="display:inline-block; width:10px; height:10px; background:rgba(0,212,170,0.18); border:1px dashed rgba(0,212,170,0.5); vertical-align:middle; margin-right:6px;"></span>target band (avg ±30min)</div>
+    </div>
+    <div style="font-size:11px; color:var(--fg-3); margin-top:12px; line-height:1.5;">
+      → Each row = one night. Bar = bedtime to waketime in your local TZ.<br>
+      → Green bands show your average bed/wake ±30min. Bars that miss the band = the variance Whoop is scoring.<br>
+      → Apr 25 had a 2am bedtime (way outside band) → that's the dip you saw on the consistency chart.
+    </div>
+  </div>
+
+</div>
+
+<script>
+// 30 days of realistic-looking consistency scores (matches the live chart shape).
+const data = [55, 78, 88, 72, 60, 50, 68, 80, 92, 85, 70, 58, 45, 60, 65, 52, 48, 55, 60, 58, 62, 70, 78, 85, 65, 30, 35, 73, 62, 70, 61];
+
+function buildAreaPath(values, w, h) {
+  if (values.length < 2) return "";
+  const max = 100, min = 0;
+  const pts = values.map((v, i) => [(i / (values.length - 1)) * w, h - ((v - min) / (max - min)) * h]);
+  // smooth using catmull-rom-ish
+  let d = `M ${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+  for (let i = 1; i < pts.length; i++) {
+    const p0 = pts[i - 1], p1 = pts[i];
+    const cp1x = p0[0] + (p1[0] - p0[0]) * 0.5;
+    d += ` C ${cp1x.toFixed(1)} ${p0[1].toFixed(1)}, ${cp1x.toFixed(1)} ${p1[1].toFixed(1)}, ${p1[0].toFixed(1)} ${p1[1].toFixed(1)}`;
+  }
+  d += ` L ${w} ${h} L 0 ${h} Z`;
+  return d;
+}
+
+document.getElementById("line1").setAttribute("d", buildAreaPath(data, 600, 200));
+document.getElementById("line2").setAttribute("d", buildAreaPath(data, 600, 200));
+document.getElementById("line3").setAttribute("d", buildAreaPath(data, 300, 80));
+
+// Variant 4: bars
+const bars = document.getElementById("bars4");
+const bw = 600 / data.length;
+data.forEach((v, i) => {
+  const h = (v / 100) * 200;
+  const y = 200 - h;
+  let color = "#ffaa00";
+  if (v >= 80) color = "#00d4aa";
+  else if (v < 40) color = "#ff6b6b";
+  const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  r.setAttribute("x", (i * bw + 1).toFixed(1));
+  r.setAttribute("y", y.toFixed(1));
+  r.setAttribute("width", (bw - 2).toFixed(1));
+  r.setAttribute("height", h.toFixed(1));
+  r.setAttribute("fill", color);
+  r.setAttribute("opacity", "0.85");
+  r.setAttribute("rx", "2");
+  bars.appendChild(r);
+});
+
+// Variant 5: heatmap
+const heat = document.getElementById("heat5");
+function heatColor(v) {
+  // Interpolate dark amber → bright gold by score.
+  const t = v / 100;
+  const r = Math.round(58 + (255 - 58) * t);
+  const g = Math.round(29 + (170 - 29) * t);
+  const b = 0;
+  return `rgb(${r},${g},${b})`;
+}
+data.forEach((v, i) => {
+  const cell = document.createElement("div");
+  cell.className = "heatcell";
+  cell.style.background = heatColor(v);
+  const day = i + 1;
+  cell.setAttribute("data-tip", `Apr ${day}: ${v}/100`);
+  heat.appendChild(cell);
+});
+
+// === VARIANT 7: bed/wake timeline ===
+// Sample 14 days of bed/wake times (in hours-from-8pm; range 0..16).
+// 0 = 8pm, 4 = midnight, 11 = 7am, 14 = 10am
+const sleepDays = [
+  { date: "Apr 19", bed: 4.50, wake: 11.00 },  // 12:30am → 7:00am
+  { date: "Apr 20", bed: 4.25, wake: 11.50 },
+  { date: "Apr 21", bed: 5.00, wake: 12.25 },
+  { date: "Apr 22", bed: 3.50, wake: 11.00 },
+  { date: "Apr 23", bed: 4.75, wake: 11.75 },
+  { date: "Apr 24", bed: 5.50, wake: 12.50 },
+  { date: "Apr 25", bed: 6.00, wake: 13.50 },  // 2am bedtime — the dip night
+  { date: "Apr 26", bed: 5.25, wake: 12.75 },
+  { date: "Apr 27", bed: 4.50, wake: 11.50 },
+  { date: "Apr 28", bed: 4.00, wake: 11.00 },
+  { date: "Apr 29", bed: 3.75, wake: 10.75 },
+  { date: "Apr 30", bed: 4.25, wake: 11.50 },
+  { date: "May 1",  bed: 4.00, wake: 11.25 },
+  { date: "May 2",  bed: 4.99, wake: 13.56 },  // matches the real one
+];
+
+const PAD_L = 80, PAD_R = 40, PAD_T = 30, PAD_B = 30;
+const W = 800, H = 360;
+const CHART_W = W - PAD_L - PAD_R;
+const CHART_H = H - PAD_T - PAD_B;
+const HOUR_TO_X = (h) => PAD_L + (h / 16) * CHART_W;
+const ROW_H = CHART_H / sleepDays.length;
+
+// Hour labels: 8pm, 12am, 4am, 8am, 12pm
+const hourTicks = [
+  { h: 0,  label: "8pm" },
+  { h: 4,  label: "12am" },
+  { h: 8,  label: "4am" },
+  { h: 12, label: "8am" },
+  { h: 16, label: "12pm" },
+];
+const hourGrid = document.getElementById("hourGrid");
+const hourLabels = document.getElementById("hourLabels");
+hourTicks.forEach(t => {
+  const x = HOUR_TO_X(t.h);
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  line.setAttribute("x1", x); line.setAttribute("x2", x);
+  line.setAttribute("y1", PAD_T); line.setAttribute("y2", PAD_T + CHART_H);
+  line.setAttribute("stroke", "rgba(255,255,255,0.05)");
+  line.setAttribute("stroke-dasharray", "2,4");
+  hourGrid.appendChild(line);
+  const lbl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  lbl.setAttribute("x", x); lbl.setAttribute("y", PAD_T - 8);
+  lbl.setAttribute("text-anchor", "middle");
+  lbl.setAttribute("font-size", "10");
+  lbl.setAttribute("font-family", "SF Mono, monospace");
+  lbl.setAttribute("fill", "rgba(255,255,255,0.4)");
+  lbl.textContent = t.label;
+  hourLabels.appendChild(lbl);
+});
+
+// Target band: avg bed ± 0.5h, avg wake ± 0.5h
+const avgBed = sleepDays.reduce((a, d) => a + d.bed, 0) / sleepDays.length;
+const avgWake = sleepDays.reduce((a, d) => a + d.wake, 0) / sleepDays.length;
+const targetBand = document.getElementById("targetBand");
+[
+  { x: HOUR_TO_X(avgBed - 0.5), w: HOUR_TO_X(avgBed + 0.5) - HOUR_TO_X(avgBed - 0.5) },
+  { x: HOUR_TO_X(avgWake - 0.5), w: HOUR_TO_X(avgWake + 0.5) - HOUR_TO_X(avgWake - 0.5) },
+].forEach(b => {
+  const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  r.setAttribute("x", b.x); r.setAttribute("y", PAD_T);
+  r.setAttribute("width", b.w); r.setAttribute("height", CHART_H);
+  r.setAttribute("fill", "rgba(0,212,170,0.07)");
+  r.setAttribute("stroke", "rgba(0,212,170,0.3)");
+  r.setAttribute("stroke-dasharray", "3,3");
+  targetBand.appendChild(r);
+});
+
+// Per-day bars
+const dayRows = document.getElementById("dayRows");
+function fmtTime(h) {
+  // h is hours-from-8pm; convert to clock
+  const totalMin = Math.round(h * 60);
+  let hour24 = (20 + Math.floor(totalMin / 60)) % 24;
+  const min = totalMin % 60;
+  const ampm = hour24 >= 12 ? "pm" : "am";
+  let h12 = hour24 % 12; if (h12 === 0) h12 = 12;
+  return `${h12}:${String(min).padStart(2,"0")}${ampm}`;
+}
+sleepDays.forEach((d, i) => {
+  const y = PAD_T + i * ROW_H + 4;
+  const barH = ROW_H - 8;
+  // Date label
+  const lbl = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  lbl.setAttribute("x", PAD_L - 10); lbl.setAttribute("y", y + barH/2 + 3);
+  lbl.setAttribute("text-anchor", "end");
+  lbl.setAttribute("font-size", "10");
+  lbl.setAttribute("font-family", "SF Mono, monospace");
+  lbl.setAttribute("fill", "rgba(255,255,255,0.55)");
+  lbl.textContent = d.date;
+  dayRows.appendChild(lbl);
+  // Sleep bar
+  const bx = HOUR_TO_X(d.bed);
+  const bw = HOUR_TO_X(d.wake) - bx;
+  const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  r.setAttribute("x", bx); r.setAttribute("y", y);
+  r.setAttribute("width", bw); r.setAttribute("height", barH);
+  r.setAttribute("fill", "url(#sleepBar)");
+  r.setAttribute("rx", "3");
+  r.setAttribute("opacity", "0.85");
+  dayRows.appendChild(r);
+  // Bedtime label (left of bar, inline)
+  if (bw > 60) {
+    const bt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    bt.setAttribute("x", bx + 6); bt.setAttribute("y", y + barH/2 + 3);
+    bt.setAttribute("font-size", "9");
+    bt.setAttribute("font-family", "SF Mono, monospace");
+    bt.setAttribute("fill", "rgba(255,255,255,0.85)");
+    bt.textContent = fmtTime(d.bed);
+    dayRows.appendChild(bt);
+    const wt = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    wt.setAttribute("x", bx + bw - 6); wt.setAttribute("y", y + barH/2 + 3);
+    wt.setAttribute("text-anchor", "end");
+    wt.setAttribute("font-size", "9");
+    wt.setAttribute("font-family", "SF Mono, monospace");
+    wt.setAttribute("fill", "rgba(255,255,255,0.85)");
+    wt.textContent = fmtTime(d.wake);
+    dayRows.appendChild(wt);
+  }
+});
+</script>
+
+</body>
+</html>

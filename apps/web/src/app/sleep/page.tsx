@@ -72,7 +72,7 @@ export default async function SleepPage({
             color="#ffaa00"
             gradientId="sleep-cons"
             data={consistencyData}
-            unit="%"
+            unit="/100"
           />
         </div>
       </div>
