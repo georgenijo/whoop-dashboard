@@ -1,18 +1,18 @@
 ---
 name: vm-ops
-description: Operate the Whoop dashboard VM — SSH access, deploys, systemd service, logs, SQLite DB, cloudflared tunnel. Use whenever the user asks to deploy, restart the web app, pull logs, inspect prod DB, or otherwise touch the production VM.
+description: Operate the Whoop dashboard VM — SSH access, deploys, systemd service, logs, SQLite DB, nginx + Cloudflare Access. Use whenever the user asks to deploy, restart the web app, pull logs, inspect prod DB, or otherwise touch the production VM.
 ---
 
 # Whoop dashboard — VM ops
 
-Production lives on an Oracle Cloud VM behind a Cloudflare tunnel. This skill captures the wiring so future sessions don't have to rediscover it.
+Production lives on an Oracle Cloud VM. Public traffic: DNS → Cloudflare (proxy + Access) → VM port 443 → nginx → `localhost:8501` (Next.js). **No `cloudflared` tunnel** — the box runs nginx directly with a letsencrypt cert. Auth gate is **Cloudflare Access** (302 to `georgnijo.cloudflareaccess.com` for unauthed requests).
 
 ## Hosts & users
 
 | Item | Value |
 |---|---|
 | VM host | `129.80.134.194` |
-| Public domain | `whoop.georgenijo.com` (Cloudflare tunnel → port 8501) |
+| Public domain | `whoop.georgenijo.com` (Cloudflare proxy + Access → VM nginx → `localhost:8501`) |
 | SSH user | `ubuntu` (sudo) |
 | App user | `george` (NO sudo — see "Two-user dance") |
 | SSH key | `~/.ssh/id_ed25519` |
@@ -51,7 +51,7 @@ Local repo (mac): `/Users/georgenijo/Documents/code/whoop-dashboard/`. Same layo
 
 ## Service: `whoop-web.service`
 
-Runs `next start -p 8501` as `george`, restarts on crash, capped at 512M RAM. Cloudflare tunnel maps `whoop.georgenijo.com` → `localhost:8501`.
+Runs `next start -p 8501` as `george`, restarts on crash, capped at 512M RAM. nginx (`/etc/nginx/sites-enabled/whoop`) listens on 443 with a letsencrypt cert and `proxy_pass`es all of `whoop.georgenijo.com` to `localhost:8501`. Cloudflare Access enforces auth at the edge before requests reach the VM.
 
 The unit file is tracked at `systemd/whoop-web.service` in the repo. `infra/terraform/cloud-init.sh` copies it to `/etc/systemd/system/` on fresh VMs via the `*.service` glob, but it does **not** enable the unit and does **not** install its runtime prereqs — see "Fresh VM provisioning" below before bringing up `whoop-web` on a new box.
 
@@ -61,6 +61,50 @@ sudo systemctl restart whoop-web
 sudo journalctl -u whoop-web -n 100 --no-pager
 sudo journalctl -u whoop-web -f                  # tail live
 ```
+
+## Cloudflare Access (auth gate)
+
+Public traffic to `whoop.georgenijo.com` is gated by **Cloudflare Access**, not by anything in the Next.js app. Unauthenticated requests get `302` to `https://georgnijo.cloudflareaccess.com/...`. Allowed identity: `george.nijo8@gmail.com`.
+
+**Account / app IDs** (account: `George.nijo8@gmail.com's Account`):
+
+| Item | ID |
+|---|---|
+| account_id | `38cc18a41f7705126a99fbac7cd526ba` |
+| zone_id (`georgenijo.com`) | `9d6aac41d48f9da8b5e821dc769c477a` |
+| Access app `Whoop Dashboard` (gates whole host) | `c2a34753-ebc7-4365-a79e-f55545de3add` |
+| Access app `Whoop Webhook (bypass)` (path `/api/whoop/webhook`) | `6b005c56-0982-43ad-8f2e-d86a3a78182e` |
+
+**Path-scoped bypass pattern.** To exempt a single path from Access, create a SEPARATE self_hosted Access app whose `domain` is the full `host/path` (e.g. `whoop.georgenijo.com/api/whoop/webhook`) and attach a single policy with `decision: "bypass"` and `include: [{everyone: {}}]`. CF evaluates the more-specific app first, so that path skips auth while the broader app continues to gate everything else. Used today for the Whoop webhook receiver (issue #27) — the route-level HMAC check is the real auth.
+
+**API token.** Stored in macOS Keychain (service `cloudflare-api-token-whoop`, account `$USER`). `~/.zshrc` exports it as `CLOUDFLARE_API_TOKEN` on shell start. Manual fetch:
+
+```bash
+security find-generic-password -a "$USER" -s 'cloudflare-api-token-whoop' -w
+```
+
+Token has `Account.Access (Apps + Policies, Edit)` and `Zone.DNS` scopes. Sufficient for managing Access apps + policies on this account and editing DNS for `georgenijo.com`.
+
+**Useful API recipes:**
+
+```bash
+# List all Access apps in the account
+ACCT=38cc18a41f7705126a99fbac7cd526ba
+curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+  "https://api.cloudflare.com/client/v4/accounts/$ACCT/access/apps" \
+  | python3 -c "import sys,json; [print(a['id'],'|',a.get('domain','-'),'|',a['name']) for a in json.load(sys.stdin)['result']]"
+
+# Read one app's full policy block
+APP=c2a34753-ebc7-4365-a79e-f55545de3add
+curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+  "https://api.cloudflare.com/client/v4/accounts/$ACCT/access/apps/$APP" | python3 -m json.tool
+
+# Verify the gate is intact (root → 302) and bypass works (webhook → reaches origin)
+curl -sI https://whoop.georgenijo.com/                       # expect: HTTP/2 302
+curl -sI https://whoop.georgenijo.com/api/whoop/webhook      # expect: HTTP/2 404 (no route yet) or 200
+```
+
+If you're locked out of the dashboard from a new device, it's the IdP — log in via the redirected `cloudflareaccess.com` URL with `george.nijo8@gmail.com`.
 
 ## Fresh VM provisioning (`whoop-web` only)
 
@@ -186,9 +230,9 @@ When in doubt: SSH in, look around as `george`, and check `journalctl -u whoop-w
 
 ### SSH times out (TCP connect, not auth)
 
-Symptom: `ssh ubuntu@129.80.134.194` hangs and dies with `connect to address ... port 22: Operation timed out`. `curl https://whoop.georgenijo.com` still works (Cloudflare tunnel is unaffected).
+Symptom: `ssh ubuntu@129.80.134.194` hangs and dies with `connect to address ... port 22: Operation timed out`. `curl https://whoop.georgenijo.com` still works (Cloudflare proxy → nginx path is unaffected).
 
-Cause: the Oracle VCN security list allowlists SSH ingress to specific `/32` source IPs only. When your home/ISP IP rotates, your new IP is not in the list and TCP connects to port 22 are silently dropped at the cloud edge. The web app keeps working because it uses the outbound Cloudflare tunnel.
+Cause: the Oracle VCN security list allowlists SSH ingress to specific `/32` source IPs only. When your home/ISP IP rotates, your new IP is not in the list and TCP connects to port 22 are silently dropped at the cloud edge. The web app keeps working because port 443 is open to the Cloudflare proxy IP ranges.
 
 Fix:
 
@@ -202,7 +246,7 @@ Fix:
 
 Two `/32` slots already exist for known home IPs (Canada + Mass at last check). Stale entries can be deleted, but harmless if left.
 
-Long-term fix to consider: Tailscale/WireGuard mesh, or close port 22 entirely and proxy SSH through the existing Cloudflare tunnel (`cloudflared access ssh`). Either removes the `/32` toil.
+Long-term fix to consider: Tailscale/WireGuard mesh, or stand up a Cloudflare Tunnel for SSH (`cloudflared access ssh`) and close port 22 entirely. Either removes the `/32` toil.
 
 ### Sync runs slow / insight step takes ~40s
 
