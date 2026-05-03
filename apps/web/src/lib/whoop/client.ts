@@ -2,6 +2,7 @@ import "server-only";
 import { getValidAccessToken } from "./token";
 
 const BASE_URL = "https://api.prod.whoop.com/developer";
+const FETCH_TIMEOUT_MS = 15_000;
 
 export class WhoopAuthError extends Error {}
 export class WhoopUpstreamError extends Error {
@@ -10,6 +11,9 @@ export class WhoopUpstreamError extends Error {
   }
 }
 export class WhoopNotFoundError extends Error {}
+// Thrown when recovery.updated webhook id is not found in the first page of
+// GET /v2/recovery — likely a scoring race; Whoop will retry.
+export class WhoopRecoveryListMissError extends Error {}
 
 export async function whoopGet<T>(path: string): Promise<T> {
   const url = `${BASE_URL}${path}`;
@@ -19,6 +23,7 @@ export async function whoopGet<T>(path: string): Promise<T> {
   let resp = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
     cache: "no-store",
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
 
   if (resp.status === 401) {
@@ -27,6 +32,7 @@ export async function whoopGet<T>(path: string): Promise<T> {
     resp = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   }
 

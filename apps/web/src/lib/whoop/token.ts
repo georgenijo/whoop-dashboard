@@ -41,6 +41,7 @@ async function refreshTokens(current: StoredTokens): Promise<StoredTokens | null
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
+    signal: AbortSignal.timeout(15_000),
   });
   if (!resp.ok) return null;
   const data = (await resp.json()) as Omit<StoredTokens, "expires_at">;
@@ -53,9 +54,9 @@ async function refreshTokens(current: StoredTokens): Promise<StoredTokens | null
 }
 
 export async function getValidAccessToken(forceRefresh = false): Promise<string | null> {
-  if (inflightRefresh) {
-    const refreshed = await inflightRefresh;
-    return refreshed?.access_token ?? null;
+  const existing = inflightRefresh;
+  if (existing) {
+    return (await existing)?.access_token ?? null;
   }
 
   const tokens = await loadTokens();
@@ -64,9 +65,17 @@ export async function getValidAccessToken(forceRefresh = false): Promise<string 
     return tokens.access_token;
   }
 
-  inflightRefresh = refreshTokens(tokens).finally(() => {
+  // Re-check after the async gap above: a concurrent webhook may have started
+  // a refresh between our loadTokens() await and here. Join it if so.
+  const existingAfterLoad = inflightRefresh;
+  if (existingAfterLoad) {
+    return (await existingAfterLoad)?.access_token ?? null;
+  }
+
+  const refreshPromise = refreshTokens(tokens);
+  inflightRefresh = refreshPromise.finally(() => {
     inflightRefresh = null;
   });
-  const refreshed = await inflightRefresh;
+  const refreshed = await refreshPromise;
   return refreshed?.access_token ?? null;
 }

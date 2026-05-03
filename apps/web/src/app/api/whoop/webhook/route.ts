@@ -4,16 +4,14 @@ import {
   whoopGet,
   WhoopAuthError,
   WhoopNotFoundError,
+  WhoopRecoveryListMissError,
   WhoopUpstreamError,
 } from "@/lib/whoop/client";
 import { verifyWhoopSignature } from "@/lib/whoop/signature";
 import {
-  deleteRecoveryBySleepId,
-  deleteSleepById,
-  deleteWorkoutById,
-  lookupRecoveryDateBySleepId,
-  lookupSleepDateById,
-  lookupWorkoutDateById,
+  deleteRecoveryAndRecompute,
+  deleteSleepAndRecompute,
+  deleteWorkoutAndRecompute,
   recomputeDailySummary,
   recoverySummaryDate,
   sleepSummaryDate,
@@ -64,7 +62,8 @@ export async function POST(req: Request) {
 
   const verify = verifyWhoopSignature(raw, sig, ts, clientSecret());
   if (!verify.ok) {
-    console.warn(`[whoop-webhook] signature rejected: ${verify.reason}`);
+    // Include req.url to aid misconfig debugging (e.g. path registered wrong in Whoop dashboard).
+    console.warn(`[whoop-webhook] signature rejected: ${verify.reason} url=${req.url}`);
     return new Response(`Unauthorized: ${verify.reason}`, { status: 401 });
   }
 
@@ -108,9 +107,7 @@ export async function POST(req: Request) {
         break;
       }
       case "workout.updated": {
-        const r = await whoopGet<WhoopWorkoutRecord>(
-          `/v2/activity/workout/${evt.id}`,
-        );
+        const r = await whoopGet<WhoopWorkoutRecord>(`/v2/activity/workout/${evt.id}`);
         upsertWorkout(r);
         recomputeDailySummary(workoutSummaryDate(r));
         break;
@@ -121,9 +118,9 @@ export async function POST(req: Request) {
         );
         const r = list.records.find((x) => x.sleep_id === evt.id);
         if (!r) {
-          throw new WhoopUpstreamError(
+          // Record not yet in latest 10 — likely a scoring race. 502 → Whoop retries.
+          throw new WhoopRecoveryListMissError(
             `recovery sleep_id=${evt.id} not in latest 10`,
-            502,
           );
         }
         upsertRecovery(r);
@@ -131,7 +128,7 @@ export async function POST(req: Request) {
         break;
       }
       case "sleep.deleted": {
-        const date = lookupSleepDateById(evt.id);
+        const date = deleteSleepAndRecompute(evt.id);
         if (!date) {
           logWebhook({
             startedAt,
@@ -141,12 +138,10 @@ export async function POST(req: Request) {
           });
           return new Response("ok", { status: 200 });
         }
-        deleteSleepById(evt.id);
-        recomputeDailySummary(date);
         break;
       }
       case "workout.deleted": {
-        const date = lookupWorkoutDateById(evt.id);
+        const date = deleteWorkoutAndRecompute(evt.id);
         if (!date) {
           logWebhook({
             startedAt,
@@ -156,12 +151,10 @@ export async function POST(req: Request) {
           });
           return new Response("ok", { status: 200 });
         }
-        deleteWorkoutById(evt.id);
-        recomputeDailySummary(date);
         break;
       }
       case "recovery.deleted": {
-        const date = lookupRecoveryDateBySleepId(evt.id);
+        const date = deleteRecoveryAndRecompute(evt.id);
         if (!date) {
           logWebhook({
             startedAt,
@@ -171,8 +164,6 @@ export async function POST(req: Request) {
           });
           return new Response("ok", { status: 200 });
         }
-        deleteRecoveryBySleepId(evt.id);
-        recomputeDailySummary(date);
         break;
       }
       default: {
@@ -195,12 +186,9 @@ export async function POST(req: Request) {
     return new Response("ok", { status: 200 });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    // 404 from Whoop = resource permanently absent; retrying will not help.
-    // 5xx / network / auth-after-refresh = transient → 502 lets Whoop retry 5×.
-    const isTransient =
-      err instanceof WhoopUpstreamError ||
-      err instanceof WhoopAuthError ||
-      (err instanceof TypeError && msg.includes("fetch"));
+    // 404 from Whoop = resource permanently absent; discard silently, don't retry.
+    // Everything else = transient (upstream error, network, timeout, recovery list miss,
+    // auth failure) → 502 so Whoop retries up to 5×.
     const isHandledMiss = err instanceof WhoopNotFoundError;
     logWebhook({
       startedAt,
@@ -210,6 +198,6 @@ export async function POST(req: Request) {
       error: msg.slice(0, 800),
     });
     if (isHandledMiss) return new Response("ok (resource missing)", { status: 200 });
-    return new Response(msg.slice(0, 200), { status: isTransient ? 502 : 500 });
+    return new Response(msg.slice(0, 200), { status: 502 });
   }
 }
