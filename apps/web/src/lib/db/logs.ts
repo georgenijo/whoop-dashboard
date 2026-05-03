@@ -149,6 +149,18 @@ export function getSyncLogs(limit = 200): SyncLog[] {
   );
 }
 
+export function getLastSuccessfulSyncAt(): Date | null {
+  return safeQuery((db) => {
+    if (!hasTable(db, "sync_logs")) return null;
+    const row = db
+      .prepare(
+        "SELECT started_at FROM sync_logs WHERE status = 'ok' ORDER BY id DESC LIMIT 1"
+      )
+      .get() as { started_at: string } | undefined;
+    return row ? new Date(row.started_at) : null;
+  });
+}
+
 export type RouteLog = {
   id: number;
   started_at: string;

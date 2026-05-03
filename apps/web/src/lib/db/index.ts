@@ -85,6 +85,7 @@ export {
   clearChatLogs,
   addSyncLog,
   getSyncLogs,
+  getLastSuccessfulSyncAt,
   addRouteLog,
   getRouteLogs,
 } from "./logs";

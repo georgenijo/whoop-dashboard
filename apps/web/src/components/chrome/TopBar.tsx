@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 const RANGES = ["7d", "14d", "30d", "90d", "all"] as const;
@@ -18,6 +18,14 @@ const TITLES: Record<string, string> = {
   "/settings": "Settings",
 };
 
+const SYNC_STATUS_TIMEOUT_MS = 4000;
+
+type SyncStatus =
+  | { kind: "idle" }
+  | { kind: "synced" }
+  | { kind: "skipped"; lastSyncAt: string }
+  | { kind: "error" };
+
 function icon(name: string) {
   return `https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/${name}.svg`;
 }
@@ -32,6 +40,28 @@ function formatToday(): string {
   }).replace(",", " ·");
 }
 
+function formatRelative(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  return `${hrs}h ago`;
+}
+
+function syncStatusLabel(status: SyncStatus): string | null {
+  switch (status.kind) {
+    case "synced":
+      return "Synced just now";
+    case "skipped":
+      return `Already up to date · synced ${formatRelative(status.lastSyncAt)}`;
+    case "error":
+      return "Sync failed";
+    default:
+      return null;
+  }
+}
+
 export default function TopBar() {
   const pathname = usePathname();
   const router = useRouter();
@@ -40,6 +70,23 @@ export default function TopBar() {
   const range = (searchParams.get("range") as Range) ?? "30d";
   const subtitle = useMemo(formatToday, []);
   const [syncing, setSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({ kind: "idle" });
+  const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+    };
+  }, []);
+
+  function flashStatus(status: SyncStatus) {
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current);
+    setSyncStatus(status);
+    statusTimerRef.current = setTimeout(
+      () => setSyncStatus({ kind: "idle" }),
+      SYNC_STATUS_TIMEOUT_MS
+    );
+  }
 
   function setRange(r: Range) {
     const params = new URLSearchParams(searchParams.toString());
@@ -55,10 +102,21 @@ export default function TopBar() {
       const data = await r.json();
       if (!r.ok) {
         console.error("Sync failed", data);
+        flashStatus({ kind: "error" });
+        return;
       }
+      if (data?.skipped) {
+        flashStatus({
+          kind: "skipped",
+          lastSyncAt: typeof data.lastSyncAt === "string" ? data.lastSyncAt : new Date().toISOString(),
+        });
+        return;
+      }
+      flashStatus({ kind: "synced" });
       router.refresh();
     } catch (e) {
       console.error("Sync error", e);
+      flashStatus({ kind: "error" });
     } finally {
       setSyncing(false);
     }
@@ -94,6 +152,23 @@ export default function TopBar() {
             ))}
           </div>
         )}
+        {(() => {
+          const label = syncStatusLabel(syncStatus);
+          if (!label) return null;
+          return (
+            <span
+              role="status"
+              aria-live="polite"
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: 12,
+                color: syncStatus.kind === "error" ? "#ff6b6b" : "var(--fg-3)",
+              }}
+            >
+              {label}
+            </span>
+          );
+        })()}
         <button
           type="button"
           className="icon-btn"

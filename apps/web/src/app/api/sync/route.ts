@@ -1,8 +1,10 @@
 import { spawn } from "child_process";
 import path from "path";
-import { addSyncLog } from "@/lib/db";
+import { addSyncLog, getLastSuccessfulSyncAt } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
+
+const SYNC_COOLDOWN_MS = 5 * 60 * 1000;
 
 type ParsedCounts = {
   recovery: number | null;
@@ -102,6 +104,16 @@ function runSync(): Promise<{ ok: boolean; stdout: string; stderr: string }> {
 }
 
 export async function POST() {
+  const lastOk = getLastSuccessfulSyncAt();
+  if (lastOk && Date.now() - lastOk.getTime() < SYNC_COOLDOWN_MS) {
+    return Response.json({
+      ok: true,
+      skipped: true,
+      reason: "recent_sync",
+      lastSyncAt: lastOk.toISOString(),
+    });
+  }
+
   const startedAt = new Date().toISOString();
   const t0 = Date.now();
   const { ok, stdout, stderr } = await runSync();
