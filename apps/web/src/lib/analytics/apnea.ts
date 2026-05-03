@@ -98,8 +98,8 @@ export function rollingScoreColor(value: number): string {
 export function highRiskNightsCount(rows: ApneaRow[], windowDays = 14): number {
   if (rows.length === 0) return 0;
   const lastDate = rows[rows.length - 1].date;
-  const cutoff = new Date(lastDate + "T00:00:00");
-  cutoff.setDate(cutoff.getDate() - windowDays);
+  const cutoff = new Date(lastDate + "T00:00:00Z");
+  cutoff.setUTCDate(cutoff.getUTCDate() - windowDays);
   const cutoffStr = cutoff.toISOString().slice(0, 10);
   return rows.filter((r) => r.date >= cutoffStr && r.apnea_score >= 2).length;
 }
