@@ -21,6 +21,7 @@ export default async function SleepPage({
   const durationData = trend.map((r) => ({ date: r.date, value: msToHoursNumber(r.in_bed_ms) }));
   const needData = trend.map((r) => ({ date: r.date, value: msToHoursNumber(r.sleep_need_ms) }));
   const perfData = trend.map((r) => ({ date: r.date, value: r.performance }));
+  const consistencyData = trend.map((r) => ({ date: r.date, value: r.consistency }));
 
   return (
     <>
@@ -64,6 +65,14 @@ export default async function SleepPage({
             gradientId="sleep-need"
             data={needData}
             unit="h"
+          />
+          <TrendChart
+            title="Sleep Consistency"
+            subtitle={rangeLabel}
+            color="#ffaa00"
+            gradientId="sleep-cons"
+            data={consistencyData}
+            unit="%"
           />
         </div>
       </div>
