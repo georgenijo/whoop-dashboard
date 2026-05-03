@@ -1,6 +1,7 @@
 import KPIStrip from "@/components/overview/KPIStrip";
 import TrendChart from "@/components/charts/TrendChart";
-import { getOverview, getRecoveryTrend } from "@/lib/db";
+import OvertrainingCard from "@/components/recovery/OvertrainingCard";
+import { getOverview, getRecoveryTrend, getStrainTrend } from "@/lib/db";
 import { parseDays, formatRangeLabel } from "@/lib/range";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,8 @@ export default async function RecoveryPage({
   const rangeLabel = formatRangeLabel(range);
   const data = getOverview(days);
   const trend = getRecoveryTrend(days);
+  const otsRecovery = getRecoveryTrend(7);
+  const otsCycles = getStrainTrend(7);
 
   const recoveryData = trend.map((r) => ({ date: r.date, value: r.recovery_score }));
   const hrvData = trend.map((r) => ({ date: r.date, value: r.hrv }));
@@ -34,6 +37,8 @@ export default async function RecoveryPage({
         strainTrend={data.strainTrend}
         sleepTrend={data.sleepTrend}
       />
+
+      <OvertrainingCard recovery={otsRecovery} cycles={otsCycles} />
 
       <div className="grid-main">
         <div className="col">

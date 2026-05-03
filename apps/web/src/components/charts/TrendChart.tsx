@@ -2,6 +2,7 @@
 
 import { useRef, useState, useCallback, useEffect } from "react";
 import { smoothPath } from "@/lib/paths";
+import { linearSlope } from "@/lib/stats";
 
 function linearRegression(values: number[]): { x1: number; y1: number; x2: number; y2: number } | null {
   const n = values.length;
@@ -10,11 +11,9 @@ function linearRegression(values: number[]): { x1: number; y1: number; x2: numbe
   const max = Math.max(...values);
   const range = max - min || 1;
 
-  let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-  for (let i = 0; i < n; i++) {
-    sumX += i; sumY += values[i]; sumXY += i * values[i]; sumX2 += i * i;
-  }
-  const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+  const slope = linearSlope(values);
+  let sumX = 0, sumY = 0;
+  for (let i = 0; i < n; i++) { sumX += i; sumY += values[i]; }
   const intercept = (sumY - slope * sumX) / n;
 
   const yAt = (x: number) => 100 - ((slope * x + intercept - min) / range) * 100;
