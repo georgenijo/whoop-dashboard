@@ -2,7 +2,9 @@ import SportFrequencyChart from "@/components/charts/SportFrequencyChart";
 import WorkoutZoneChart from "@/components/charts/WorkoutZoneChart";
 import WorkoutDistanceChart from "@/components/charts/WorkoutDistanceChart";
 import Zone2Tracker from "@/components/charts/Zone2Tracker";
-import { getWorkouts, getWorkoutsRange } from "@/lib/db";
+import CardiacDriftCard from "@/components/charts/CardiacDriftCard";
+import { getWorkouts, getWorkoutsRange, getBodyMeasurements } from "@/lib/db";
+import { computeCardiacDrift } from "@/lib/analytics/cardiacDrift";
 
 export const dynamic = "force-dynamic";
 
@@ -31,12 +33,18 @@ export default function WorkoutsPage() {
   const workouts = getWorkouts(50);
   const today = new Date().toISOString().slice(0, 10);
   const last90 = getWorkoutsRange(isoNDaysAgo(90), today);
+  const last180 = getWorkoutsRange(isoNDaysAgo(180), today);
+  const body = getBodyMeasurements();
+  const maxHR = body?.max_heart_rate ?? null;
+  const driftReport = computeCardiacDrift(last180);
 
   return (
     <>
       <SportFrequencyChart rows={last90} />
 
-      <WorkoutZoneChart rows={last90} />
+      <WorkoutZoneChart rows={last90} maxHR={maxHR} />
+
+      <CardiacDriftCard report={driftReport} />
 
       <div className="grid-main">
         <div className="col">
