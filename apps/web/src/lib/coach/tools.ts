@@ -2,6 +2,7 @@ import "server-only";
 import type { Tool, ToolResultBlockParam, ToolUseBlock } from "@anthropic-ai/sdk/resources/messages";
 import {
   getJournalRange,
+  getNaps,
   getRecoveryRange,
   getSleepRange,
   getStrainRange,
@@ -13,7 +14,8 @@ export type CoachToolName =
   | "query_sleep"
   | "query_strain"
   | "query_workouts"
-  | "query_journal";
+  | "query_journal"
+  | "query_naps";
 
 type DateRangeInput = {
   start_date: string;
@@ -55,14 +57,14 @@ export const TOOLS: ToolSchema[] = [
   {
     name: "query_recovery",
     description:
-      "Query daily Whoop recovery rows for a date range. Returns recovery_score, HRV, resting heart rate, SpO2, and skin temperature.",
+      "Query daily Whoop recovery rows for a date range. Returns recovery_score (0-100), HRV (ms), resting heart rate (bpm), SpO2 (%), and skin temperature (degrees C).",
     input_schema: DATE_RANGE_SCHEMA,
     strict: true,
   },
   {
     name: "query_sleep",
     description:
-      "Query nightly Whoop sleep rows for a date range. Excludes naps and returns sleep duration/stages, need, performance, efficiency, disturbances, and respiratory rate.",
+      "Query nightly Whoop sleep rows for a date range. Excludes naps. Returns sleep duration, stage breakdown (light/deep/REM/awake ms), sleep need (with baseline / debt / strain / nap-credit components when available), performance, efficiency, consistency, disturbances, cycles, and respiratory rate.",
     input_schema: DATE_RANGE_SCHEMA,
     strict: true,
   },
@@ -76,7 +78,14 @@ export const TOOLS: ToolSchema[] = [
   {
     name: "query_workouts",
     description:
-      "Query Whoop workout rows for a date range. Returns sport, duration, heart rate, strain, kilojoules, distance in meters (when GPS recorded), and milliseconds spent in each HR zone (zone_0_ms through zone_5_ms — Z0 below 50% max HR, Z2 aerobic 60-70%, Z5 max effort 90%+).",
+      "Query Whoop workout rows for a date range. Returns sport, duration, heart rate (avg/max), strain, kilojoules, distance (meters), and time-in-zone breakdown (zone_0_ms through zone_5_ms; zone 2 = aerobic base, zones 4-5 = high intensity).",
+    input_schema: DATE_RANGE_SCHEMA,
+    strict: true,
+  },
+  {
+    name: "query_naps",
+    description:
+      "Query Whoop nap rows (naps only — excludes nightly sleep) for a date range. Returns date, duration_ms, performance, efficiency, and stage breakdown (light/deep/REM/awake ms).",
     input_schema: DATE_RANGE_SCHEMA,
     strict: true,
   },
@@ -165,6 +174,8 @@ export async function executeTool(name: string, input: unknown): Promise<unknown
       return getStrainRange(startDate, endDate);
     case "query_workouts":
       return getWorkoutsRange(startDate, endDate);
+    case "query_naps":
+      return getNaps(startDate, endDate);
     case "query_journal":
       return getJournalRange(startDate, endDate);
     default:

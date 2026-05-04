@@ -24,13 +24,14 @@ export {
   getStrainRange,
 } from "./strain";
 
-export type { SleepRow } from "./sleep";
+export type { SleepRow, NapRow } from "./sleep";
 export {
   getLatestSleep,
   getPreviousSleep,
   getSleepTrend,
   getSleepRange,
   getFullSleepTrend,
+  getNaps,
 } from "./sleep";
 
 export type { WorkoutRow } from "./workouts";
@@ -38,6 +39,9 @@ export { getWorkouts, getWorkoutsRange } from "./workouts";
 
 export type { JournalRow } from "./journal";
 export { getJournalRange } from "./journal";
+
+export type { BodyMeasurementRow } from "./body";
+export { getBodyMeasurements } from "./body";
 
 export type { DailySummaryRow, InsightRow, Overview } from "./summary";
 export {

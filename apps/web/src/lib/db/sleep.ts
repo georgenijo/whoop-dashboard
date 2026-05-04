@@ -80,3 +80,28 @@ export function getFullSleepTrend(days: number): SleepRow[] {
     }) ?? []
   ).reverse();
 }
+
+export type NapRow = {
+  date: string;
+  duration_ms: number | null;
+  performance: number | null;
+  efficiency: number | null;
+  light_ms: number | null;
+  deep_ms: number | null;
+  rem_ms: number | null;
+  awake_ms: number | null;
+};
+
+export function getNaps(startDate: string, endDate: string): NapRow[] {
+  return (
+    safeQuery((db) => {
+      if (!hasTable(db, "sleep")) return [];
+      const range = dateRangeClause(startDate, endDate);
+      return db
+        .prepare(
+          `SELECT date, in_bed_ms AS duration_ms, performance, efficiency, light_ms, deep_ms, rem_ms, awake_ms FROM sleep WHERE nap = 1 AND ${range.clause} ORDER BY date ASC`
+        )
+        .all(...range.params) as NapRow[];
+    }) ?? []
+  );
+}
