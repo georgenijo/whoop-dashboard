@@ -76,7 +76,7 @@ export const TOOLS: ToolSchema[] = [
   {
     name: "query_workouts",
     description:
-      "Query Whoop workout rows for a date range. Returns sport, duration, heart rate, strain, and kilojoules.",
+      "Query Whoop workout rows for a date range. Returns sport, duration, heart rate, strain, kilojoules, distance in meters (when GPS recorded), and milliseconds spent in each HR zone (zone_0_ms through zone_5_ms — Z0 below 50% max HR, Z2 aerobic 60-70%, Z5 max effort 90%+).",
     input_schema: DATE_RANGE_SCHEMA,
     strict: true,
   },
