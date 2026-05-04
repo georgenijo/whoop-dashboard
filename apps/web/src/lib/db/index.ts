@@ -32,6 +32,7 @@ export {
   getSleepRange,
   getFullSleepTrend,
   getNaps,
+  getRecentNaps,
 } from "./sleep";
 
 export type { WorkoutRow } from "./workouts";

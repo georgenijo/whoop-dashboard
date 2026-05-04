@@ -101,11 +101,15 @@ export function upsertSleep(record: WhoopSleepRecord): boolean {
       INSERT OR REPLACE INTO sleep
         (date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms, sleep_need_ms,
          performance, efficiency, consistency, respiratory_rate,
-         disturbances, cycles, nap, raw)
+         disturbances, cycles, nap,
+         need_from_baseline_ms, need_from_debt_ms, need_from_strain_ms, need_from_nap_ms,
+         raw)
       VALUES
         (@date, @in_bed_ms, @light_ms, @deep_ms, @rem_ms, @awake_ms, @sleep_need_ms,
          @performance, @efficiency, @consistency, @respiratory_rate,
-         @disturbances, @cycles, @nap, @raw)
+         @disturbances, @cycles, @nap,
+         @need_from_baseline_ms, @need_from_debt_ms, @need_from_strain_ms, @need_from_nap_ms,
+         @raw)
     `).run({
       date: parseDate(record.start),
       in_bed_ms: ss.total_in_bed_time_milli,
@@ -125,6 +129,10 @@ export function upsertSleep(record: WhoopSleepRecord): boolean {
       disturbances: ss.disturbance_count,
       cycles: ss.sleep_cycle_count,
       nap: record.nap ? 1 : 0,
+      need_from_baseline_ms: sn.baseline_milli,
+      need_from_debt_ms: sn.need_from_sleep_debt_milli,
+      need_from_strain_ms: sn.need_from_recent_strain_milli,
+      need_from_nap_ms: sn.need_from_recent_nap_milli,
       raw: JSON.stringify(record),
     });
     return true;
