@@ -1,12 +1,14 @@
 import KPIStrip from "@/components/overview/KPIStrip";
 import TrendChart from "@/components/charts/TrendChart";
 import HRVTrend from "@/components/charts/HRVTrend";
+import DayOfWeekRecovery from "@/components/recovery/DayOfWeekRecovery";
 import OvertrainingCard from "@/components/recovery/OvertrainingCard";
 import IllnessSignalCard from "@/components/recovery/IllnessSignalCard";
 import SkinTempDeviationCard from "@/components/recovery/SkinTempDeviationCard";
 import Spo2TrendCard from "@/components/recovery/Spo2TrendCard";
 import {
   getOverview,
+  getRecoveryByDayOfWeek,
   getRecoveryRange,
   getRecoveryTrend,
   getSleepRange,
@@ -52,6 +54,7 @@ export default async function RecoveryPage({
   const illnessRecovery = getRecoveryRange(start, end);
   const illnessSleep = getSleepRange(start, end);
   const illnessRows = computeIllnessSignal(illnessRecovery, illnessSleep);
+  const dowRecovery = getRecoveryByDayOfWeek();
 
   return (
     <>
@@ -69,6 +72,8 @@ export default async function RecoveryPage({
 
       <OvertrainingCard recovery={otsRecovery} cycles={otsCycles} />
 
+      <DayOfWeekRecovery rows={dowRecovery} />
+
       <div className="grid-main">
         <div className="col">
           <TrendChart
@@ -78,6 +83,7 @@ export default async function RecoveryPage({
             gradientId="recovery"
             data={recoveryData}
             unit="%"
+            showRollingToggle
           />
           <HRVTrend subtitle={rangeLabel} data={hrvSeries} />
           <SkinTempDeviationCard data={skinTempSeries} />
@@ -90,6 +96,7 @@ export default async function RecoveryPage({
             gradientId="rhr"
             data={rhrData}
             unit=" bpm"
+            showRollingToggle
           />
           <Spo2TrendCard data={spo2Series} />
         </div>

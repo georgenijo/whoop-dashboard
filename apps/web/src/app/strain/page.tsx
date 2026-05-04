@@ -1,5 +1,6 @@
 import KPIStrip from "@/components/overview/KPIStrip";
 import TrendChart from "@/components/charts/TrendChart";
+import TSBCurve from "@/components/charts/TSBCurve";
 import { getOverview, getStrainTrend } from "@/lib/db";
 import { parseDays, formatRangeLabel } from "@/lib/range";
 
@@ -15,6 +16,7 @@ export default async function StrainPage({
   const rangeLabel = formatRangeLabel(range);
   const data = getOverview(days);
   const trend = getStrainTrend(days);
+  const tsbTrend = days >= 180 ? trend : getStrainTrend(180);
 
   const strainData = trend.map((r) => ({ date: r.date, value: r.strain }));
   const hrData = trend.map((r) => ({ date: r.date, value: r.avg_hr }));
@@ -42,6 +44,7 @@ export default async function StrainPage({
             gradientId="strain"
             data={strainData}
             unit=""
+            showRollingToggle
           />
         </div>
         <div className="col">
@@ -55,6 +58,8 @@ export default async function StrainPage({
           />
         </div>
       </div>
+
+      <TSBCurve rows={tsbTrend} />
     </>
   );
 }

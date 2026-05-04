@@ -61,3 +61,29 @@ export function getRecoveryRange(startDate: string, endDate: string): RecoveryRo
     }) ?? []
   );
 }
+
+export type DayOfWeekRecoveryRow = {
+  dow: number;
+  avg: number;
+  count: number;
+};
+
+export function getRecoveryByDayOfWeek(): DayOfWeekRecoveryRow[] {
+  return (
+    safeQuery((db) => {
+      if (!hasTable(db, "recovery")) return [];
+      return db
+        .prepare(
+          `SELECT CAST(strftime('%w', date) AS INTEGER) AS dow,
+                  AVG(recovery_score) AS avg,
+                  COUNT(*) AS count
+           FROM recovery
+           WHERE recovery_score IS NOT NULL
+             AND date >= date('now', '-90 days')
+           GROUP BY dow
+           ORDER BY dow`
+        )
+        .all() as DayOfWeekRecoveryRow[];
+    }) ?? []
+  );
+}
