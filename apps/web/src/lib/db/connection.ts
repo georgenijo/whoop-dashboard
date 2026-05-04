@@ -73,6 +73,17 @@ export function openWrite(): DB | null {
         zone_5_ms INTEGER,
         raw JSON
       );
+      CREATE TABLE IF NOT EXISTS body_measurements (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) DEFAULT 1,
+        height_meter REAL,
+        weight_kilogram REAL,
+        max_heart_rate INTEGER,
+        measured_at TEXT NOT NULL,
+        raw JSON
+      );
+      CREATE INDEX IF NOT EXISTS idx_body_measurements_user_measured
+        ON body_measurements(user_id, measured_at DESC);
       CREATE TABLE IF NOT EXISTS daily_summary (
         date TEXT PRIMARY KEY,
         recovery_score INTEGER,

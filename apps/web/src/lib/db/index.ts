@@ -39,6 +39,9 @@ export { getWorkouts, getWorkoutsRange } from "./workouts";
 export type { JournalRow } from "./journal";
 export { getJournalRange } from "./journal";
 
+export type { BodyMeasurementRow } from "./body";
+export { getBodyMeasurements } from "./body";
+
 export type { DailySummaryRow, InsightRow, Overview } from "./summary";
 export {
   getDailySummary,

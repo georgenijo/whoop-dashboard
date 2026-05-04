@@ -75,6 +75,17 @@ def init_db():
             zone_5_ms INTEGER,
             raw JSON
         );
+        CREATE TABLE IF NOT EXISTS body_measurements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL DEFAULT 1,
+            height_meter REAL,
+            weight_kilogram REAL,
+            max_heart_rate INTEGER,
+            measured_at TEXT NOT NULL,
+            raw JSON
+        );
+        CREATE INDEX IF NOT EXISTS idx_body_measurements_user_measured
+            ON body_measurements(user_id, measured_at DESC);
         CREATE TABLE IF NOT EXISTS insights (
             date TEXT PRIMARY KEY,
             insight TEXT,
@@ -262,12 +273,62 @@ def sync_workouts(records: list):
     conn.close()
 
 
+def sync_body_measurement(body: dict | None, user_id: int = 1) -> bool:
+    """Persist Whoop body measurement if it differs from the latest stored row.
+
+    Whoop's payload has no timestamp — values are "current". We dedupe by
+    comparing height/weight/max_hr against the most recent row to avoid one
+    row per sync.
+    """
+    if not body:
+        return False
+    height = body.get("height_meter")
+    weight = body.get("weight_kilogram")
+    max_hr = body.get("max_heart_rate")
+    if height is None and weight is None and max_hr is None:
+        return False
+
+    conn = get_conn()
+    latest = conn.execute(
+        "SELECT height_meter, weight_kilogram, max_heart_rate "
+        "FROM body_measurements WHERE user_id = ? "
+        "ORDER BY measured_at DESC LIMIT 1",
+        (user_id,),
+    ).fetchone()
+    if (
+        latest is not None
+        and latest["height_meter"] == height
+        and latest["weight_kilogram"] == weight
+        and latest["max_heart_rate"] == max_hr
+    ):
+        conn.close()
+        return False
+
+    conn.execute(
+        "INSERT INTO body_measurements "
+        "(user_id, height_meter, weight_kilogram, max_heart_rate, measured_at, raw) "
+        "VALUES (?,?,?,?,?,?)",
+        (
+            user_id,
+            height,
+            weight,
+            max_hr,
+            datetime.utcnow().isoformat(),
+            json.dumps(body),
+        ),
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
 def sync_all(data: dict):
     init_db()
     sync_recovery(data.get("recovery", []))
     sync_cycles(data.get("cycles", []))
     sync_sleep(data.get("sleep", []))
     sync_workouts(data.get("workouts", []))
+    sync_body_measurement(data.get("body"))
 
 
 def save_insight(date: str, insight: str):
