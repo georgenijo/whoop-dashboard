@@ -4,9 +4,11 @@ import KPIStrip from "@/components/overview/KPIStrip";
 import RecoveryTrend from "@/components/overview/RecoveryTrend";
 import AIInsightCard from "@/components/overview/AIInsightCard";
 import AIInsightRefreshWatcher from "@/components/overview/AIInsightRefreshWatcher";
+import PRsCard from "@/components/overview/PRsCard";
 import {
   getDailySummary,
   getOverview,
+  getPRStats,
   getRecoveryTrend,
   type DailySummaryRow,
   type RecoveryRow,
@@ -29,6 +31,7 @@ export default async function OverviewPage({
   const days = parseDays(range);
   const data = getOverview(days);
   const trend = getRecoveryTrend(days);
+  const prStats = getPRStats();
   const summaryByDate = new Map(
     getDailySummary("0000-01-01", "9999-12-31")
       .filter((r) => r.recovery_score != null)
@@ -80,6 +83,8 @@ export default async function OverviewPage({
         strainTrend={data.strainTrend}
         sleepTrend={data.sleepTrend}
       />
+
+      <PRsCard stats={prStats} />
 
       <div className="grid-main">
         <div className="col">
