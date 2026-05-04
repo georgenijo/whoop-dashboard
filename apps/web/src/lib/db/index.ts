@@ -24,13 +24,14 @@ export {
   getStrainRange,
 } from "./strain";
 
-export type { SleepRow } from "./sleep";
+export type { SleepRow, NapRow } from "./sleep";
 export {
   getLatestSleep,
   getPreviousSleep,
   getSleepTrend,
   getSleepRange,
   getFullSleepTrend,
+  getNaps,
 } from "./sleep";
 
 export type { WorkoutRow } from "./workouts";
