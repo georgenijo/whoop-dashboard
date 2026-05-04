@@ -3,6 +3,8 @@ import TrendChart from "@/components/charts/TrendChart";
 import HRVTrend from "@/components/charts/HRVTrend";
 import OvertrainingCard from "@/components/recovery/OvertrainingCard";
 import IllnessSignalCard from "@/components/recovery/IllnessSignalCard";
+import SkinTempDeviationCard from "@/components/recovery/SkinTempDeviationCard";
+import Spo2TrendCard from "@/components/recovery/Spo2TrendCard";
 import {
   getOverview,
   getRecoveryRange,
@@ -25,13 +27,19 @@ export default async function RecoveryPage({
   const rangeLabel = formatRangeLabel(range);
   const data = getOverview(days);
   const trend = getRecoveryTrend(days);
+  const trend30 = getRecoveryTrend(30);
   const otsRecovery = getRecoveryTrend(7);
   const otsCycles = getStrainTrend(7);
 
   const recoveryData = trend.map((r) => ({ date: r.date, value: r.recovery_score }));
   const hrvSeries = trend.map((r) => ({ date: r.date, hrv: r.hrv }));
   const rhrData = trend.map((r) => ({ date: r.date, value: r.rhr }));
-  const spo2Data = trend.map((r) => ({ date: r.date, value: r.spo2 }));
+  const skinTempSeries = trend30.map((r) => ({
+    date: r.date,
+    skin_temp: r.skin_temp,
+    recovery_score: r.recovery_score,
+  }));
+  const spo2Series = trend30.map((r) => ({ date: r.date, spo2: r.spo2 }));
 
   // Illness signal needs ~14 days of pre-window history for the baseline,
   // plus the current display window.
@@ -72,6 +80,7 @@ export default async function RecoveryPage({
             unit="%"
           />
           <HRVTrend subtitle={rangeLabel} data={hrvSeries} />
+          <SkinTempDeviationCard data={skinTempSeries} />
         </div>
         <div className="col">
           <TrendChart
@@ -82,14 +91,7 @@ export default async function RecoveryPage({
             data={rhrData}
             unit=" bpm"
           />
-          <TrendChart
-            title="SpO2"
-            subtitle={rangeLabel}
-            color="#00aaff"
-            gradientId="spo2"
-            data={spo2Data}
-            unit="%"
-          />
+          <Spo2TrendCard data={spo2Series} />
         </div>
       </div>
 
