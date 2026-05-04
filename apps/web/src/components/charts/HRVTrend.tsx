@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useMemo } from "react";
 import { smoothPath } from "@/lib/paths";
 
 type DataPoint = { date: string; hrv: number | null };
@@ -9,6 +9,8 @@ type Props = {
   subtitle?: string;
   data: DataPoint[];
 };
+
+type RollingMode = "raw" | "7d" | "30d";
 
 type Tooltip = {
   x: number;
@@ -71,12 +73,17 @@ function rollingMean(values: (number | null)[], windowSize: number): (number | n
 export default function HRVTrend({ subtitle, data }: Props) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
+  const [mode, setMode] = useState<RollingMode>("7d");
 
   const valid = data.filter((d): d is { date: string; hrv: number } =>
     d.hrv != null && Number.isFinite(d.hrv)
   );
-  const rolling = rollingMean(data.map((d) => d.hrv), 7);
-  const stats = rollingMeanStd(data.map((d) => d.hrv));
+  const rolling = useMemo(() => {
+    if (mode === "raw") return null;
+    const window = mode === "7d" ? 7 : 30;
+    return rollingMean(data.map((d) => d.hrv), window);
+  }, [data, mode]);
+  const stats = useMemo(() => rollingMeanStd(data.map((d) => d.hrv)), [data]);
   const validIndices = data.reduce<number[]>((acc, d, i) => {
     if (d.hrv != null && Number.isFinite(d.hrv)) acc.push(i);
     return acc;
@@ -103,7 +110,7 @@ export default function HRVTrend({ subtitle, data }: Props) {
     const originalIdx = validIndices[clamped];
 
     const rawValues = valid.map((d) => d.hrv);
-    const rollingValues = rolling.filter((v): v is number => v != null);
+    const rollingValues = rolling ? rolling.filter((v): v is number => v != null) : [];
     const allValues = [...rawValues, ...rollingValues];
     const min = Math.min(...allValues);
     const max = Math.max(...allValues);
@@ -120,7 +127,7 @@ export default function HRVTrend({ subtitle, data }: Props) {
       y: (svgY / 100) * rect.height,
       date: pt.date,
       raw: pt.hrv,
-      rolling: rolling[originalIdx],
+      rolling: rolling ? rolling[originalIdx] : null,
       pct,
       svgY,
       anomaly: anomalies.get(originalIdx) ?? null,
@@ -148,7 +155,7 @@ export default function HRVTrend({ subtitle, data }: Props) {
   }
 
   const rawValues = valid.map((d) => d.hrv);
-  const rollingValues = rolling.filter((v): v is number => v != null);
+  const rollingValues = rolling ? rolling.filter((v): v is number => v != null) : [];
   const allValues = [...rawValues, ...rollingValues];
   const min = Math.min(...allValues);
   const max = Math.max(...allValues);
@@ -163,22 +170,25 @@ export default function HRVTrend({ subtitle, data }: Props) {
   const rawLinePath = smoothPath(rawPoints);
 
   const rollingPoints: [number, number][] = [];
-  rolling.forEach((v, i) => {
-    if (v == null) return;
-    const xIdx = validIndices.indexOf(i);
-    if (xIdx === -1) return;
-    rollingPoints.push([
-      (xIdx / (valid.length - 1)) * 100,
-      100 - ((v - min) / range) * 100,
-    ]);
-  });
-  const rollingLinePath = smoothPath(rollingPoints);
+  if (rolling) {
+    rolling.forEach((v, i) => {
+      if (v == null) return;
+      const xIdx = validIndices.indexOf(i);
+      if (xIdx === -1) return;
+      rollingPoints.push([
+        (xIdx / (valid.length - 1)) * 100,
+        100 - ((v - min) / range) * 100,
+      ]);
+    });
+  }
+  const rollingLinePath = rollingPoints.length > 1 ? smoothPath(rollingPoints) : "";
   const rollingAreaPath = rollingPoints.length > 1
     ? `${rollingLinePath} L ${rollingPoints[rollingPoints.length - 1][0]},100 L ${rollingPoints[0][0]},100 Z`
     : "";
 
   const endY = 100 - ((latest - min) / range) * 100;
   const axis = pickAxis(valid);
+  const subtitleSuffix = mode === "raw" ? "raw" : `${mode} avg overlay`;
 
   return (
     <div className="card">
@@ -190,13 +200,16 @@ export default function HRVTrend({ subtitle, data }: Props) {
           </div>
           {subtitle && (
             <div className="card-sub" style={{ marginTop: 4 }}>
-              {subtitle} · 7d avg overlay · avg {avg.toFixed(1)} ms
+              {subtitle} · {subtitleSuffix} · avg {avg.toFixed(1)} ms
             </div>
           )}
         </div>
-        <span className="card-sub">
-          Latest&nbsp;<span style={{ color: COLOR }}>{latest.toFixed(1)} ms</span>
-        </span>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+          <span className="card-sub">
+            Latest&nbsp;<span style={{ color: COLOR }}>{latest.toFixed(1)} ms</span>
+          </span>
+          <RollingToggle mode={mode} onChange={setMode} color={COLOR} />
+        </div>
       </div>
 
       <div
@@ -226,13 +239,13 @@ export default function HRVTrend({ subtitle, data }: Props) {
             d={rawLinePath}
             fill="none"
             stroke={COLOR}
-            strokeOpacity="0.35"
-            strokeWidth="0.8"
+            strokeOpacity={mode === "raw" ? 0.85 : 0.35}
+            strokeWidth={mode === "raw" ? 1.5 : 0.8}
             strokeLinejoin="round"
             strokeLinecap="round"
             vectorEffect="non-scaling-stroke"
           />
-          {rawPoints.map(([x, y], i) => (
+          {mode !== "raw" && rawPoints.map(([x, y], i) => (
             <circle
               key={`raw-${i}`}
               cx={x}
@@ -316,12 +329,14 @@ export default function HRVTrend({ subtitle, data }: Props) {
                 {tooltip.raw.toFixed(1)}<span style={{ fontSize: 10, color: "var(--fg-3)", marginLeft: 2 }}>ms</span>
               </span>
             </div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-              <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--fg-3)" }}>7d avg</span>
-              <span style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 500, color: COLOR, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
-                {tooltip.rolling != null ? tooltip.rolling.toFixed(1) : "—"}<span style={{ fontSize: 10, color: "var(--fg-3)", marginLeft: 2 }}>ms</span>
-              </span>
-            </div>
+            {mode !== "raw" && (
+              <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--fg-3)" }}>{mode} avg</span>
+                <span style={{ fontFamily: "var(--font-display)", fontSize: 16, fontWeight: 500, color: COLOR, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
+                  {tooltip.rolling != null ? tooltip.rolling.toFixed(1) : "—"}<span style={{ fontSize: 10, color: "var(--fg-3)", marginLeft: 2 }}>ms</span>
+                </span>
+              </div>
+            )}
             {tooltip.anomaly && (
               <div style={{ marginTop: 4, fontSize: 10, color: ANOMALY_COLOR, fontFamily: "var(--font-mono)" }}>
                 HRV {tooltip.raw.toFixed(1)} ms — {Math.round(tooltip.anomaly.pctBelow)}% below your 30d baseline
@@ -336,6 +351,47 @@ export default function HRVTrend({ subtitle, data }: Props) {
           <span key={`${label}-${i}`}>{label}</span>
         ))}
       </div>
+    </div>
+  );
+}
+
+function RollingToggle({
+  mode,
+  onChange,
+  color,
+}: {
+  mode: RollingMode;
+  onChange: (m: RollingMode) => void;
+  color: string;
+}) {
+  const opts: RollingMode[] = ["raw", "7d", "30d"];
+  return (
+    <div style={{ display: "inline-flex", gap: 2, padding: 2, background: "rgba(255,255,255,0.04)", borderRadius: 6 }}>
+      {opts.map((opt) => {
+        const active = mode === opt;
+        return (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => onChange(opt)}
+            className="card-sub"
+            style={{
+              padding: "2px 8px",
+              borderRadius: 4,
+              border: "none",
+              background: active ? `${color}22` : "transparent",
+              color: active ? color : "var(--fg-3)",
+              cursor: "pointer",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              letterSpacing: "0.02em",
+              textTransform: "lowercase",
+            }}
+          >
+            {opt}
+          </button>
+        );
+      })}
     </div>
   );
 }

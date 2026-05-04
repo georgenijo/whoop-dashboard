@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { smoothPath } from "@/lib/paths";
 import { linearSlope } from "@/lib/stats";
 
@@ -20,6 +20,18 @@ function linearRegression(values: number[]): { x1: number; y1: number; x2: numbe
   return { x1: 0, y1: yAt(0), x2: 100, y2: yAt(n - 1) };
 }
 
+function rollingMean(values: (number | null)[], windowSize: number): (number | null)[] {
+  return values.map((_, i) => {
+    const window = values
+      .slice(Math.max(0, i - (windowSize - 1)), i + 1)
+      .filter((v): v is number => v != null && Number.isFinite(v));
+    if (window.length === 0) return null;
+    return window.reduce((a, b) => a + b, 0) / window.length;
+  });
+}
+
+type RollingMode = "raw" | "7d" | "30d";
+
 type DataPoint = { date: string; value: number | null };
 
 type Props = {
@@ -29,15 +41,17 @@ type Props = {
   gradientId: string;
   data: DataPoint[];
   unit?: string;
+  showRollingToggle?: boolean;
 };
 
 type Tooltip = {
-  x: number; // px from left of chart-body
-  y: number; // px from top of chart-body
+  x: number;
+  y: number;
   date: string;
   value: number;
-  pct: number; // 0–100 x position for crosshair in SVG coords
-  svgY: number; // 0–100 y for dot
+  rolling: number | null;
+  pct: number;
+  svgY: number;
 };
 
 function pickAxis(data: DataPoint[]): string[] {
@@ -55,16 +69,36 @@ function formatDate(dateStr: string): string {
   });
 }
 
-export default function TrendChart({ title, subtitle, color, gradientId, data, unit = "" }: Props) {
+export default function TrendChart({
+  title,
+  subtitle,
+  color,
+  gradientId,
+  data,
+  unit = "",
+  showRollingToggle = false,
+}: Props) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const [showTrendline, setShowTrendline] = useState(false);
+  const [rollingMode, setRollingMode] = useState<RollingMode>("raw");
 
   useEffect(() => {
     setShowTrendline(localStorage.getItem("trendline") === "1");
   }, []);
 
   const valid = data.filter((d): d is { date: string; value: number } => d.value != null && Number.isFinite(d.value));
+
+  const rolling = useMemo(() => {
+    if (!showRollingToggle || rollingMode === "raw") return null;
+    const window = rollingMode === "7d" ? 7 : 30;
+    const allVals = data.map((d) => d.value);
+    const allRolling = rollingMean(allVals, window);
+    return data.reduce<(number | null)[]>((acc, d, i) => {
+      if (d.value != null && Number.isFinite(d.value)) acc.push(allRolling[i]);
+      return acc;
+    }, []);
+  }, [data, rollingMode, showRollingToggle]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!bodyRef.current || valid.length < 2) return;
@@ -74,19 +108,30 @@ export default function TrendChart({ title, subtitle, color, gradientId, data, u
     const clamped = Math.max(0, Math.min(valid.length - 1, idx));
     const pt = valid[clamped];
 
-    const min = Math.min(...valid.map((d) => d.value));
-    const max = Math.max(...valid.map((d) => d.value));
+    const baseValues = valid.map((d) => d.value);
+    const allValues = rolling
+      ? [...baseValues, ...rolling.filter((v): v is number => v != null)]
+      : baseValues;
+    const min = Math.min(...allValues);
+    const max = Math.max(...allValues);
     const range = max - min || 1;
     const svgY = 100 - ((pt.value - min) / range) * 100;
     const pct = (clamped / (valid.length - 1)) * 100;
 
-    // tooltip x: keep inside bounds
     const rawX = (clamped / (valid.length - 1)) * rect.width;
     const tooltipWidth = 130;
     const x = Math.min(Math.max(rawX, tooltipWidth / 2), rect.width - tooltipWidth / 2);
 
-    setTooltip({ x, y: (svgY / 100) * rect.height, date: pt.date, value: pt.value, pct, svgY });
-  }, [valid]);
+    setTooltip({
+      x,
+      y: (svgY / 100) * rect.height,
+      date: pt.date,
+      value: pt.value,
+      rolling: rolling ? rolling[clamped] : null,
+      pct,
+      svgY,
+    });
+  }, [valid, rolling]);
 
   if (valid.length < 2) {
     return (
@@ -108,12 +153,16 @@ export default function TrendChart({ title, subtitle, color, gradientId, data, u
     );
   }
 
-  const avg = valid.reduce((a, b) => a + b.value, 0) / valid.length;
-  const latest = valid[valid.length - 1].value;
-  const min = Math.min(...valid.map((d) => d.value));
-  const max = Math.max(...valid.map((d) => d.value));
+  const baseValues = valid.map((d) => d.value);
+  const avg = baseValues.reduce((a, b) => a + b, 0) / baseValues.length;
+  const latest = baseValues[baseValues.length - 1];
+  const allValues = rolling
+    ? [...baseValues, ...rolling.filter((v): v is number => v != null)]
+    : baseValues;
+  const min = Math.min(...allValues);
+  const max = Math.max(...allValues);
   const range = max - min || 1;
-  const trendLine = showTrendline ? linearRegression(valid.map((d) => d.value)) : null;
+  const trendLine = showTrendline ? linearRegression(baseValues) : null;
 
   const points = valid.map<[number, number]>((d, i) => [
     (i / (valid.length - 1)) * 100,
@@ -123,6 +172,18 @@ export default function TrendChart({ title, subtitle, color, gradientId, data, u
   const areaPath = `${linePath} L 100,100 L 0,100 Z`;
   const endY = 100 - ((latest - min) / range) * 100;
   const axis = pickAxis(valid);
+
+  const rollingPoints: [number, number][] = [];
+  if (rolling) {
+    rolling.forEach((v, i) => {
+      if (v == null) return;
+      rollingPoints.push([
+        (i / (valid.length - 1)) * 100,
+        100 - ((v - min) / range) * 100,
+      ]);
+    });
+  }
+  const rollingLinePath = rollingPoints.length > 1 ? smoothPath(rollingPoints) : "";
 
   return (
     <div className="card">
@@ -138,9 +199,12 @@ export default function TrendChart({ title, subtitle, color, gradientId, data, u
             </div>
           )}
         </div>
-        <span className="card-sub">
-          Latest&nbsp;<span style={{ color }}>{latest.toFixed(1)}{unit}</span>
-        </span>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+          <span className="card-sub">
+            Latest&nbsp;<span style={{ color }}>{latest.toFixed(1)}{unit}</span>
+          </span>
+          {showRollingToggle && <RollingToggle mode={rollingMode} onChange={setRollingMode} color={color} />}
+        </div>
       </div>
 
       <div
@@ -165,6 +229,18 @@ export default function TrendChart({ title, subtitle, color, gradientId, data, u
           <line x1="0" y1="66" x2="100" y2="66" stroke="rgba(255,255,255,0.04)" strokeDasharray="0.3 0.6" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />
           <path d={areaPath} fill={`url(#${gradientId}-area)`} />
           <path d={linePath} fill="none" stroke={`url(#${gradientId}-line)`} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          {rollingLinePath && (
+            <path
+              d={rollingLinePath}
+              fill="none"
+              stroke={color}
+              strokeOpacity="0.55"
+              strokeWidth="2.4"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          )}
           <circle cx="100" cy={endY} r="1.2" fill={color} vectorEffect="non-scaling-stroke" style={{ filter: `drop-shadow(0 0 3px ${color})` }} />
           {trendLine && (
             <line
@@ -196,7 +272,7 @@ export default function TrendChart({ title, subtitle, color, gradientId, data, u
         {tooltip && (
           <div style={{
             position: "absolute",
-            top: Math.max(0, tooltip.y - 52),
+            top: Math.max(0, tooltip.y - (tooltip.rolling != null ? 72 : 52)),
             left: tooltip.x,
             transform: "translateX(-50%)",
             pointerEvents: "none",
@@ -215,6 +291,16 @@ export default function TrendChart({ title, subtitle, color, gradientId, data, u
             <div style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 500, color, letterSpacing: "-0.02em", fontVariantNumeric: "tabular-nums" }}>
               {tooltip.value.toFixed(1)}<span style={{ fontSize: 11, color: "var(--fg-3)", marginLeft: 2 }}>{unit}</span>
             </div>
+            {tooltip.rolling != null && (
+              <div style={{ display: "flex", alignItems: "baseline", gap: 6, marginTop: 2 }}>
+                <span style={{ fontFamily: "var(--font-mono)", fontSize: 9, color: "var(--fg-3)" }}>
+                  {rollingMode} avg
+                </span>
+                <span style={{ fontFamily: "var(--font-display)", fontSize: 13, color, opacity: 0.75, fontVariantNumeric: "tabular-nums" }}>
+                  {tooltip.rolling.toFixed(1)}<span style={{ fontSize: 10, color: "var(--fg-3)", marginLeft: 2 }}>{unit}</span>
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -224,6 +310,47 @@ export default function TrendChart({ title, subtitle, color, gradientId, data, u
           <span key={`${label}-${i}`}>{label}</span>
         ))}
       </div>
+    </div>
+  );
+}
+
+function RollingToggle({
+  mode,
+  onChange,
+  color,
+}: {
+  mode: RollingMode;
+  onChange: (m: RollingMode) => void;
+  color: string;
+}) {
+  const opts: RollingMode[] = ["raw", "7d", "30d"];
+  return (
+    <div style={{ display: "inline-flex", gap: 2, padding: 2, background: "rgba(255,255,255,0.04)", borderRadius: 6 }}>
+      {opts.map((opt) => {
+        const active = mode === opt;
+        return (
+          <button
+            key={opt}
+            type="button"
+            onClick={() => onChange(opt)}
+            className="card-sub"
+            style={{
+              padding: "2px 8px",
+              borderRadius: 4,
+              border: "none",
+              background: active ? `${color}22` : "transparent",
+              color: active ? color : "var(--fg-3)",
+              cursor: "pointer",
+              fontFamily: "var(--font-mono)",
+              fontSize: 10,
+              letterSpacing: "0.02em",
+              textTransform: "lowercase",
+            }}
+          >
+            {opt}
+          </button>
+        );
+      })}
     </div>
   );
 }

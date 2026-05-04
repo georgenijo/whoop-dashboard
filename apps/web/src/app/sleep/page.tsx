@@ -9,6 +9,7 @@ import RespiratoryRateChart from "@/components/charts/RespiratoryRateChart";
 import SleepCyclesBarChart from "@/components/charts/SleepCyclesBarChart";
 import NapCalendar from "@/components/charts/NapCalendar";
 import ApneaRiskCard from "@/components/charts/ApneaRiskCard";
+import SleepDebtChart from "@/components/charts/SleepDebtChart";
 import {
   getOverview,
   getFullSleepTrend,
@@ -35,6 +36,7 @@ export default async function SleepPage({
   const trend = getFullSleepTrend(days);
   const recoveryTrend = getRecoveryTrend(days);
   const apneaRows = computeApneaSignal(trend, recoveryTrend);
+  const debtTrend = days >= 30 ? trend : getFullSleepTrend(30);
 
   const latestSleep = getLatestSleep();
   const trend14 = getFullSleepTrend(14);
@@ -99,6 +101,8 @@ export default async function SleepPage({
 
       <NapCalendar naps={naps} />
       <ApneaRiskCard rows={apneaRows} />
+
+      <SleepDebtChart rows={debtTrend} />
     </>
   );
 }

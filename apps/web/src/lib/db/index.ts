@@ -8,12 +8,13 @@ export {
   getPrimaryUser,
 } from "./auth";
 
-export type { RecoveryRow } from "./recovery";
+export type { RecoveryRow, DayOfWeekRecoveryRow } from "./recovery";
 export {
   getLatestRecovery,
   getPreviousRecovery,
   getRecoveryTrend,
   getRecoveryRange,
+  getRecoveryByDayOfWeek,
 } from "./recovery";
 
 export type { CycleRow } from "./strain";
