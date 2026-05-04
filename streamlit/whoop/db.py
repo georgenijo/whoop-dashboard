@@ -55,6 +55,10 @@ def init_db():
             disturbances INTEGER,
             cycles INTEGER,
             nap BOOLEAN,
+            need_from_baseline_ms INTEGER,
+            need_from_debt_ms INTEGER,
+            need_from_strain_ms INTEGER,
+            need_from_nap_ms INTEGER,
             raw JSON
         );
         CREATE TABLE IF NOT EXISTS workouts (
@@ -216,7 +220,15 @@ def sync_sleep(records: list):
             + sn["need_from_recent_nap_milli"]
         )
         conn.execute(
-            "INSERT OR REPLACE INTO sleep VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            """
+            INSERT OR REPLACE INTO sleep
+                (date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms, sleep_need_ms,
+                 performance, efficiency, consistency, respiratory_rate,
+                 disturbances, cycles, nap,
+                 need_from_baseline_ms, need_from_debt_ms, need_from_strain_ms, need_from_nap_ms,
+                 raw)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
             (
                 date,
                 ss["total_in_bed_time_milli"],
@@ -232,6 +244,10 @@ def sync_sleep(records: list):
                 ss["disturbance_count"],
                 ss["sleep_cycle_count"],
                 r.get("nap", False),
+                sn["baseline_milli"],
+                sn["need_from_sleep_debt_milli"],
+                sn["need_from_recent_strain_milli"],
+                sn["need_from_recent_nap_milli"],
                 json.dumps(r),
             ),
         )

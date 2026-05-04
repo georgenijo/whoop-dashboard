@@ -53,6 +53,10 @@ export function openWrite(): DB | null {
         disturbances INTEGER,
         cycles INTEGER,
         nap BOOLEAN,
+        need_from_baseline_ms INTEGER,
+        need_from_debt_ms INTEGER,
+        need_from_strain_ms INTEGER,
+        need_from_nap_ms INTEGER,
         raw JSON
       );
       CREATE TABLE IF NOT EXISTS workouts (
@@ -207,6 +211,31 @@ export function openWrite(): DB | null {
       db.exec("ALTER TABLE chat_messages ADD COLUMN thread_id INTEGER REFERENCES chat_threads(id)");
     }
     db.exec("CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id, id)");
+    const sleepCols = db.prepare("PRAGMA table_info(sleep)").all() as { name: string }[];
+    const sleepNeedColumns = [
+      "need_from_baseline_ms",
+      "need_from_debt_ms",
+      "need_from_strain_ms",
+      "need_from_nap_ms",
+    ];
+    let addedSleepNeedColumn = false;
+    for (const col of sleepNeedColumns) {
+      if (!sleepCols.some((c) => c.name === col)) {
+        db.exec(`ALTER TABLE sleep ADD COLUMN ${col} INTEGER`);
+        addedSleepNeedColumn = true;
+      }
+    }
+    if (addedSleepNeedColumn) {
+      db.exec(`
+        UPDATE sleep SET
+          need_from_baseline_ms = COALESCE(need_from_baseline_ms, json_extract(raw, '$.score.sleep_needed.baseline_milli')),
+          need_from_debt_ms = COALESCE(need_from_debt_ms, json_extract(raw, '$.score.sleep_needed.need_from_sleep_debt_milli')),
+          need_from_strain_ms = COALESCE(need_from_strain_ms, json_extract(raw, '$.score.sleep_needed.need_from_recent_strain_milli')),
+          need_from_nap_ms = COALESCE(need_from_nap_ms, json_extract(raw, '$.score.sleep_needed.need_from_recent_nap_milli'))
+        WHERE raw IS NOT NULL
+          AND (need_from_baseline_ms IS NULL OR need_from_debt_ms IS NULL OR need_from_strain_ms IS NULL OR need_from_nap_ms IS NULL)
+      `);
+    }
     return db;
   } catch {
     db?.close();
