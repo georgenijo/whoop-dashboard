@@ -11,15 +11,15 @@ import {
 } from "recharts";
 import type { WorkoutRow } from "@/lib/db";
 
-type Props = { rows: WorkoutRow[] };
+type Props = { rows: WorkoutRow[]; maxHR?: number | null };
 
 const ZONES = [
-  { key: "zone_0_ms" as const, label: "Z0", color: "#1e3a8a" },
-  { key: "zone_1_ms" as const, label: "Z1", color: "#2563eb" },
-  { key: "zone_2_ms" as const, label: "Z2", color: "#06b6d4" },
-  { key: "zone_3_ms" as const, label: "Z3", color: "#facc15" },
-  { key: "zone_4_ms" as const, label: "Z4", color: "#f97316" },
-  { key: "zone_5_ms" as const, label: "Z5", color: "#b91c1c" },
+  { key: "zone_0_ms" as const, label: "Z0", color: "#1e3a8a", lowPct: 0,  highPct: 50 },
+  { key: "zone_1_ms" as const, label: "Z1", color: "#2563eb", lowPct: 50, highPct: 60 },
+  { key: "zone_2_ms" as const, label: "Z2", color: "#06b6d4", lowPct: 60, highPct: 70 },
+  { key: "zone_3_ms" as const, label: "Z3", color: "#facc15", lowPct: 70, highPct: 80 },
+  { key: "zone_4_ms" as const, label: "Z4", color: "#f97316", lowPct: 80, highPct: 90 },
+  { key: "zone_5_ms" as const, label: "Z5", color: "#b91c1c", lowPct: 90, highPct: 100 },
 ];
 
 const MAX_ROWS = 14;
@@ -32,7 +32,26 @@ function formatLabel(date: string, sport: string | null): string {
   return `${d} · ${sport ?? "—"}`;
 }
 
-export default function WorkoutZoneChart({ rows }: Props) {
+function buildLegendLabel(
+  zone: typeof ZONES[number],
+  maxHR: number | null,
+): string {
+  if (!maxHR) return zone.label;
+  const lowBpm = Math.round((maxHR * zone.lowPct) / 100);
+  const highBpm = Math.round((maxHR * zone.highPct) / 100);
+  if (zone.lowPct === 0) {
+    return `${zone.label} <${zone.highPct}% · <${highBpm} bpm`;
+  }
+  if (zone.highPct === 100) {
+    return `${zone.label} >${zone.lowPct}% · >${lowBpm} bpm`;
+  }
+  return `${zone.label} ${zone.lowPct}–${zone.highPct}% · ${lowBpm}–${highBpm} bpm`;
+}
+
+export default function WorkoutZoneChart({ rows, maxHR }: Props) {
+  const effectiveMax =
+    maxHR != null && Number.isFinite(maxHR) && maxHR > 0 ? maxHR : null;
+
   const withZones = rows
     .filter((r) => {
       const total = ZONES.reduce((sum, z) => sum + (r[z.key] ?? 0), 0);
@@ -84,7 +103,9 @@ export default function WorkoutZoneChart({ rows }: Props) {
             HR zone breakdown
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
-            {withZones.length} sessions · minutes per zone
+            {effectiveMax
+              ? `${withZones.length} sessions · minutes per zone · max HR ${effectiveMax} bpm`
+              : `${withZones.length} sessions · minutes per zone`}
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -101,7 +122,7 @@ export default function WorkoutZoneChart({ rows }: Props) {
               }}
             >
               <span style={{ width: 8, height: 8, borderRadius: 2, background: z.color, display: "inline-block" }} />
-              {z.label}
+              {buildLegendLabel(z, effectiveMax)}
             </span>
           ))}
         </div>
