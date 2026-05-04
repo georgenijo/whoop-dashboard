@@ -1,6 +1,8 @@
 import KPIStrip from "@/components/overview/KPIStrip";
 import TrendChart from "@/components/charts/TrendChart";
 import HRVTrend from "@/components/charts/HRVTrend";
+import StrainRecoveryScatter from "@/components/charts/StrainRecoveryScatter";
+import RecoveryReboundCard from "@/components/charts/RecoveryReboundCard";
 import DayOfWeekRecovery from "@/components/recovery/DayOfWeekRecovery";
 import OvertrainingCard from "@/components/recovery/OvertrainingCard";
 import IllnessSignalCard from "@/components/recovery/IllnessSignalCard";
@@ -12,9 +14,11 @@ import {
   getRecoveryRange,
   getRecoveryTrend,
   getSleepRange,
+  getSleepTrend,
   getStrainTrend,
 } from "@/lib/db";
 import { computeIllnessSignal } from "@/lib/analytics/illness";
+import { computeRebound } from "@/lib/analytics/rebound";
 import { parseDays, formatRangeLabel } from "@/lib/range";
 
 export const dynamic = "force-dynamic";
@@ -55,6 +59,29 @@ export default async function RecoveryPage({
   const illnessSleep = getSleepRange(start, end);
   const illnessRows = computeIllnessSignal(illnessRecovery, illnessSleep);
   const dowRecovery = getRecoveryByDayOfWeek();
+
+  const strain30 = getStrainTrend(30);
+  const sleep30 = getSleepTrend(30);
+  const strainByDate = new Map(strain30.map((c) => [c.date, c.strain]));
+  const sleepByDate = new Map(
+    sleep30.map((s) => {
+      const total = (s.light_ms ?? 0) + (s.deep_ms ?? 0) + (s.rem_ms ?? 0);
+      const hours =
+        s.light_ms != null && s.deep_ms != null && s.rem_ms != null
+          ? total / 3_600_000
+          : null;
+      return [s.date, hours];
+    })
+  );
+  const scatterRows = trend30.map((r) => ({
+    date: r.date,
+    strain: strainByDate.get(r.date) ?? null,
+    recovery: r.recovery_score,
+    sleep_hours: sleepByDate.get(r.date) ?? null,
+  }));
+
+  const reboundRecovery = getRecoveryTrend(Math.max(days, 90));
+  const reboundEvents = computeRebound(reboundRecovery);
 
   return (
     <>
@@ -103,6 +130,10 @@ export default async function RecoveryPage({
       </div>
 
       <IllnessSignalCard rows={illnessRows} />
+
+      <StrainRecoveryScatter rows={scatterRows} />
+
+      <RecoveryReboundCard events={reboundEvents} />
     </>
   );
 }
