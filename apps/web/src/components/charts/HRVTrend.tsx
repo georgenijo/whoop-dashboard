@@ -18,10 +18,30 @@ type Tooltip = {
   rolling: number | null;
   pct: number;
   svgY: number;
+  anomaly: { baseline: number; pctBelow: number } | null;
 };
 
 const COLOR = "#7b61ff";
+const ANOMALY_COLOR = "#ff3b3b";
 const GRADIENT_ID = "hrv-trend";
+const ANOMALY_WINDOW = 30;
+const ANOMALY_MIN_PERIODS = 14;
+const ANOMALY_SIGMA = 1.5;
+
+function rollingMeanStd(
+  values: (number | null)[],
+): { mean: number | null; std: number | null }[] {
+  return values.map((_, i) => {
+    const window = values
+      .slice(Math.max(0, i - (ANOMALY_WINDOW - 1)), i + 1)
+      .filter((v): v is number => v != null && Number.isFinite(v));
+    if (window.length < ANOMALY_MIN_PERIODS) return { mean: null, std: null };
+    const mean = window.reduce((a, b) => a + b, 0) / window.length;
+    const variance =
+      window.reduce((a, b) => a + (b - mean) ** 2, 0) / window.length;
+    return { mean, std: Math.sqrt(variance) };
+  });
+}
 
 function pickAxis(data: DataPoint[]): string[] {
   if (data.length === 0) return [];
@@ -56,10 +76,22 @@ export default function HRVTrend({ subtitle, data }: Props) {
     d.hrv != null && Number.isFinite(d.hrv)
   );
   const rolling = rollingMean(data.map((d) => d.hrv), 7);
+  const stats = rollingMeanStd(data.map((d) => d.hrv));
   const validIndices = data.reduce<number[]>((acc, d, i) => {
     if (d.hrv != null && Number.isFinite(d.hrv)) acc.push(i);
     return acc;
   }, []);
+
+  const anomalies = new Map<number, { baseline: number; pctBelow: number }>();
+  data.forEach((d, i) => {
+    if (d.hrv == null || !Number.isFinite(d.hrv)) return;
+    const s = stats[i];
+    if (s.mean == null || s.std == null || s.std === 0) return;
+    if (d.hrv < s.mean - ANOMALY_SIGMA * s.std) {
+      const pctBelow = ((s.mean - d.hrv) / s.mean) * 100;
+      anomalies.set(i, { baseline: s.mean, pctBelow });
+    }
+  });
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!bodyRef.current || valid.length < 2) return;
@@ -91,8 +123,9 @@ export default function HRVTrend({ subtitle, data }: Props) {
       rolling: rolling[originalIdx],
       pct,
       svgY,
+      anomaly: anomalies.get(originalIdx) ?? null,
     });
-  }, [valid, rolling, validIndices]);
+  }, [valid, rolling, validIndices, anomalies]);
 
   if (valid.length < 2) {
     return (
@@ -210,6 +243,23 @@ export default function HRVTrend({ subtitle, data }: Props) {
               vectorEffect="non-scaling-stroke"
             />
           ))}
+          {rawPoints.map(([x, y], i) => {
+            const originalIdx = validIndices[i];
+            if (!anomalies.has(originalIdx)) return null;
+            return (
+              <circle
+                key={`anom-${i}`}
+                cx={x}
+                cy={y}
+                r="1.4"
+                fill={ANOMALY_COLOR}
+                stroke="rgba(5,5,10,0.9)"
+                strokeWidth="0.4"
+                vectorEffect="non-scaling-stroke"
+                style={{ filter: `drop-shadow(0 0 3px ${ANOMALY_COLOR})` }}
+              />
+            );
+          })}
 
           {rollingLinePath && (
             <path
@@ -272,6 +322,11 @@ export default function HRVTrend({ subtitle, data }: Props) {
                 {tooltip.rolling != null ? tooltip.rolling.toFixed(1) : "—"}<span style={{ fontSize: 10, color: "var(--fg-3)", marginLeft: 2 }}>ms</span>
               </span>
             </div>
+            {tooltip.anomaly && (
+              <div style={{ marginTop: 4, fontSize: 10, color: ANOMALY_COLOR, fontFamily: "var(--font-mono)" }}>
+                HRV {tooltip.raw.toFixed(1)} ms — {Math.round(tooltip.anomaly.pctBelow)}% below your 30d baseline
+              </div>
+            )}
           </div>
         )}
       </div>
