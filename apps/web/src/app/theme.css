@@ -855,1308 +855,146 @@ a:hover { border-bottom-color: var(--brand-strain); }
   padding-left: 2px;
 }
 
-
 /* =========================================================================
-   ATELIER — Overview
+   ATELIER LOGS — scoped layout + components
    ========================================================================= */
 
-:root[data-theme="atelier"] .atelier-overview {
+:root[data-theme="atelier"] .atelier-logs {
   display: flex;
   flex-direction: column;
-  gap: 0;
-  padding: 0 0 80px;
+  gap: 24px;
+  padding: 0 0 40px;
 }
 
-/* ── DailyBulletin ── */
-
-:root[data-theme="atelier"] .bulletin-section {
+:root[data-theme="atelier"] .atelier-logs-header {
   border-bottom: 1px solid var(--line);
-  padding: 0 0 36px;
-  margin-bottom: 0;
+  padding-bottom: 10px;
 }
 
-:root[data-theme="atelier"] .bulletin-header-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  align-items: center;
-  padding: 10px 0;
-  border-top: 1px solid var(--ink);
-  border-bottom: 1px solid var(--line);
-  font-size: 10.5px;
-  color: var(--ink-faint);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  font-weight: 500;
-  margin-bottom: 32px;
-}
-
-:root[data-theme="atelier"] .bulletin-section-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 10.5px;
-  color: var(--ink-faint);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-:root[data-theme="atelier"] .bulletin-roman-accent {
+:root[data-theme="atelier"] .atelier-logs-headline {
   font-family: var(--font-display-serif);
-  font-style: italic;
-  font-weight: 500;
-  color: var(--coral);
-  font-size: 14px;
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-:root[data-theme="atelier"] .bulletin-meta {
-  justify-self: center;
-  text-align: center;
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: 10px;
-  color: var(--ink-faint);
-}
-
-:root[data-theme="atelier"] .bulletin-plate-num {
-  justify-self: end;
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: 10px;
-  color: var(--ink-faint);
-}
-
-:root[data-theme="atelier"] .bulletin-body {
-  display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
-  gap: 36px;
-  align-items: start;
-}
-
-@media (max-width: 880px) {
-  :root[data-theme="atelier"] .bulletin-body {
-    grid-template-columns: 1fr;
-  }
-}
-
-:root[data-theme="atelier"] .bulletin-left {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-:root[data-theme="atelier"] .bulletin-tag {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--coral);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-:root[data-theme="atelier"] .bulletin-tag::before {
-  content: "";
-  width: 18px;
-  height: 1px;
-  background: var(--coral);
-}
-
-:root[data-theme="atelier"] .bulletin-headline {
-  font-family: var(--font-display-sans);
-  font-size: clamp(38px, 5.4vw, 66px);
-  font-weight: 800;
-  letter-spacing: -0.035em;
-  line-height: 0.96;
+  font-size: 28px;
+  font-weight: 400;
   color: var(--ink);
-}
-
-:root[data-theme="atelier"] .bulletin-headline em {
-  font-family: var(--font-display-serif);
-  font-style: italic;
-  font-weight: 500;
-  color: var(--ink-soft);
-}
-
-:root[data-theme="atelier"] .bulletin-blurb {
-  font-size: 14.5px;
-  line-height: 1.65;
-  color: var(--ink-mute);
-  max-width: 46ch;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
   margin: 0;
 }
 
-:root[data-theme="atelier"] .bulletin-figs {
+/* ── StatsRow ── */
+:root[data-theme="atelier"] .atelier-stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+
+@media (max-width: 640px) {
+  :root[data-theme="atelier"] .atelier-stats-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+:root[data-theme="atelier"] .atelier-stat-card {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 18px;
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: 10.5px;
-  color: var(--ink-faint);
-  letter-spacing: 0.04em;
-}
-
-:root[data-theme="atelier"] .bulletin-figs span + span {
-  padding-left: 18px;
-  border-left: 1px solid var(--line);
-}
-
-:root[data-theme="atelier"] .bulletin-plate {
-  position: relative;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 20px 14px;
   background: var(--bone);
-  border-radius: 18px;
-  padding: 30px 28px 26px;
-  box-shadow: inset 0 0 0 1px rgba(21, 20, 15, 0.06), 0 30px 60px -30px rgba(60, 48, 20, 0.18);
 }
 
-:root[data-theme="atelier"] .bulletin-plate-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 6px;
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-
-:root[data-theme="atelier"] .bulletin-plate-body {
-  display: grid;
-  grid-template-columns: 1fr 1.1fr;
-  gap: 18px;
-  align-items: center;
-  padding: 6px 4px 0;
-}
-
-@media (max-width: 560px) {
-  :root[data-theme="atelier"] .bulletin-plate-body {
-    grid-template-columns: 1fr;
-  }
-}
-
-:root[data-theme="atelier"] .bulletin-ring-svg {
-  width: 100%;
-  height: auto;
-  display: block;
-}
-
-:root[data-theme="atelier"] .bulletin-metrics-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  font-size: 12.5px;
-  color: var(--ink-soft);
-}
-
-:root[data-theme="atelier"] .bulletin-metric-row {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 10px;
-  align-items: center;
-  padding: 8px 0;
-  border-top: 1px solid var(--line-soft);
-}
-
-:root[data-theme="atelier"] .bulletin-metric-row:first-child {
-  border-top: 0;
-}
-
-:root[data-theme="atelier"] .bm-roman {
-  font-family: var(--font-display-serif);
-  font-style: italic;
-  font-size: 13px;
-  color: var(--coral);
-  width: 22px;
-}
-
-:root[data-theme="atelier"] .bm-label {
-  color: var(--ink-soft);
-  font-size: 12.5px;
-}
-
-:root[data-theme="atelier"] .bm-value {
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: 11.5px;
-  color: var(--ink);
-}
-
-/* ── AtelierKPIGrid ── */
-
-:root[data-theme="atelier"] .atelier-kpi-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 0;
-  border-top: 1px solid var(--line);
-  margin-bottom: 0;
-}
-
-@media (max-width: 1180px) {
-  :root[data-theme="atelier"] .atelier-kpi-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 560px) {
-  :root[data-theme="atelier"] .atelier-kpi-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-:root[data-theme="atelier"] .atelier-kpi-card {
-  padding: 26px 24px 22px;
-  border-bottom: 1px solid var(--line);
-  border-right: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  position: relative;
-}
-
-:root[data-theme="atelier"] .atelier-kpi-card:nth-child(4n) {
-  border-right: 0;
-}
-
-@media (max-width: 1180px) {
-  :root[data-theme="atelier"] .atelier-kpi-card:nth-child(4n) {
-    border-right: 1px solid var(--line);
-  }
-  :root[data-theme="atelier"] .atelier-kpi-card:nth-child(2n) {
-    border-right: 0;
-  }
-}
-
-:root[data-theme="atelier"] .atelier-kpi-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 10.5px;
-  color: var(--ink-faint);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-
-:root[data-theme="atelier"] .atelier-kpi-label {
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-:root[data-theme="atelier"] .atelier-kpi-roman {
-  font-family: var(--font-display-serif);
-  font-style: italic;
-  font-weight: 500;
-  color: var(--coral);
-  font-size: 13px;
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-:root[data-theme="atelier"] .atelier-kpi-value {
+:root[data-theme="atelier"] .atelier-stat-roman {
   font-family: var(--font-display-sans);
-  font-weight: 800;
-  font-size: 46px;
-  letter-spacing: -0.04em;
-  line-height: 1;
-  color: var(--ink);
-}
-
-:root[data-theme="atelier"] .atelier-kpi-unit {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: var(--ink-faint);
-  letter-spacing: 0;
-  margin-left: 6px;
 }
 
-:root[data-theme="atelier"] .atelier-kpi-desc {
-  font-size: 11.5px;
+:root[data-theme="atelier"] .atelier-stat-label {
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: var(--ink-mute);
 }
 
-:root[data-theme="atelier"] .atelier-kpi-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 11.5px;
-  color: var(--ink-mute);
+:root[data-theme="atelier"] .atelier-stat-value {
+  font-family: var(--font-display-sans);
+  font-size: 30px;
+  font-weight: 300;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin: 4px 0 2px;
+  font-variant-numeric: tabular-nums;
 }
 
-:root[data-theme="atelier"] .atelier-kpi-delta {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: 11px;
-}
-
-:root[data-theme="atelier"] .atelier-spark {
-  width: 60px;
+:root[data-theme="atelier"] .atelier-spark-svg {
+  display: block;
+  width: 80px;
   height: 28px;
-  display: block;
-  flex-shrink: 0;
+  margin: 4px 0;
 }
 
-/* ── AtelierCharts ── */
-
-:root[data-theme="atelier"] .atelier-charts-row {
-  display: grid;
-  grid-template-columns: 1.6fr 1fr;
-  gap: 24px;
-  margin-top: 32px;
-  margin-bottom: 0;
-}
-
-@media (max-width: 1080px) {
-  :root[data-theme="atelier"] .atelier-charts-row {
-    grid-template-columns: 1fr;
-  }
-}
-
-:root[data-theme="atelier"] .atelier-chart-card {
-  background: var(--bone);
-  border-radius: 18px;
-  padding: 28px 26px;
-  box-shadow: inset 0 0 0 1px rgba(21, 20, 15, 0.06), 0 30px 60px -30px rgba(60, 48, 20, 0.15);
-  position: relative;
-}
-
-:root[data-theme="atelier"] .atelier-chart-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 18px;
-  gap: 18px;
-}
-
-:root[data-theme="atelier"] .atelier-chart-title {
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: -0.025em;
-  color: var(--ink);
-  line-height: var(--lh-tight);
-}
-
-:root[data-theme="atelier"] .atelier-chart-title em {
-  font-family: var(--font-display-serif);
-  font-style: italic;
-  font-weight: 500;
-  color: var(--ink-soft);
-}
-
-:root[data-theme="atelier"] .atelier-chart-sub {
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: 10.5px;
-  color: var(--ink-faint);
-  white-space: nowrap;
-}
-
-:root[data-theme="atelier"] .atelier-chart-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: 10.5px;
-  color: var(--ink-faint);
-  margin-bottom: 10px;
-  gap: 10px;
-}
-
-:root[data-theme="atelier"] .atelier-chart-fig {
-  font-family: var(--font-display-sans);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-}
-
-:root[data-theme="atelier"] .atelier-chart-body {
-  width: 100%;
-  height: 120px;
-}
-
-:root[data-theme="atelier"] .atelier-chart-body svg {
-  width: 100%;
-  height: 100%;
-}
-
-:root[data-theme="atelier"] .atelier-chart-axis {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 6px;
-  font-family: var(--font-display-sans);
-  font-size: 9px;
-  color: var(--ink-faint);
-  letter-spacing: 0.04em;
-}
-
-:root[data-theme="atelier"] .atelier-chart-empty {
-  font-family: var(--font-display-sans);
-  font-size: 12px;
-  color: var(--ink-faint);
-  padding: 20px 0;
-}
-
-:root[data-theme="atelier"] .atelier-recovery-chart {
-  display: flex;
-  flex-direction: column;
-}
-
-:root[data-theme="atelier"] .atelier-sleep-chart {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-:root[data-theme="atelier"] .atelier-sleep-bar {
-  display: flex;
-  height: 10px;
-  border-radius: 2px;
-  overflow: hidden;
-  gap: 1px;
-}
-
-:root[data-theme="atelier"] .atelier-sleep-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-:root[data-theme="atelier"] .atelier-sleep-stage-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-:root[data-theme="atelier"] .atelier-sleep-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-:root[data-theme="atelier"] .atelier-sleep-stage-label {
-  font-family: var(--font-display-sans);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-  flex: 1;
-}
-
-:root[data-theme="atelier"] .atelier-sleep-stage-val {
-  font-family: var(--font-display-sans);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink);
-}
-
-:root[data-theme="atelier"] .atelier-sleep-stats {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-display-sans);
-  font-size: 11px;
-  color: var(--ink-mute);
-  border-top: 1px solid var(--line-soft);
-  padding-top: 10px;
-}
-
-:root[data-theme="atelier"] .atelier-sleep-stats strong {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-:root[data-theme="atelier"] .atelier-sleep-dot-sep {
-  color: var(--ink-faint);
-}
-
-/* ── AtelierBottomStrip ── */
-
-:root[data-theme="atelier"] .atelier-bottom-strip {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0;
-  margin-top: 32px;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-}
-
-@media (max-width: 880px) {
-  :root[data-theme="atelier"] .atelier-bottom-strip {
-    grid-template-columns: 1fr;
-  }
-}
-
-:root[data-theme="atelier"] .atelier-strip-col {
-  padding: 26px 28px 24px;
-  border-right: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-:root[data-theme="atelier"] .atelier-strip-col:last-child {
-  border-right: 0;
-}
-
-:root[data-theme="atelier"] .atelier-strip-eyebrow {
-  font-family: var(--font-display-sans);
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--coral);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-:root[data-theme="atelier"] .atelier-strip-eyebrow::before {
-  content: "";
-  width: 18px;
-  height: 1px;
-  background: var(--coral);
-}
-
-:root[data-theme="atelier"] .atelier-strip-big-serif {
-  font-family: var(--font-display-serif);
-  font-style: italic;
-  font-weight: 500;
-  font-size: 36px;
-  letter-spacing: -0.02em;
-  line-height: 1;
-  color: var(--ink);
-  margin: 0;
-}
-
-:root[data-theme="atelier"] .atelier-strip-big-num {
-  font-family: var(--font-display-sans);
-  font-weight: 800;
-  font-size: 46px;
-  letter-spacing: -0.04em;
-  line-height: 1;
-  color: var(--ink);
-  margin: 0;
-}
-
-:root[data-theme="atelier"] .atelier-strip-big-unit {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--ink-faint);
-  letter-spacing: 0;
-  margin-left: 4px;
-}
-
-:root[data-theme="atelier"] .atelier-strip-meta {
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: 10.5px;
-  color: var(--ink-faint);
-  margin: 0;
-}
-
-:root[data-theme="atelier"] .atelier-strip-delta {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: 11px;
-  color: var(--olive);
-}
-
-:root[data-theme="atelier"] .atelier-strip-delta--flat {
-  color: var(--ink-faint);
-}
-
-:root[data-theme="atelier"] .atelier-strip-coach-sentence {
-  font-size: 13.5px;
-  line-height: 1.6;
-  color: var(--ink-soft);
-  flex: 1;
-  margin: 0;
-}
-
-:root[data-theme="atelier"] .atelier-strip-coach-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-top: 8px;
-  border-top: 1px solid var(--line-soft);
-}
-
-:root[data-theme="atelier"] .atelier-strip-coach-link {
-  font-size: 11.5px;
-  color: var(--coral);
-  text-decoration: none;
-  border: none;
-}
-
-:root[data-theme="atelier"] .atelier-strip-coach-link:hover {
-  border: none;
-  text-decoration: underline;
-}
-:root[data-theme="atelier"] .atelier-strip-coach-link:hover {
-  border: none;
-  text-decoration: underline;
-}
-/* =========================================================================
-   ATELIER RECOVERY — scoped layout + components
-   ========================================================================= */
-
-:root[data-theme="atelier"] .atelier-recovery {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  padding: 0 0 40px;
-}
-
-/* ── RecoveryHero ── */
-:root[data-theme="atelier"] .atelier-recovery-hero {
-  border: 1px solid var(--line);
-  padding: 24px 28px 20px;
-  background: var(--bone);
-}
-
-:root[data-theme="atelier"] .atelier-recovery-headline {
-  font-family: var(--font-display-serif);
-  font-size: 32px;
-  font-weight: 400;
-  color: var(--ink);
-  letter-spacing: -0.01em;
-  margin: 0 0 20px;
-  line-height: 1.15;
-}
-
-:root[data-theme="atelier"] .atelier-recovery-hero-body {
-  display: grid;
-  grid-template-columns: 140px 1fr;
-  gap: 24px;
-  align-items: start;
-}
-
-@media (max-width: 540px) {
-  :root[data-theme="atelier"] .atelier-recovery-hero-body {
-    grid-template-columns: 1fr;
-  }
-}
-
-:root[data-theme="atelier"] .atelier-recovery-ring {
-  width: 128px;
-  height: 128px;
-  flex-shrink: 0;
-}
-
-:root[data-theme="atelier"] .atelier-recovery-metrics-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-top: 4px;
-}
-
-:root[data-theme="atelier"] .atelier-recovery-metric-row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  font-family: var(--font-display-sans);
-  font-size: 12px;
-  border-bottom: 1px solid var(--line-soft);
-  padding-bottom: 6px;
-}
-
-:root[data-theme="atelier"] .atelier-recovery-metric-row:last-child {
-  border-bottom: none;
-}
-
-:root[data-theme="atelier"] .atelier-recovery-metric-roman {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: var(--ink-faint);
-  width: 18px;
-  flex-shrink: 0;
-}
-
-:root[data-theme="atelier"] .atelier-recovery-metric-label {
-  flex: 1;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-}
-
-:root[data-theme="atelier"] .atelier-recovery-metric-value {
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink);
-  font-weight: 500;
-}
-
-/* ── Shared chart block ── */
-:root[data-theme="atelier"] .atelier-recovery-chart-block {
-  border: 1px solid var(--line);
-  padding: 20px 24px 16px;
-  background: var(--bone);
-}
-
-:root[data-theme="atelier"] .atelier-recovery-chart-title {
-  font-family: var(--font-display-serif);
-  font-size: 18px;
-  font-weight: 400;
-  color: var(--ink-mute);
-  margin: 0 0 12px;
-}
-
-/* ── ZoneDistribution ── */
-:root[data-theme="atelier"] .atelier-recovery-zone-dist {
-  border: 1px solid var(--line);
-  padding: 20px 24px 16px;
-  background: var(--bone);
-}
-
-:root[data-theme="atelier"] .atelier-zone-stacked-bar {
-  display: flex;
-  height: 10px;
-  border-radius: 2px;
-  overflow: hidden;
-  margin-bottom: 16px;
-  gap: 1px;
-}
-
-:root[data-theme="atelier"] .atelier-zone-bar-seg {
-  height: 100%;
-  min-width: 2px;
-  transition: width 0.2s ease;
-}
-
-:root[data-theme="atelier"] .atelier-zone-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-:root[data-theme="atelier"] .atelier-zone-legend-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-display-sans);
-  font-size: 12px;
-}
-
-:root[data-theme="atelier"] .atelier-zone-roman {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: var(--ink-faint);
-  width: 14px;
-  flex-shrink: 0;
-}
-
-:root[data-theme="atelier"] .atelier-zone-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-:root[data-theme="atelier"] .atelier-zone-label {
-  flex: 1;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-}
-
-:root[data-theme="atelier"] .atelier-zone-count {
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink);
-  font-weight: 500;
-}
-
-:root[data-theme="atelier"] .atelier-zone-pct {
-  color: var(--ink-mute);
-  font-size: 11px;
-  font-weight: 400;
-}
-
-/* ── DayLedger ── */
-:root[data-theme="atelier"] .atelier-recovery-ledger {
-  border: 1px solid var(--line);
-  padding: 20px 24px 16px;
-  background: var(--bone);
-}
-
-:root[data-theme="atelier"] .atelier-day-ledger-tbl {
-  width: 100%;
-  border-collapse: collapse;
-  font-family: var(--font-display-sans);
-  font-size: 12px;
-  color: var(--ink);
-}
-
-:root[data-theme="atelier"] .atelier-day-ledger-tbl th {
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-  text-align: left;
-  padding: 4px 12px 8px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-:root[data-theme="atelier"] .atelier-day-ledger-tbl td {
-  padding: 5px 12px 5px 0;
-  border-bottom: 1px solid var(--line-soft);
-  font-variant-numeric: tabular-nums;
-  vertical-align: middle;
-}
-
-:root[data-theme="atelier"] .atelier-day-ledger-tbl tr:last-child td {
-  border-bottom: none;
-}
-
-:root[data-theme="atelier"] .atelier-ledger-date {
-  color: var(--ink-mute);
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-:root[data-theme="atelier"] .atelier-ledger-score {
-  font-weight: 500;
-  color: var(--ink);
-}
-
-:root[data-theme="atelier"] .atelier-ledger-tag {
-  display: inline-block;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  padding: 2px 5px;
-  border-radius: 2px;
-}
-
-:root[data-theme="atelier"] .atelier-ledger-tag.tag-olive {
-  background: rgba(110, 116, 72, 0.15);
-  color: #6e7448;
-}
-
-:root[data-theme="atelier"] .atelier-ledger-tag.tag-mustard {
-  background: rgba(233, 185, 74, 0.18);
-  color: #c4941a;
-}
-
-:root[data-theme="atelier"] .atelier-ledger-tag.tag-coral {
-  background: rgba(237, 111, 92, 0.15);
-  color: #ed6f5c;
-}
-
-:root[data-theme="atelier"] .atelier-ledger-bar-cell {
-  min-width: 80px;
-}
-
-:root[data-theme="atelier"] .atelier-ledger-bar-wrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-:root[data-theme="atelier"] .atelier-ledger-bar {
-  height: 6px;
-  border-radius: 1px;
-  flex-shrink: 0;
-}
-
-:root[data-theme="atelier"] .atelier-ledger-bar.hrv-bar {
-  background: var(--olive);
-  max-width: 60px;
-}
-
-:root[data-theme="atelier"] .atelier-ledger-bar.rhr-bar {
-  background: var(--mustard);
-  max-width: 60px;
-}
-
-:root[data-theme="atelier"] .atelier-ledger-bar-val {
-  font-size: 11px;
-  color: var(--ink-mute);
-  font-variant-numeric: tabular-nums;
-}
-
-:root[data-theme="atelier"] .atelier-ledger-null {
-  color: var(--ink-faint);
-}
-
-
-/* =========================================================================
-   ATELIER STRAIN — scoped layout + components
-   ========================================================================= */
-
-:root[data-theme="atelier"] .atelier-strain {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  padding: 0 0 40px;
-}
-
-:root[data-theme="atelier"] .atelier-strain-row-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-}
-
-@media (max-width: 768px) {
-  :root[data-theme="atelier"] .atelier-strain-row-2 {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ── StrainHero ── */
-:root[data-theme="atelier"] .atelier-strain-hero {
-  border: 1px solid var(--line);
-  padding: 24px 28px 20px;
-  background: var(--bone);
-}
-
-:root[data-theme="atelier"] .atelier-strain-headline {
-  font-family: var(--font-display-serif);
-  font-size: 32px;
-  font-weight: 400;
-  color: var(--ink);
-  letter-spacing: -0.01em;
-  margin: 0 0 20px;
-  line-height: 1.15;
-}
-
-:root[data-theme="atelier"] .atelier-strain-hero-body {
-  display: flex;
-  align-items: flex-start;
-  gap: 32px;
-}
-
-@media (max-width: 768px) {
-  :root[data-theme="atelier"] .atelier-strain-hero-body {
-    flex-direction: column;
-  }
-}
-
-:root[data-theme="atelier"] .atelier-strain-ring-wrap {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-:root[data-theme="atelier"] .atelier-strain-ring-svg {
-  width: 120px;
-  height: 120px;
-}
-
-:root[data-theme="atelier"] .atelier-strain-ring-label {
-  font-family: var(--font-display-sans);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-:root[data-theme="atelier"] .atelier-strain-kpi-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1px;
-  background: var(--line);
-  border: 1px solid var(--line);
-  flex: 1;
-}
-
-@media (max-width: 768px) {
-  :root[data-theme="atelier"] .atelier-strain-kpi-row {
-    grid-template-columns: 1fr 1fr;
-    width: 100%;
-  }
-}
-
-:root[data-theme="atelier"] .atelier-strain-kpi-card {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 16px 18px;
-  background: var(--bone);
-}
-
-:root[data-theme="atelier"] .atelier-strain-kpi-roman {
-  font-family: var(--font-display-sans);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-:root[data-theme="atelier"] .atelier-strain-kpi-label {
-  font-family: var(--font-display-sans);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-}
-
-:root[data-theme="atelier"] .atelier-strain-kpi-value {
-  font-family: var(--font-display-sans);
-  font-size: 26px;
-  font-weight: 300;
-  color: var(--ink);
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-  margin-top: 4px;
-  font-variant-numeric: tabular-nums;
-}
-
-:root[data-theme="atelier"] .atelier-strain-kpi-delta {
-  font-family: var(--font-display-sans);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-mute);
-}
-:root[data-theme="atelier"] .atelier-strain-kpi-delta.up { color: var(--olive); }
-:root[data-theme="atelier"] .atelier-strain-kpi-delta.down { color: var(--coral); }
-:root[data-theme="atelier"] .atelier-strain-kpi-delta.flat { color: var(--ink-faint); }
-
-/* ── StrainBars ── */
-:root[data-theme="atelier"] .atelier-strain-bars-plate {
-  border: 1px solid var(--line);
-  padding: 24px 28px 20px;
-  background: var(--bone);
-}
-
-:root[data-theme="atelier"] .atelier-strain-bars-body {
-  width: 100%;
-}
-
-:root[data-theme="atelier"] .atelier-strain-bars-axis {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 6px;
-  font-family: var(--font-display-sans);
-  font-size: 9px;
-  color: var(--ink-faint);
-  letter-spacing: 0.04em;
-}
-
-/* ── Mini panels (HRTrend, KcalTrend) ── */
-:root[data-theme="atelier"] .atelier-mini-panel {
-  border: 1px solid var(--line);
-  padding: 20px 24px 16px;
-  background: var(--bone);
-}
-
-/* ── WorkoutsTable ── */
-:root[data-theme="atelier"] .atelier-strain-log {
-  border: 1px solid var(--line);
-  padding: 24px 28px 20px;
-  background: var(--bone);
-}
-
-:root[data-theme="atelier"] .atelier-strain-log-tbl {
-  width: 100%;
-  border-collapse: collapse;
-  font-family: var(--font-display-sans);
-  font-size: 12px;
-  color: var(--ink);
-}
-
-:root[data-theme="atelier"] .atelier-strain-log-tbl th {
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-  text-align: left;
-  padding: 4px 12px 8px 0;
-  border-bottom: 1px solid var(--line);
-}
-
-:root[data-theme="atelier"] .atelier-strain-log-tbl td {
-  padding: 6px 12px 6px 0;
-  border-bottom: 1px solid var(--line-soft);
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-soft);
-}
-
-:root[data-theme="atelier"] .atelier-strain-log-tbl tr:last-child td {
-  border-bottom: none;
-}
-
-:root[data-theme="atelier"] .atelier-strain-log-roman {
-  font-family: var(--font-display-sans);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: var(--ink-faint);
-  width: 20px;
-}
-
-/* =========================================================================
-   ATELIER WORKOUTS — scoped layout + components
-   ========================================================================= */
-
-:root[data-theme="atelier"] .atelier-workouts {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  padding: 0 0 40px;
-}
-
-:root[data-theme="atelier"] .atelier-workouts-row-2 {
-  display: grid;
-  grid-template-columns: 3fr 2fr;
-  gap: 20px;
-}
-
-@media (max-width: 900px) {
-  :root[data-theme="atelier"] .atelier-workouts-row-2 {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ── WorkoutsHero ── */
-:root[data-theme="atelier"] .atelier-workouts-hero {
-  border: 1px solid var(--line);
-  padding: 24px 28px 20px;
-  background: var(--bone);
-}
-
-:root[data-theme="atelier"] .atelier-workouts-headline {
-  font-family: var(--font-display-serif);
-  font-size: 32px;
-  font-weight: 400;
-  color: var(--ink);
-  letter-spacing: -0.01em;
-  margin: 0 0 20px;
-  line-height: 1.15;
-}
-
-:root[data-theme="atelier"] .atelier-workouts-kpi-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1px;
-  background: var(--line);
-  border: 1px solid var(--line);
-}
-
-@media (max-width: 768px) {
-  :root[data-theme="atelier"] .atelier-workouts-kpi-row {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-:root[data-theme="atelier"] .atelier-workouts-kpi-card {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 16px 18px;
-  background: var(--bone);
-}
-
-:root[data-theme="atelier"] .atelier-workouts-kpi-roman {
-  font-family: var(--font-display-sans);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-:root[data-theme="atelier"] .atelier-workouts-kpi-label {
-  font-family: var(--font-display-sans);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-}
-
-:root[data-theme="atelier"] .atelier-workouts-kpi-value {
-  font-family: var(--font-display-sans);
-  font-size: 26px;
-  font-weight: 300;
-  color: var(--ink);
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-  margin-top: 4px;
-}
-
-:root[data-theme="atelier"] .atelier-workouts-kpi-unit {
+:root[data-theme="atelier"] .atelier-stat-sub {
   font-family: var(--font-display-sans);
   font-size: 10px;
   color: var(--ink-faint);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.02em;
 }
 
-:root[data-theme="atelier"] .atelier-workouts-kpi-delta {
-  font-family: var(--font-display-sans);
-  font-size: 10px;
-  margin-top: 2px;
+/* ── EventLedger toolbar ── */
+:root[data-theme="atelier"] .atelier-log-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-/* ── Logbook ── */
-:root[data-theme="atelier"] .atelier-logbook {
-  border: 1px solid var(--line);
-  padding: 24px 28px 20px;
-  background: var(--bone);
-  overflow-x: auto;
-}
-
-:root[data-theme="atelier"] .atelier-logbook-pills {
+:root[data-theme="atelier"] .atelier-log-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 16px;
 }
 
-:root[data-theme="atelier"] .atelier-logbook-pill {
+:root[data-theme="atelier"] .atelier-log-pill {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   padding: 4px 10px;
   border: 1px solid var(--line);
   background: transparent;
-  color: var(--ink-mute);
   font-family: var(--font-display-sans);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  color: var(--ink-mute);
   cursor: pointer;
-  transition: background 120ms, color 120ms, border-color 120ms;
+  transition: background 120ms ease, color 120ms ease;
 }
 
-:root[data-theme="atelier"] .atelier-logbook-pill:hover {
+:root[data-theme="atelier"] .atelier-log-pill:hover {
   background: var(--paper-dark);
   color: var(--ink);
 }
 
-:root[data-theme="atelier"] .atelier-logbook-pill.active {
-  background: var(--coral);
-  border-color: var(--coral);
-  color: #fff;
+:root[data-theme="atelier"] .atelier-log-pill.active {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
 }
 
-:root[data-theme="atelier"] .atelier-logbook-pill-count {
-  font-weight: 400;
-  opacity: 0.75;
+:root[data-theme="atelier"] .atelier-log-pill-count {
+  font-size: 9px;
+  opacity: 0.7;
 }
 
-:root[data-theme="atelier"] .atelier-logbook-tbl {
+/* ── EventLedger table ── */
+:root[data-theme="atelier"] .atelier-log-table {
   width: 100%;
   border-collapse: collapse;
   font-family: var(--font-display-sans);
@@ -2164,7 +1002,14 @@ a:hover { border-bottom-color: var(--brand-strain); }
   color: var(--ink);
 }
 
-:root[data-theme="atelier"] .atelier-logbook-tbl th {
+:root[data-theme="atelier"] .atelier-log-table thead {
+  position: sticky;
+  top: 0;
+  background: var(--paper);
+  z-index: 1;
+}
+
+:root[data-theme="atelier"] .atelier-log-table th {
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -2173,933 +1018,131 @@ a:hover { border-bottom-color: var(--brand-strain); }
   text-align: left;
   padding: 4px 10px 8px 0;
   border-bottom: 1px solid var(--line);
-  white-space: nowrap;
 }
 
-:root[data-theme="atelier"] .atelier-logbook-tbl td {
+:root[data-theme="atelier"] .atelier-log-table td {
   padding: 7px 10px 7px 0;
   border-bottom: 1px solid var(--line-soft);
+  vertical-align: middle;
   font-variant-numeric: tabular-nums;
-  color: var(--ink-soft);
-  white-space: nowrap;
 }
 
-:root[data-theme="atelier"] .atelier-logbook-tbl tr:last-child td {
+:root[data-theme="atelier"] .atelier-log-table tbody tr:last-child td {
   border-bottom: none;
 }
 
-:root[data-theme="atelier"] .atelier-logbook-roman {
-  font-family: var(--font-display-sans);
+:root[data-theme="atelier"] .atelier-log-row.clickable {
+  cursor: pointer;
+}
+
+:root[data-theme="atelier"] .atelier-log-row.clickable:hover td {
+  background: var(--paper-warm);
+}
+
+:root[data-theme="atelier"] .atelier-log-idx {
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.1em;
   color: var(--ink-faint);
+  white-space: nowrap;
+  padding-right: 12px;
 }
 
-:root[data-theme="atelier"] .atelier-logbook-sport-tag {
-  display: inline-block;
-  border: 1px solid;
-  padding: 1px 6px;
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-:root[data-theme="atelier"] .atelier-logbook-strain {
-  font-weight: 600;
-  color: var(--ink);
-}
-
-:root[data-theme="atelier"] .atelier-logbook-empty {
-  font-family: var(--font-display-sans);
-  font-size: 12px;
+:root[data-theme="atelier"] .atelier-log-date {
   color: var(--ink-faint);
-  padding: 20px 0;
+  margin-right: 2px;
 }
 
-/* ── SportDonut ── */
-:root[data-theme="atelier"] .atelier-sport-donut {
-  border: 1px solid var(--line);
-  padding: 24px 28px 20px;
-  background: var(--bone);
+:root[data-theme="atelier"] .atelier-log-time {
+  white-space: nowrap;
+  color: var(--ink-soft);
 }
 
-:root[data-theme="atelier"] .atelier-sport-donut-body {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-:root[data-theme="atelier"] .atelier-sport-donut-svg {
-  width: 140px;
-  height: 140px;
-  flex-shrink: 0;
-}
-
-:root[data-theme="atelier"] .atelier-sport-donut-center-num {
-  font-family: var(--font-display-sans);
-  font-size: 22px;
-  font-weight: 300;
-  fill: var(--ink);
-  dominant-baseline: middle;
-}
-
-:root[data-theme="atelier"] .atelier-sport-donut-center-label {
-  font-family: var(--font-display-sans);
-  font-size: 8px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  fill: var(--ink-faint);
-}
-
-:root[data-theme="atelier"] .atelier-sport-donut-legend {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-
-:root[data-theme="atelier"] .atelier-sport-donut-legend-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-:root[data-theme="atelier"] .atelier-sport-donut-legend-roman {
-  font-family: var(--font-display-sans);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: var(--ink-faint);
-  width: 18px;
-  flex-shrink: 0;
-}
-
-:root[data-theme="atelier"] .atelier-sport-donut-legend-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-:root[data-theme="atelier"] .atelier-sport-donut-legend-label {
-  font-family: var(--font-display-sans);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-  flex: 1;
-  min-width: 0;
+:root[data-theme="atelier"] .atelier-log-summary {
+  max-width: 280px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-:root[data-theme="atelier"] .atelier-sport-donut-legend-count {
-  font-family: var(--font-display-sans);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink);
-}
-
-:root[data-theme="atelier"] .atelier-sport-donut-legend-pct {
-  font-family: var(--font-display-sans);
-  font-size: 10px;
-  color: var(--ink-faint);
-  width: 30px;
-  text-align: right;
-}
-
-/* =========================================================================
-   ATELIER COACH — scoped layout + components
-   ========================================================================= */
-
-:root[data-theme="atelier"] .atelier-coach {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-:root[data-theme="atelier"] .atelier-coach-shell {
-  display: grid;
-  grid-template-columns: 320px 1fr;
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-}
-
-@media (max-width: 880px) {
-  :root[data-theme="atelier"] .atelier-coach-shell {
-    grid-template-columns: 1fr;
-  }
-  :root[data-theme="atelier"] .atelier-chapter-index {
-    display: none;
-  }
-}
-
-/* ── Chapter Index (left column) ── */
-:root[data-theme="atelier"] .atelier-chapter-index {
-  border-right: 1px solid var(--line);
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  background: linear-gradient(180deg, var(--paper) 0%, var(--paper-warm) 100%);
-  overflow: hidden;
-}
-
-:root[data-theme="atelier"] .atelier-hist-head {
-  padding: 22px 24px 14px;
-  border-bottom: 1px solid var(--line-soft);
-  flex-shrink: 0;
-}
-
-:root[data-theme="atelier"] .atelier-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-family: var(--font-display-sans);
-  font-weight: 600;
-  font-size: 10px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--coral);
-}
-
-:root[data-theme="atelier"] .atelier-eyebrow::before {
-  content: "";
-  width: 18px;
-  height: 1px;
-  background: var(--coral);
-}
-
-:root[data-theme="atelier"] .atelier-hist-title {
-  font-family: var(--font-display-sans);
-  font-weight: 800;
-  font-size: 20px;
-  letter-spacing: -0.025em;
-  margin-top: 10px;
-  color: var(--ink);
-}
-
-:root[data-theme="atelier"] .atelier-hist-title em {
-  font-family: var(--font-display-serif);
-  font-style: italic;
-  font-weight: 500;
   color: var(--ink-soft);
 }
 
-:root[data-theme="atelier"] .atelier-new-thread {
-  margin-top: 12px;
-  display: inline-flex;
-  align-items: center;
+:root[data-theme="atelier"] .atelier-log-dur {
+  white-space: nowrap;
+  color: var(--ink-mute);
   font-family: var(--font-display-sans);
-  font-weight: 600;
+}
+
+:root[data-theme="atelier"] .atelier-log-status {
+  color: var(--ink-mute);
   font-size: 11px;
-  color: var(--ink-mute);
-  padding: 6px 12px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  transition: 0.18s ease;
 }
 
-:root[data-theme="atelier"] .atelier-new-thread:hover {
-  color: var(--ink);
-  background: rgba(21, 20, 15, 0.04);
-}
-
-:root[data-theme="atelier"] .atelier-hist-search {
-  margin: 14px 24px 8px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--bone);
-  flex-shrink: 0;
-}
-
-:root[data-theme="atelier"] .atelier-hist-search svg {
-  flex: 0 0 14px;
-  color: var(--ink-mute);
-}
-
-:root[data-theme="atelier"] .atelier-hist-search input {
-  font-family: var(--font-display-sans);
-  font-size: 13px;
-  width: 100%;
-  color: var(--ink-soft);
-  background: none;
-  border: none;
-  outline: none;
-}
-
-:root[data-theme="atelier"] .atelier-hist-search input::placeholder {
-  color: var(--ink-faint);
-}
-
-:root[data-theme="atelier"] .atelier-hist-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 10px 24px 14px;
-  flex-shrink: 0;
-}
-
-:root[data-theme="atelier"] .atelier-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font-family: var(--font-display-sans);
-  font-weight: 500;
-  font-size: 11px;
-  color: var(--ink-soft);
-  transition: 0.18s ease;
-}
-
-:root[data-theme="atelier"] .atelier-pill.active {
-  background: var(--ink);
-  color: #fff;
-  border-color: var(--ink);
-}
-
-:root[data-theme="atelier"] .atelier-pill.decorative {
-  opacity: 0.5;
-  cursor: default;
-}
-
-:root[data-theme="atelier"] .atelier-pill:not(.decorative):hover {
-  background: rgba(21, 20, 15, 0.04);
-}
-
-:root[data-theme="atelier"] .atelier-hist-list {
-  overflow-y: auto;
-  flex: 1;
-  padding-bottom: 24px;
-}
-
-:root[data-theme="atelier"] .atelier-hist-list::-webkit-scrollbar {
-  width: 6px;
-}
-
-:root[data-theme="atelier"] .atelier-hist-list::-webkit-scrollbar-thumb {
-  background: var(--paper-dark);
-  border-radius: 6px;
-}
-
-:root[data-theme="atelier"] .atelier-hist-bucket {
-  padding: 14px 24px 4px;
-  font-family: var(--font-display-sans);
-  font-weight: 600;
-  font-size: 10px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-:root[data-theme="atelier"] .atelier-bucket-roman {
-  font-family: var(--font-display-serif);
-  font-style: italic;
-  font-weight: 500;
-  font-size: 13px;
-  color: var(--coral);
-  text-transform: none;
-  letter-spacing: 0;
-}
-
-:root[data-theme="atelier"] .atelier-hist-item {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 14px 24px;
-  border-bottom: 1px solid rgba(21, 20, 15, 0.06);
-  position: relative;
-  transition: 0.18s ease;
-  background: none;
-  border-left: none;
-  border-right: none;
-  border-top: none;
-}
-
-:root[data-theme="atelier"] .atelier-hist-item:hover {
-  background: rgba(21, 20, 15, 0.025);
-}
-
-:root[data-theme="atelier"] .atelier-hist-item.active {
-  background: var(--bone);
-}
-
-:root[data-theme="atelier"] .atelier-hist-item.active::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: var(--coral);
-}
-
-:root[data-theme="atelier"] .atelier-hist-row1 {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--ink-faint);
-  letter-spacing: 0.04em;
-  margin-bottom: 6px;
-}
-
-:root[data-theme="atelier"] .atelier-hist-preview {
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--ink-soft);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-:root[data-theme="atelier"] .atelier-hist-item.active .atelier-hist-preview {
-  color: var(--ink);
-}
-
-:root[data-theme="atelier"] .atelier-hist-delete {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  color: var(--ink-faint);
-  opacity: 0;
-  transition: 0.18s ease;
-  background: none;
-  border: none;
-}
-
-:root[data-theme="atelier"] .atelier-hist-item.active:hover .atelier-hist-delete {
-  opacity: 1;
-}
-
-:root[data-theme="atelier"] .atelier-hist-delete:hover {
-  color: var(--coral);
-}
-
-:root[data-theme="atelier"] .atelier-hist-empty {
-  padding: 24px;
-  font-family: var(--font-display-sans);
-  font-size: 12px;
-  color: var(--ink-faint);
-}
-
-/* ── Chat column ── */
-:root[data-theme="atelier"] .atelier-coach-chat {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  border-right: 1px solid var(--line);
-  overflow: hidden;
-}
-
-:root[data-theme="atelier"] .atelier-chat-head {
-  padding: 22px 32px 18px;
-  border-bottom: 1px solid var(--line);
-  background: var(--paper);
-  flex-shrink: 0;
-}
-
-:root[data-theme="atelier"] .atelier-eyebrow-tag {
-  font-family: var(--font-display-sans);
-  font-weight: 600;
-  font-size: 10px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--coral);
-}
-
-:root[data-theme="atelier"] .atelier-chat-title {
-  font-family: var(--font-display-sans);
-  font-weight: 800;
-  font-size: 32px;
-  letter-spacing: -0.03em;
-  line-height: 1;
-  margin-top: 10px;
-  color: var(--ink);
-}
-
-:root[data-theme="atelier"] .atelier-chat-subtitle {
-  margin-top: 8px;
-  font-family: var(--font-display-serif);
-  font-style: italic;
-  font-weight: 500;
-  font-size: 14px;
-  color: var(--ink-mute);
-}
-
-/* ── Chat stream ── */
-:root[data-theme="atelier"] .atelier-chat-stream {
-  flex: 1;
-  overflow-y: auto;
-  padding: 36px 56px 24px;
-  background: var(--paper);
-}
-
-@media (max-width: 880px) {
-  :root[data-theme="atelier"] .atelier-chat-stream {
-    padding: 24px;
-  }
-}
-
-:root[data-theme="atelier"] .atelier-chat-stream::-webkit-scrollbar {
-  width: 8px;
-}
-
-:root[data-theme="atelier"] .atelier-chat-stream::-webkit-scrollbar-thumb {
-  background: var(--paper-dark);
-  border-radius: 8px;
-}
-
-:root[data-theme="atelier"] .atelier-chat-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 64px 0;
-  text-align: center;
-}
-
-:root[data-theme="atelier"] .atelier-chat-empty-mark {
-  font-family: var(--font-display-serif);
-  font-style: italic;
-  font-weight: 500;
-  font-size: 32px;
-  color: var(--ink-mute);
-}
-
-:root[data-theme="atelier"] .atelier-chat-empty-title {
-  font-family: var(--font-display-sans);
-  font-size: 14px;
-  color: var(--ink-faint);
-}
-
-/* ── Day marker ── */
-:root[data-theme="atelier"] .atelier-day-marker {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin: 10px 0 28px;
-  font-family: var(--font-display-sans);
-  font-size: 10px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-}
-
-:root[data-theme="atelier"] .atelier-day-marker::before,
-:root[data-theme="atelier"] .atelier-day-marker::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: rgba(21, 20, 15, 0.1);
-}
-
-:root[data-theme="atelier"] .atelier-day-roman {
-  font-family: var(--font-display-serif);
-  font-style: italic;
-  color: var(--coral);
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: 13px;
-}
-
-/* ── Messages ── */
-:root[data-theme="atelier"] .atelier-msg {
-  margin-bottom: 30px;
-  max-width: 78%;
-}
-
-:root[data-theme="atelier"] .atelier-msg.user {
-  margin-left: auto;
-  text-align: right;
-}
-
-:root[data-theme="atelier"] .atelier-msg.ai {
-  max-width: 88%;
-}
-
-:root[data-theme="atelier"] .atelier-msg-who {
-  font-family: var(--font-display-sans);
-  font-weight: 600;
-  font-size: 10.5px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-
-:root[data-theme="atelier"] .atelier-msg.user .atelier-msg-who {
-  justify-content: flex-end;
-}
-
-:root[data-theme="atelier"] .atelier-msg-ts {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--ink-faint);
-  letter-spacing: 0.04em;
-  text-transform: none;
-}
-
-:root[data-theme="atelier"] .atelier-msg-plate {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  color: var(--ink-faint);
-  border: 1px solid var(--line-soft);
-  padding: 1px 6px;
-  border-radius: 3px;
-  letter-spacing: 0.04em;
-  text-transform: none;
-}
-
-:root[data-theme="atelier"] .atelier-bubble {
+/* ── Kind tags ── */
+:root[data-theme="atelier"] .atelier-log-tag {
   display: inline-block;
-  text-align: left;
-  background: var(--paper-dark);
-  border: 1px solid var(--line-soft);
-  padding: 16px 20px;
-  border-radius: 18px 18px 4px 18px;
-  font-size: 14.5px;
-  line-height: 1.55;
-  color: var(--ink);
-  max-width: 100%;
-}
-
-/* ── Editorial card (AI) ── */
-:root[data-theme="atelier"] .atelier-ed-card {
-  position: relative;
-  background: var(--bone);
-  border: 1px solid var(--line-soft);
-  border-radius: 18px;
-  padding: 30px 36px;
-  box-shadow: 0 30px 60px -30px rgba(21, 20, 15, 0.15), inset 0 0 0 1px rgba(21, 20, 15, 0.025);
-}
-
-:root[data-theme="atelier"] .atelier-ed-card::before,
-:root[data-theme="atelier"] .atelier-ed-card::after,
-:root[data-theme="atelier"] .bk-bl,
-:root[data-theme="atelier"] .bk-br {
-  content: "";
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  border: 1px solid var(--ink);
-  opacity: 0.45;
-}
-
-:root[data-theme="atelier"] .atelier-ed-card::before {
-  top: 10px;
-  left: 10px;
-  border-right: 0;
-  border-bottom: 0;
-}
-
-:root[data-theme="atelier"] .atelier-ed-card::after {
-  top: 10px;
-  right: 10px;
-  border-left: 0;
-  border-bottom: 0;
-}
-
-:root[data-theme="atelier"] .bk-bl {
-  bottom: 10px;
-  left: 10px;
-  border-right: 0;
-  border-top: 0;
-}
-
-:root[data-theme="atelier"] .bk-br {
-  bottom: 10px;
-  right: 10px;
-  border-left: 0;
-  border-top: 0;
-}
-
-:root[data-theme="atelier"] .atelier-plate-strip {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--ink-faint);
-  letter-spacing: 0.04em;
-  border-bottom: 1px solid var(--line-soft);
-  padding-bottom: 14px;
-  margin-bottom: 18px;
-}
-
-:root[data-theme="atelier"] .atelier-plate-strip-left {
-  display: flex;
-  gap: 14px;
-  align-items: center;
-}
-
-:root[data-theme="atelier"] .atelier-plate-roman {
-  font-family: var(--font-display-serif);
-  font-style: italic;
-  font-weight: 500;
-  color: var(--coral);
-  font-size: 13px;
-}
-
-:root[data-theme="atelier"] .atelier-plate-author {
-  font-family: var(--font-display-sans);
-  font-weight: 600;
-  font-size: 10px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-
-/* Editorial body markdown */
-:root[data-theme="atelier"] .atelier-ed-body .lede {
-  font-family: var(--font-display-serif);
-  font-style: italic;
-  font-weight: 500;
-  font-size: 22px;
-  line-height: 1.25;
-  color: var(--ink);
-  letter-spacing: -0.005em;
-  margin-bottom: 18px;
-  padding-left: 18px;
-  border-left: 2px solid var(--coral);
-}
-
-:root[data-theme="atelier"] .atelier-ed-body p {
-  font-size: 14.5px;
-  line-height: 1.7;
-  color: var(--ink-soft);
-  margin-bottom: 14px;
-}
-
-:root[data-theme="atelier"] .atelier-ed-body p strong {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-:root[data-theme="atelier"] .atelier-ed-body p em {
-  font-family: var(--font-display-serif);
-  font-style: italic;
-  font-weight: 500;
-  color: var(--ink);
-}
-
-:root[data-theme="atelier"] .atelier-ed-body ol {
-  margin: 6px 0 14px;
-  padding-left: 0;
-  list-style: none;
-  counter-reset: steps;
-}
-
-:root[data-theme="atelier"] .atelier-ed-body ol li {
-  counter-increment: steps;
-  position: relative;
-  padding: 10px 0 10px 46px;
-  border-bottom: 1px solid rgba(21, 20, 15, 0.06);
-  font-size: 14px;
-  color: var(--ink-soft);
-  line-height: 1.55;
-}
-
-:root[data-theme="atelier"] .atelier-ed-body ol li::before {
-  content: counter(steps, upper-roman) ".";
-  position: absolute;
-  left: 0;
-  top: 10px;
-  font-family: var(--font-display-serif);
-  font-style: italic;
-  font-weight: 500;
-  color: var(--coral);
-  font-size: 14px;
-  width: 36px;
-  text-align: left;
-}
-
-:root[data-theme="atelier"] .atelier-ed-body ol li:last-child {
-  border-bottom: 0;
-}
-
-:root[data-theme="atelier"] .atelier-ed-body ul {
-  margin: 6px 0 14px;
-  padding-left: 18px;
-  font-size: 14px;
-  color: var(--ink-soft);
-  line-height: 1.6;
-}
-
-:root[data-theme="atelier"] .atelier-ed-body code {
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  background: rgba(21, 20, 15, 0.06);
-  padding: 1px 5px;
-  border-radius: 3px;
-}
-
-:root[data-theme="atelier"] .atelier-ann {
-  margin-top: 14px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-top: 1px solid var(--line-soft);
-  padding-top: 14px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--ink-faint);
-}
-
-:root[data-theme="atelier"] .atelier-fin {
-  font-family: var(--font-display-serif);
-  font-style: italic;
-  color: var(--coral);
-}
-
-/* ── Progress / thinking ── */
-:root[data-theme="atelier"] .atelier-tool-progress {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--ink-mute);
-  padding: 10px 0;
-}
-
-:root[data-theme="atelier"] .atelier-tool-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--coral);
-  animation: atelier-pulse 2.4s ease-in-out infinite;
-  flex-shrink: 0;
-}
-
-@keyframes atelier-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-
-:root[data-theme="atelier"] .atelier-thinking {
-  font-family: var(--font-display-serif);
-  font-style: italic;
-  font-size: 14px;
-  color: var(--ink-mute);
-  padding: 10px 0;
-}
-
-/* ── Composer ── */
-:root[data-theme="atelier"] .atelier-composer {
-  border-top: 1px solid var(--line);
-  padding: 18px 32px 22px;
-  background: var(--paper-warm);
-  flex-shrink: 0;
-}
-
-:root[data-theme="atelier"] .atelier-composer-wrap {
-  background: var(--bone);
-  border: 1px solid var(--line);
-  border-radius: 22px;
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-:root[data-theme="atelier"] .atelier-composer-input {
-  width: 100%;
-  min-height: 54px;
-  font-family: var(--font-display-sans);
-  font-size: 14.5px;
-  line-height: 1.55;
-  color: var(--ink);
-  resize: none;
-  background: none;
-  border: none;
-  outline: none;
-}
-
-:root[data-theme="atelier"] .atelier-composer-input::placeholder {
-  color: var(--ink-faint);
-  font-family: var(--font-display-serif);
-  font-style: italic;
-  font-weight: 500;
-}
-
-:root[data-theme="atelier"] .atelier-composer-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-:root[data-theme="atelier"] .atelier-composer-hint {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--ink-faint);
-}
-
-:root[data-theme="atelier"] .atelier-composer-send {
-  background: var(--coral);
-  color: #fff;
-  font-family: var(--font-display-sans);
+  padding: 2px 6px;
+  font-size: 9px;
   font-weight: 700;
-  font-size: 13px;
-  padding: 11px 20px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  box-shadow: 0 14px 26px -16px rgba(237, 111, 92, 0.7);
-  transition: 0.18s ease;
-  border: none;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: 1px solid;
+  white-space: nowrap;
 }
 
-:root[data-theme="atelier"] .atelier-composer-send:hover:not(:disabled) {
-  background: #e55a45;
-  transform: translateY(-1px);
+:root[data-theme="atelier"] .atelier-log-tag-sync {
+  color: var(--ink-mute);
+  border-color: var(--ink-mute);
+  background: transparent;
 }
 
-:root[data-theme="atelier"] .atelier-composer-send:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-:root[data-theme="atelier"] .atelier-composer-footnote {
-  padding: 10px 6px 0;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--ink-faint);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-:root[data-theme="atelier"] .atelier-composer-footnote em {
-  font-family: var(--font-display-serif);
-  font-style: italic;
+:root[data-theme="atelier"] .atelier-log-tag-recovery {
   color: var(--coral);
+  border-color: var(--coral-soft);
+  background: transparent;
+}
+
+:root[data-theme="atelier"] .atelier-log-tag-sleep {
+  color: var(--olive);
+  border-color: var(--olive);
+  background: transparent;
+}
+
+:root[data-theme="atelier"] .atelier-log-tag-error {
+  color: var(--coral);
+  border-color: var(--coral);
+  background: rgba(237, 111, 92, 0.08);
+}
+
+:root[data-theme="atelier"] .atelier-log-tag-chat {
+  color: var(--ink-mute);
+  border-color: var(--line);
+  background: transparent;
+}
+
+:root[data-theme="atelier"] .atelier-log-tag-page {
+  color: var(--ink-faint);
+  border-color: var(--line-soft);
+  background: transparent;
+}
+
+/* ── Detail expansion row ── */
+:root[data-theme="atelier"] .atelier-log-detail-row td {
+  background: var(--paper-warm);
+  padding: 10px 14px;
+}
+
+:root[data-theme="atelier"] .atelier-log-detail-pre {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+}
+
+:root[data-theme="atelier"] .atelier-log-empty {
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  color: var(--ink-faint);
+  padding: 16px 0;
 }
