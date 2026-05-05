@@ -5,11 +5,16 @@ import RecoveryTrend from "@/components/overview/RecoveryTrend";
 import AIInsightCard from "@/components/overview/AIInsightCard";
 import AIInsightRefreshWatcher from "@/components/overview/AIInsightRefreshWatcher";
 import PRsCard from "@/components/overview/PRsCard";
+import DailyBulletin from "@/components/overview/DailyBulletin";
+import AtelierKPIGrid from "@/components/overview/AtelierKPIGrid";
+import AtelierCharts from "@/components/overview/AtelierCharts";
+import AtelierBottomStrip from "@/components/overview/AtelierBottomStrip";
 import {
   getDailySummary,
   getOverview,
   getPRStats,
   getRecoveryTrend,
+  getBodyMeasurements,
   type DailySummaryRow,
   type RecoveryRow,
 } from "@/lib/db";
@@ -32,6 +37,7 @@ export default async function OverviewPage({
   const data = getOverview(days);
   const trend = getRecoveryTrend(days);
   const prStats = getPRStats();
+  const body = getBodyMeasurements();
   const summaryByDate = new Map(
     getDailySummary("0000-01-01", "9999-12-31")
       .filter((r) => r.recovery_score != null)
@@ -57,40 +63,78 @@ export default async function OverviewPage({
 
   return (
     <>
-      <div className="hero">
-        <RecoveryHero
+      <div className="classic-overview">
+        <div className="hero">
+          <RecoveryHero
+            score={latestRecovery?.recovery_score ?? null}
+            hrv={latestRecovery?.hrv ?? null}
+            rhr={latestRecovery?.rhr ?? null}
+            updatedAt={latestRecovery?.date ?? null}
+          />
+          <AIInsightCard
+            hasData={hasInsightData}
+            insight={insightStatus.insight}
+            refreshing={insightRefreshing}
+          />
+        </div>
+        {insightStatus.isStale && insightRefreshing ? <AIInsightRefreshWatcher /> : null}
+
+        <KPIStrip
+          latestRecovery={latestRecovery}
+          previousRecovery={previousRecovery}
+          latestCycle={data.latestCycle}
+          previousCycle={data.previousCycle}
+          latestSleep={data.latestSleep}
+          previousSleep={data.previousSleep}
+          recoveryTrend={data.recoveryTrend}
+          strainTrend={data.strainTrend}
+          sleepTrend={data.sleepTrend}
+        />
+
+        <PRsCard stats={prStats} />
+
+        <div className="grid-main">
+          <div className="col">
+            <RecoveryTrend rows={trend} />
+          </div>
+          <div className="col">{/* Phase 2 */}</div>
+        </div>
+      </div>
+
+      <div className="atelier-overview">
+        {insightStatus.isStale && insightRefreshing ? <AIInsightRefreshWatcher /> : null}
+        <DailyBulletin
           score={latestRecovery?.recovery_score ?? null}
           hrv={latestRecovery?.hrv ?? null}
           rhr={latestRecovery?.rhr ?? null}
-          updatedAt={latestRecovery?.date ?? null}
-        />
-        <AIInsightCard
-          hasData={hasInsightData}
+          sleepPerf={data.latestSleep?.performance ?? null}
+          respRate={data.latestSleep?.respiratory_rate ?? null}
+          skinTemp={latestRecovery?.skin_temp ?? null}
           insight={insightStatus.insight}
           refreshing={insightRefreshing}
         />
-      </div>
-      {insightStatus.isStale && insightRefreshing ? <AIInsightRefreshWatcher /> : null}
-
-      <KPIStrip
-        latestRecovery={latestRecovery}
-        previousRecovery={previousRecovery}
-        latestCycle={data.latestCycle}
-        previousCycle={data.previousCycle}
-        latestSleep={data.latestSleep}
-        previousSleep={data.previousSleep}
-        recoveryTrend={data.recoveryTrend}
-        strainTrend={data.strainTrend}
-        sleepTrend={data.sleepTrend}
-      />
-
-      <PRsCard stats={prStats} />
-
-      <div className="grid-main">
-        <div className="col">
-          <RecoveryTrend rows={trend} />
-        </div>
-        <div className="col">{/* Phase 2 */}</div>
+        <AtelierKPIGrid
+          latestRecovery={latestRecovery}
+          previousRecovery={previousRecovery}
+          latestCycle={data.latestCycle}
+          previousCycle={data.previousCycle}
+          latestSleep={data.latestSleep}
+          previousSleep={data.previousSleep}
+          recoveryTrend={data.recoveryTrend}
+          strainTrend={data.strainTrend}
+          sleepTrend={data.sleepTrend}
+        />
+        <AtelierCharts
+          recoveryTrend={trend}
+          latestSleep={data.latestSleep}
+        />
+        <AtelierBottomStrip
+          latestRecovery={latestRecovery}
+          latestCycle={data.latestCycle}
+          latestSleep={data.latestSleep}
+          insight={insightStatus.insight}
+          bodyWeightKg={body?.weight_kilogram ?? undefined}
+        />
       </div>
     </>
   );

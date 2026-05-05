@@ -37,7 +37,7 @@ export default function AtelierBottomStrip({
   latestCycle,
   latestSleep,
   insight,
-  bodyWeightKg = 70,
+  bodyWeightKg,
 }: Props) {
   // ── Stress ──
   const score = latestRecovery?.recovery_score ?? null;
@@ -45,7 +45,8 @@ export default function AtelierBottomStrip({
   const avgHr = latestCycle?.avg_hr ?? null;
 
   // ── Hydration ──
-  const hydrationL = Math.round(bodyWeightKg * 0.033 * 10) / 10;
+  const hydrationL =
+    bodyWeightKg != null ? Math.round(bodyWeightKg * 0.033 * 10) / 10 : null;
   const goalL = 2.6;
 
   // ── Coach digest ──
@@ -73,10 +74,11 @@ export default function AtelierBottomStrip({
       <div className="atelier-strip-col">
         <span className="atelier-strip-eyebrow">HYDRATION · EST.</span>
         <p className="atelier-strip-big-num">
-          {hydrationL.toFixed(1)}
-          <span className="atelier-strip-big-unit"> L</span>
+          {hydrationL != null ? (
+            <>{hydrationL.toFixed(1)}<span className="atelier-strip-big-unit"> L</span></>
+          ) : "—"}
         </p>
-        <p className="atelier-strip-meta">Goal {goalL.toFixed(1)} L</p>
+        <p className="atelier-strip-meta">{hydrationL != null ? `Goal ${goalL.toFixed(1)} L` : "No body data"}</p>
         <span className="atelier-strip-delta atelier-strip-delta--flat">
           estimate
         </span>
