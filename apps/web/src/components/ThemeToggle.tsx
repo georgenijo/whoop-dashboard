@@ -7,12 +7,18 @@ export default function ThemeToggle() {
   const [theme, setTheme] = useState<Theme>("classic");
 
   useEffect(() => {
-    const current = document.documentElement.dataset.theme;
-    setTheme(current === "atelier" ? "atelier" : "classic");
+    const read = () =>
+      setTheme(document.documentElement.dataset.theme === "atelier" ? "atelier" : "classic");
+    read();
+    const obs = new MutationObserver(read);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    return () => obs.disconnect();
   }, []);
 
   async function toggle() {
-    const next: Theme = theme === "atelier" ? "classic" : "atelier";
+    const current: Theme =
+      document.documentElement.dataset.theme === "atelier" ? "atelier" : "classic";
+    const next: Theme = current === "atelier" ? "classic" : "atelier";
     // Optimistic update
     if (next === "atelier") {
       document.documentElement.dataset.theme = "atelier";
