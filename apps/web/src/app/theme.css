@@ -650,3 +650,207 @@ a:hover { border-bottom-color: var(--brand-strain); }
 :root[data-theme="atelier"] .atelier-bedtime-tbl tr:last-child td {
   border-bottom: none;
 }
+
+/* =========================================================================
+   ATELIER SETTINGS — scoped layout + components
+   ========================================================================= */
+
+:root[data-theme="atelier"] .atelier-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+:root[data-theme="atelier"] .atelier-settings-shell {
+  max-width: 680px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  padding: 0 0 60px;
+}
+
+:root[data-theme="atelier"] .atelier-settings-title {
+  font-family: var(--font-display-serif);
+  font-size: 32px;
+  font-weight: 400;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  margin: 0 0 4px;
+}
+
+:root[data-theme="atelier"] .atelier-settings-title em {
+  font-style: italic;
+  color: var(--ink-mute);
+}
+
+/* ── Section rule ── */
+:root[data-theme="atelier"] .atelier-sec-rule {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+  margin-bottom: 16px;
+}
+
+:root[data-theme="atelier"] .atelier-sec-roman {
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+:root[data-theme="atelier"] .atelier-sec-title {
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+:root[data-theme="atelier"] .atelier-sec-sub {
+  font-family: var(--font-display-serif);
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--ink-mute);
+  margin: 0 0 16px;
+  line-height: 1.4;
+}
+
+:root[data-theme="atelier"] .atelier-sec-sub em {
+  font-style: italic;
+  color: var(--ink);
+}
+
+/* ── Theme stage ── */
+:root[data-theme="atelier"] .atelier-theme-stage {
+  display: flex;
+  flex-direction: column;
+}
+
+:root[data-theme="atelier"] .atelier-theme-card {
+  cursor: default;
+  transition: border-color 200ms;
+}
+
+:root[data-theme="atelier"] .atelier-theme-card.is-active {
+  box-shadow: 0 2px 12px rgba(21,20,15,0.12);
+}
+
+:root[data-theme="atelier"] .atelier-swatch-row {
+  display: flex;
+  gap: 6px;
+}
+
+:root[data-theme="atelier"] .atelier-theme-switch {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0 0;
+}
+
+/* ── Shared card ── */
+:root[data-theme="atelier"] .atelier-placeholder-card {
+  border: 1px solid var(--line);
+  padding: 18px 22px;
+  background: var(--bone);
+}
+
+:root[data-theme="atelier"] .atelier-placeholder-dash {
+  font-family: var(--font-display-serif);
+  font-size: 22px;
+  color: var(--ink-faint);
+  margin-right: 10px;
+}
+
+:root[data-theme="atelier"] .atelier-placeholder-copy {
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  color: var(--ink-mute);
+  letter-spacing: 0.02em;
+}
+
+/* ── Coach section ── */
+:root[data-theme="atelier"] .atelier-coach-label {
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0.01em;
+}
+
+:root[data-theme="atelier"] .atelier-coach-sub {
+  font-family: var(--font-display-sans);
+  font-size: 11px;
+  color: var(--ink-mute);
+  margin-top: 3px;
+  line-height: 1.45;
+}
+
+:root[data-theme="atelier"] .atelier-coach-prompt-area {
+  width: 100%;
+  min-height: 180px;
+  background: var(--paper-warm);
+  border: 1px solid var(--line);
+  padding: 10px 12px;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.55;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+}
+
+:root[data-theme="atelier"] .atelier-btn-ghost {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--ink-mute);
+  padding: 5px 12px;
+  font-family: var(--font-display-sans);
+  font-size: 11px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+
+:root[data-theme="atelier"] .atelier-btn-primary {
+  background: var(--coral);
+  border: none;
+  color: #fff;
+  padding: 5px 12px;
+  font-family: var(--font-display-sans);
+  font-size: 11px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+
+/* ── Sync section ── */
+:root[data-theme="atelier"] .atelier-sync-btn {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  padding: 5px 14px;
+  font-family: var(--font-display-sans);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+
+:root[data-theme="atelier"] .atelier-sync-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+:root[data-theme="atelier"] .atelier-sync-result {
+  font-family: var(--font-display-sans);
+  font-size: 11px;
+  color: var(--ink-mute);
+  margin-top: 8px;
+  padding-left: 2px;
+}
