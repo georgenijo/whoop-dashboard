@@ -1,3 +1,9 @@
+import SleepHero from "@/components/sleep/atelier/SleepHero";
+import StagesPlate from "@/components/sleep/atelier/StagesPlate";
+import SleepTrendCard from "@/components/sleep/atelier/SleepTrendCard";
+import AtelierSleepConsistencyCard from "@/components/sleep/atelier/SleepConsistencyCard";
+import NeedBreakdown from "@/components/sleep/atelier/NeedBreakdown";
+import BedtimeDistribution from "@/components/sleep/atelier/BedtimeDistribution";
 import KPIStrip from "@/components/overview/KPIStrip";
 import TrendChart from "@/components/charts/TrendChart";
 import SleepStagesChart from "@/components/charts/SleepStagesChart";
@@ -68,6 +74,7 @@ export default async function SleepPage({
 
   return (
     <>
+      <div className="classic-sleep">
       <KPIStrip
         latestRecovery={data.latestRecovery}
         previousRecovery={data.previousRecovery}
@@ -135,6 +142,18 @@ export default async function SleepPage({
       <ApneaRiskCard rows={apneaRows} />
       <DeepSleepEfficiencyCard rows={deepSleepEffRows} />
       <SleepDebtChart rows={debtTrend} />
+      </div>
+
+      <div className="atelier-sleep">
+        <SleepHero latest={latestSleep} />
+        <StagesPlate latest={latestSleep} />
+        <div className="atelier-sleep-row-2">
+          <SleepTrendCard rows={trend14} />
+          <AtelierSleepConsistencyCard rows={trend14} />
+        </div>
+        <NeedBreakdown latest={latestSleep} />
+        <BedtimeDistribution rows={trend90} />
+      </div>
     </>
   );
 }
