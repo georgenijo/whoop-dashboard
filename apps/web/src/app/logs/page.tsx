@@ -69,7 +69,8 @@ export default function LogsPage() {
 
   return (
     <>
-      <div className="classic-logs" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <div className="classic-logs">
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
         <div className="kpi-strip" aria-label="Chat metrics" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
           <div className="kpi" style={{ cursor: "default" }}>
             <div className="head">
@@ -143,6 +144,7 @@ export default function LogsPage() {
             <RouteLogsTable logs={routeLogs} />
           )}
         </CollapsibleCard>
+        </div>
       </div>
 
       <div className="atelier-logs">
