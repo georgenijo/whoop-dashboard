@@ -1499,3 +1499,292 @@ a:hover { border-bottom-color: var(--brand-strain); }
   border: none;
   text-decoration: underline;
 }
+/* =========================================================================
+   ATELIER RECOVERY — scoped layout + components
+   ========================================================================= */
+
+:root[data-theme="atelier"] .atelier-recovery {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 0 0 40px;
+}
+
+/* ── RecoveryHero ── */
+:root[data-theme="atelier"] .atelier-recovery-hero {
+  border: 1px solid var(--line);
+  padding: 24px 28px 20px;
+  background: var(--bone);
+}
+
+:root[data-theme="atelier"] .atelier-recovery-headline {
+  font-family: var(--font-display-serif);
+  font-size: 32px;
+  font-weight: 400;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin: 0 0 20px;
+  line-height: 1.15;
+}
+
+:root[data-theme="atelier"] .atelier-recovery-hero-body {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 540px) {
+  :root[data-theme="atelier"] .atelier-recovery-hero-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+:root[data-theme="atelier"] .atelier-recovery-ring {
+  width: 128px;
+  height: 128px;
+  flex-shrink: 0;
+}
+
+:root[data-theme="atelier"] .atelier-recovery-metrics-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+:root[data-theme="atelier"] .atelier-recovery-metric-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  border-bottom: 1px solid var(--line-soft);
+  padding-bottom: 6px;
+}
+
+:root[data-theme="atelier"] .atelier-recovery-metric-row:last-child {
+  border-bottom: none;
+}
+
+:root[data-theme="atelier"] .atelier-recovery-metric-roman {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
+  width: 18px;
+  flex-shrink: 0;
+}
+
+:root[data-theme="atelier"] .atelier-recovery-metric-label {
+  flex: 1;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+:root[data-theme="atelier"] .atelier-recovery-metric-value {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/* ── Shared chart block ── */
+:root[data-theme="atelier"] .atelier-recovery-chart-block {
+  border: 1px solid var(--line);
+  padding: 20px 24px 16px;
+  background: var(--bone);
+}
+
+:root[data-theme="atelier"] .atelier-recovery-chart-title {
+  font-family: var(--font-display-serif);
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--ink-mute);
+  margin: 0 0 12px;
+}
+
+/* ── ZoneDistribution ── */
+:root[data-theme="atelier"] .atelier-recovery-zone-dist {
+  border: 1px solid var(--line);
+  padding: 20px 24px 16px;
+  background: var(--bone);
+}
+
+:root[data-theme="atelier"] .atelier-zone-stacked-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  gap: 1px;
+}
+
+:root[data-theme="atelier"] .atelier-zone-bar-seg {
+  height: 100%;
+  min-width: 2px;
+  transition: width 0.2s ease;
+}
+
+:root[data-theme="atelier"] .atelier-zone-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+:root[data-theme="atelier"] .atelier-zone-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+}
+
+:root[data-theme="atelier"] .atelier-zone-roman {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
+  width: 14px;
+  flex-shrink: 0;
+}
+
+:root[data-theme="atelier"] .atelier-zone-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+:root[data-theme="atelier"] .atelier-zone-label {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+:root[data-theme="atelier"] .atelier-zone-count {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+:root[data-theme="atelier"] .atelier-zone-pct {
+  color: var(--ink-mute);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+/* ── DayLedger ── */
+:root[data-theme="atelier"] .atelier-recovery-ledger {
+  border: 1px solid var(--line);
+  padding: 20px 24px 16px;
+  background: var(--bone);
+}
+
+:root[data-theme="atelier"] .atelier-day-ledger-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  color: var(--ink);
+}
+
+:root[data-theme="atelier"] .atelier-day-ledger-tbl th {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  text-align: left;
+  padding: 4px 12px 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+:root[data-theme="atelier"] .atelier-day-ledger-tbl td {
+  padding: 5px 12px 5px 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+:root[data-theme="atelier"] .atelier-day-ledger-tbl tr:last-child td {
+  border-bottom: none;
+}
+
+:root[data-theme="atelier"] .atelier-ledger-date {
+  color: var(--ink-mute);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+:root[data-theme="atelier"] .atelier-ledger-score {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+:root[data-theme="atelier"] .atelier-ledger-tag {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 2px 5px;
+  border-radius: 2px;
+}
+
+:root[data-theme="atelier"] .atelier-ledger-tag.tag-olive {
+  background: rgba(110, 116, 72, 0.15);
+  color: #6e7448;
+}
+
+:root[data-theme="atelier"] .atelier-ledger-tag.tag-mustard {
+  background: rgba(233, 185, 74, 0.18);
+  color: #c4941a;
+}
+
+:root[data-theme="atelier"] .atelier-ledger-tag.tag-coral {
+  background: rgba(237, 111, 92, 0.15);
+  color: #ed6f5c;
+}
+
+:root[data-theme="atelier"] .atelier-ledger-bar-cell {
+  min-width: 80px;
+}
+
+:root[data-theme="atelier"] .atelier-ledger-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+:root[data-theme="atelier"] .atelier-ledger-bar {
+  height: 6px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+:root[data-theme="atelier"] .atelier-ledger-bar.hrv-bar {
+  background: var(--olive);
+  max-width: 60px;
+}
+
+:root[data-theme="atelier"] .atelier-ledger-bar.rhr-bar {
+  background: var(--mustard);
+  max-width: 60px;
+}
+
+:root[data-theme="atelier"] .atelier-ledger-bar-val {
+  font-size: 11px;
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-theme="atelier"] .atelier-ledger-null {
+  color: var(--ink-faint);
+}
