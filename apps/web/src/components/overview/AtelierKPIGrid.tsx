@@ -209,20 +209,15 @@ export default function AtelierKPIGrid({
   );
   const sleepDesc = latestSleep ? `Need ${sleepNeedStr} · got ${sleepGotStr}` : "No data";
 
-  // ── Steps — placeholder data ──
-  const stepsPlaceholder = [4200, 7800, 5100, 3847, 6500, 8100, 3847];
-  const latestSteps = 3847;
-  const prevSteps = 5200;
-  const stepsDesc = "Goal 8 000";
+  // ── Steps — not available from Whoop API; render "—" until source lands ──
+  const stepsDesc = "No source";
 
   // ── Calories (from kilojoules) ──
   const kj = latestCycle?.kilojoule ?? null;
   const prevKj = previousCycle?.kilojoule ?? null;
   const kcal = kj != null ? Math.round(kj / 4.184) : null;
   const prevKcal = prevKj != null ? Math.round(prevKj / 4.184) : null;
-  const bmr = 1612;
-  const burn = kcal != null ? Math.max(0, kcal - bmr) : null;
-  const calDesc = kcal != null ? `BMR ${bmr} · burn ${burn}` : "No data";
+  const calDesc = kcal != null ? `${kcal.toLocaleString()} kcal` : "No data";
   const calValues = strainTrend
     .map((r) => (r.kilojoule != null ? r.kilojoule / 4.184 : null))
     .filter((v): v is number => v != null);
@@ -283,11 +278,10 @@ export default function AtelierKPIGrid({
     {
       roman: "vi.",
       label: "DAILY STEPS",
-      value: latestSteps.toLocaleString(),
-      unit: " steps",
+      value: "—",
       desc: stepsDesc,
-      delta: deltaLabel(latestSteps, prevSteps, { unit: "k", precision: 1 }),
-      chart: <BarSpark values={stepsPlaceholder} />,
+      delta: { label: "—", dir: "flat" as const },
+      chart: <BarSpark values={[]} />,
     },
     {
       roman: "vii.",
