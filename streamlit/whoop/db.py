@@ -1,7 +1,7 @@
 import json
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
 DB_PATH = os.environ.get(
@@ -59,6 +59,8 @@ def init_db():
             need_from_debt_ms INTEGER,
             need_from_strain_ms INTEGER,
             need_from_nap_ms INTEGER,
+            start_local TEXT,
+            end_local TEXT,
             raw JSON
         );
         CREATE TABLE IF NOT EXISTS workouts (
@@ -204,6 +206,20 @@ def sync_cycles(records: list):
     conn.close()
 
 
+def _to_local_iso(utc_str: str | None, tz_offset: str | None) -> str | None:
+    if not utc_str or not tz_offset:
+        return None
+    try:
+        utc_dt = datetime.fromisoformat(utc_str.replace("Z", "+00:00"))
+        sign = 1 if tz_offset[0] == "+" else -1
+        hh, mm = tz_offset[1:].split(":")
+        delta = sign * (int(hh) * 60 + int(mm))
+        local_dt = utc_dt + timedelta(minutes=delta)
+        return local_dt.strftime("%Y-%m-%dT%H:%M:%S")
+    except (ValueError, IndexError):
+        return None
+
+
 def sync_sleep(records: list):
     conn = get_conn()
     for r in records:
@@ -219,6 +235,9 @@ def sync_sleep(records: list):
             + sn["need_from_recent_strain_milli"]
             + sn["need_from_recent_nap_milli"]
         )
+        tz_offset = r.get("timezone_offset")
+        start_local = _to_local_iso(r.get("start"), tz_offset)
+        end_local = _to_local_iso(r.get("end"), tz_offset)
         conn.execute(
             """
             INSERT OR REPLACE INTO sleep
@@ -226,8 +245,9 @@ def sync_sleep(records: list):
                  performance, efficiency, consistency, respiratory_rate,
                  disturbances, cycles, nap,
                  need_from_baseline_ms, need_from_debt_ms, need_from_strain_ms, need_from_nap_ms,
+                 start_local, end_local,
                  raw)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
                 date,
@@ -248,6 +268,8 @@ def sync_sleep(records: list):
                 sn["need_from_sleep_debt_milli"],
                 sn["need_from_recent_strain_milli"],
                 sn["need_from_recent_nap_milli"],
+                start_local,
+                end_local,
                 json.dumps(r),
             ),
         )

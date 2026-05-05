@@ -19,6 +19,8 @@ export type SleepRow = {
   need_from_debt_ms: number | null;
   need_from_strain_ms: number | null;
   need_from_nap_ms: number | null;
+  start_local: string | null;
+  end_local: string | null;
 };
 
 export type NapRow = {
@@ -30,13 +32,15 @@ export type NapRow = {
   deep_ms: number | null;
   rem_ms: number | null;
   awake_ms: number | null;
+  start_local: string | null;
+  end_local: string | null;
 };
 
 const SLEEP_COLUMNS =
-  "date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms, sleep_need_ms, performance, efficiency, consistency, disturbances, cycles, respiratory_rate, need_from_baseline_ms, need_from_debt_ms, need_from_strain_ms, need_from_nap_ms";
+  "date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms, sleep_need_ms, performance, efficiency, consistency, disturbances, cycles, respiratory_rate, need_from_baseline_ms, need_from_debt_ms, need_from_strain_ms, need_from_nap_ms, start_local, end_local";
 
 const NAP_COLUMNS =
-  "date, in_bed_ms AS duration_ms, performance, efficiency, light_ms, deep_ms, rem_ms, awake_ms";
+  "date, in_bed_ms AS duration_ms, performance, efficiency, light_ms, deep_ms, rem_ms, awake_ms, start_local, end_local";
 
 export function getLatestSleep(): SleepRow | null {
   return safeQuery((db) => {
