@@ -2004,3 +2004,311 @@ a:hover { border-bottom-color: var(--brand-strain); }
   color: var(--ink-faint);
   width: 20px;
 }
+
+/* =========================================================================
+   ATELIER WORKOUTS — scoped layout + components
+   ========================================================================= */
+
+:root[data-theme="atelier"] .atelier-workouts {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 0 0 40px;
+}
+
+:root[data-theme="atelier"] .atelier-workouts-row-2 {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  :root[data-theme="atelier"] .atelier-workouts-row-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── WorkoutsHero ── */
+:root[data-theme="atelier"] .atelier-workouts-hero {
+  border: 1px solid var(--line);
+  padding: 24px 28px 20px;
+  background: var(--bone);
+}
+
+:root[data-theme="atelier"] .atelier-workouts-headline {
+  font-family: var(--font-display-serif);
+  font-size: 32px;
+  font-weight: 400;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin: 0 0 20px;
+  line-height: 1.15;
+}
+
+:root[data-theme="atelier"] .atelier-workouts-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+
+@media (max-width: 768px) {
+  :root[data-theme="atelier"] .atelier-workouts-kpi-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+:root[data-theme="atelier"] .atelier-workouts-kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 16px 18px;
+  background: var(--bone);
+}
+
+:root[data-theme="atelier"] .atelier-workouts-kpi-roman {
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+:root[data-theme="atelier"] .atelier-workouts-kpi-label {
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+:root[data-theme="atelier"] .atelier-workouts-kpi-value {
+  font-family: var(--font-display-sans);
+  font-size: 26px;
+  font-weight: 300;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin-top: 4px;
+}
+
+:root[data-theme="atelier"] .atelier-workouts-kpi-unit {
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  color: var(--ink-faint);
+  letter-spacing: 0.04em;
+}
+
+:root[data-theme="atelier"] .atelier-workouts-kpi-delta {
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  margin-top: 2px;
+}
+
+/* ── Logbook ── */
+:root[data-theme="atelier"] .atelier-logbook {
+  border: 1px solid var(--line);
+  padding: 24px 28px 20px;
+  background: var(--bone);
+  overflow-x: auto;
+}
+
+:root[data-theme="atelier"] .atelier-logbook-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+:root[data-theme="atelier"] .atelier-logbook-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-mute);
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 120ms, color 120ms, border-color 120ms;
+}
+
+:root[data-theme="atelier"] .atelier-logbook-pill:hover {
+  background: var(--paper-dark);
+  color: var(--ink);
+}
+
+:root[data-theme="atelier"] .atelier-logbook-pill.active {
+  background: var(--coral);
+  border-color: var(--coral);
+  color: #fff;
+}
+
+:root[data-theme="atelier"] .atelier-logbook-pill-count {
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+:root[data-theme="atelier"] .atelier-logbook-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  color: var(--ink);
+}
+
+:root[data-theme="atelier"] .atelier-logbook-tbl th {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  text-align: left;
+  padding: 4px 10px 8px 0;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+:root[data-theme="atelier"] .atelier-logbook-tbl td {
+  padding: 7px 10px 7px 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+:root[data-theme="atelier"] .atelier-logbook-tbl tr:last-child td {
+  border-bottom: none;
+}
+
+:root[data-theme="atelier"] .atelier-logbook-roman {
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
+}
+
+:root[data-theme="atelier"] .atelier-logbook-sport-tag {
+  display: inline-block;
+  border: 1px solid;
+  padding: 1px 6px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+:root[data-theme="atelier"] .atelier-logbook-strain {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+:root[data-theme="atelier"] .atelier-logbook-empty {
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  color: var(--ink-faint);
+  padding: 20px 0;
+}
+
+/* ── SportDonut ── */
+:root[data-theme="atelier"] .atelier-sport-donut {
+  border: 1px solid var(--line);
+  padding: 24px 28px 20px;
+  background: var(--bone);
+}
+
+:root[data-theme="atelier"] .atelier-sport-donut-body {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+:root[data-theme="atelier"] .atelier-sport-donut-svg {
+  width: 140px;
+  height: 140px;
+  flex-shrink: 0;
+}
+
+:root[data-theme="atelier"] .atelier-sport-donut-center-num {
+  font-family: var(--font-display-sans);
+  font-size: 22px;
+  font-weight: 300;
+  fill: var(--ink);
+  dominant-baseline: middle;
+}
+
+:root[data-theme="atelier"] .atelier-sport-donut-center-label {
+  font-family: var(--font-display-sans);
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  fill: var(--ink-faint);
+}
+
+:root[data-theme="atelier"] .atelier-sport-donut-legend {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+:root[data-theme="atelier"] .atelier-sport-donut-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+:root[data-theme="atelier"] .atelier-sport-donut-legend-roman {
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
+  width: 18px;
+  flex-shrink: 0;
+}
+
+:root[data-theme="atelier"] .atelier-sport-donut-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+:root[data-theme="atelier"] .atelier-sport-donut-legend-label {
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:root[data-theme="atelier"] .atelier-sport-donut-legend-count {
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+:root[data-theme="atelier"] .atelier-sport-donut-legend-pct {
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  color: var(--ink-faint);
+  width: 30px;
+  text-align: right;
+}
