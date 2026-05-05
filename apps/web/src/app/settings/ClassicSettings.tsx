@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import ThemeToggle from "@/components/ThemeToggle";
 
 type LocalSetting = {
   key: string;
@@ -146,6 +147,22 @@ export default function ClassicSettings() {
 
   return (
     <div style={{ maxWidth: 720, display: "flex", flexDirection: "column", gap: 18 }}>
+      <div className="card">
+        <div className="card-head">
+          <div className="card-title">Theme</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", gap: 16 }}>
+          <div>
+            <div style={{ fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, color: "var(--fg-0)", marginBottom: 3 }}>
+              Visual theme
+            </div>
+            <div style={{ fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--fg-3)", lineHeight: 1.45 }}>
+              Switch between Classic (dark) and Atelier (paper). Persists across reloads.
+            </div>
+          </div>
+          <ThemeToggle />
+        </div>
+      </div>
       <div className="card">
         <div className="card-head">
           <div className="card-title">Coach</div>
