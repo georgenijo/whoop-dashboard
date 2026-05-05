@@ -64,7 +64,7 @@ export const TOOLS: ToolSchema[] = [
   {
     name: "query_sleep",
     description:
-      "Query nightly Whoop sleep rows for a date range. Excludes naps. Returns sleep duration, stage breakdown (light/deep/REM/awake ms), sleep need (with baseline / debt / strain / nap-credit components when available), performance, efficiency, consistency, disturbances, cycles, and respiratory rate.",
+      "Query nightly Whoop sleep rows for a date range. Excludes naps. Returns sleep duration, stage breakdown (light/deep/REM/awake ms), sleep need (with baseline / debt / strain / nap-credit components when available), performance, efficiency, consistency, disturbances, cycles, respiratory rate, and local-time bedtime/waketime when available (start_local/end_local in YYYY-MM-DDTHH:MM:SS format).",
     input_schema: DATE_RANGE_SCHEMA,
     strict: true,
   },

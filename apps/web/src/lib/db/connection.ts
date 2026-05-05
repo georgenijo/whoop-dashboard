@@ -236,6 +236,11 @@ export function openWrite(): DB | null {
           AND (need_from_baseline_ms IS NULL OR need_from_debt_ms IS NULL OR need_from_strain_ms IS NULL OR need_from_nap_ms IS NULL)
       `);
     }
+    for (const col of ["start_local", "end_local"]) {
+      if (!sleepCols.some((c) => c.name === col)) {
+        db.exec(`ALTER TABLE sleep ADD COLUMN ${col} TEXT`);
+      }
+    }
     return db;
   } catch {
     db?.close();
