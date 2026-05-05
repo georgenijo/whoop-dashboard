@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import CoachWorkspace from "@/components/coach/CoachWorkspace";
+import AtelierCoachWorkspace from "@/components/coach/AtelierCoachWorkspace";
 import {
   createChatThread,
   getChatThreadById,
@@ -52,11 +53,23 @@ export default async function CoachPage({
   const messages = getChatThreadMessages(user.id, activeThread.id);
 
   return (
-    <CoachWorkspace
-      key={activeThread.id}
-      initialThreadId={activeThread.id}
-      initialThreads={threads}
-      initialMessages={messages}
-    />
+    <>
+      <div className="classic-coach">
+        <CoachWorkspace
+          key={activeThread.id}
+          initialThreadId={activeThread.id}
+          initialThreads={threads}
+          initialMessages={messages}
+        />
+      </div>
+      <div className="atelier-coach">
+        <AtelierCoachWorkspace
+          key={activeThread.id}
+          initialThreadId={activeThread.id}
+          initialThreads={threads}
+          initialMessages={messages}
+        />
+      </div>
+    </>
   );
 }
