@@ -1,4 +1,10 @@
 import KPIStrip from "@/components/overview/KPIStrip";
+import RecoveryHero from "@/components/recovery/atelier/RecoveryHero";
+import RecoveryScoreChart from "@/components/recovery/atelier/RecoveryScoreChart";
+import HRVLedger from "@/components/recovery/atelier/HRVLedger";
+import RHRBaseline from "@/components/recovery/atelier/RHRBaseline";
+import ZoneDistribution from "@/components/recovery/atelier/ZoneDistribution";
+import DayLedger from "@/components/recovery/atelier/DayLedger";
 import TrendChart from "@/components/charts/TrendChart";
 import HRVTrend from "@/components/charts/HRVTrend";
 import StrainRecoveryScatter from "@/components/charts/StrainRecoveryScatter";
@@ -85,6 +91,7 @@ export default async function RecoveryPage({
 
   return (
     <>
+      <div className="classic-recovery">
       <KPIStrip
         latestRecovery={data.latestRecovery}
         previousRecovery={data.previousRecovery}
@@ -134,6 +141,23 @@ export default async function RecoveryPage({
       <StrainRecoveryScatter rows={scatterRows} />
 
       <RecoveryReboundCard events={reboundEvents} />
+      </div>
+
+      <div className="atelier-recovery">
+        <RecoveryHero
+          score={data.latestRecovery?.recovery_score ?? null}
+          hrv={data.latestRecovery?.hrv ?? null}
+          rhr={data.latestRecovery?.rhr ?? null}
+          spo2={data.latestRecovery?.spo2 ?? null}
+          skinTemp={data.latestRecovery?.skin_temp ?? null}
+          respRate={data.latestSleep?.respiratory_rate ?? null}
+        />
+        <RecoveryScoreChart rows={trend30} />
+        <HRVLedger rows={trend30} />
+        <RHRBaseline rows={trend30} />
+        <ZoneDistribution rows={trend30} />
+        <DayLedger rows={trend30} />
+      </div>
     </>
   );
 }
