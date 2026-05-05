@@ -256,3 +256,80 @@ a {
   transition: border-color var(--dur-fast) var(--ease-out);
 }
 a:hover { border-bottom-color: var(--brand-strain); }
+
+/* =========================================================================
+   ATELIER ZERO — paper palette + token overrides
+   ========================================================================= */
+
+:root[data-theme="atelier"] {
+  /* paper palette */
+  --paper: #efe7d2;
+  --paper-warm: #ece4cf;
+  --paper-dark: #ddd2b6;
+  --bone: #f7f1de;
+  --ink: #15140f;
+  --ink-soft: #2a2620;
+  --ink-mute: #5a5448;
+  --ink-faint: #8b8676;
+  --coral: #ed6f5c;
+  --coral-soft: #f08e7c;
+  --mustard: #e9b94a;
+  --olive: #6e7448;
+  --line: rgba(21,20,15,0.18);
+  --line-soft: rgba(21,20,15,0.08);
+
+  /* override base tokens so Classic chrome blends correctly under Atelier */
+  --bg-0: var(--paper);
+  --bg-1: var(--bone);
+  --bg-2: var(--paper-warm);
+  --bg-3: var(--paper-dark);
+  --fg-0: var(--ink);
+  --fg-1: var(--ink-soft);
+  --fg-2: var(--ink-mute);
+  --fg-3: var(--ink-faint);
+  --border-subtle: var(--line-soft);
+  --border-default: var(--line);
+  --border-strong: var(--line);
+
+  /* Atelier type stack */
+  --font-display-serif: var(--font-playfair-display), Georgia, serif;
+  --font-display-sans: var(--font-inter-tight), Inter, system-ui, sans-serif;
+}
+
+/* Atelier visibility gate — both trees co-exist; CSS swaps them.
+   Only the page-level wrappers are gated. Children inside the active
+   wrapper inherit visibility naturally and keep their own display rules. */
+.atelier-overview,
+.atelier-recovery,
+.atelier-sleep,
+.atelier-strain,
+.atelier-workouts,
+.atelier-coach,
+.atelier-logs,
+.atelier-settings { display: none; }
+
+:root[data-theme="atelier"] .classic-overview,
+:root[data-theme="atelier"] .classic-recovery,
+:root[data-theme="atelier"] .classic-sleep,
+:root[data-theme="atelier"] .classic-strain,
+:root[data-theme="atelier"] .classic-workouts,
+:root[data-theme="atelier"] .classic-coach,
+:root[data-theme="atelier"] .classic-logs,
+:root[data-theme="atelier"] .classic-settings { display: none; }
+
+:root[data-theme="atelier"] .atelier-overview,
+:root[data-theme="atelier"] .atelier-recovery,
+:root[data-theme="atelier"] .atelier-sleep,
+:root[data-theme="atelier"] .atelier-strain,
+:root[data-theme="atelier"] .atelier-workouts,
+:root[data-theme="atelier"] .atelier-coach,
+:root[data-theme="atelier"] .atelier-logs,
+:root[data-theme="atelier"] .atelier-settings { display: block; }
+
+:root[data-theme="atelier"] body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-display-sans);
+  letter-spacing: -0.005em;
+}
+:root[data-theme="atelier"] .aurora { display: none; } /* paper has no aurora */

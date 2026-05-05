@@ -1,12 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import { after } from "next/server";
-import { headers } from "next/headers";
+import { headers, cookies } from "next/headers";
 import { Suspense } from "react";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Playfair_Display, Inter_Tight } from "next/font/google";
 import Sidebar from "@/components/chrome/Sidebar";
 import TopBar from "@/components/chrome/TopBar";
 import BottomNav from "@/components/chrome/BottomNav";
 import { addRouteLog } from "@/lib/db";
+import { getThemeCookie } from "./theme-cookie";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -18,6 +19,21 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+  display: "swap",
+});
+
+const playfair = Playfair_Display({
+  variable: "--font-playfair-display",
+  subsets: ["latin"],
+  style: ["normal", "italic"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+
+const interTight = Inter_Tight({
+  variable: "--font-inter-tight",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800", "900"],
   display: "swap",
 });
 
@@ -37,6 +53,10 @@ export const viewport: Viewport = {
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const cookieStore = await cookies();
+  const theme = getThemeCookie(cookieStore);
+  const isAtelier = theme === "atelier";
+
   const requestHeaders = await headers();
   const route = requestHeaders.get("x-whoop-route-log-route");
   const startedAt = requestHeaders.get("x-whoop-route-log-started-at");
@@ -62,8 +82,9 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable}`}
-      style={{ colorScheme: "dark" }}
+      className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} ${interTight.variable}`}
+      data-theme={isAtelier ? "atelier" : undefined}
+      style={{ colorScheme: isAtelier ? "light" : "dark" }}
     >
       <body>
         <div className="aurora" aria-hidden />
