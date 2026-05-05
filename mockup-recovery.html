@@ -1,0 +1,869 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Recovery — A Thirty-Morning Atlas · Vol. 01 / Issue Nº 26</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800;900&family=Inter:wght@300;400;500&family=Playfair+Display:ital,wght@1,500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --paper:#efe7d2;
+    --paper-warm:#ece4cf;
+    --paper-dark:#ddd2b6;
+    --bone:#f7f1de;
+    --ink:#15140f;
+    --ink-soft:#2a2620;
+    --ink-mute:#5a5448;
+    --ink-faint:#8b8676;
+    --coral:#ed6f5c;
+    --coral-soft:#f08e7c;
+    --mustard:#e9b94a;
+    --olive:#6e7448;
+    --violet:#6b5b95;
+    --line:rgba(21,20,15,0.18);
+    --line-soft:rgba(21,20,15,0.10);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--paper);color:var(--ink);font-family:'Inter',system-ui,sans-serif;font-weight:400;-webkit-font-smoothing:antialiased}
+  body{overflow-x:hidden;position:relative;min-height:100vh}
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:1;
+    background:
+      radial-gradient(circle at 18% 12%, rgba(106,92,56,0.06), transparent 55%),
+      radial-gradient(circle at 82% 88%, rgba(106,92,56,0.06), transparent 55%),
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.86' numOctaves='2' seed='4'/><feColorMatrix values='0 0 0 0 0.08 0 0 0 0 0.07 0 0 0 0 0.05 0 0 0 0.55 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/></svg>");
+    mix-blend-mode:multiply;opacity:0.5;
+  }
+
+  /* === META STRIP === */
+  .meta-strip{
+    border-bottom:1px solid var(--line);
+    font-family:'Inter Tight',sans-serif;font-size:10.5px;font-weight:500;
+    letter-spacing:0.18em;text-transform:uppercase;color:var(--ink-faint);
+    position:relative;z-index:5;
+  }
+  .meta-strip-inner{
+    max-width:1360px;margin:0 auto;padding:14px 64px;
+    display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;align-items:center;
+  }
+  .meta-strip .mid{justify-self:center;display:flex;align-items:center;gap:14px}
+  .meta-strip .right{justify-self:end;display:flex;align-items:center;gap:10px}
+  .pulse{width:6px;height:6px;border-radius:50%;background:var(--coral);display:inline-block;animation:pulse 2.4s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .badge{padding:3px 9px;border:1px solid var(--line);border-radius:999px;color:var(--ink-soft)}
+
+  /* === NAV === */
+  nav.top{
+    border-bottom:1px solid var(--line);position:relative;z-index:5;
+  }
+  nav.top .row{
+    max-width:1360px;margin:0 auto;padding:22px 64px;
+    display:flex;align-items:center;justify-content:space-between;gap:32px;
+  }
+  .brand{font-family:'Inter Tight',sans-serif;font-weight:800;font-size:18px;letter-spacing:-0.02em;display:flex;align-items:center;gap:10px}
+  .brand .o{font-family:'Playfair Display',serif;font-style:italic;font-weight:500;font-size:22px;color:var(--coral)}
+  .nav-links{display:flex;gap:34px;font-family:'Inter Tight',sans-serif;font-size:13px;font-weight:600;color:var(--ink-soft)}
+  .nav-links a{color:inherit;text-decoration:none}
+  .nav-links a.active{color:var(--ink)}
+  .nav-links a.active::after{content:"";display:block;height:2px;background:var(--coral);margin-top:4px}
+  .nav-cta{display:flex;align-items:center;gap:14px;font-family:'Inter Tight',sans-serif;font-size:12px;font-weight:600;letter-spacing:0.04em}
+  .nav-cta .star{color:var(--mustard);font-size:14px}
+  .nav-cta .ghost{padding:9px 16px;border:1px solid var(--line);border-radius:999px;color:var(--ink)}
+
+  /* === RAILS === */
+  .rail{
+    position:fixed;top:0;bottom:0;width:36px;display:flex;align-items:center;justify-content:center;
+    z-index:4;pointer-events:none;
+  }
+  .rail.left{left:0;border-right:1px solid var(--line-soft)}
+  .rail.right{right:0;border-left:1px solid var(--line-soft)}
+  .rail span{
+    font-family:'Inter Tight',sans-serif;font-size:10px;font-weight:600;
+    letter-spacing:0.42em;text-transform:uppercase;color:var(--ink-faint);
+    writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;
+  }
+  .rail.right span{transform:rotate(0deg);writing-mode:vertical-rl}
+  @media (max-width:1280px){.rail{display:none}}
+
+  /* === LAYOUT === */
+  main{position:relative;z-index:3;max-width:1360px;margin:0 auto;padding:0 64px}
+  section{padding:90px 0}
+  section.tight{padding:70px 0}
+
+  /* === SEC RULE === */
+  .sec-rule{
+    border-top:1px solid var(--ink);
+    padding-top:18px;margin-bottom:54px;
+    display:grid;grid-template-columns:1fr auto 1fr;align-items:start;gap:24px;
+    font-family:'Inter Tight',sans-serif;font-size:10.5px;font-weight:600;
+    letter-spacing:0.22em;text-transform:uppercase;color:var(--ink-faint);
+  }
+  .sec-rule .roman{font-family:'Playfair Display',serif;font-style:italic;font-weight:500;font-size:14px;color:var(--coral);letter-spacing:0;text-transform:none}
+  .sec-rule .mid{justify-self:center;display:flex;gap:18px}
+  .sec-rule .right{justify-self:end}
+
+  /* === HERO === */
+  .hero{padding-top:54px}
+  .eyebrow{
+    font-family:'Inter Tight',sans-serif;font-size:11px;font-weight:600;
+    letter-spacing:0.22em;text-transform:uppercase;color:var(--coral);
+    display:flex;align-items:center;gap:14px;margin-bottom:36px;
+  }
+  .eyebrow::before{content:"";width:18px;height:1px;background:var(--coral)}
+  h1.display{
+    font-family:'Inter Tight',sans-serif;font-weight:800;
+    font-size:clamp(46px,7vw,90px);line-height:0.98;letter-spacing:-0.035em;
+    color:var(--ink);max-width:1100px;
+  }
+  h1.display em{font-family:'Playfair Display',serif;font-style:italic;font-weight:500;letter-spacing:-0.01em}
+  h1.display .dot{color:var(--coral)}
+  .lede{
+    margin-top:36px;max-width:680px;font-size:17px;line-height:1.55;color:var(--ink-soft);font-weight:400;
+  }
+  .lede .mono{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--ink-mute);letter-spacing:0.02em}
+
+  /* === HERO STATS === */
+  .stat-row{
+    margin-top:64px;
+    display:grid;grid-template-columns:repeat(4,1fr);gap:0;
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  }
+  .stat{
+    padding:28px 24px 26px;
+    border-right:1px solid var(--line);
+    display:flex;flex-direction:column;gap:10px;
+  }
+  .stat:last-child{border-right:none}
+  .stat .label{
+    font-family:'Inter Tight',sans-serif;font-size:10.5px;font-weight:600;
+    letter-spacing:0.22em;text-transform:uppercase;color:var(--ink-faint);
+    display:flex;justify-content:space-between;align-items:center;
+  }
+  .stat .label .num{font-family:'Playfair Display',serif;font-style:italic;font-weight:500;color:var(--coral);letter-spacing:0;text-transform:none;font-size:13px}
+  .stat .value{
+    font-family:'Inter Tight',sans-serif;font-size:54px;font-weight:800;letter-spacing:-0.035em;color:var(--ink);
+    line-height:1;display:flex;align-items:baseline;gap:6px;
+  }
+  .stat .value .unit{font-size:18px;font-weight:600;color:var(--ink-mute);letter-spacing:0;font-family:'Inter Tight',sans-serif}
+  .stat .delta{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-mute);letter-spacing:0.04em}
+  .stat .delta.up{color:var(--olive)}
+  .stat .delta.down{color:var(--coral)}
+
+  /* === CHART CARD === */
+  .chart-block{
+    border:1px solid var(--line);background:var(--bone);
+    padding:36px 40px 30px;position:relative;
+  }
+  .chart-block + .chart-block{margin-top:48px}
+  .chart-head{
+    display:flex;justify-content:space-between;align-items:flex-end;gap:24px;margin-bottom:28px;
+    border-bottom:1px solid var(--line);padding-bottom:20px;
+  }
+  .chart-title{
+    font-family:'Inter Tight',sans-serif;font-weight:800;font-size:38px;letter-spacing:-0.03em;line-height:1.05;
+  }
+  .chart-title em{font-family:'Playfair Display',serif;font-style:italic;font-weight:500}
+  .chart-sub{
+    margin-top:8px;font-size:13px;color:var(--ink-mute);max-width:420px;line-height:1.5;
+  }
+  .chart-meta{
+    text-align:right;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--ink-faint);
+    letter-spacing:0.04em;line-height:1.7;
+  }
+  .chart-meta strong{color:var(--ink);font-weight:500}
+  .chart-stats{
+    display:flex;gap:36px;margin-bottom:18px;
+    font-family:'Inter Tight',sans-serif;
+  }
+  .chart-stats .k{
+    display:flex;flex-direction:column;gap:4px;
+  }
+  .chart-stats .k .lbl{font-size:10.5px;font-weight:600;letter-spacing:0.22em;text-transform:uppercase;color:var(--ink-faint)}
+  .chart-stats .k .v{font-size:26px;font-weight:800;letter-spacing:-0.025em;color:var(--ink)}
+  .chart-stats .k .v .u{font-size:13px;color:var(--ink-mute);font-weight:600;letter-spacing:0;margin-left:3px}
+
+  /* SVG axis */
+  .axis-y text, .axis-x text{font-family:'JetBrains Mono',monospace;font-size:9.5px;fill:var(--ink-faint);letter-spacing:0.04em}
+  .grid-line{stroke:var(--line-soft);stroke-width:1;stroke-dasharray:2 4}
+  .axis-label{font-family:'Inter Tight',sans-serif;font-size:9.5px;font-weight:600;letter-spacing:0.22em;text-transform:uppercase;fill:var(--ink-faint)}
+
+  /* === ZONE / DONUT === */
+  .zone-grid{
+    display:grid;grid-template-columns:1fr 1.05fr;gap:60px;align-items:center;
+  }
+  .donut-wrap{position:relative;display:flex;justify-content:center}
+  .donut-center{
+    position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;align-items:center;
+    pointer-events:none;
+  }
+  .donut-center .big{
+    font-family:'Inter Tight',sans-serif;font-weight:800;font-size:66px;letter-spacing:-0.04em;color:var(--ink);line-height:1;
+  }
+  .donut-center .lbl{
+    margin-top:8px;font-family:'Inter Tight',sans-serif;font-size:10.5px;font-weight:600;
+    letter-spacing:0.22em;text-transform:uppercase;color:var(--ink-faint);
+  }
+  .zone-legend{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--line)}
+  .zone-row{
+    display:grid;grid-template-columns:18px 1fr auto auto;gap:18px;align-items:center;
+    padding:22px 4px;border-bottom:1px solid var(--line);
+  }
+  .zone-row .swatch{width:14px;height:14px;border:1px solid var(--ink)}
+  .zone-row.green .swatch{background:var(--olive)}
+  .zone-row.yellow .swatch{background:var(--mustard)}
+  .zone-row.red .swatch{background:var(--coral)}
+  .zone-row .name{
+    font-family:'Inter Tight',sans-serif;font-weight:700;font-size:18px;letter-spacing:-0.015em;
+  }
+  .zone-row .name em{font-family:'Playfair Display',serif;font-style:italic;font-weight:500;color:var(--ink-mute);font-size:14px;margin-left:8px}
+  .zone-row .pct{
+    font-family:'Inter Tight',sans-serif;font-weight:800;font-size:32px;letter-spacing:-0.03em;
+  }
+  .zone-row .days{
+    font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-faint);letter-spacing:0.04em;
+  }
+  .zone-note{
+    margin-top:18px;font-size:12.5px;color:var(--ink-mute);line-height:1.55;max-width:480px;
+  }
+
+  /* === TABLE === */
+  .ledger{
+    border:1px solid var(--ink);background:var(--bone);
+    overflow:hidden;
+  }
+  .ledger table{width:100%;border-collapse:collapse}
+  .ledger th{
+    text-align:left;font-family:'Inter Tight',sans-serif;font-size:10.5px;font-weight:600;
+    letter-spacing:0.22em;text-transform:uppercase;color:var(--ink-faint);
+    padding:14px 18px;border-bottom:1px solid var(--ink);background:var(--paper-warm);
+  }
+  .ledger th.num,.ledger td.num{text-align:right;font-family:'JetBrains Mono',monospace}
+  .ledger th.cen,.ledger td.cen{text-align:center}
+  .ledger td{
+    padding:14px 18px;border-bottom:1px solid var(--line-soft);
+    font-size:14px;color:var(--ink-soft);vertical-align:middle;
+  }
+  .ledger tr:last-child td{border-bottom:none}
+  .ledger tr:hover td{background:rgba(21,20,15,0.025)}
+  .ledger td.idx{font-family:'Playfair Display',serif;font-style:italic;font-weight:500;color:var(--coral);font-size:14px;width:46px}
+  .ledger td.date{font-family:'Inter Tight',sans-serif;font-weight:600;color:var(--ink);font-size:13px}
+  .ledger td.score{font-family:'Inter Tight',sans-serif;font-weight:800;font-size:22px;letter-spacing:-0.025em;color:var(--ink);width:90px}
+  .ledger td.score .pct-mark{font-size:12px;color:var(--ink-mute);font-weight:600;margin-left:2px}
+  .zone-tag{
+    display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border-radius:999px;
+    font-family:'Inter Tight',sans-serif;font-size:10.5px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;
+    border:1px solid currentColor;
+  }
+  .zone-tag .d{width:6px;height:6px;border-radius:50%;background:currentColor}
+  .zone-tag.green{color:var(--olive)}
+  .zone-tag.yellow{color:#a88321}
+  .zone-tag.red{color:var(--coral)}
+  .ledger td.bar-cell{width:140px}
+  .bar{height:6px;background:var(--paper-dark);position:relative;width:100%}
+  .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--ink)}
+  .bar.coral i{background:var(--coral)}
+  .bar.violet i{background:var(--violet)}
+  .bar.olive i{background:var(--olive)}
+
+  /* === METHOD === */
+  .method-grid{
+    display:grid;grid-template-columns:repeat(4,1fr);gap:0;
+    border-top:1px solid var(--ink);position:relative;
+  }
+  .method-grid::before{
+    content:"";position:absolute;top:48px;left:0;right:0;height:1px;background:var(--line);
+  }
+  .method-step{
+    padding:20px 22px 28px;border-right:1px solid var(--line);position:relative;
+  }
+  .method-step:last-child{border-right:none}
+  .method-step .num{
+    font-family:'Playfair Display',serif;font-style:italic;font-weight:500;color:var(--coral);font-size:14px;
+  }
+  .method-step h4{
+    margin-top:6px;font-family:'Inter Tight',sans-serif;font-weight:800;font-size:20px;letter-spacing:-0.02em;
+    display:flex;align-items:center;gap:8px;
+    background:var(--paper);padding:10px 0 12px;
+  }
+  .method-step h4 .arrow{color:var(--ink-faint);font-weight:500}
+  .method-step:last-child h4 .arrow{display:none}
+  .method-step p{font-size:13px;color:var(--ink-mute);line-height:1.55}
+
+  /* === FOOTER === */
+  footer{
+    margin-top:90px;padding:64px 0 0;border-top:1px solid var(--ink);position:relative;z-index:3;
+  }
+  .foot-row{
+    max-width:1360px;margin:0 auto;padding:0 64px;
+    display:grid;grid-template-columns:repeat(4,1fr);gap:32px;font-family:'Inter Tight',sans-serif;font-size:12px;
+    color:var(--ink-mute);
+  }
+  .foot-row h5{font-size:10.5px;font-weight:600;letter-spacing:0.22em;text-transform:uppercase;color:var(--ink);margin-bottom:14px}
+  .foot-row a,.foot-row p{color:var(--ink-mute);text-decoration:none;display:block;line-height:1.9}
+  .mega{
+    margin:80px 0 0;padding:0 24px 30px;font-family:'Inter Tight',sans-serif;font-weight:900;
+    font-size:clamp(70px,13vw,200px);line-height:0.86;letter-spacing:-0.05em;color:var(--ink);
+    text-align:left;
+  }
+  .mega em{font-family:'Playfair Display',serif;font-style:italic;font-weight:500;color:var(--ink)}
+  .mega .dot{color:var(--coral)}
+  .foot-base{
+    border-top:1px solid var(--line);padding:18px 64px;
+    max-width:1360px;margin:0 auto;display:flex;justify-content:space-between;
+    font-family:'Inter Tight',sans-serif;font-size:10.5px;font-weight:600;letter-spacing:0.22em;text-transform:uppercase;color:var(--ink-faint);
+  }
+  .foot-base .pulse{margin-right:8px;vertical-align:middle}
+
+  /* === RESPONSIVE === */
+  @media (max-width:1080px){
+    main,nav.top .row,.meta-strip-inner,.foot-row,.foot-base{padding-left:32px;padding-right:32px}
+    .stat-row{grid-template-columns:repeat(2,1fr)}
+    .stat:nth-child(2){border-right:none}
+    .stat:nth-child(1),.stat:nth-child(2){border-bottom:1px solid var(--line)}
+    .zone-grid{grid-template-columns:1fr;gap:40px}
+    .method-grid{grid-template-columns:repeat(2,1fr)}
+    .method-grid::before{display:none}
+    .foot-row{grid-template-columns:repeat(2,1fr)}
+  }
+  @media (max-width:640px){
+    main,nav.top .row,.meta-strip-inner,.foot-row,.foot-base{padding-left:20px;padding-right:20px}
+    .meta-strip-inner{grid-template-columns:1fr 1fr;gap:10px}
+    .meta-strip .mid{display:none}
+    .nav-links{display:none}
+    .stat-row{grid-template-columns:1fr}
+    .stat{border-right:none;border-bottom:1px solid var(--line)}
+    .stat:last-child{border-bottom:none}
+    .ledger td.bar-cell{display:none}
+    .ledger th.bar-cell{display:none}
+    .chart-block{padding:24px 20px}
+    .chart-stats{flex-wrap:wrap;gap:18px}
+    .method-grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<!-- META STRIP -->
+<div class="meta-strip" data-od-id="meta-strip">
+  <div class="meta-strip-inner">
+    <div>Vol. 01 / Issue Nº 26 — A Recovery Atlas</div>
+    <div class="mid">
+      <span>Filed under: Recovery Studies · Cardiac Rhythms</span>
+    </div>
+    <div class="right">
+      <span class="pulse"></span>
+      <span>Live · MMXXVI / EN-US · 52.5200° N · 13.4050° E</span>
+    </div>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav class="top" data-od-id="nav">
+  <div class="row">
+    <div class="brand"><span class="o">Ø</span> Atelier Whoop</div>
+    <div class="nav-links">
+      <a href="#">Overview</a>
+      <a href="#" class="active">Recovery</a>
+      <a href="#">Strain</a>
+      <a href="#">Sleep</a>
+      <a href="#">Journal</a>
+    </div>
+    <div class="nav-cta">
+      <span class="star">★</span>
+      <a href="#" class="ghost">Export PDF ↗</a>
+    </div>
+  </div>
+</nav>
+
+<!-- RAILS -->
+<aside class="rail left" aria-hidden="true"><span>RECOVERY ATLAS · MMXXVI · WHOOP</span></aside>
+<aside class="rail right" aria-hidden="true"><span>VOL. 01 — ISSUE Nº 26 · ATELIER ZERO</span></aside>
+
+<main>
+
+  <!-- HERO -->
+  <section class="hero" data-od-id="hero">
+    <div class="sec-rule">
+      <span class="roman">I.</span>
+      <span class="mid"><span>Aperture</span><span>·</span><span>Plate Nº 14</span></span>
+      <span class="right">001 / 008</span>
+    </div>
+    <div class="eyebrow">Recovery Studies — Plate Nº 14</div>
+    <h1 class="display">
+      Recovery, measured over <em>thirty</em> mornings of breath, beats, and <em>quiet</em> nerves<span class="dot">.</span>
+    </h1>
+    <p class="lede">
+      A close read of one body across thirty consecutive sleeps — the rise and fall of autonomic balance, plotted against the stubborn arithmetic of resting heart rate. Window opens <span class="mono">04 APR 2026</span>; closes <span class="mono">03 MAY 2026</span>. Source telemetry: <span class="mono">whoop-4.0 / fw-9.31.2</span>.
+    </p>
+
+    <div class="stat-row">
+      <div class="stat">
+        <div class="label"><span>Avg recovery</span><span class="num">01</span></div>
+        <div class="value">65<span class="unit">%</span></div>
+        <div class="delta up">▲ 4.2 vs. prior 30 days</div>
+      </div>
+      <div class="stat">
+        <div class="label"><span>Avg HRV</span><span class="num">02</span></div>
+        <div class="value">73<span class="unit">ms</span></div>
+        <div class="delta up">▲ 6.1 ms vs. prior</div>
+      </div>
+      <div class="stat">
+        <div class="label"><span>Avg resting HR</span><span class="num">03</span></div>
+        <div class="value">54<span class="unit">bpm</span></div>
+        <div class="delta down">▼ 1.8 bpm — favorable</div>
+      </div>
+      <div class="stat">
+        <div class="label"><span>Days in green</span><span class="num">04</span></div>
+        <div class="value">16<span class="unit">/ 30</span></div>
+        <div class="delta up">53.3% restorative</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- II. RECOVERY TREND -->
+  <section data-od-id="recovery-trend">
+    <div class="sec-rule">
+      <span class="roman">II.</span>
+      <span class="mid"><span>The thirty-day curve</span><span>·</span><span>FIG. 02 / RC-30</span></span>
+      <span class="right">002 / 008</span>
+    </div>
+
+    <div class="chart-block">
+      <div class="chart-head">
+        <div>
+          <h2 class="chart-title">Recovery score, <em>day by day</em><span style="color:var(--coral)">.</span></h2>
+          <p class="chart-sub">Whoop's blended index of HRV, RHR, sleep performance, and respiratory rate. Higher is more restored.</p>
+        </div>
+        <div class="chart-meta">
+          <strong>RANGE</strong> 38 — 91<br>
+          <strong>MEAN</strong> 64.7<br>
+          <strong>σ</strong> 13.8<br>
+          <strong>SHA</strong> 7c2af0e
+        </div>
+      </div>
+      <div class="chart-stats">
+        <div class="k"><span class="lbl">Peak</span><span class="v">91<span class="u">%</span></span></div>
+        <div class="k"><span class="lbl">Trough</span><span class="v">38<span class="u">%</span></span></div>
+        <div class="k"><span class="lbl">Median</span><span class="v">68<span class="u">%</span></span></div>
+        <div class="k"><span class="lbl">Days plotted</span><span class="v">30</span></div>
+      </div>
+
+      <svg viewBox="0 0 1240 320" width="100%" preserveAspectRatio="none" style="display:block">
+        <!-- y axis labels & grid -->
+        <g class="axis-y">
+          <line x1="40" y1="30" x2="1240" y2="30" class="grid-line"/>
+          <line x1="40" y1="95" x2="1240" y2="95" class="grid-line"/>
+          <line x1="40" y1="160" x2="1240" y2="160" class="grid-line"/>
+          <line x1="40" y1="225" x2="1240" y2="225" class="grid-line"/>
+          <line x1="40" y1="240" x2="1240" y2="240" stroke="#15140f" stroke-width="1"/>
+          <text x="0" y="34">95</text>
+          <text x="0" y="99">79</text>
+          <text x="0" y="164">62</text>
+          <text x="0" y="229">46</text>
+          <text x="0" y="244">30</text>
+        </g>
+        <!-- recovery zone bands -->
+        <rect x="40" y="30" width="1200" height="59" fill="#6e7448" opacity="0.06"/>
+        <rect x="40" y="89" width="1200" height="71" fill="#e9b94a" opacity="0.07"/>
+        <rect x="40" y="160" width="1200" height="80" fill="#ed6f5c" opacity="0.06"/>
+        <text x="1238" y="62" text-anchor="end" class="axis-label" fill="#6e7448">GREEN ≥ 67</text>
+        <text x="1238" y="128" text-anchor="end" class="axis-label" fill="#a88321">YELLOW 34—66</text>
+        <text x="1238" y="205" text-anchor="end" class="axis-label" fill="#ed6f5c">RED &lt; 34</text>
+
+        <!-- line + area -->
+        <g transform="translate(40,0)">
+          <polygon
+            fill="#ed6f5c" fill-opacity="0.10"
+            points="0,104 41,150 83,75 124,195 166,133 207,91 248,53 290,159 331,214 372,120 414,82 455,108 497,179 538,137 579,66 621,88 662,146 703,201 745,117 786,75 828,98 869,156 910,43 952,127 993,85 1034,185 1076,111 1117,69 1159,140 1200,101 1200,240 0,240"/>
+          <polyline
+            fill="none" stroke="#ed6f5c" stroke-width="1.8"
+            points="0,104 41,150 83,75 124,195 166,133 207,91 248,53 290,159 331,214 372,120 414,82 455,108 497,179 538,137 579,66 621,88 662,146 703,201 745,117 786,75 828,98 869,156 910,43 952,127 993,85 1034,185 1076,111 1117,69 1159,140 1200,101"/>
+          <!-- dots -->
+          <g fill="#efe7d2" stroke="#ed6f5c" stroke-width="1.4">
+            <circle cx="0" cy="104" r="3"/><circle cx="41" cy="150" r="3"/><circle cx="83" cy="75" r="3"/><circle cx="124" cy="195" r="3"/><circle cx="166" cy="133" r="3"/><circle cx="207" cy="91" r="3"/><circle cx="248" cy="53" r="3"/><circle cx="290" cy="159" r="3"/><circle cx="331" cy="214" r="3"/><circle cx="372" cy="120" r="3"/><circle cx="414" cy="82" r="3"/><circle cx="455" cy="108" r="3"/><circle cx="497" cy="179" r="3"/><circle cx="538" cy="137" r="3"/><circle cx="579" cy="66" r="3"/><circle cx="621" cy="88" r="3"/><circle cx="662" cy="146" r="3"/><circle cx="703" cy="201" r="3"/><circle cx="745" cy="117" r="3"/><circle cx="786" cy="75" r="3"/><circle cx="828" cy="98" r="3"/><circle cx="869" cy="156" r="3"/><circle cx="910" cy="43" r="3"/><circle cx="952" cy="127" r="3"/><circle cx="993" cy="85" r="3"/><circle cx="1034" cy="185" r="3"/><circle cx="1076" cy="111" r="3"/><circle cx="1117" cy="69" r="3"/><circle cx="1159" cy="140" r="3"/><circle cx="1200" cy="101" r="3"/>
+          </g>
+          <!-- peak annotation -->
+          <line x1="910" y1="43" x2="910" y2="20" stroke="#15140f" stroke-width="1"/>
+          <text x="910" y="14" text-anchor="middle" class="axis-label" fill="#15140f">PEAK · 91% · 26 APR</text>
+          <!-- trough -->
+          <line x1="331" y1="214" x2="331" y2="262" stroke="#15140f" stroke-width="1"/>
+          <text x="331" y="276" text-anchor="middle" class="axis-label" fill="#15140f">TROUGH · 38% · 12 APR</text>
+        </g>
+        <!-- x labels -->
+        <g class="axis-x" transform="translate(40,304)">
+          <text x="0">04 APR</text>
+          <text x="248">10 APR</text>
+          <text x="538">17 APR</text>
+          <text x="828">24 APR</text>
+          <text x="1118">01 MAY</text>
+          <text x="1200" text-anchor="end">03 MAY</text>
+        </g>
+      </svg>
+    </div>
+  </section>
+
+  <!-- III. HRV TREND -->
+  <section data-od-id="hrv-trend">
+    <div class="sec-rule">
+      <span class="roman">III.</span>
+      <span class="mid"><span>Heart-rate variability</span><span>·</span><span>FIG. 03 / HV-30</span></span>
+      <span class="right">003 / 008</span>
+    </div>
+
+    <div class="chart-block">
+      <div class="chart-head">
+        <div>
+          <h2 class="chart-title">HRV, the <em>vagal</em> ledger<span style="color:var(--coral)">.</span></h2>
+          <p class="chart-sub">Beat-to-beat variation during the deepest 90 minutes of slow-wave sleep. Higher signals greater parasympathetic reserve.</p>
+        </div>
+        <div class="chart-meta">
+          <strong>RANGE</strong> 48 — 95 ms<br>
+          <strong>MEAN</strong> 73.4 ms<br>
+          <strong>σ</strong> 12.6<br>
+          <strong>RMSSD</strong> root-mean-sq.
+        </div>
+      </div>
+      <div class="chart-stats">
+        <div class="k"><span class="lbl">Peak</span><span class="v">95<span class="u">ms</span></span></div>
+        <div class="k"><span class="lbl">Trough</span><span class="v">48<span class="u">ms</span></span></div>
+        <div class="k"><span class="lbl">Baseline</span><span class="v">71<span class="u">ms</span></span></div>
+        <div class="k"><span class="lbl">Δ vs prior</span><span class="v" style="color:var(--olive)">+6.1<span class="u">ms</span></span></div>
+      </div>
+
+      <svg viewBox="0 0 1240 320" width="100%" preserveAspectRatio="none" style="display:block">
+        <g class="axis-y">
+          <line x1="40" y1="30" x2="1240" y2="30" class="grid-line"/>
+          <line x1="40" y1="100" x2="1240" y2="100" class="grid-line"/>
+          <line x1="40" y1="170" x2="1240" y2="170" class="grid-line"/>
+          <line x1="40" y1="240" x2="1240" y2="240" stroke="#15140f" stroke-width="1"/>
+          <text x="0" y="34">95</text>
+          <text x="0" y="104">79</text>
+          <text x="0" y="174">63</text>
+          <text x="0" y="244">48</text>
+          <text x="1240" y="34" text-anchor="end" class="axis-label" fill="#8b8676">MS</text>
+        </g>
+
+        <!-- baseline 71ms ≈ y= 30 + (95-71)/47*210 = 30+107.2=137 -->
+        <line x1="40" y1="137" x2="1240" y2="137" stroke="#6b5b95" stroke-width="1" stroke-dasharray="4 6" opacity="0.5"/>
+        <text x="1238" y="133" text-anchor="end" class="axis-label" fill="#6b5b95">BASELINE 71 ms</text>
+
+        <g transform="translate(40,0)">
+          <polygon
+            fill="#6b5b95" fill-opacity="0.09"
+            points="0,106 41,169 83,70 124,227 166,142 207,88 248,48 290,177 331,240 372,133 414,79 455,115 497,209 538,151 579,57 621,93 662,164 703,231 745,128 786,66 828,101 869,173 910,30 952,137 993,84 1034,213 1076,119 1117,61 1159,155 1200,106 1200,240 0,240"/>
+          <polyline
+            fill="none" stroke="#6b5b95" stroke-width="1.8"
+            points="0,106 41,169 83,70 124,227 166,142 207,88 248,48 290,177 331,240 372,133 414,79 455,115 497,209 538,151 579,57 621,93 662,164 703,231 745,128 786,66 828,101 869,173 910,30 952,137 993,84 1034,213 1076,119 1117,61 1159,155 1200,106"/>
+          <g fill="#efe7d2" stroke="#6b5b95" stroke-width="1.4">
+            <circle cx="0" cy="106" r="2.6"/><circle cx="41" cy="169" r="2.6"/><circle cx="83" cy="70" r="2.6"/><circle cx="124" cy="227" r="2.6"/><circle cx="166" cy="142" r="2.6"/><circle cx="207" cy="88" r="2.6"/><circle cx="248" cy="48" r="2.6"/><circle cx="290" cy="177" r="2.6"/><circle cx="331" cy="240" r="2.6"/><circle cx="372" cy="133" r="2.6"/><circle cx="414" cy="79" r="2.6"/><circle cx="455" cy="115" r="2.6"/><circle cx="497" cy="209" r="2.6"/><circle cx="538" cy="151" r="2.6"/><circle cx="579" cy="57" r="2.6"/><circle cx="621" cy="93" r="2.6"/><circle cx="662" cy="164" r="2.6"/><circle cx="703" cy="231" r="2.6"/><circle cx="745" cy="128" r="2.6"/><circle cx="786" cy="66" r="2.6"/><circle cx="828" cy="101" r="2.6"/><circle cx="869" cy="173" r="2.6"/><circle cx="910" cy="30" r="2.6"/><circle cx="952" cy="137" r="2.6"/><circle cx="993" cy="84" r="2.6"/><circle cx="1034" cy="213" r="2.6"/><circle cx="1076" cy="119" r="2.6"/><circle cx="1117" cy="61" r="2.6"/><circle cx="1159" cy="155" r="2.6"/><circle cx="1200" cy="106" r="2.6"/>
+          </g>
+          <line x1="910" y1="30" x2="910" y2="14" stroke="#15140f" stroke-width="1"/>
+          <text x="910" y="10" text-anchor="middle" class="axis-label" fill="#15140f">95 ms · 26 APR</text>
+        </g>
+        <g class="axis-x" transform="translate(40,304)">
+          <text x="0">04 APR</text>
+          <text x="248">10 APR</text>
+          <text x="538">17 APR</text>
+          <text x="828">24 APR</text>
+          <text x="1118">01 MAY</text>
+          <text x="1200" text-anchor="end">03 MAY</text>
+        </g>
+      </svg>
+    </div>
+  </section>
+
+  <!-- IV. RHR TREND -->
+  <section data-od-id="rhr-trend">
+    <div class="sec-rule">
+      <span class="roman">IV.</span>
+      <span class="mid"><span>Resting heart rate</span><span>·</span><span>FIG. 04 / HR-30</span></span>
+      <span class="right">004 / 008</span>
+    </div>
+
+    <div class="chart-block">
+      <div class="chart-head">
+        <div>
+          <h2 class="chart-title">Resting pulse, the <em>quiet</em> baseline<span style="color:var(--coral)">.</span></h2>
+          <p class="chart-sub">Lowest 30-second heart rate observed during sleep. Lower values indicate parasympathetic dominance and recovered cardiovascular load.</p>
+        </div>
+        <div class="chart-meta">
+          <strong>RANGE</strong> 48 — 62 bpm<br>
+          <strong>MEAN</strong> 53.7 bpm<br>
+          <strong>σ</strong> 3.6<br>
+          <strong>METHOD</strong> 30 s rolling min
+        </div>
+      </div>
+      <div class="chart-stats">
+        <div class="k"><span class="lbl">Min</span><span class="v" style="color:var(--olive)">48<span class="u">bpm</span></span></div>
+        <div class="k"><span class="lbl">Max</span><span class="v" style="color:var(--coral)">62<span class="u">bpm</span></span></div>
+        <div class="k"><span class="lbl">Baseline</span><span class="v">55<span class="u">bpm</span></span></div>
+        <div class="k"><span class="lbl">Δ vs prior</span><span class="v" style="color:var(--olive)">−1.8<span class="u">bpm</span></span></div>
+      </div>
+
+      <svg viewBox="0 0 1240 320" width="100%" preserveAspectRatio="none" style="display:block">
+        <g class="axis-y">
+          <line x1="40" y1="30" x2="1240" y2="30" class="grid-line"/>
+          <line x1="40" y1="97" x2="1240" y2="97" class="grid-line"/>
+          <line x1="40" y1="165" x2="1240" y2="165" class="grid-line"/>
+          <line x1="40" y1="240" x2="1240" y2="240" stroke="#15140f" stroke-width="1"/>
+          <text x="0" y="34">62</text>
+          <text x="0" y="101">57</text>
+          <text x="0" y="169">53</text>
+          <text x="0" y="244">48</text>
+          <text x="1240" y="34" text-anchor="end" class="axis-label" fill="#8b8676">BPM</text>
+        </g>
+
+        <!-- baseline 55bpm: y = 240 - (55-48)*15 = 240-105 = 135 -->
+        <line x1="40" y1="135" x2="1240" y2="135" stroke="#6e7448" stroke-width="1" stroke-dasharray="4 6" opacity="0.6"/>
+        <text x="1238" y="131" text-anchor="end" class="axis-label" fill="#6e7448">BASELINE 55 bpm</text>
+
+        <g transform="translate(40,0)">
+          <polygon
+            fill="#6e7448" fill-opacity="0.10"
+            points="0,165 41,120 83,195 124,60 166,150 207,180 248,225 290,105 331,30 372,150 414,210 455,180 497,75 538,135 579,225 621,195 662,120 703,45 745,150 786,210 828,180 869,120 910,240 952,150 993,195 1034,60 1076,165 1117,210 1159,135 1200,180 1200,240 0,240"/>
+          <polyline
+            fill="none" stroke="#6e7448" stroke-width="1.8"
+            points="0,165 41,120 83,195 124,60 166,150 207,180 248,225 290,105 331,30 372,150 414,210 455,180 497,75 538,135 579,225 621,195 662,120 703,45 745,150 786,210 828,180 869,120 910,240 952,150 993,195 1034,60 1076,165 1117,210 1159,135 1200,180"/>
+          <g fill="#efe7d2" stroke="#6e7448" stroke-width="1.4">
+            <circle cx="0" cy="165" r="2.6"/><circle cx="41" cy="120" r="2.6"/><circle cx="83" cy="195" r="2.6"/><circle cx="124" cy="60" r="2.6"/><circle cx="166" cy="150" r="2.6"/><circle cx="207" cy="180" r="2.6"/><circle cx="248" cy="225" r="2.6"/><circle cx="290" cy="105" r="2.6"/><circle cx="331" cy="30" r="2.6"/><circle cx="372" cy="150" r="2.6"/><circle cx="414" cy="210" r="2.6"/><circle cx="455" cy="180" r="2.6"/><circle cx="497" cy="75" r="2.6"/><circle cx="538" cy="135" r="2.6"/><circle cx="579" cy="225" r="2.6"/><circle cx="621" cy="195" r="2.6"/><circle cx="662" cy="120" r="2.6"/><circle cx="703" cy="45" r="2.6"/><circle cx="745" cy="150" r="2.6"/><circle cx="786" cy="210" r="2.6"/><circle cx="828" cy="180" r="2.6"/><circle cx="869" cy="120" r="2.6"/><circle cx="910" cy="240" r="2.6"/><circle cx="952" cy="150" r="2.6"/><circle cx="993" cy="195" r="2.6"/><circle cx="1034" cy="60" r="2.6"/><circle cx="1076" cy="165" r="2.6"/><circle cx="1117" cy="210" r="2.6"/><circle cx="1159" cy="135" r="2.6"/><circle cx="1200" cy="180" r="2.6"/>
+          </g>
+          <line x1="910" y1="240" x2="910" y2="262" stroke="#15140f" stroke-width="1"/>
+          <text x="910" y="276" text-anchor="middle" class="axis-label" fill="#15140f">48 BPM · 26 APR</text>
+        </g>
+        <g class="axis-x" transform="translate(40,304)">
+          <text x="0">04 APR</text>
+          <text x="248">10 APR</text>
+          <text x="538">17 APR</text>
+          <text x="828">24 APR</text>
+          <text x="1118">01 MAY</text>
+          <text x="1200" text-anchor="end">03 MAY</text>
+        </g>
+      </svg>
+    </div>
+  </section>
+
+  <!-- V. ZONE DISTRIBUTION -->
+  <section data-od-id="zone-distribution">
+    <div class="sec-rule">
+      <span class="roman">V.</span>
+      <span class="mid"><span>Zone distribution</span><span>·</span><span>FIG. 05 / ZN-30</span></span>
+      <span class="right">005 / 008</span>
+    </div>
+
+    <div class="chart-block">
+      <div class="chart-head">
+        <div>
+          <h2 class="chart-title">Thirty mornings, <em>three</em> zones<span style="color:var(--coral)">.</span></h2>
+          <p class="chart-sub">Each morning sorts into one of three categories — restorative, neutral, or compromised. Together they describe the rhythm of a month.</p>
+        </div>
+        <div class="chart-meta">
+          <strong>n</strong> 30<br>
+          <strong>METHOD</strong> Whoop std. cutoffs<br>
+          <strong>GREEN</strong> ≥ 67 <br>
+          <strong>RED</strong> &lt; 34
+        </div>
+      </div>
+
+      <div class="zone-grid">
+        <div class="donut-wrap">
+          <svg viewBox="0 0 280 280" width="280" height="280">
+            <!-- track -->
+            <circle cx="140" cy="140" r="80" fill="none" stroke="#ddd2b6" stroke-width="28"/>
+            <!-- segments rotated -90 to start at top -->
+            <g transform="rotate(-90 140 140)">
+              <!-- green 16/30 = 53.33% → arc len 268.08 of 502.65 -->
+              <circle cx="140" cy="140" r="80" fill="none" stroke="#6e7448" stroke-width="28"
+                stroke-dasharray="268.08 502.65" stroke-dashoffset="0"/>
+              <!-- yellow 9/30 = 30% → arc 150.80, offset -268.08 -->
+              <circle cx="140" cy="140" r="80" fill="none" stroke="#e9b94a" stroke-width="28"
+                stroke-dasharray="150.80 502.65" stroke-dashoffset="-268.08"/>
+              <!-- red 5/30 = 16.67% → arc 83.78, offset -418.88 -->
+              <circle cx="140" cy="140" r="80" fill="none" stroke="#ed6f5c" stroke-width="28"
+                stroke-dasharray="83.78 502.65" stroke-dashoffset="-418.88"/>
+            </g>
+            <!-- inner hairline -->
+            <circle cx="140" cy="140" r="62" fill="none" stroke="#15140f" stroke-width="0.5" opacity="0.25"/>
+            <circle cx="140" cy="140" r="98" fill="none" stroke="#15140f" stroke-width="0.5" opacity="0.25"/>
+            <!-- corner brackets -->
+            <g stroke="#15140f" stroke-width="1" fill="none">
+              <path d="M4 4 L24 4 M4 4 L4 24"/>
+              <path d="M276 4 L256 4 M276 4 L276 24"/>
+              <path d="M4 276 L24 276 M4 276 L4 256"/>
+              <path d="M276 276 L256 276 M276 276 L276 256"/>
+            </g>
+          </svg>
+          <div class="donut-center">
+            <div class="big">30</div>
+            <div class="lbl">Mornings · n</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="zone-legend">
+            <div class="zone-row green">
+              <span class="swatch"></span>
+              <span class="name">Green <em>restorative</em></span>
+              <span class="pct">53%</span>
+              <span class="days">16 / 30 days</span>
+            </div>
+            <div class="zone-row yellow">
+              <span class="swatch"></span>
+              <span class="name">Yellow <em>neutral</em></span>
+              <span class="pct">30%</span>
+              <span class="days">09 / 30 days</span>
+            </div>
+            <div class="zone-row red">
+              <span class="swatch"></span>
+              <span class="name">Red <em>compromised</em></span>
+              <span class="pct">17%</span>
+              <span class="days">05 / 30 days</span>
+            </div>
+          </div>
+          <p class="zone-note">A green-majority month, but with a meaningful long tail. The five compromised mornings cluster within 48 hours of late-evening intake or unusually short prior sleep — see <em>Method, Nº 03</em>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- VI. LEDGER TABLE -->
+  <section data-od-id="day-ledger">
+    <div class="sec-rule">
+      <span class="roman">VI.</span>
+      <span class="mid"><span>Day-by-day ledger</span><span>·</span><span>TBL. 06 / LD-30</span></span>
+      <span class="right">006 / 008</span>
+    </div>
+
+    <h2 class="chart-title" style="margin-bottom:14px">Thirty entries, in <em>chronological</em> order<span style="color:var(--coral)">.</span></h2>
+    <p class="chart-sub" style="margin-bottom:32px">Every morning's recovery score, classification, and the two physiological signals that drive them. Bars are scaled within each column's observed range.</p>
+
+    <div class="ledger">
+      <table>
+        <thead>
+          <tr>
+            <th>Nº</th>
+            <th>Date</th>
+            <th>Recovery</th>
+            <th class="bar-cell">— curve</th>
+            <th>Zone</th>
+            <th class="num">HRV</th>
+            <th class="bar-cell">— curve</th>
+            <th class="num">RHR</th>
+          </tr>
+        </thead>
+        <tbody id="ledger-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- VII. METHOD -->
+  <section data-od-id="method">
+    <div class="sec-rule">
+      <span class="roman">VII.</span>
+      <span class="mid"><span>Method</span><span>·</span><span>NOTE 07 / MT</span></span>
+      <span class="right">007 / 008</span>
+    </div>
+
+    <h2 class="chart-title" style="margin-bottom:32px">How this <em>page</em> was assembled<span style="color:var(--coral)">.</span></h2>
+
+    <div class="method-grid">
+      <div class="method-step">
+        <div class="num">01.</div>
+        <h4>Capture <span class="arrow">→</span></h4>
+        <p>Whoop 4.0 strap worn 24 / 7. HRV and RHR sampled during the deepest 90 minutes of slow-wave sleep on each consecutive night.</p>
+      </div>
+      <div class="method-step">
+        <div class="num">02.</div>
+        <h4>Score <span class="arrow">→</span></h4>
+        <p>Whoop's proprietary recovery index combines HRV, RHR, sleep performance, and respiratory rate into a single 0—100 percentage.</p>
+      </div>
+      <div class="method-step">
+        <div class="num">03.</div>
+        <h4>Classify <span class="arrow">→</span></h4>
+        <p>Each morning is sorted into green (≥67), yellow (34—66), or red (&lt;34). Cutoffs follow Whoop's own thresholds; no smoothing applied.</p>
+      </div>
+      <div class="method-step">
+        <div class="num">04.</div>
+        <h4>Render</h4>
+        <p>Plotted as inline SVG, set in Inter Tight + Playfair Display + JetBrains Mono. No JavaScript libraries. <span style="color:var(--coral)">Fin.</span></p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- FOOTER -->
+<footer data-od-id="footer">
+  <div class="foot-row">
+    <div>
+      <h5>Atlas</h5>
+      <a href="#">Recovery</a>
+      <a href="#">Strain</a>
+      <a href="#">Sleep</a>
+      <a href="#">Cardiac Load</a>
+    </div>
+    <div>
+      <h5>Methodology</h5>
+      <a href="#">Sources & telemetry</a>
+      <a href="#">Cutoff thresholds</a>
+      <a href="#">Sample integrity</a>
+    </div>
+    <div>
+      <h5>Studio</h5>
+      <a href="#">Atelier Whoop</a>
+      <a href="#">Volume index</a>
+      <a href="#">Filed essays</a>
+    </div>
+    <div>
+      <h5>Colophon</h5>
+      <p>Set in Inter Tight, Playfair Display, JetBrains Mono.</p>
+      <p>Printed on warm paper #efe7d2.</p>
+      <p>52.5200° N · 13.4050° E</p>
+    </div>
+  </div>
+
+  <div class="mega">Recovery<em>.</em><span class="dot">.</span></div>
+
+  <div class="foot-base">
+    <div><span class="pulse"></span> Live · MMXXVI · Vol. 01 / Nº 26</div>
+    <div>Edited by Atelier Whoop — FIN.</div>
+  </div>
+</footer>
+
+<script>
+  // Day-by-day ledger rows
+  const days = [
+    [1,'04 Apr',72,'green',78,53],[2,'05 Apr',58,'yellow',64,56],[3,'06 Apr',81,'green',86,51],
+    [4,'07 Apr',44,'red',51,60],[5,'08 Apr',63,'yellow',70,54],[6,'09 Apr',76,'green',82,52],
+    [7,'10 Apr',88,'green',91,49],[8,'11 Apr',55,'yellow',62,57],[9,'12 Apr',38,'red',48,62],
+    [10,'13 Apr',67,'yellow',72,54],[11,'14 Apr',79,'green',84,50],[12,'15 Apr',71,'green',76,52],
+    [13,'16 Apr',49,'red',55,59],[14,'17 Apr',62,'yellow',68,55],[15,'18 Apr',84,'green',89,49],
+    [16,'19 Apr',77,'green',81,51],[17,'20 Apr',59,'yellow',65,56],[18,'21 Apr',42,'red',50,61],
+    [19,'22 Apr',68,'yellow',73,54],[20,'23 Apr',81,'green',87,50],[21,'24 Apr',74,'green',79,52],
+    [22,'25 Apr',56,'yellow',63,56],[23,'26 Apr',91,'green',95,48],[24,'27 Apr',65,'yellow',71,54],
+    [25,'28 Apr',78,'green',83,51],[26,'29 Apr',47,'red',54,60],[27,'30 Apr',70,'green',75,53],
+    [28,'01 May',83,'green',88,50],[29,'02 May',61,'yellow',67,55],[30,'03 May',73,'green',78,52]
+  ];
+  const zoneLabel={green:'Green',yellow:'Yellow',red:'Red'};
+  const tbody=document.getElementById('ledger-body');
+  const recPct=v=>Math.round((v-30)/(95-30)*100);
+  const hrvPct=v=>Math.round((v-48)/(95-48)*100);
+  tbody.innerHTML = days.map(d=>{
+    const [n,date,score,zone,hrv,rhr]=d;
+    const idx=String(n).padStart(2,'0');
+    return `<tr>
+      <td class="idx">${idx}</td>
+      <td class="date">${date}</td>
+      <td class="score">${score}<span class="pct-mark">%</span></td>
+      <td class="bar-cell"><div class="bar coral"><i style="width:${recPct(score)}%"></i></div></td>
+      <td><span class="zone-tag ${zone}"><span class="d"></span>${zoneLabel[zone]}</span></td>
+      <td class="num">${hrv} <span style="color:var(--ink-faint);font-size:11px">ms</span></td>
+      <td class="bar-cell"><div class="bar violet"><i style="width:${hrvPct(hrv)}%"></i></div></td>
+      <td class="num">${rhr} <span style="color:var(--ink-faint);font-size:11px">bpm</span></td>
+    </tr>`;
+  }).join('');
+</script>
+
+</body>
+</html>

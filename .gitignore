@@ -18,3 +18,7 @@ infra/terraform/.terraform.lock.hcl
 infra/terraform/terraform.tfstate
 infra/terraform/terraform.tfstate.backup
 infra/terraform/*.tfvars
+
+# stray dev artifacts
+/web/
+apps/web/.env.local

@@ -1,0 +1,1636 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Whoop · Settings · Atelier Zero</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Inter+Tight:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:ital,wght@1,500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #efe7d2;
+    --paper-warm: #ece4cf;
+    --paper-dark: #ddd2b6;
+    --bone: #f7f1de;
+    --ink: #15140f;
+    --ink-soft: #2a2620;
+    --ink-mute: #5a5448;
+    --ink-faint: #8b8676;
+    --coral: #ed6f5c;
+    --coral-soft: #f08e7c;
+    --mustard: #e9b94a;
+    --olive: #6e7448;
+    --line: rgba(21, 20, 15, 0.14);
+    --line-strong: rgba(21, 20, 15, 0.28);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', sans-serif;
+    font-weight: 400;
+    color: var(--ink);
+    background: var(--paper);
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  body::before {
+    content: "";
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 100;
+    mix-blend-mode: multiply;
+    opacity: 0.55;
+    background:
+      radial-gradient(1200px 800px at 12% 8%, rgba(106,92,56,0.06), transparent 60%),
+      radial-gradient(1000px 700px at 88% 92%, rgba(106,92,56,0.06), transparent 60%),
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.92' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.27 0 0 0 0 0.23 0 0 0 0 0.14 0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
+  .app {
+    display: grid;
+    grid-template-columns: 252px 1fr;
+    height: 100vh;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ========== SIDEBAR ========== */
+  aside.sidebar {
+    border-right: 1px solid var(--line);
+    background: var(--paper-warm);
+    display: flex; flex-direction: column;
+    padding: 22px 22px 18px;
+    height: 100vh;
+    position: sticky; top: 0;
+  }
+  .brand-row {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 800;
+    font-size: 22px;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+  }
+  .brand .o {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-weight: 500;
+    color: var(--coral);
+  }
+  .brand-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    color: var(--ink-faint);
+    letter-spacing: 0.04em;
+  }
+
+  .vol-strip {
+    display: flex; justify-content: space-between;
+    margin-top: 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    color: var(--ink-faint);
+    letter-spacing: 0.04em;
+  }
+  .vol-strip .pulse {
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .pulse-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--coral);
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+  }
+
+  .nav-eyebrow {
+    margin-top: 26px; margin-bottom: 12px;
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 10.5px; font-weight: 600;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--coral);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .nav-eyebrow::before {
+    content: ""; width: 18px; height: 1px; background: var(--coral);
+  }
+
+  nav ul { list-style: none; }
+  nav li {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 10px;
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--ink-soft);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.18s ease;
+    margin: 2px 0;
+  }
+  nav li:hover { background: rgba(21,20,15,0.04); }
+  nav li.active {
+    background: var(--ink);
+    color: var(--bone);
+  }
+  nav li.active .nav-num { color: var(--coral); }
+  .nav-num {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--ink-faint);
+    width: 22px;
+  }
+  nav li .nav-tail {
+    margin-left: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    color: var(--ink-faint);
+    opacity: 0.7;
+  }
+  nav li.active .nav-tail { color: rgba(247,241,222,0.55); }
+
+  .side-foot {
+    margin-top: auto;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .coord {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--ink-faint);
+    letter-spacing: 0.04em;
+  }
+  .side-foot .filed {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 10px; font-weight: 600;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--ink-mute);
+  }
+  .filed em {
+    font-family: 'Playfair Display', serif;
+    font-style: italic; font-weight: 500;
+    text-transform: none; letter-spacing: 0;
+    color: var(--ink);
+    margin-left: 4px;
+  }
+
+  /* ========== MAIN ========== */
+  main.main {
+    overflow-y: auto;
+    height: 100vh;
+    padding: 0;
+  }
+  /* metadata strip */
+  .meta-strip {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 14px 56px;
+    border-bottom: 1px solid var(--line);
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    background: var(--paper);
+    position: sticky; top: 0; z-index: 5;
+  }
+  .meta-strip .mid {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: 12px;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--ink);
+  }
+  .meta-strip .right {
+    text-align: right;
+    display: flex; align-items: center; gap: 8px; justify-content: flex-end;
+  }
+
+  /* topbar */
+  .topbar {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 38px 56px 26px;
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar h1 {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 800;
+    font-size: 54px;
+    line-height: 0.96;
+    letter-spacing: -0.035em;
+    color: var(--ink);
+  }
+  .topbar h1 em {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-weight: 500;
+  }
+  .topbar h1 .dot { color: var(--coral); }
+  .topbar .ttl-eye {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--coral);
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 14px;
+  }
+  .topbar .ttl-eye::before {
+    content: ""; width: 18px; height: 1px; background: var(--coral);
+  }
+  .topbar-right {
+    display: flex; align-items: center; gap: 14px;
+  }
+  .search {
+    display: flex; align-items: center; gap: 8px;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    padding: 8px 14px;
+    background: var(--bone);
+    width: 240px;
+  }
+  .search input {
+    border: 0; background: transparent; outline: none; flex: 1;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    color: var(--ink);
+  }
+  .search input::placeholder { color: var(--ink-faint); }
+  .search-key {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    color: var(--ink-faint);
+    border: 1px solid var(--line);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  .avatar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 6px 10px 6px 6px;
+    border: 1px solid var(--line-strong);
+    border-radius: 999px;
+    background: var(--bone);
+  }
+  .avatar .ava {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--ink-soft), var(--olive));
+    color: var(--bone);
+    display: grid; place-items: center;
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+  }
+  .avatar .who {
+    line-height: 1.1;
+  }
+  .avatar .who b {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 700; font-size: 12.5px;
+    letter-spacing: -0.01em;
+  }
+  .avatar .who span {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    color: var(--ink-faint);
+    letter-spacing: 0.04em;
+  }
+
+  /* ========== SECTIONS ========== */
+  .sections { padding: 0 56px 80px; }
+
+  .sec-rule {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 26px;
+    padding: 36px 0 18px;
+    border-top: 1px solid var(--line);
+    margin-top: 4px;
+  }
+  .sections > section:first-of-type .sec-rule { border-top: 0; padding-top: 30px; }
+  .roman {
+    font-family: 'Playfair Display', serif;
+    font-style: italic; font-weight: 500;
+    font-size: 14px;
+    color: var(--coral);
+    letter-spacing: 0.02em;
+    min-width: 38px;
+  }
+  .sec-mid {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 10.5px; font-weight: 600;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--ink-faint);
+    text-align: center;
+  }
+  .sec-mid .dotsep {
+    color: var(--coral);
+    margin: 0 8px;
+  }
+  .sec-page {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink-faint);
+    letter-spacing: 0.04em;
+  }
+  .sec-page b { color: var(--ink); font-weight: 500; }
+
+  .sec-title {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: 30px;
+    padding: 6px 0 22px;
+  }
+  .sec-title h2 {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 800;
+    font-size: 38px;
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+  }
+  .sec-title h2 em {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-weight: 500;
+  }
+  .sec-title h2 .dot { color: var(--coral); }
+  .sec-title p {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    color: var(--ink-mute);
+    max-width: 360px;
+    text-align: right;
+    line-height: 1.55;
+  }
+
+  /* ========== I. THEME TOGGLE (HERO) ========== */
+  .theme-stage {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    margin-bottom: 8px;
+  }
+  .theme-card {
+    border-radius: 18px;
+    padding: 26px 26px 24px;
+    position: relative;
+    cursor: pointer;
+    transition: transform 0.18s ease;
+  }
+  .theme-card:hover { transform: translateY(-3px); }
+  .theme-card .corner {
+    position: absolute; width: 22px; height: 22px;
+    border: 1px solid currentColor;
+    opacity: 0.7;
+  }
+  .theme-card .c1 { top: 12px; left: 12px; border-right: 0; border-bottom: 0; }
+  .theme-card .c2 { top: 12px; right: 12px; border-left: 0; border-bottom: 0; }
+  .theme-card .c3 { bottom: 12px; left: 12px; border-right: 0; border-top: 0; }
+  .theme-card .c4 { bottom: 12px; right: 12px; border-left: 0; border-top: 0; }
+
+  .theme-classic {
+    background: #0e0e0e;
+    color: #d6d2c8;
+    box-shadow: 0 30px 60px -30px rgba(21,20,15,0.4), inset 0 0 0 1px rgba(255,255,255,0.06);
+  }
+  .theme-zero {
+    background: var(--bone);
+    color: var(--ink);
+    box-shadow: 0 30px 60px -30px rgba(21,20,15,0.15), inset 0 0 0 1px rgba(21,20,15,0.06);
+  }
+  .theme-zero.is-active {
+    outline: 2px solid var(--coral);
+    outline-offset: 4px;
+  }
+  .theme-classic.is-active {
+    outline: 2px solid var(--coral);
+    outline-offset: 4px;
+  }
+  .theme-head {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 22px;
+  }
+  .theme-eye {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 10.5px; font-weight: 600;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--coral);
+  }
+  .theme-classic .theme-eye {
+    color: var(--coral-soft);
+    opacity: 0.85;
+  }
+  .theme-name {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 800;
+    font-size: 28px;
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+    margin: 14px 0 6px;
+  }
+  .theme-name em {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-weight: 500;
+  }
+  .theme-desc {
+    font-size: 12.5px;
+    line-height: 1.55;
+    opacity: 0.78;
+    max-width: 340px;
+    margin-bottom: 22px;
+  }
+  .theme-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    opacity: 0.55;
+  }
+
+  /* swatch row inside cards */
+  .swatch-row {
+    display: flex; gap: 8px; margin: 18px 0 22px;
+  }
+  .swatch {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    border: 1px solid rgba(0,0,0,0.18);
+  }
+  .theme-classic .swatch { border-color: rgba(255,255,255,0.14); }
+
+  /* preview chip */
+  .preview {
+    margin-top: 6px;
+    border-radius: 12px;
+    padding: 18px 18px 16px;
+    border: 1px solid currentColor;
+    border-color: rgba(255,255,255,0.12);
+  }
+  .theme-zero .preview { border-color: var(--line); }
+  .preview-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 10px;
+  }
+  .preview-num {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 800;
+    font-size: 38px;
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+  .theme-classic .preview-num { color: var(--coral); }
+  .theme-zero .preview-num { color: var(--ink); }
+  .theme-zero .preview-num em {
+    font-family: 'Playfair Display', serif; font-style: italic; font-weight: 500;
+    color: var(--coral);
+  }
+  .preview-lbl {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.06em;
+    opacity: 0.6;
+  }
+  .preview-bars { display: flex; align-items: flex-end; gap: 4px; height: 38px; margin-top: 6px; }
+  .preview-bars span {
+    flex: 1;
+    border-radius: 2px;
+    background: currentColor;
+    opacity: 0.18;
+  }
+  .preview-bars span:nth-child(1) { height: 28%; }
+  .preview-bars span:nth-child(2) { height: 52%; }
+  .preview-bars span:nth-child(3) { height: 38%; }
+  .preview-bars span:nth-child(4) { height: 78%; opacity: 0.9; background: var(--coral); }
+  .preview-bars span:nth-child(5) { height: 64%; }
+  .preview-bars span:nth-child(6) { height: 44%; }
+  .preview-bars span:nth-child(7) { height: 92%; }
+  .preview-bars span:nth-child(8) { height: 56%; }
+
+  /* the big switch */
+  .theme-switch {
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 28px;
+    align-items: center;
+    padding: 22px 28px;
+    background: var(--paper-warm);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+  }
+  .switch-side {
+    display: flex; align-items: center; gap: 14px;
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: -0.01em;
+    color: var(--ink-faint);
+    transition: color 0.18s ease;
+  }
+  .switch-side.left { justify-content: flex-end; }
+  .switch-side .roman-mark {
+    font-family: 'Playfair Display', serif;
+    font-style: italic; font-weight: 500;
+    font-size: 14px;
+    color: var(--ink-faint);
+  }
+  .switch-side.is-on { color: var(--ink); }
+  .switch-side.is-on .roman-mark { color: var(--coral); }
+
+  .switch {
+    width: 96px; height: 44px;
+    background: var(--ink);
+    border-radius: 999px;
+    position: relative;
+    cursor: pointer;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05),
+                inset 0 1px 2px rgba(0,0,0,0.6);
+  }
+  .switch .knob {
+    position: absolute;
+    top: 4px; left: 4px;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--coral);
+    transition: left 0.22s ease;
+    display: grid; place-items: center;
+    color: var(--bone);
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: 16px;
+    box-shadow: 0 6px 14px -4px rgba(237,111,92,0.6);
+  }
+  .switch.is-zero .knob { left: 56px; background: var(--bone); color: var(--coral); }
+  .switch.is-zero { background: var(--paper-dark); }
+
+  /* ========== II. DATA & SYNC ========== */
+  .sync-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 28px;
+  }
+  .sync-card {
+    background: var(--bone);
+    border-radius: 18px;
+    padding: 26px 28px;
+    border: 1px solid var(--line);
+    box-shadow: 0 30px 60px -30px rgba(21,20,15,0.15);
+    position: relative;
+  }
+  .sync-card .corner {
+    position: absolute; width: 22px; height: 22px;
+    border: 1px solid var(--ink-faint);
+    opacity: 0.55;
+  }
+  .sync-card .c1 { top: 12px; left: 12px; border-right: 0; border-bottom: 0; }
+  .sync-card .c2 { top: 12px; right: 12px; border-left: 0; border-bottom: 0; }
+  .sync-card .c3 { bottom: 12px; left: 12px; border-right: 0; border-top: 0; }
+  .sync-card .c4 { bottom: 12px; right: 12px; border-left: 0; border-top: 0; }
+
+  .sync-head {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 18px;
+  }
+  .sync-status {
+    display: flex; align-items: center; gap: 14px;
+  }
+  .sync-glyph {
+    width: 56px; height: 56px;
+    border: 1px dashed var(--ink-faint);
+    border-radius: 50%;
+    display: grid; place-items: center;
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 800; font-size: 18px;
+    letter-spacing: -0.04em;
+    color: var(--ink);
+    position: relative;
+  }
+  .sync-glyph::after {
+    content: ""; position: absolute;
+    inset: -6px;
+    border: 1px solid var(--coral);
+    border-radius: 50%;
+    opacity: 0.35;
+  }
+  .sync-status .info b {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 700;
+    font-size: 17px;
+    letter-spacing: -0.015em;
+  }
+  .sync-status .info span {
+    display: block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink-faint);
+    letter-spacing: 0.04em;
+    margin-top: 2px;
+  }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 10.5px; font-weight: 600;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    background: rgba(110,116,72,0.15);
+    color: var(--olive);
+    border: 1px solid rgba(110,116,72,0.3);
+  }
+  .badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--olive); }
+  .sync-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    border-top: 1px solid var(--line);
+    margin-top: 20px;
+    padding-top: 18px;
+  }
+  .sync-meta-grid > div {
+    border-right: 1px solid var(--line);
+    padding-right: 14px;
+  }
+  .sync-meta-grid > div:last-child { border-right: 0; }
+  .sync-meta-lbl {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 10px; font-weight: 600;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 6px;
+  }
+  .sync-meta-val {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    letter-spacing: -0.015em;
+    color: var(--ink);
+  }
+  .sync-meta-val em {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-weight: 500;
+    color: var(--coral);
+  }
+  .sync-meta-val .mono {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-mute);
+    font-weight: 400;
+    letter-spacing: 0.02em;
+  }
+
+  .sync-action {
+    display: flex; flex-direction: column;
+    background: var(--bone);
+    border-radius: 18px;
+    padding: 26px 28px;
+    border: 1px solid var(--line);
+    box-shadow: 0 30px 60px -30px rgba(21,20,15,0.15);
+    position: relative;
+  }
+  .sync-action .plate {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.04em;
+    color: var(--ink-faint);
+    margin-bottom: 14px;
+  }
+  .sync-action h3 {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 800;
+    font-size: 22px;
+    line-height: 1.05;
+    letter-spacing: -0.025em;
+    margin-bottom: 8px;
+  }
+  .sync-action h3 em {
+    font-family: 'Playfair Display', serif; font-style: italic; font-weight: 500;
+  }
+  .sync-action p {
+    font-size: 12.5px;
+    color: var(--ink-mute);
+    line-height: 1.55;
+    margin-bottom: 22px;
+  }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 14px 22px;
+    border-radius: 999px;
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: -0.005em;
+    cursor: pointer;
+    border: 0;
+    transition: transform 0.18s ease, background 0.18s ease;
+  }
+  .btn-coral {
+    background: var(--coral);
+    color: #fff;
+    box-shadow: 0 14px 26px -16px rgba(237,111,92,0.9);
+  }
+  .btn-coral:hover { transform: translateY(-1px); background: var(--coral-soft); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--line-strong);
+  }
+  .btn-ghost:hover { background: rgba(21,20,15,0.04); }
+  .arrow-svg { width: 14px; height: 14px; }
+
+  .sync-action-row {
+    display: flex; gap: 10px; flex-wrap: wrap;
+  }
+
+  /* ========== III. COACH MODEL ========== */
+  .coach-grid {
+    display: grid;
+    grid-template-columns: 1.05fr 1fr;
+    gap: 28px;
+  }
+  .coach-card {
+    background: var(--bone);
+    border-radius: 18px;
+    padding: 28px;
+    border: 1px solid var(--line);
+    box-shadow: 0 30px 60px -30px rgba(21,20,15,0.15);
+    position: relative;
+  }
+  .coach-card .corner {
+    position: absolute; width: 22px; height: 22px;
+    border: 1px solid var(--ink-faint); opacity: 0.5;
+  }
+  .coach-card .c1 { top: 12px; left: 12px; border-right: 0; border-bottom: 0; }
+  .coach-card .c2 { top: 12px; right: 12px; border-left: 0; border-bottom: 0; }
+  .coach-card .c3 { bottom: 12px; left: 12px; border-right: 0; border-top: 0; }
+  .coach-card .c4 { bottom: 12px; right: 12px; border-left: 0; border-top: 0; }
+
+  .model-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--paper-warm);
+    margin-bottom: 10px;
+    cursor: pointer;
+    transition: background 0.18s ease;
+  }
+  .model-row:hover { background: var(--paper-dark); }
+  .model-row.is-active {
+    background: var(--ink);
+    border-color: var(--ink);
+  }
+  .model-row.is-active .m-name,
+  .model-row.is-active .m-num { color: var(--bone); }
+  .model-row.is-active .m-meta { color: rgba(247,241,222,0.6); }
+  .model-row.is-active .check { background: var(--coral); border-color: var(--coral); color: #fff; }
+
+  .m-num {
+    font-family: 'Playfair Display', serif;
+    font-style: italic; font-weight: 500;
+    font-size: 16px;
+    color: var(--coral);
+    margin-right: 14px;
+  }
+  .m-info { flex: 1; }
+  .m-name {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 700;
+    font-size: 14.5px;
+    letter-spacing: -0.01em;
+    color: var(--ink);
+  }
+  .m-name em {
+    font-family: 'Playfair Display', serif; font-style: italic; font-weight: 500;
+  }
+  .m-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink-faint);
+    letter-spacing: 0.04em;
+    margin-top: 2px;
+  }
+  .check {
+    width: 22px; height: 22px;
+    border: 1px solid var(--line-strong);
+    border-radius: 50%;
+    display: grid; place-items: center;
+    color: transparent;
+    font-size: 12px;
+  }
+
+  .token-cap {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 18px;
+    padding-top: 6px;
+  }
+  .token-row {
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .token-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .token-lbl {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .token-val {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 800;
+    font-size: 22px;
+    letter-spacing: -0.025em;
+    color: var(--ink);
+  }
+  .token-val em {
+    font-family: 'Playfair Display', serif; font-style: italic; font-weight: 500;
+    color: var(--coral);
+  }
+  .token-val .unit {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink-faint);
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    margin-left: 4px;
+  }
+  .slider {
+    height: 6px;
+    background: var(--paper-dark);
+    border-radius: 999px;
+    position: relative;
+  }
+  .slider-fill {
+    position: absolute; left: 0; top: 0; bottom: 0;
+    background: var(--ink);
+    border-radius: 999px;
+  }
+  .slider-knob {
+    position: absolute; top: 50%;
+    width: 18px; height: 18px;
+    transform: translate(-50%, -50%);
+    background: var(--coral);
+    border: 2px solid var(--bone);
+    border-radius: 50%;
+    box-shadow: 0 4px 10px -2px rgba(237,111,92,0.6);
+    cursor: grab;
+  }
+  .slider-ticks {
+    display: flex; justify-content: space-between;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    color: var(--ink-faint);
+    letter-spacing: 0.04em;
+    margin-top: 6px;
+  }
+
+  /* ========== IV. NOTIFICATIONS ========== */
+  .notif-table {
+    background: var(--bone);
+    border-radius: 18px;
+    border: 1px solid var(--line);
+    overflow: hidden;
+    box-shadow: 0 30px 60px -30px rgba(21,20,15,0.15);
+  }
+  .notif-row {
+    display: grid;
+    grid-template-columns: 60px 1.2fr 1fr 1fr 90px;
+    align-items: center;
+    gap: 18px;
+    padding: 18px 26px;
+    border-bottom: 1px solid var(--line);
+  }
+  .notif-row:last-child { border-bottom: 0; }
+  .notif-row.head {
+    background: var(--paper-warm);
+    padding: 12px 26px;
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 10px; font-weight: 600;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .notif-num {
+    font-family: 'Playfair Display', serif;
+    font-style: italic; font-weight: 500;
+    font-size: 18px;
+    color: var(--coral);
+  }
+  .notif-name b {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: -0.01em;
+    display: block;
+  }
+  .notif-name span {
+    font-size: 12px;
+    color: var(--ink-mute);
+    line-height: 1.5;
+    margin-top: 2px;
+  }
+  .notif-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink-faint);
+    letter-spacing: 0.04em;
+  }
+  .pill-row { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill {
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line-strong);
+    background: transparent;
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 10.5px; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--ink-mute);
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+  .pill:hover { background: rgba(21,20,15,0.04); }
+  .pill.is-on {
+    background: var(--ink);
+    color: var(--bone);
+    border-color: var(--ink);
+  }
+
+  .toggle {
+    width: 42px; height: 24px;
+    background: var(--paper-dark);
+    border-radius: 999px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    justify-self: end;
+  }
+  .toggle::after {
+    content: "";
+    position: absolute; top: 3px; left: 3px;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--bone);
+    border: 1px solid var(--line);
+    transition: left 0.2s ease;
+  }
+  .toggle.is-on { background: var(--coral); }
+  .toggle.is-on::after { left: 21px; border-color: rgba(237,111,92,0.4); }
+
+  /* ========== V. ACCOUNT ========== */
+  .account-grid {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    gap: 28px;
+  }
+  .form-card {
+    background: var(--bone);
+    border-radius: 18px;
+    padding: 28px 30px;
+    border: 1px solid var(--line);
+    box-shadow: 0 30px 60px -30px rgba(21,20,15,0.15);
+  }
+  .field {
+    display: flex; flex-direction: column;
+    margin-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 18px;
+  }
+  .field:last-of-type { border-bottom: 0; padding-bottom: 0; margin-bottom: 0; }
+  .field-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 8px;
+  }
+  .field-lbl {
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--coral);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .field-lbl::before {
+    content: ""; width: 14px; height: 1px; background: var(--coral);
+  }
+  .field-hint {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9.5px;
+    color: var(--ink-faint);
+    letter-spacing: 0.04em;
+  }
+  .field-input {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--ink);
+    background: transparent;
+    border: 0;
+    outline: 0;
+    padding: 4px 0;
+    letter-spacing: -0.01em;
+    width: 100%;
+  }
+  .field-input::placeholder { color: var(--ink-faint); font-weight: 400; }
+  .field-foot {
+    font-size: 12px;
+    color: var(--ink-mute);
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+
+  .danger-card {
+    background: var(--paper-warm);
+    border: 1px dashed var(--coral);
+    border-radius: 18px;
+    padding: 24px 26px;
+    margin-top: 22px;
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 18px;
+  }
+  .danger-card h4 {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 800;
+    font-size: 17px;
+    letter-spacing: -0.02em;
+    margin-bottom: 4px;
+  }
+  .danger-card h4 em {
+    font-family: 'Playfair Display', serif; font-style: italic; font-weight: 500;
+    color: var(--coral);
+  }
+  .danger-card p {
+    font-size: 12px;
+    color: var(--ink-mute);
+    max-width: 380px;
+    line-height: 1.5;
+  }
+
+  /* ========== FOOTER ========== */
+  footer.foot {
+    margin-top: 60px;
+    border-top: 1px solid var(--line);
+    padding: 30px 0 0;
+  }
+  .foot-strip {
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: 'Inter Tight', sans-serif;
+    font-size: 10.5px; font-weight: 600;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  .foot-strip .pulse-row {
+    display: inline-flex; align-items: center; gap: 8px;
+    color: var(--ink);
+  }
+  .foot-mega {
+    font-family: 'Inter Tight', sans-serif;
+    font-weight: 900;
+    font-size: clamp(70px, 13vw, 200px);
+    line-height: 0.92;
+    letter-spacing: -0.05em;
+    color: var(--ink);
+    margin-top: 22px;
+    margin-bottom: -14px;
+  }
+  .foot-mega em {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-weight: 500;
+  }
+  .foot-mega .dot { color: var(--coral); }
+
+  /* scrollbar */
+  main::-webkit-scrollbar { width: 8px; }
+  main::-webkit-scrollbar-track { background: var(--paper); }
+  main::-webkit-scrollbar-thumb { background: var(--paper-dark); border-radius: 4px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar" data-od-id="sidebar">
+    <div class="brand-row">
+      <div class="brand">Whoo<span class="o">Ø</span></div>
+      <div class="brand-meta">VOL. 01 · MMXXVI</div>
+    </div>
+    <div class="vol-strip">
+      <span>Issue Nº 26</span>
+      <span class="pulse"><span class="pulse-dot"></span>LIVE · v3.4.1</span>
+    </div>
+
+    <div class="nav-eyebrow">Console</div>
+    <nav>
+      <ul>
+        <li><span class="nav-num">i.</span>Overview<span class="nav-tail">↗</span></li>
+        <li><span class="nav-num">ii.</span>Recovery<span class="nav-tail">72</span></li>
+        <li><span class="nav-num">iii.</span>Strain<span class="nav-tail">14.2</span></li>
+        <li><span class="nav-num">iv.</span>Sleep<span class="nav-tail">6h 48m</span></li>
+        <li><span class="nav-num">v.</span>Coach Journal<span class="nav-tail">31</span></li>
+        <li><span class="nav-num">vi.</span>Workouts<span class="nav-tail">12</span></li>
+      </ul>
+    </nav>
+
+    <div class="nav-eyebrow" style="margin-top:18px">System</div>
+    <nav>
+      <ul>
+        <li><span class="nav-num">vii.</span>Integrations<span class="nav-tail">3</span></li>
+        <li class="active"><span class="nav-num">viii.</span>Settings<span class="nav-tail">★</span></li>
+      </ul>
+    </nav>
+
+    <div class="side-foot">
+      <div class="filed">Filed under <em>System / Settings</em></div>
+      <div class="coord">52.5200° N · 13.4050° E</div>
+      <div class="coord">SHA · 7c2af9d · build 2614</div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main" data-od-id="main">
+
+    <!-- metadata strip -->
+    <div class="meta-strip">
+      <span>Whoop Console · Vol. 01 / Issue Nº 26</span>
+      <span class="mid">Filed under <span style="color:var(--coral)">·</span> Settings, <em>per the agent</em></span>
+      <span class="right"><span class="pulse-dot"></span> Editing · en-US · MMXXVI</span>
+    </div>
+
+    <!-- topbar -->
+    <header class="topbar" data-od-id="topbar">
+      <div>
+        <div class="ttl-eye">Page 008 / 008 · Final folio</div>
+        <h1>Settings, calibrated <em>by hand</em><span class="dot">.</span></h1>
+      </div>
+      <div class="topbar-right">
+        <div class="search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="m20 20-3-3"/></svg>
+          <input placeholder="Search settings…">
+          <span class="search-key">⌘K</span>
+        </div>
+        <div class="avatar">
+          <div class="ava">GN</div>
+          <div class="who"><b>G. Nijo</b><span>member · 31m</span></div>
+        </div>
+      </div>
+    </header>
+
+    <div class="sections">
+
+      <!-- ============ I. VISUAL THEME ============ -->
+      <section data-od-id="sec-theme">
+        <div class="sec-rule">
+          <span class="roman">I.</span>
+          <span class="sec-mid">Visual Theme <span class="dotsep">·</span> Surface, type, accent</span>
+          <span class="sec-page"><b>001</b> / 005</span>
+        </div>
+        <div class="sec-title">
+          <h2>Pick a <em>surface</em>. Coach reads either<span class="dot">.</span></h2>
+          <p>Theme governs canvas, type stack, and the single hot accent. Recovery numbers stay readable on both. Switch any time.</p>
+        </div>
+
+        <div class="theme-stage">
+          <!-- Classic dark -->
+          <div class="theme-card theme-classic">
+            <span class="corner c1"></span><span class="corner c2"></span>
+            <span class="corner c3"></span><span class="corner c4"></span>
+            <div class="theme-head">
+              <div class="theme-eye">— Theme α</div>
+              <div class="theme-meta">PLATE Nº 01 / TH-01</div>
+            </div>
+            <div class="theme-name">Classic <em>dark</em></div>
+            <div class="theme-desc">Whoop's stadium stack. Black canvas, neon coral pulse, monospace numerics. The default since 2019.</div>
+            <div class="swatch-row">
+              <span class="swatch" style="background:#0e0e0e"></span>
+              <span class="swatch" style="background:#1c1c1c"></span>
+              <span class="swatch" style="background:#3a3a3a"></span>
+              <span class="swatch" style="background:#ed6f5c"></span>
+              <span class="swatch" style="background:#d6d2c8"></span>
+            </div>
+            <div class="preview">
+              <div class="preview-row">
+                <div class="preview-num">72</div>
+                <div class="preview-lbl">RECOVERY · Y/Y</div>
+              </div>
+              <div class="preview-bars"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+            </div>
+          </div>
+
+          <!-- Atelier Zero -->
+          <div class="theme-card theme-zero is-active">
+            <span class="corner c1"></span><span class="corner c2"></span>
+            <span class="corner c3"></span><span class="corner c4"></span>
+            <div class="theme-head">
+              <div class="theme-eye">— Theme β · Active</div>
+              <div class="theme-meta">PLATE Nº 02 / TH-02</div>
+            </div>
+            <div class="theme-name">Atelier <em>Zero</em></div>
+            <div class="theme-desc">Warm paper canvas. Editorial italic serif, hairline rules, Roman numerals. Reads like a printed dossier.</div>
+            <div class="swatch-row">
+              <span class="swatch" style="background:#efe7d2"></span>
+              <span class="swatch" style="background:#f7f1de"></span>
+              <span class="swatch" style="background:#ddd2b6"></span>
+              <span class="swatch" style="background:#ed6f5c"></span>
+              <span class="swatch" style="background:#15140f"></span>
+            </div>
+            <div class="preview">
+              <div class="preview-row">
+                <div class="preview-num">7<em>2</em></div>
+                <div class="preview-lbl">RECOVERY · Y/Y</div>
+              </div>
+              <div class="preview-bars"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- the prominent switch -->
+        <div class="theme-switch">
+          <div class="switch-side left">
+            <span class="roman-mark">α.</span>
+            Classic dark
+          </div>
+          <div class="switch is-zero" id="theme-switch">
+            <div class="knob">β</div>
+          </div>
+          <div class="switch-side is-on">
+            <span class="roman-mark">β.</span>
+            Atelier Zero <span style="color:var(--coral); font-family:'Playfair Display',serif; font-style:italic; margin-left:6px">— current</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ II. DATA & SYNC ============ -->
+      <section data-od-id="sec-sync">
+        <div class="sec-rule">
+          <span class="roman">II.</span>
+          <span class="sec-mid">Data &amp; Sync <span class="dotsep">·</span> Strap link · history pull</span>
+          <span class="sec-page"><b>002</b> / 005</span>
+        </div>
+        <div class="sec-title">
+          <h2>The strap is <em>connected</em><span class="dot">.</span></h2>
+          <p>Whoop 4.0 reports continuously over BLE. Manual sync forces a pull of the last 24h, useful before a coach review.</p>
+        </div>
+
+        <div class="sync-grid">
+          <div class="sync-card">
+            <span class="corner c1"></span><span class="corner c2"></span>
+            <span class="corner c3"></span><span class="corner c4"></span>
+            <div class="sync-head">
+              <div class="sync-status">
+                <div class="sync-glyph">W4<span style="position:absolute; bottom:-2px; right:-2px; width:8px; height:8px; background:var(--coral); border-radius:50%; border:2px solid var(--bone)"></span></div>
+                <div class="info">
+                  <b>Whoop 4.0 · Onyx</b>
+                  <span>HW-2614 · FW 5.18.1 · Battery 64%</span>
+                </div>
+              </div>
+              <div class="badge"><span class="dot"></span>Connected</div>
+            </div>
+            <div class="sync-meta-grid">
+              <div>
+                <div class="sync-meta-lbl">Last sync</div>
+                <div class="sync-meta-val">12<em>m</em> <span class="mono">ago</span></div>
+              </div>
+              <div>
+                <div class="sync-meta-lbl">Records</div>
+                <div class="sync-meta-val">31,448</div>
+              </div>
+              <div>
+                <div class="sync-meta-lbl">Coverage</div>
+                <div class="sync-meta-val">98<em>.4</em><span class="mono">%</span></div>
+              </div>
+              <div>
+                <div class="sync-meta-lbl">Since</div>
+                <div class="sync-meta-val"><span class="mono" style="font-size:14px">14·Mar·24</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="sync-action">
+            <div class="plate">PLATE Nº 03 · MANUAL OVERRIDE</div>
+            <h3>Force a <em>pull</em>.</h3>
+            <p>Re-fetch the last 24 hours from Whoop's API. Average run: 2–4 seconds. Coach context refreshes after sync completes.</p>
+            <div class="sync-action-row">
+              <button class="btn btn-coral">
+                Sync now
+                <svg class="arrow-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M9 7h8v8"/></svg>
+              </button>
+              <button class="btn btn-ghost">Disconnect strap</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ III. COACH MODEL ============ -->
+      <section data-od-id="sec-coach">
+        <div class="sec-rule">
+          <span class="roman">III.</span>
+          <span class="sec-mid">Coach Model <span class="dotsep">·</span> Reasoning · token caps</span>
+          <span class="sec-page"><b>003</b> / 005</span>
+        </div>
+        <div class="sec-title">
+          <h2>Choose the <em>brain</em><span class="dot">.</span></h2>
+          <p>Sonnet 4.6 is the recommended balance for daily journals. Cap context for cost; cap output for crisper coach replies.</p>
+        </div>
+
+        <div class="coach-grid">
+          <div class="coach-card">
+            <span class="corner c1"></span><span class="corner c2"></span>
+            <span class="corner c3"></span><span class="corner c4"></span>
+            <div class="model-row is-active">
+              <span class="m-num">i.</span>
+              <div class="m-info">
+                <div class="m-name">Claude Sonnet <em>4.6</em></div>
+                <div class="m-meta">claude-sonnet-4-6-20260101 · 1M ctx · vision · tools</div>
+              </div>
+              <div class="check">✓</div>
+            </div>
+            <div class="model-row">
+              <span class="m-num">ii.</span>
+              <div class="m-info">
+                <div class="m-name">Claude Opus <em>4.7</em></div>
+                <div class="m-meta">claude-opus-4-7 · 1M ctx · slower · highest quality</div>
+              </div>
+              <div class="check"></div>
+            </div>
+            <div class="model-row">
+              <span class="m-num">iii.</span>
+              <div class="m-info">
+                <div class="m-name">Claude Haiku <em>4.5</em></div>
+                <div class="m-meta">claude-haiku-4-5 · 200k ctx · fastest · cheapest</div>
+              </div>
+              <div class="check"></div>
+            </div>
+          </div>
+
+          <div class="coach-card">
+            <span class="corner c1"></span><span class="corner c2"></span>
+            <span class="corner c3"></span><span class="corner c4"></span>
+            <div class="token-cap">
+              <div class="token-row">
+                <div class="token-head">
+                  <div class="token-lbl">— Context cap</div>
+                  <div class="token-val">42<em>k</em><span class="unit">tokens</span></div>
+                </div>
+                <div class="slider"><div class="slider-fill" style="width:42%"></div><div class="slider-knob" style="left:42%"></div></div>
+                <div class="slider-ticks"><span>4k</span><span>32k</span><span>64k</span><span>128k</span><span>1M</span></div>
+              </div>
+              <div class="token-row">
+                <div class="token-head">
+                  <div class="token-lbl">— Output cap</div>
+                  <div class="token-val">2<em>.0</em><span class="unit">k tokens</span></div>
+                </div>
+                <div class="slider"><div class="slider-fill" style="width:25%"></div><div class="slider-knob" style="left:25%"></div></div>
+                <div class="slider-ticks"><span>512</span><span>2k</span><span>4k</span><span>8k</span><span>16k</span></div>
+              </div>
+              <div class="token-row">
+                <div class="token-head">
+                  <div class="token-lbl">— Daily ceiling</div>
+                  <div class="token-val">$4<em>.20</em><span class="unit">/ day</span></div>
+                </div>
+                <div class="slider"><div class="slider-fill" style="width:60%"></div><div class="slider-knob" style="left:60%"></div></div>
+                <div class="slider-ticks"><span>$1</span><span>$3</span><span>$5</span><span>$10</span><span>—</span></div>
+              </div>
+              <div class="field-foot" style="border-top:1px dashed var(--line); padding-top:12px; margin-top:4px">
+                Prompt caching enabled · 5-min TTL · est. 71% cache hit on coach loop. Last 24h spend: <b style="color:var(--ink); font-family:'Inter Tight'">$2.84</b>.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ IV. NOTIFICATIONS ============ -->
+      <section data-od-id="sec-notif">
+        <div class="sec-rule">
+          <span class="roman">IV.</span>
+          <span class="sec-mid">Notifications <span class="dotsep">·</span> When the coach speaks</span>
+          <span class="sec-page"><b>004</b> / 005</span>
+        </div>
+        <div class="sec-title">
+          <h2>Pick the <em>signals</em>, mute the rest<span class="dot">.</span></h2>
+          <p>The coach is quiet by default. Three channels: push, email digest, and the in-app journal entry. Configure per signal.</p>
+        </div>
+
+        <div class="notif-table">
+          <div class="notif-row head">
+            <div>—</div>
+            <div>Signal</div>
+            <div>Channels</div>
+            <div>Cadence</div>
+            <div style="text-align:right">Active</div>
+          </div>
+
+          <div class="notif-row">
+            <div class="notif-num">i.</div>
+            <div class="notif-name"><b>Recovery briefing</b><span>Morning summary of HRV, RHR, sleep score, and a one-line plan.</span></div>
+            <div class="pill-row">
+              <span class="pill is-on">Push</span><span class="pill is-on">Email</span><span class="pill">Journal</span>
+            </div>
+            <div class="notif-meta">07:15 · daily</div>
+            <div class="toggle is-on"></div>
+          </div>
+
+          <div class="notif-row">
+            <div class="notif-num">ii.</div>
+            <div class="notif-name"><b>Strain warning</b><span>Triggers when day strain projects above your 14-day average + 30%.</span></div>
+            <div class="pill-row">
+              <span class="pill is-on">Push</span><span class="pill">Email</span><span class="pill is-on">Journal</span>
+            </div>
+            <div class="notif-meta">realtime</div>
+            <div class="toggle is-on"></div>
+          </div>
+
+          <div class="notif-row">
+            <div class="notif-num">iii.</div>
+            <div class="notif-name"><b>Sleep onset nudge</b><span>Coach prompts wind-down 90 minutes before your target bedtime.</span></div>
+            <div class="pill-row">
+              <span class="pill">Push</span><span class="pill">Email</span><span class="pill is-on">Journal</span>
+            </div>
+            <div class="notif-meta">22:30 · nightly</div>
+            <div class="toggle"></div>
+          </div>
+
+          <div class="notif-row">
+            <div class="notif-num">iv.</div>
+            <div class="notif-name"><b>Weekly journal</b><span>Sunday recap with recovery curve, top correlations, and one suggested experiment.</span></div>
+            <div class="pill-row">
+              <span class="pill">Push</span><span class="pill is-on">Email</span><span class="pill is-on">Journal</span>
+            </div>
+            <div class="notif-meta">Sun · 18:00</div>
+            <div class="toggle is-on"></div>
+          </div>
+
+          <div class="notif-row">
+            <div class="notif-num">v.</div>
+            <div class="notif-name"><b>Strap battery</b><span>Quiet ping when battery drops below 15% — never repeats more than once per day.</span></div>
+            <div class="pill-row">
+              <span class="pill is-on">Push</span><span class="pill">Email</span><span class="pill">Journal</span>
+            </div>
+            <div class="notif-meta">conditional</div>
+            <div class="toggle is-on"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ V. ACCOUNT ============ -->
+      <section data-od-id="sec-account">
+        <div class="sec-rule">
+          <span class="roman">V.</span>
+          <span class="sec-mid">Account <span class="dotsep">·</span> Identity · plan · departure</span>
+          <span class="sec-page"><b>005</b> / 005</span>
+        </div>
+        <div class="sec-title">
+          <h2>The masthead, <em>by name</em><span class="dot">.</span></h2>
+          <p>Your member record, billing email, and the door marked exit. All edits are logged to the local journal.</p>
+        </div>
+
+        <div class="account-grid">
+          <div class="form-card">
+            <div class="field">
+              <div class="field-head">
+                <div class="field-lbl">Display name</div>
+                <div class="field-hint">— required</div>
+              </div>
+              <input class="field-input" value="George Nijo">
+              <div class="field-foot">Shown on the masthead and on shared coach reports.</div>
+            </div>
+
+            <div class="field">
+              <div class="field-head">
+                <div class="field-lbl">Email</div>
+                <div class="field-hint">verified · 04·MAY</div>
+              </div>
+              <input class="field-input" value="george.nijo8@gmail.com">
+              <div class="field-foot">Receives weekly journals and billing receipts. Two-factor required.</div>
+            </div>
+
+            <div class="field">
+              <div class="field-head">
+                <div class="field-lbl">Member since</div>
+                <div class="field-hint">read-only</div>
+              </div>
+              <input class="field-input" value="14 March 2024 · 786 days" readonly>
+            </div>
+
+            <div class="field">
+              <div class="field-head">
+                <div class="field-lbl">Locale &amp; units</div>
+                <div class="field-hint">en-US · metric</div>
+              </div>
+              <input class="field-input" value="English (United States) — metric (km, kg, °C)">
+            </div>
+          </div>
+
+          <div class="form-card">
+            <div class="field">
+              <div class="field-head">
+                <div class="field-lbl">Plan</div>
+                <div class="field-hint">renews 14·MAR·26</div>
+              </div>
+              <div style="display:flex; align-items:baseline; gap:10px">
+                <div style="font-family:'Inter Tight'; font-weight:800; font-size:32px; letter-spacing:-0.03em">Whoop <em style="font-family:'Playfair Display'; font-style:italic; font-weight:500; color:var(--coral)">Pro</em></div>
+                <div style="font-family:'JetBrains Mono'; font-size:11px; color:var(--ink-faint)">$30 / mo</div>
+              </div>
+              <div class="field-foot">Includes the coach journal, 1M-token context, and unlimited history exports.</div>
+            </div>
+
+            <div class="field">
+              <div class="field-head">
+                <div class="field-lbl">API key</div>
+                <div class="field-hint">last rotated 12·APR</div>
+              </div>
+              <input class="field-input" style="font-family:'JetBrains Mono'; font-size:13px; letter-spacing:0.03em" value="whp_••••••••••••••3a9c">
+              <div class="field-foot" style="display:flex; gap:10px; margin-top:10px">
+                <button class="btn btn-ghost" style="padding:8px 14px; font-size:11px">Copy</button>
+                <button class="btn btn-ghost" style="padding:8px 14px; font-size:11px">Rotate</button>
+              </div>
+            </div>
+
+            <div class="field">
+              <div class="field-head">
+                <div class="field-lbl">Data export</div>
+                <div class="field-hint">CSV + JSONL · ~88 MB</div>
+              </div>
+              <div class="field-foot" style="margin-top:0">Full history of recovery, strain, sleep, and coach transcripts. Generated on request.</div>
+              <div style="margin-top:12px"><button class="btn btn-ghost" style="padding:10px 18px; font-size:12px">Request export ↓</button></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="danger-card">
+          <div>
+            <h4>Close <em>account</em>.</h4>
+            <p>Erases the journal, revokes the strap pairing, and ends recurring billing at end of cycle. The 30-day cooling window applies.</p>
+          </div>
+          <button class="btn" style="border:1px solid var(--coral); color:var(--coral); background:transparent; padding:12px 22px">Begin closure ↗</button>
+        </div>
+      </section>
+
+      <!-- footer -->
+      <footer class="foot">
+        <div class="foot-strip">
+          <span>Vol. 01 · Issue Nº 26 · Page 008 / 008</span>
+          <span class="pulse-row"><span class="pulse-dot"></span>Saved · 4 sec ago · auto-save on</span>
+          <span>FIN. · MMXXVI</span>
+        </div>
+        <div class="foot-mega">Whoop<em> Ø</em><span class="dot">.</span></div>
+      </footer>
+
+    </div>
+  </main>
+</div>
+
+<script>
+  // theme switch
+  const sw = document.getElementById('theme-switch');
+  const cardClassic = document.querySelector('.theme-classic');
+  const cardZero = document.querySelector('.theme-zero');
+  function setTheme(zero){
+    sw.classList.toggle('is-zero', zero);
+    cardZero.classList.toggle('is-active', zero);
+    cardClassic.classList.toggle('is-active', !zero);
+    sw.querySelector('.knob').textContent = zero ? 'β' : 'α';
+  }
+  sw.addEventListener('click', () => setTheme(!sw.classList.contains('is-zero')));
+  cardClassic.addEventListener('click', () => setTheme(false));
+  cardZero.addEventListener('click', () => setTheme(true));
+
+  // toggles
+  document.querySelectorAll('.toggle').forEach(t => {
+    t.addEventListener('click', () => t.classList.toggle('is-on'));
+  });
+  // pills
+  document.querySelectorAll('.pill').forEach(p => {
+    p.addEventListener('click', () => p.classList.toggle('is-on'));
+  });
+  // model rows
+  document.querySelectorAll('.model-row').forEach(r => {
+    r.addEventListener('click', () => {
+      document.querySelectorAll('.model-row').forEach(x => x.classList.remove('is-active'));
+      document.querySelectorAll('.model-row .check').forEach(c => c.textContent = '');
+      r.classList.add('is-active');
+      r.querySelector('.check').textContent = '✓';
+    });
+  });
+</script>
+</body>
+</html>

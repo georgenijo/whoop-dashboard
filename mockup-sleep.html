@@ -1,0 +1,806 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Whoop · Sleep — Atelier Zero</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600;700;800;900&family=Inter:wght@300;400;500&family=Playfair+Display:ital,wght@1,500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --paper:#efe7d2; --paper-warm:#ece4cf; --paper-dark:#ddd2b6; --bone:#f7f1de;
+    --ink:#15140f; --ink-soft:#2a2620; --ink-mute:#5a5448; --ink-faint:#8b8676;
+    --coral:#ed6f5c; --coral-soft:#f08e7c; --mustard:#e9b94a; --olive:#6e7448;
+    --line: rgba(21,20,15,0.14);
+    --line-soft: rgba(21,20,15,0.08);
+  }
+  html,body{background:var(--paper);color:var(--ink);font-family:'Inter',sans-serif;font-weight:400;font-size:14px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  body{position:relative;min-height:100vh;overflow-x:hidden}
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:200;mix-blend-mode:multiply;opacity:.06;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.08 0 0 0 0 0.07 0 0 0 0 0.05 0 0 0 0.9 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  }
+  body::after{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:199;
+    background:
+      radial-gradient(60vw 60vh at 12% 8%, rgba(106,92,56,.06), transparent 60%),
+      radial-gradient(50vw 50vh at 95% 95%, rgba(106,92,56,.06), transparent 60%);
+  }
+  /* metadata strip */
+  .meta-strip{
+    position:sticky;top:0;z-index:50;background:var(--paper);
+    border-bottom:1px solid var(--line);
+    display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
+    padding:9px 28px;font-family:'Inter Tight';font-size:10.5px;color:var(--ink-faint);
+    letter-spacing:.04em;text-transform:uppercase;
+  }
+  .meta-strip .filed{color:var(--ink-soft);font-weight:600}
+  .meta-strip .filed em{font-family:'Playfair Display';font-style:italic;font-weight:500;color:var(--coral);text-transform:none;letter-spacing:0;font-size:13px;margin:0 4px}
+  .meta-strip .right{justify-self:end;display:flex;gap:18px;align-items:center}
+  .pulse{width:6px;height:6px;border-radius:50%;background:var(--coral);animation:pulse 2.4s ease-in-out infinite;display:inline-block;margin-right:6px;vertical-align:middle}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+  /* shell */
+  .shell{display:grid;grid-template-columns:240px 1fr;min-height:calc(100vh - 36px)}
+
+  /* sidebar */
+  aside.side{
+    position:sticky;top:36px;align-self:start;height:calc(100vh - 36px);
+    border-right:1px solid var(--line);background:var(--paper);
+    padding:30px 22px 22px;display:flex;flex-direction:column;gap:28px;
+  }
+  .brand{display:flex;align-items:baseline;gap:8px}
+  .brand .mark{font-family:'Playfair Display';font-style:italic;font-weight:500;font-size:38px;color:var(--ink);line-height:.8}
+  .brand .name{font-family:'Inter Tight';font-weight:800;font-size:13px;letter-spacing:-.02em}
+  .brand .name em{font-family:'Playfair Display';font-style:italic;font-weight:500;color:var(--coral)}
+  .side .eyebrow{font-family:'Inter Tight';font-size:10px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--coral);display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .side .eyebrow::before{content:"";width:18px;height:1px;background:var(--coral)}
+  nav.primary{display:flex;flex-direction:column;gap:1px}
+  nav.primary a{
+    text-decoration:none;color:var(--ink-soft);font-family:'Inter Tight';font-weight:600;font-size:13px;
+    padding:9px 10px;border-radius:8px;display:flex;align-items:center;justify-content:space-between;
+    letter-spacing:-.005em;transition:.18s ease;
+  }
+  nav.primary a .lead{display:flex;align-items:center;gap:11px}
+  nav.primary a .roman{font-family:'Playfair Display';font-style:italic;font-weight:500;color:var(--ink-faint);font-size:11px;width:20px;text-align:right}
+  nav.primary a .ct{font-family:'JetBrains Mono';font-size:10px;color:var(--ink-faint)}
+  nav.primary a:hover{background:rgba(21,20,15,.04)}
+  nav.primary a.active{background:var(--ink);color:var(--bone)}
+  nav.primary a.active .roman{color:var(--coral)}
+  nav.primary a.active .ct{color:rgba(247,241,222,.6)}
+  .side .foot{margin-top:auto;border-top:1px solid var(--line);padding-top:16px;display:flex;flex-direction:column;gap:6px}
+  .side .foot .row{display:flex;justify-content:space-between;font-family:'JetBrains Mono';font-size:10px;color:var(--ink-faint);letter-spacing:.04em}
+  .side .foot .row b{color:var(--ink-soft);font-weight:500}
+
+  /* main */
+  main.main{padding:0 44px 90px}
+  .topbar{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    padding:32px 0 24px;border-bottom:1px solid var(--line);
+  }
+  .topbar h1{font-family:'Inter Tight';font-weight:800;font-size:54px;letter-spacing:-.035em;line-height:.95}
+  .topbar h1 em{font-family:'Playfair Display';font-style:italic;font-weight:500;color:var(--ink-soft)}
+  .topbar h1 .dot{color:var(--coral)}
+  .topbar .lead-meta{font-family:'JetBrains Mono';font-size:10.5px;color:var(--ink-faint);margin-bottom:8px;letter-spacing:.04em}
+  .topbar .right{display:flex;align-items:center;gap:14px}
+  .search{
+    display:flex;align-items:center;gap:8px;border:1px solid var(--line);
+    padding:9px 14px;border-radius:999px;background:var(--bone);min-width:280px;
+  }
+  .search input{
+    border:0;background:transparent;outline:none;font-family:'Inter Tight';font-size:12.5px;color:var(--ink);width:100%;
+  }
+  .search .kbd{font-family:'JetBrains Mono';font-size:9.5px;color:var(--ink-faint);border:1px solid var(--line);padding:2px 6px;border-radius:4px}
+  .avatar{
+    width:36px;height:36px;border-radius:999px;background:var(--ink);color:var(--bone);
+    display:grid;place-items:center;font-family:'Inter Tight';font-weight:700;font-size:13px;
+    border:1px solid var(--ink);
+  }
+  .user-block{display:flex;align-items:center;gap:10px}
+  .user-block .who{font-family:'Inter Tight';font-size:12px;font-weight:600;line-height:1.1}
+  .user-block .who small{display:block;font-family:'JetBrains Mono';font-size:9.5px;color:var(--ink-faint);font-weight:400;letter-spacing:.04em;margin-top:3px}
+
+  /* section rule */
+  .sec-rule{display:flex;align-items:center;justify-content:space-between;padding:18px 0 14px;border-top:1px solid var(--line);margin-top:48px;font-family:'JetBrains Mono';font-size:10.5px;color:var(--ink-faint);letter-spacing:.04em;text-transform:uppercase}
+  .sec-rule .roman{font-family:'Playfair Display';font-style:italic;font-weight:500;color:var(--coral);font-size:14px;text-transform:none;letter-spacing:0}
+  .sec-rule .mid{display:flex;gap:14px;align-items:center}
+  .sec-rule .mid span+span::before{content:"·";margin-right:14px;color:var(--ink-faint)}
+
+  /* section heading */
+  .sec-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:24px;gap:24px}
+  .sec-head h2{font-family:'Inter Tight';font-weight:800;font-size:38px;letter-spacing:-.03em;line-height:1}
+  .sec-head h2 em{font-family:'Playfair Display';font-style:italic;font-weight:500;color:var(--ink-soft)}
+  .sec-head h2 .dot{color:var(--coral)}
+  .sec-head p{max-width:380px;color:var(--ink-mute);font-size:13px;line-height:1.55}
+
+  /* KPI row */
+  .kpi-row{display:grid;grid-template-columns:repeat(7,1fr);gap:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-top:14px}
+  .kpi{
+    padding:22px 18px 20px;border-right:1px solid var(--line);position:relative;
+    display:flex;flex-direction:column;gap:8px;
+  }
+  .kpi:last-child{border-right:0}
+  .kpi .lbl{font-family:'Inter Tight';font-size:10px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-faint);display:flex;justify-content:space-between;align-items:center}
+  .kpi .lbl .num{font-family:'Playfair Display';font-style:italic;font-weight:500;color:var(--coral);font-size:13px;letter-spacing:0;text-transform:none}
+  .kpi .val{font-family:'Inter Tight';font-weight:800;font-size:34px;letter-spacing:-.035em;line-height:1}
+  .kpi .val em{font-family:'Playfair Display';font-style:italic;font-weight:500;color:var(--ink-soft);font-size:22px}
+  .kpi .val .unit{font-family:'JetBrains Mono';font-size:11px;color:var(--ink-faint);font-weight:400;letter-spacing:.04em;margin-left:4px}
+  .kpi .delta{font-family:'JetBrains Mono';font-size:10.5px;color:var(--ink-mute);letter-spacing:.04em;display:flex;justify-content:space-between}
+  .kpi .delta .up{color:var(--olive)}
+  .kpi .delta .dn{color:var(--coral)}
+  .kpi.feat{background:var(--bone)}
+  .kpi.feat .val{color:var(--ink)}
+
+  /* card grid common */
+  .card{
+    background:var(--bone);border:1px solid var(--line);border-radius:18px;
+    padding:26px 26px 22px;position:relative;
+    box-shadow:inset 0 0 0 1px rgba(21,20,15,.04), 0 30px 60px -30px rgba(21,20,15,.15);
+  }
+  .card .hd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:18px}
+  .card .hd h3{font-family:'Inter Tight';font-weight:800;font-size:18px;letter-spacing:-.02em}
+  .card .hd h3 em{font-family:'Playfair Display';font-style:italic;font-weight:500;color:var(--ink-soft)}
+  .card .hd .meta{font-family:'JetBrains Mono';font-size:10px;color:var(--ink-faint);letter-spacing:.04em}
+  .card .plate{position:absolute;top:14px;right:18px;font-family:'JetBrains Mono';font-size:9.5px;color:var(--ink-faint);letter-spacing:.04em}
+  .corner{position:absolute;width:18px;height:18px;border:1px solid var(--ink-faint)}
+  .corner.tl{top:8px;left:8px;border-right:0;border-bottom:0}
+  .corner.tr{top:8px;right:8px;border-left:0;border-bottom:0}
+  .corner.bl{bottom:8px;left:8px;border-right:0;border-top:0}
+  .corner.br{bottom:8px;right:8px;border-left:0;border-top:0}
+
+  /* I — last night stages timeline */
+  .stages-card{padding:30px 30px 26px}
+  .legend{display:flex;gap:22px;font-family:'Inter Tight';font-size:10.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-mute);margin-bottom:14px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:7px;vertical-align:middle}
+  .swatch-deep{background:#15140f}
+  .swatch-rem{background:#5a5448}
+  .swatch-light{background:#bdb39a}
+  .swatch-awake{background:var(--coral)}
+  .timeline-svg{width:100%;height:170px;display:block}
+  .axis-row{display:flex;justify-content:space-between;font-family:'JetBrains Mono';font-size:10px;color:var(--ink-faint);letter-spacing:.04em;margin-top:6px}
+  .stages-foot{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-top:18px;border-top:1px solid var(--line)}
+  .stages-foot div{padding:14px 16px;border-right:1px solid var(--line)}
+  .stages-foot div:last-child{border-right:0}
+  .stages-foot .lbl{font-family:'Inter Tight';font-size:10px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:6px}
+  .stages-foot .v{font-family:'Inter Tight';font-weight:800;font-size:22px;letter-spacing:-.025em}
+  .stages-foot .v em{font-family:'Playfair Display';font-style:italic;font-weight:500;color:var(--ink-soft);font-size:15px}
+  .stages-foot .pct{font-family:'JetBrains Mono';font-size:10px;color:var(--ink-faint);letter-spacing:.04em;margin-top:2px}
+
+  /* trend + consistency grid */
+  .grid-2{display:grid;grid-template-columns:1.55fr 1fr;gap:24px}
+  .trend-svg{width:100%;height:280px;display:block}
+  .trend-axis{display:flex;justify-content:space-between;font-family:'JetBrains Mono';font-size:10px;color:var(--ink-faint);letter-spacing:.04em;margin-top:8px}
+  .ring-wrap{display:flex;justify-content:space-around;align-items:center;height:280px}
+  .ring{position:relative;width:200px;height:200px}
+  .ring svg{transform:rotate(-90deg)}
+  .ring-center{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+  .ring-center .big{font-family:'Inter Tight';font-weight:800;font-size:44px;letter-spacing:-.04em;line-height:1}
+  .ring-center .big em{font-family:'Playfair Display';font-style:italic;font-weight:500;color:var(--coral);font-size:30px}
+  .ring-center .lbl{font-family:'Inter Tight';font-size:9.5px;font-weight:600;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-faint);margin-top:4px}
+  .week-bars{display:flex;align-items:flex-end;justify-content:space-between;gap:6px;height:200px;margin-top:8px}
+  .wk{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1}
+  .wk .bar{width:100%;background:var(--ink);border-radius:3px 3px 0 0}
+  .wk .bar.alt{background:var(--ink-mute)}
+  .wk .bar.feat{background:var(--coral)}
+  .wk .d{font-family:'JetBrains Mono';font-size:10px;color:var(--ink-faint);letter-spacing:.04em}
+
+  /* need vs actual */
+  .need-card .row{
+    display:grid;grid-template-columns:90px 1fr 90px;align-items:center;gap:14px;
+    padding:12px 0;border-bottom:1px solid var(--line-soft);
+  }
+  .need-card .row:last-child{border-bottom:0}
+  .need-card .day{font-family:'JetBrains Mono';font-size:11px;color:var(--ink-mute);letter-spacing:.06em}
+  .need-card .day b{font-family:'Inter Tight';font-weight:700;color:var(--ink);font-size:12.5px;letter-spacing:0;display:block}
+  .bartrack{position:relative;height:18px;background:var(--paper-warm);border-radius:3px;overflow:hidden}
+  .bartrack .need{position:absolute;left:0;top:0;height:100%;background:repeating-linear-gradient(45deg,transparent 0 4px,rgba(21,20,15,.18) 4px 5px)}
+  .bartrack .actual{position:absolute;left:0;top:0;height:100%;background:var(--ink)}
+  .bartrack .actual.short{background:var(--coral)}
+  .bartrack .marker{position:absolute;top:-2px;bottom:-2px;width:1px;background:var(--ink)}
+  .need-card .num{font-family:'JetBrains Mono';font-size:11px;color:var(--ink);letter-spacing:.04em;text-align:right}
+  .need-card .num em{display:block;color:var(--ink-faint);font-style:normal;margin-top:2px}
+
+  /* breakdown table */
+  table.bd{width:100%;border-collapse:collapse;margin-top:6px}
+  table.bd th, table.bd td{text-align:left;padding:14px 14px;border-bottom:1px solid var(--line-soft);font-size:13px}
+  table.bd th{font-family:'Inter Tight';font-weight:600;font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-faint);border-bottom:1px solid var(--line)}
+  table.bd td.stage{font-family:'Inter Tight';font-weight:700;letter-spacing:-.01em}
+  table.bd td.stage em{font-family:'Playfair Display';font-style:italic;font-weight:500;color:var(--ink-soft)}
+  table.bd td.stage i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:10px;vertical-align:middle}
+  table.bd td.num{font-family:'JetBrains Mono';font-size:12px;letter-spacing:.04em;color:var(--ink-soft)}
+  table.bd td.bar{width:180px}
+  table.bd td.note{font-family:'Inter';font-size:12px;color:var(--ink-mute)}
+  .minibar{height:6px;background:var(--paper-warm);border-radius:2px;overflow:hidden}
+  .minibar > i{display:block;height:100%;background:var(--ink)}
+  .roman-cell{font-family:'Playfair Display';font-style:italic;font-weight:500;color:var(--coral);font-size:13px;width:36px}
+
+  /* footer mega */
+  .megafoot{
+    margin:80px -44px -90px;padding:60px 44px 44px;border-top:1px solid var(--line);
+    background:var(--paper);
+  }
+  .megafoot .word{
+    font-family:'Inter Tight';font-weight:900;font-size:clamp(70px,13vw,200px);
+    letter-spacing:-.05em;line-height:.85;color:var(--ink);
+  }
+  .megafoot .word em{font-family:'Playfair Display';font-style:italic;font-weight:500;color:var(--ink-soft)}
+  .megafoot .word .dot{color:var(--coral)}
+  .megafoot .meta{display:flex;justify-content:space-between;font-family:'JetBrains Mono';font-size:10.5px;color:var(--ink-faint);letter-spacing:.04em;margin-top:30px;padding-top:18px;border-top:1px solid var(--line)}
+
+  /* responsive */
+  @media (max-width:1280px){
+    .shell{grid-template-columns:200px 1fr}
+    main.main{padding:0 32px 80px}
+    .kpi-row{grid-template-columns:repeat(4,1fr)}
+    .kpi:nth-child(4){border-right:0}
+    .kpi:nth-child(n+5){border-top:1px solid var(--line)}
+  }
+  @media (max-width:980px){
+    .grid-2{grid-template-columns:1fr}
+    .kpi-row{grid-template-columns:repeat(2,1fr)}
+    .kpi{border-right:1px solid var(--line) !important}
+    .kpi:nth-child(2n){border-right:0 !important}
+  }
+</style>
+</head>
+<body>
+
+<!-- META STRIP -->
+<div class="meta-strip" data-od-id="meta-strip">
+  <div class="left">Vol. 04 / Issue Nº 26 · Ø Whoop · MMXXVI</div>
+  <div class="filed">Filed under <em>Sleep</em> · Recovery Desk · Plate Nº 08</div>
+  <div class="right">
+    <span><span class="pulse"></span>Live · v4.26.1 · en-US</span>
+    <span>52.5200° N · 13.4050° E</span>
+  </div>
+</div>
+
+<div class="shell">
+
+  <!-- SIDEBAR -->
+  <aside class="side" data-od-id="sidebar">
+    <div class="brand">
+      <span class="mark">Ø</span>
+      <span class="name">Whoop <em>Atelier</em></span>
+    </div>
+
+    <div>
+      <div class="eyebrow">Chapters</div>
+      <nav class="primary">
+        <a href="#"><span class="lead"><span class="roman">I.</span>Overview</span><span class="ct">012</span></a>
+        <a href="#" class="active"><span class="lead"><span class="roman">II.</span>Sleep</span><span class="ct">★ 26</span></a>
+        <a href="#"><span class="lead"><span class="roman">III.</span>Recovery</span><span class="ct">88</span></a>
+        <a href="#"><span class="lead"><span class="roman">IV.</span>Strain</span><span class="ct">14.2</span></a>
+        <a href="#"><span class="lead"><span class="roman">V.</span>Workouts</span><span class="ct">07</span></a>
+        <a href="#"><span class="lead"><span class="roman">VI.</span>Journal</span><span class="ct">31</span></a>
+        <a href="#"><span class="lead"><span class="roman">VII.</span>Trends</span><span class="ct">90d</span></a>
+        <a href="#"><span class="lead"><span class="roman">VIII.</span>Settings</span><span class="ct">—</span></a>
+      </nav>
+    </div>
+
+    <div class="foot">
+      <div class="row"><b>Strap 4.0</b><span>98%</span></div>
+      <div class="row"><span>Sync</span><span>02m ago</span></div>
+      <div class="row"><span>SHA</span><span>a17f·c9d2</span></div>
+      <div class="row"><span>Edited by</span><span>G. Nijo</span></div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main" data-od-id="main">
+
+    <!-- TOPBAR -->
+    <div class="topbar" data-od-id="topbar">
+      <div>
+        <div class="lead-meta">II. Sleep · 04 / 008 · Tuesday, 04 May MMXXVI</div>
+        <h1>The night, <em>recorded</em><span class="dot">.</span></h1>
+      </div>
+      <div class="right">
+        <div class="search">
+          <span style="color:var(--ink-faint);font-family:'JetBrains Mono';font-size:11px">⌕</span>
+          <input placeholder="Search nights, naps, journal entries…">
+          <span class="kbd">⌘K</span>
+        </div>
+        <div class="user-block">
+          <div class="who">George N.<small>MEMBER · 04Y · 26W</small></div>
+          <div class="avatar">GN</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="sec-rule" data-od-id="kpi-rule">
+      <span class="roman">I.</span>
+      <span class="mid"><span>Last Night · Hypnogram</span><span>23:18 → 06:52</span><span>Plate Nº 01</span></span>
+      <span>001 / 008</span>
+    </div>
+
+    <div class="kpi-row" data-od-id="kpi-row">
+      <div class="kpi feat">
+        <div class="lbl">Performance<span class="num">i.</span></div>
+        <div class="val">92<span class="unit">%</span></div>
+        <div class="delta"><span>vs. 30d <b class="up">+04 ▲</b></span><span>need · 99%</span></div>
+      </div>
+      <div class="kpi">
+        <div class="lbl">Efficiency<span class="num">ii.</span></div>
+        <div class="val">94<span class="unit">%</span></div>
+        <div class="delta"><span>asleep / in bed</span><span class="up">+02 ▲</span></div>
+      </div>
+      <div class="kpi">
+        <div class="lbl">Duration<span class="num">iii.</span></div>
+        <div class="val">7<em>h</em>42<span class="unit">m</span></div>
+        <div class="delta"><span>need 8h 14m</span><span class="dn">−32m ▼</span></div>
+      </div>
+      <div class="kpi">
+        <div class="lbl">Disturbances<span class="num">iv.</span></div>
+        <div class="val">03</div>
+        <div class="delta"><span>23:54 · 02:11 · 04:38</span><span class="up">−02 ▼</span></div>
+      </div>
+      <div class="kpi">
+        <div class="lbl">Latency<span class="num">v.</span></div>
+        <div class="val">12<span class="unit">m</span></div>
+        <div class="delta"><span>to first sleep</span><span class="up">−04m ▼</span></div>
+      </div>
+      <div class="kpi">
+        <div class="lbl">REM<span class="num">vi.</span></div>
+        <div class="val">1<em>h</em>48<span class="unit">m</span></div>
+        <div class="delta"><span>23.4% of sleep</span><span class="up">+11m ▲</span></div>
+      </div>
+      <div class="kpi">
+        <div class="lbl">Slow Wave<span class="num">vii.</span></div>
+        <div class="val">1<em>h</em>22<span class="unit">m</span></div>
+        <div class="delta"><span>17.7% deep</span><span class="dn">−06m ▼</span></div>
+      </div>
+    </div>
+
+    <!-- I. STAGES TIMELINE -->
+    <div class="sec-rule" data-od-id="stages-rule" style="margin-top:60px">
+      <span class="roman">II.</span>
+      <span class="mid"><span>Hypnogram · 7h 42m</span><span>4 stages</span><span>3 disturbances</span></span>
+      <span>002 / 008</span>
+    </div>
+
+    <div class="sec-head">
+      <h2>Last night, <em>stage by stage</em><span class="dot">.</span></h2>
+      <p>A continuous read from 23:18 to 06:52. Coral marks waking moments; ink marks slow-wave; ink-mute marks REM; bone marks light. Three disturbances, none extended.</p>
+    </div>
+
+    <section class="card stages-card" data-od-id="stages-card">
+      <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+      <span class="plate">FIG. 01 / SL-26 · 23:18 → 06:52</span>
+      <div class="hd">
+        <h3>Hypnogram <em>plate Nº 01</em></h3>
+        <div class="meta">SHA a17f · resolution 30s</div>
+      </div>
+
+      <div class="legend">
+        <span><i class="swatch-deep"></i>Deep · slow wave</span>
+        <span><i class="swatch-rem"></i>REM</span>
+        <span><i class="swatch-light"></i>Light</span>
+        <span><i class="swatch-awake"></i>Awake</span>
+      </div>
+
+      <!-- HYPNOGRAM SVG -->
+      <svg class="timeline-svg" viewBox="0 0 1200 170" preserveAspectRatio="none">
+        <!-- baseline grid -->
+        <g stroke="rgba(21,20,15,0.08)" stroke-width="1">
+          <line x1="0" y1="30" x2="1200" y2="30"/>
+          <line x1="0" y1="65" x2="1200" y2="65"/>
+          <line x1="0" y1="100" x2="1200" y2="100"/>
+          <line x1="0" y1="135" x2="1200" y2="135"/>
+        </g>
+        <!-- stage labels -->
+        <g font-family="JetBrains Mono" font-size="9" fill="#8b8676" letter-spacing="1">
+          <text x="6" y="26">AWAKE</text>
+          <text x="6" y="61">REM</text>
+          <text x="6" y="96">LIGHT</text>
+          <text x="6" y="131">DEEP</text>
+        </g>
+        <!-- hypnogram polyline path through stages -->
+        <!-- 8 hours, x pixel = (t/480)*1200; y by stage: awake 30, rem 65, light 100, deep 135 -->
+        <polyline fill="none" stroke="#15140f" stroke-width="1.4" stroke-linejoin="miter"
+          points="
+          0,30 30,30
+          30,100 70,100
+          70,135 130,135
+          130,100 170,100
+          170,135 230,135
+          230,65 280,65
+          280,100 340,100
+          340,135 410,135
+          410,100 470,100
+          470,65 530,65
+          530,30 545,30
+          545,100 610,100
+          610,135 660,135
+          660,100 720,100
+          720,65 800,65
+          800,100 850,100
+          850,135 880,135
+          880,100 940,100
+          940,30 952,30
+          952,65 1020,65
+          1020,100 1080,100
+          1080,30 1095,30
+          1095,100 1170,100
+          1170,65 1200,65
+        "/>
+
+        <!-- shaded bands per stage (decorative bars under the line) -->
+        <g opacity="0.85">
+          <!-- deep bands -->
+          <rect x="70" y="135" width="60" height="6" fill="#15140f"/>
+          <rect x="170" y="135" width="60" height="6" fill="#15140f"/>
+          <rect x="340" y="135" width="70" height="6" fill="#15140f"/>
+          <rect x="610" y="135" width="50" height="6" fill="#15140f"/>
+          <rect x="850" y="135" width="30" height="6" fill="#15140f"/>
+          <!-- rem bands -->
+          <rect x="230" y="65" width="50" height="5" fill="#5a5448"/>
+          <rect x="470" y="65" width="60" height="5" fill="#5a5448"/>
+          <rect x="720" y="65" width="80" height="5" fill="#5a5448"/>
+          <rect x="952" y="65" width="68" height="5" fill="#5a5448"/>
+          <rect x="1170" y="65" width="30" height="5" fill="#5a5448"/>
+          <!-- awake markers -->
+          <rect x="530" y="28" width="15" height="6" fill="#ed6f5c"/>
+          <rect x="940" y="28" width="12" height="6" fill="#ed6f5c"/>
+          <rect x="1080" y="28" width="15" height="6" fill="#ed6f5c"/>
+        </g>
+
+        <!-- disturbance pulse marks -->
+        <g>
+          <circle cx="538" cy="20" r="3" fill="#ed6f5c"/>
+          <circle cx="946" cy="20" r="3" fill="#ed6f5c"/>
+          <circle cx="1088" cy="20" r="3" fill="#ed6f5c"/>
+          <text x="538" y="14" font-family="JetBrains Mono" font-size="8" fill="#8b8676" text-anchor="middle">23:54</text>
+          <text x="946" y="14" font-family="JetBrains Mono" font-size="8" fill="#8b8676" text-anchor="middle">02:11</text>
+          <text x="1088" y="14" font-family="JetBrains Mono" font-size="8" fill="#8b8676" text-anchor="middle">04:38</text>
+        </g>
+      </svg>
+
+      <div class="axis-row">
+        <span>23:18</span><span>00:30</span><span>01:30</span><span>02:30</span><span>03:30</span><span>04:30</span><span>05:30</span><span>06:52</span>
+      </div>
+
+      <div class="stages-foot">
+        <div>
+          <div class="lbl">Deep / Slow Wave</div>
+          <div class="v">1<em>h</em>22m</div>
+          <div class="pct">17.7% · need 1h 30m</div>
+        </div>
+        <div>
+          <div class="lbl">REM</div>
+          <div class="v">1<em>h</em>48m</div>
+          <div class="pct">23.4% · need 1h 40m</div>
+        </div>
+        <div>
+          <div class="lbl">Light</div>
+          <div class="v">4<em>h</em>20m</div>
+          <div class="pct">56.3% · within band</div>
+        </div>
+        <div>
+          <div class="lbl">Awake</div>
+          <div class="v">12m</div>
+          <div class="pct">2.6% · 3 events</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- III. TREND + IV. CONSISTENCY -->
+    <div class="sec-rule" data-od-id="trend-rule">
+      <span class="roman">III.</span>
+      <span class="mid"><span>30 Nights · Performance &amp; Consistency</span><span>Apr 04 → May 04</span></span>
+      <span>003 / 008</span>
+    </div>
+
+    <div class="sec-head">
+      <h2>Thirty nights, <em>plotted plainly</em><span class="dot">.</span></h2>
+      <p>The performance trace, the rolling mean, and a consistency ring computed across bedtime, wake, and total time in bed. Mid-week dip on 23–25 April; recovered by month end.</p>
+    </div>
+
+    <div class="grid-2">
+      <!-- TREND CARD -->
+      <section class="card" data-od-id="trend-card">
+        <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+        <span class="plate">FIG. 02 / SL-26</span>
+        <div class="hd">
+          <h3>Performance <em>30-day trend</em></h3>
+          <div class="meta">μ 86.4% · σ 6.1 · n=30</div>
+        </div>
+
+        <svg class="trend-svg" viewBox="0 0 760 280" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="ar" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stop-color="#15140f" stop-opacity="0.18"/>
+              <stop offset="100%" stop-color="#15140f" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+
+          <!-- y grid 100/90/80/70/60 -->
+          <g stroke="rgba(21,20,15,0.08)" stroke-width="1">
+            <line x1="40" y1="20" x2="760" y2="20"/>
+            <line x1="40" y1="70" x2="760" y2="70"/>
+            <line x1="40" y1="120" x2="760" y2="120"/>
+            <line x1="40" y1="170" x2="760" y2="170"/>
+            <line x1="40" y1="220" x2="760" y2="220"/>
+          </g>
+          <g font-family="JetBrains Mono" font-size="9" fill="#8b8676">
+            <text x="6" y="24">100</text>
+            <text x="10" y="74">90</text>
+            <text x="10" y="124">80</text>
+            <text x="10" y="174">70</text>
+            <text x="10" y="224">60</text>
+          </g>
+
+          <!-- target band 80-95 -->
+          <rect x="40" y="45" width="720" height="75" fill="#ed6f5c" opacity="0.06"/>
+          <line x1="40" y1="45" x2="760" y2="45" stroke="#ed6f5c" stroke-width="0.6" stroke-dasharray="3 3" opacity="0.6"/>
+
+          <!-- area fill -->
+          <path d="M40,118 L64,98 L88,84 L112,108 L136,92 L160,76 L184,90 L208,68 L232,86 L256,104 L280,124 L304,138 L328,150 L352,144 L376,128 L400,110 L424,96 L448,114 L472,82 L496,68 L520,76 L544,92 L568,84 L592,72 L616,90 L640,66 L664,82 L688,70 L712,58 L736,74 L760,62 L760,260 L40,260 Z"
+                fill="url(#ar)"/>
+          <!-- main line -->
+          <polyline fill="none" stroke="#15140f" stroke-width="1.6"
+            points="40,118 64,98 88,84 112,108 136,92 160,76 184,90 208,68 232,86 256,104 280,124 304,138 328,150 352,144 376,128 400,110 424,96 448,114 472,82 496,68 520,76 544,92 568,84 592,72 616,90 640,66 664,82 688,70 712,58 736,74 760,62"/>
+          <!-- 7-day rolling mean coral dashed -->
+          <polyline fill="none" stroke="#ed6f5c" stroke-width="1.4" stroke-dasharray="5 4"
+            points="40,108 64,104 88,98 112,100 136,96 160,90 184,90 208,88 232,90 256,96 280,104 304,116 328,128 352,134 376,128 400,118 424,108 448,104 472,98 496,90 520,86 544,84 568,82 592,80 616,82 640,78 664,76 688,72 712,68 736,68 760,66"/>
+
+          <!-- last point coral dot -->
+          <circle cx="760" cy="62" r="4" fill="#ed6f5c"/>
+          <circle cx="760" cy="62" r="9" fill="none" stroke="#ed6f5c" stroke-width="0.8" opacity="0.5"/>
+          <text x="744" y="50" font-family="Inter Tight" font-weight="700" font-size="11" fill="#15140f" text-anchor="end">92%</text>
+
+          <!-- x ticks -->
+          <g font-family="JetBrains Mono" font-size="9" fill="#8b8676">
+            <text x="40" y="240">Apr 04</text>
+            <text x="220" y="240">Apr 12</text>
+            <text x="400" y="240">Apr 20</text>
+            <text x="580" y="240">Apr 28</text>
+            <text x="730" y="240">May 04</text>
+          </g>
+        </svg>
+
+        <div style="display:flex;gap:24px;font-family:'Inter Tight';font-size:10.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-mute);margin-top:8px">
+          <span><i style="display:inline-block;width:14px;height:1.5px;background:#15140f;vertical-align:middle;margin-right:6px"></i>Nightly</span>
+          <span><i style="display:inline-block;width:14px;height:1.5px;background:#ed6f5c;vertical-align:middle;margin-right:6px;border-top:1px dashed #ed6f5c"></i>Rolling 7d</span>
+          <span><i style="display:inline-block;width:10px;height:10px;background:#ed6f5c;opacity:.18;vertical-align:middle;margin-right:6px"></i>Target band</span>
+        </div>
+      </section>
+
+      <!-- CONSISTENCY -->
+      <section class="card" data-od-id="consistency-card">
+        <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+        <span class="plate">FIG. 03 / SL-26</span>
+        <div class="hd">
+          <h3>Consistency <em>7d window</em></h3>
+          <div class="meta">σ bedtime ± 28m</div>
+        </div>
+
+        <div class="ring-wrap">
+          <div class="ring">
+            <svg width="200" height="200" viewBox="0 0 200 200">
+              <circle cx="100" cy="100" r="84" fill="none" stroke="rgba(21,20,15,0.08)" stroke-width="14"/>
+              <!-- 81% of circumference: 2πr=527.8, 81% = 427.5 -->
+              <circle cx="100" cy="100" r="84" fill="none" stroke="#15140f" stroke-width="14" stroke-dasharray="427.5 527.8" stroke-linecap="butt"/>
+              <!-- coral cap on the highlighted segment -->
+              <circle cx="100" cy="100" r="84" fill="none" stroke="#ed6f5c" stroke-width="14" stroke-dasharray="22 527.8" stroke-dashoffset="-405" stroke-linecap="butt"/>
+              <!-- inner dashed ring (mustard hairline) -->
+              <circle cx="100" cy="100" r="64" fill="none" stroke="#e9b94a" stroke-width="0.8" stroke-dasharray="2 4" opacity="0.7"/>
+            </svg>
+            <div class="ring-center">
+              <div>
+                <div class="big">81<em>%</em></div>
+                <div class="lbl">Consistency</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="week-bars">
+          <div class="wk"><div class="bar" style="height:74%"></div><div class="d">M</div></div>
+          <div class="wk"><div class="bar" style="height:82%"></div><div class="d">T</div></div>
+          <div class="wk"><div class="bar alt" style="height:62%"></div><div class="d">W</div></div>
+          <div class="wk"><div class="bar" style="height:88%"></div><div class="d">T</div></div>
+          <div class="wk"><div class="bar feat" style="height:54%"></div><div class="d">F</div></div>
+          <div class="wk"><div class="bar" style="height:78%"></div><div class="d">S</div></div>
+          <div class="wk"><div class="bar" style="height:92%"></div><div class="d">S</div></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono';font-size:10px;color:var(--ink-faint);margin-top:8px">
+          <span>bedtime σ · 28m</span>
+          <span>wake σ · 19m</span>
+        </div>
+      </section>
+    </div>
+
+    <!-- V. NEED VS ACTUAL -->
+    <div class="sec-rule" data-od-id="need-rule">
+      <span class="roman">IV.</span>
+      <span class="mid"><span>Sleep Need · Actual Hours · 7 nights</span><span>biological + debt + strain</span></span>
+      <span>004 / 008</span>
+    </div>
+
+    <div class="sec-head">
+      <h2>The body asked. <em>The night replied</em><span class="dot">.</span></h2>
+      <p>Bars in ink show actual sleep; the dashed track shows computed need. Coral bars indicate nights that fell short of need by more than fifteen minutes.</p>
+    </div>
+
+    <section class="card need-card" data-od-id="need-card">
+      <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+      <span class="plate">FIG. 04 / SL-26</span>
+      <div class="hd">
+        <h3>Need <em>vs.</em> actual</h3>
+        <div class="meta">unit: hours · scale 0–10</div>
+      </div>
+
+      <!-- rows: scale = % of 10h. need ~8h => 80%. -->
+      <div class="row">
+        <div class="day"><b>Mon</b>28 Apr</div>
+        <div class="bartrack">
+          <div class="need" style="width:81%"></div>
+          <div class="actual" style="width:78%"></div>
+          <div class="marker" style="left:81%"></div>
+        </div>
+        <div class="num">7h 48m<em>need 8h 06m</em></div>
+      </div>
+      <div class="row">
+        <div class="day"><b>Tue</b>29 Apr</div>
+        <div class="bartrack">
+          <div class="need" style="width:84%"></div>
+          <div class="actual short" style="width:62%"></div>
+          <div class="marker" style="left:84%"></div>
+        </div>
+        <div class="num">6h 12m<em>need 8h 24m</em></div>
+      </div>
+      <div class="row">
+        <div class="day"><b>Wed</b>30 Apr</div>
+        <div class="bartrack">
+          <div class="need" style="width:82%"></div>
+          <div class="actual" style="width:79%"></div>
+          <div class="marker" style="left:82%"></div>
+        </div>
+        <div class="num">7h 54m<em>need 8h 12m</em></div>
+      </div>
+      <div class="row">
+        <div class="day"><b>Thu</b>01 May</div>
+        <div class="bartrack">
+          <div class="need" style="width:80%"></div>
+          <div class="actual" style="width:84%"></div>
+          <div class="marker" style="left:80%"></div>
+        </div>
+        <div class="num">8h 24m<em>need 8h 00m</em></div>
+      </div>
+      <div class="row">
+        <div class="day"><b>Fri</b>02 May</div>
+        <div class="bartrack">
+          <div class="need" style="width:85%"></div>
+          <div class="actual short" style="width:58%"></div>
+          <div class="marker" style="left:85%"></div>
+        </div>
+        <div class="num">5h 48m<em>need 8h 30m</em></div>
+      </div>
+      <div class="row">
+        <div class="day"><b>Sat</b>03 May</div>
+        <div class="bartrack">
+          <div class="need" style="width:82%"></div>
+          <div class="actual" style="width:88%"></div>
+          <div class="marker" style="left:82%"></div>
+        </div>
+        <div class="num">8h 48m<em>need 8h 12m</em></div>
+      </div>
+      <div class="row">
+        <div class="day"><b>Sun</b>04 May</div>
+        <div class="bartrack">
+          <div class="need" style="width:82%"></div>
+          <div class="actual" style="width:77%"></div>
+          <div class="marker" style="left:82%"></div>
+        </div>
+        <div class="num">7h 42m<em>need 8h 14m</em></div>
+      </div>
+
+      <div style="display:flex;gap:24px;font-family:'Inter Tight';font-size:10.5px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-mute);margin-top:14px;padding-top:12px;border-top:1px solid var(--line)">
+        <span><i style="display:inline-block;width:14px;height:8px;background:#15140f;vertical-align:middle;margin-right:6px"></i>Actual</span>
+        <span><i style="display:inline-block;width:14px;height:8px;background:#ed6f5c;vertical-align:middle;margin-right:6px"></i>Short of need</span>
+        <span><i style="display:inline-block;width:14px;height:8px;background:repeating-linear-gradient(45deg,transparent 0 3px,rgba(21,20,15,.3) 3px 4px);vertical-align:middle;margin-right:6px"></i>Need</span>
+      </div>
+    </section>
+
+    <!-- VI. STAGE BREAKDOWN TABLE -->
+    <div class="sec-rule" data-od-id="bd-rule">
+      <span class="roman">V.</span>
+      <span class="mid"><span>Stage Breakdown · Tonight</span><span>composition · cycles · contribution</span></span>
+      <span>005 / 008</span>
+    </div>
+
+    <div class="sec-head">
+      <h2>The architecture, <em>tabulated</em><span class="dot">.</span></h2>
+      <p>Four stages, four cycles, one continuous record. Contribution is to overall recovery; band shows how the night sits inside the typical 30-day band for the wearer.</p>
+    </div>
+
+    <section class="card" data-od-id="bd-card" style="padding:18px 26px">
+      <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+      <span class="plate">TAB. 01 / SL-26</span>
+      <table class="bd">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Stage</th>
+            <th>Duration</th>
+            <th>%</th>
+            <th>Cycles</th>
+            <th>Avg cycle</th>
+            <th>Range (30d)</th>
+            <th>Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="roman-cell">i.</td>
+            <td class="stage"><i class="swatch-deep"></i>Deep <em>SWS</em></td>
+            <td class="num">1h 22m</td>
+            <td class="num">17.7%</td>
+            <td class="num">04</td>
+            <td class="num">20m 30s</td>
+            <td class="bar"><div class="minibar"><i style="width:62%"></i></div></td>
+            <td class="note">Within band; second half of night.</td>
+          </tr>
+          <tr>
+            <td class="roman-cell">ii.</td>
+            <td class="stage"><i class="swatch-rem"></i>REM</td>
+            <td class="num">1h 48m</td>
+            <td class="num">23.4%</td>
+            <td class="num">05</td>
+            <td class="num">21m 36s</td>
+            <td class="bar"><div class="minibar"><i style="width:78%"></i></div></td>
+            <td class="note">Above 30d mean; longest bout 04:14–04:38.</td>
+          </tr>
+          <tr>
+            <td class="roman-cell">iii.</td>
+            <td class="stage"><i class="swatch-light"></i>Light <em>N1 + N2</em></td>
+            <td class="num">4h 20m</td>
+            <td class="num">56.3%</td>
+            <td class="num">—</td>
+            <td class="num">—</td>
+            <td class="bar"><div class="minibar"><i style="width:71%"></i></div></td>
+            <td class="note">Mid-band; carrier between deep and REM.</td>
+          </tr>
+          <tr>
+            <td class="roman-cell">iv.</td>
+            <td class="stage"><i class="swatch-awake"></i>Awake</td>
+            <td class="num">12m</td>
+            <td class="num">2.6%</td>
+            <td class="num">03</td>
+            <td class="num">04m 00s</td>
+            <td class="bar"><div class="minibar"><i style="width:18%;background:#ed6f5c"></i></div></td>
+            <td class="note">Three brief disturbances; none extended.</td>
+          </tr>
+          <tr style="background:rgba(21,20,15,0.03)">
+            <td class="roman-cell">Σ</td>
+            <td class="stage" style="font-weight:800">Total <em>in bed</em></td>
+            <td class="num" style="color:var(--ink);font-weight:600">7h 54m</td>
+            <td class="num">100%</td>
+            <td class="num">04 full</td>
+            <td class="num">98m mean</td>
+            <td class="bar"><div class="minibar"><i style="width:92%"></i></div></td>
+            <td class="note" style="color:var(--ink-soft)">Efficiency 94% · latency 12m · SHA a17f.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- MEGA FOOTER -->
+    <div class="megafoot" data-od-id="megafoot">
+      <div class="word">Sleep<em>, recorded</em><span class="dot">.</span></div>
+      <div class="meta">
+        <span><span class="pulse"></span> FIN. · MMXXVI · Edited by G. Nijo · Recovery Desk</span>
+        <span>Vol. 04 / Issue Nº 26 · Plate Nº 08 · 008 / 008</span>
+        <span>52.5200° N · 13.4050° E · SHA a17f·c9d2</span>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+</body>
+</html>
