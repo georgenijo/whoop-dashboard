@@ -333,3 +333,320 @@ a:hover { border-bottom-color: var(--brand-strain); }
   letter-spacing: -0.005em;
 }
 :root[data-theme="atelier"] .aurora { display: none; } /* paper has no aurora */
+
+/* =========================================================================
+   ATELIER SLEEP — scoped layout + components
+   ========================================================================= */
+
+:root[data-theme="atelier"] .atelier-sleep {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 0 0 40px;
+}
+
+:root[data-theme="atelier"] .atelier-sleep-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  :root[data-theme="atelier"] .atelier-sleep-row-2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Shared plate header ── */
+:root[data-theme="atelier"] .atelier-plate-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+  margin-bottom: 14px;
+}
+
+:root[data-theme="atelier"] .atelier-plate-fig {
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+:root[data-theme="atelier"] .atelier-plate-page {
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  color: var(--ink-faint);
+  letter-spacing: 0.04em;
+}
+
+/* ── SleepHero ── */
+:root[data-theme="atelier"] .atelier-sleep-hero {
+  border: 1px solid var(--line);
+  padding: 24px 28px 20px;
+  background: var(--bone);
+}
+
+:root[data-theme="atelier"] .atelier-sleep-headline {
+  font-family: var(--font-display-serif);
+  font-size: 32px;
+  font-weight: 400;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin: 0 0 20px;
+  line-height: 1.15;
+}
+
+:root[data-theme="atelier"] .atelier-sleep-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+
+@media (max-width: 768px) {
+  :root[data-theme="atelier"] .atelier-sleep-kpi-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+:root[data-theme="atelier"] .atelier-sleep-kpi-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 18px;
+  background: var(--bone);
+}
+
+:root[data-theme="atelier"] .atelier-sleep-kpi-roman {
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+:root[data-theme="atelier"] .atelier-sleep-kpi-label {
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+:root[data-theme="atelier"] .atelier-sleep-kpi-value {
+  font-family: var(--font-display-sans);
+  font-size: 26px;
+  font-weight: 300;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin-top: 4px;
+}
+
+/* ── StagesPlate ── */
+:root[data-theme="atelier"] .atelier-stages-plate {
+  border: 1px solid var(--line);
+  padding: 24px 28px 20px;
+  background: var(--bone);
+}
+
+:root[data-theme="atelier"] .atelier-stages-headline {
+  font-family: var(--font-display-serif);
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--ink-mute);
+  margin: 0 0 16px;
+}
+
+:root[data-theme="atelier"] .atelier-stages-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  gap: 1px;
+}
+
+:root[data-theme="atelier"] .atelier-stages-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+:root[data-theme="atelier"] .atelier-stages-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+:root[data-theme="atelier"] .atelier-stages-roman {
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
+  width: 14px;
+  flex-shrink: 0;
+}
+
+:root[data-theme="atelier"] .atelier-stages-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+:root[data-theme="atelier"] .atelier-stages-legend-label {
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  flex: 1;
+}
+
+:root[data-theme="atelier"] .atelier-stages-legend-val {
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+:root[data-theme="atelier"] .atelier-stages-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display-sans);
+  font-size: 11px;
+  color: var(--ink-mute);
+  border-top: 1px solid var(--line-soft);
+  padding-top: 10px;
+}
+
+:root[data-theme="atelier"] .atelier-stages-stats strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+:root[data-theme="atelier"] .atelier-sep {
+  color: var(--ink-faint);
+}
+
+/* ── Shared chart shell ── */
+:root[data-theme="atelier"] .atelier-sleep-trend,
+:root[data-theme="atelier"] .atelier-sleep-consistency {
+  border: 1px solid var(--line);
+  padding: 20px 24px 16px;
+  background: var(--bone);
+}
+
+:root[data-theme="atelier"] .atelier-chart-body {
+  width: 100%;
+  height: 120px;
+}
+
+:root[data-theme="atelier"] .atelier-chart-body svg {
+  width: 100%;
+  height: 100%;
+}
+
+:root[data-theme="atelier"] .atelier-chart-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  color: var(--ink-faint);
+  letter-spacing: 0.04em;
+}
+
+:root[data-theme="atelier"] .atelier-chart-empty {
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  color: var(--ink-faint);
+  padding: 20px 0;
+}
+
+:root[data-theme="atelier"] .atelier-trend-legend {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 8px;
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  color: var(--ink-mute);
+  letter-spacing: 0.04em;
+}
+
+/* ── NeedBreakdown ── */
+:root[data-theme="atelier"] .atelier-sleep-need {
+  border: 1px solid var(--line);
+  padding: 24px 28px 20px;
+  background: var(--bone);
+}
+
+:root[data-theme="atelier"] .atelier-need-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  gap: 1px;
+}
+
+:root[data-theme="atelier"] .atelier-need-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+:root[data-theme="atelier"] .atelier-need-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── BedtimeDistribution ── */
+:root[data-theme="atelier"] .atelier-bedtime-table {
+  border: 1px solid var(--line);
+  padding: 24px 28px 20px;
+  background: var(--bone);
+}
+
+:root[data-theme="atelier"] .atelier-bedtime-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  color: var(--ink);
+}
+
+:root[data-theme="atelier"] .atelier-bedtime-tbl th {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  text-align: left;
+  padding: 4px 12px 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+:root[data-theme="atelier"] .atelier-bedtime-tbl td {
+  padding: 6px 12px 6px 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+
+:root[data-theme="atelier"] .atelier-bedtime-tbl tr:last-child td {
+  border-bottom: none;
+}
