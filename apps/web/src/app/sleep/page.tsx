@@ -4,6 +4,7 @@ import SleepTrendCard from "@/components/sleep/atelier/SleepTrendCard";
 import AtelierSleepConsistencyCard from "@/components/sleep/atelier/SleepConsistencyCard";
 import NeedBreakdown from "@/components/sleep/atelier/NeedBreakdown";
 import BedtimeDistribution from "@/components/sleep/atelier/BedtimeDistribution";
+import BedtimeTimingChart from "@/components/sleep/atelier/BedtimeTimingChart";
 import KPIStrip from "@/components/overview/KPIStrip";
 import TrendChart from "@/components/charts/TrendChart";
 import SleepStagesChart from "@/components/charts/SleepStagesChart";
@@ -152,6 +153,7 @@ export default async function SleepPage({
           <AtelierSleepConsistencyCard rows={trend14} />
         </div>
         <NeedBreakdown latest={latestSleep} />
+        <BedtimeTimingChart rows={trend90} />
         <BedtimeDistribution rows={trend90} />
       </div>
     </>
