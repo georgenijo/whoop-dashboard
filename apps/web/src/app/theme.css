@@ -651,6 +651,44 @@ a:hover { border-bottom-color: var(--brand-strain); }
   border-bottom: none;
 }
 
+/* ── BedtimeTimingChart ── */
+:root[data-theme="atelier"] .atelier-bedtime-timing {
+  border: 1px solid var(--line);
+  padding: 24px 28px 20px;
+  background: var(--bone);
+}
+
+:root[data-theme="atelier"] .atelier-bedtime-chart-body {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+
+:root[data-theme="atelier"] .atelier-bedtime-y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  color: var(--ink-faint);
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  padding: 0 0 2px;
+  flex-shrink: 0;
+  width: 36px;
+}
+
+:root[data-theme="atelier"] .atelier-bedtime-chart-inner {
+  flex: 1;
+  height: 160px;
+}
+
+:root[data-theme="atelier"] .atelier-bedtime-chart-inner svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
 /* =========================================================================
    ATELIER SETTINGS — scoped layout + components
    ========================================================================= */
