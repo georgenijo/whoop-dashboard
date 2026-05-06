@@ -1,6 +1,9 @@
 import { getChatLogs, getRouteLogs, getSyncLogs, type RouteLog } from "@/lib/db";
 import StatsRow from "@/components/logs/atelier/StatsRow";
 import EventLedger, { type LedgerRow } from "@/components/logs/atelier/EventLedger";
+import AtelierChatSection from "@/components/logs/atelier/AtelierChatSection";
+import AtelierSyncSection from "@/components/logs/atelier/AtelierSyncSection";
+import AtelierRouteSection from "@/components/logs/atelier/AtelierRouteSection";
 import ChatLogsTable from "./ChatLogsTable";
 import CollapsibleCard from "./CollapsibleCard";
 import RouteLogsTable from "./RouteLogsTable";
@@ -153,6 +156,9 @@ export default function LogsPage() {
         </div>
         <StatsRow syncLogs={syncLogs} chatLogs={logs} />
         <EventLedger rows={ledger} />
+        <AtelierChatSection logs={logs} />
+        <AtelierSyncSection logs={syncLogs} />
+        <AtelierRouteSection logs={routeLogs} />
       </div>
     </>
   );

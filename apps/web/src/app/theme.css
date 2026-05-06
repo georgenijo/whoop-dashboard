@@ -1354,6 +1354,43 @@ a:hover { border-bottom-color: var(--brand-strain); }
 :root[data-theme="atelier"] .bulletin-plate-header {
   border-bottom: 1px solid var(--line);
   padding: 6px 12px;
+/* ── Collapsible section shells (Chat / Sync / Route) ── */
+:root[data-theme="atelier"] .atelier-collapsible-section {
+  border: 1px solid var(--line);
+  background: var(--bone);
+}
+
+:root[data-theme="atelier"] .atelier-collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 14px 18px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-bottom: 1px solid transparent;
+  transition: background 120ms ease;
+}
+
+:root[data-theme="atelier"] .atelier-collapsible-header:hover {
+  background: var(--paper-warm);
+}
+
+:root[data-theme="atelier"] .atelier-collapsible-header[aria-expanded="true"] {
+  border-bottom-color: var(--line);
+}
+
+:root[data-theme="atelier"] .atelier-collapsible-title-group {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+:root[data-theme="atelier"] .atelier-collapsible-index {
   font-family: var(--font-display-sans);
   font-size: 9px;
   font-weight: 700;
@@ -1910,6 +1947,42 @@ a:hover { border-bottom-color: var(--brand-strain); }
 }
 
 :root[data-theme="atelier"] .atelier-strain-log-tbl {
+  color: var(--ink-faint);
+}
+
+:root[data-theme="atelier"] .atelier-collapsible-title {
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+:root[data-theme="atelier"] .atelier-collapsible-sub {
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  color: var(--ink-faint);
+}
+
+:root[data-theme="atelier"] .atelier-collapsible-chevron {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  color: var(--ink-faint);
+  transform: rotate(0deg);
+  transition: transform 150ms ease;
+}
+
+:root[data-theme="atelier"] .atelier-collapsible-chevron.open {
+  transform: rotate(90deg);
+}
+
+/* ── Section table ── */
+:root[data-theme="atelier"] .atelier-section-scroll {
+  overflow-x: auto;
+}
+
+:root[data-theme="atelier"] .atelier-section-table {
   width: 100%;
   border-collapse: collapse;
   font-family: var(--font-display-sans);
@@ -1918,6 +1991,12 @@ a:hover { border-bottom-color: var(--brand-strain); }
 }
 
 :root[data-theme="atelier"] .atelier-strain-log-tbl th {
+:root[data-theme="atelier"] .atelier-section-table thead {
+  background: var(--paper-warm);
+}
+
+:root[data-theme="atelier"] .atelier-section-table th {
+  padding: 8px 14px;
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -2007,6 +2086,198 @@ a:hover { border-bottom-color: var(--brand-strain); }
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.12em;
+=======
+:root[data-theme="atelier"] .atelier-section-table td {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: middle;
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-theme="atelier"] .atelier-section-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+:root[data-theme="atelier"] .atelier-section-row.clickable {
+  cursor: pointer;
+}
+
+:root[data-theme="atelier"] .atelier-section-row.clickable:hover td {
+  background: var(--paper-warm);
+}
+
+:root[data-theme="atelier"] .atelier-section-time {
+  color: var(--ink-mute);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+:root[data-theme="atelier"] .atelier-section-primary {
+  color: var(--ink-soft);
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:root[data-theme="atelier"] .atelier-section-dur {
+  color: var(--ink-mute);
+  text-align: right;
+  white-space: nowrap;
+}
+
+:root[data-theme="atelier"] .atelier-section-center {
+  text-align: center;
+  color: var(--ink-mute);
+}
+
+:root[data-theme="atelier"] .atelier-section-status {
+  text-align: center;
+  white-space: nowrap;
+}
+
+:root[data-theme="atelier"] .atelier-section-chevron-cell {
+  width: 28px;
+  text-align: center;
+}
+
+:root[data-theme="atelier"] .atelier-section-chevron {
+  width: 13px;
+  height: 13px;
+  color: var(--ink-faint);
+  transform: rotate(0deg);
+  transition: transform 150ms ease;
+}
+
+:root[data-theme="atelier"] .atelier-section-chevron.open {
+  transform: rotate(90deg);
+}
+
+/* ── Status badges ── */
+:root[data-theme="atelier"] .atelier-section-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  border: 1px solid;
+}
+
+:root[data-theme="atelier"] .atelier-section-badge-ok {
+  color: var(--olive);
+  border-color: var(--olive);
+  background: transparent;
+}
+
+:root[data-theme="atelier"] .atelier-section-badge-error {
+  color: var(--coral);
+  border-color: var(--coral);
+  background: rgba(237, 111, 92, 0.08);
+}
+
+:root[data-theme="atelier"] .atelier-section-badge-warn {
+  color: var(--mustard);
+  border-color: var(--mustard);
+  background: transparent;
+}
+
+/* ── Section empty state ── */
+:root[data-theme="atelier"] .atelier-section-empty {
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  color: var(--ink-faint);
+  padding: 18px 18px;
+}
+
+/* ── Detail expansion row ── */
+:root[data-theme="atelier"] .atelier-section-detail-row td {
+  background: var(--paper-warm);
+  padding: 0;
+}
+
+:root[data-theme="atelier"] .atelier-section-detail {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+:root[data-theme="atelier"] .atelier-section-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.2fr) minmax(240px, 1fr);
+  gap: 24px;
+}
+
+@media (max-width: 720px) {
+  :root[data-theme="atelier"] .atelier-section-detail-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+:root[data-theme="atelier"] .atelier-detail-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+:root[data-theme="atelier"] .atelier-detail-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+:root[data-theme="atelier"] .atelier-detail-label {
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+:root[data-theme="atelier"] .atelier-detail-text {
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  color: var(--ink-soft);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+:root[data-theme="atelier"] .atelier-detail-muted {
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+:root[data-theme="atelier"] .atelier-detail-notice {
+  font-family: var(--font-display-sans);
+  font-size: 11px;
+  color: var(--ink-faint);
+  border: 1px solid var(--line-soft);
+  padding: 8px 10px;
+  line-height: 1.5;
+}
+
+/* ── Detail metric pills ── */
+:root[data-theme="atelier"] .atelier-detail-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+:root[data-theme="atelier"] .atelier-detail-metric {
+  min-width: 90px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+}
+
+:root[data-theme="atelier"] .atelier-detail-metric-label {
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--ink-faint);
 }
@@ -2023,5 +2294,166 @@ a:hover { border-bottom-color: var(--brand-strain); }
 }
 
 :root[data-theme="atelier"] .atelier-tsb-today-val.fatigued {
+:root[data-theme="atelier"] .atelier-detail-metric-value {
+  margin-top: 4px;
+  font-family: var(--font-display-sans);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Detail key-value lines ── */
+:root[data-theme="atelier"] .atelier-detail-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+:root[data-theme="atelier"] .atelier-detail-line {
+  display: grid;
+  grid-template-columns: 110px minmax(160px, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+
+:root[data-theme="atelier"] .atelier-detail-line-label {
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+:root[data-theme="atelier"] .atelier-detail-line-value {
+  font-family: var(--font-display-sans);
+  font-size: 11px;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+  line-height: 1.45;
+}
+
+:root[data-theme="atelier"] .atelier-detail-line-value.muted {
+  color: var(--ink-faint);
+}
+
+/* ── Timing bar charts (Sync detail) ── */
+:root[data-theme="atelier"] .atelier-timing-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+:root[data-theme="atelier"] .atelier-timing-row {
+  display: grid;
+  grid-template-columns: 90px minmax(100px, 1fr) 52px;
+  gap: 8px;
+  align-items: center;
+}
+
+:root[data-theme="atelier"] .atelier-timing-label {
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  color: var(--ink-mute);
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+:root[data-theme="atelier"] .atelier-timing-track {
+  height: 6px;
+  background: var(--line-soft);
+  overflow: hidden;
+}
+
+:root[data-theme="atelier"] .atelier-timing-fill {
+  height: 100%;
+  transition: width 300ms ease;
+}
+
+:root[data-theme="atelier"] .atelier-timing-value {
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  color: var(--ink-mute);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Tool call list (Chat detail) ── */
+:root[data-theme="atelier"] .atelier-tool-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+:root[data-theme="atelier"] .atelier-tool-item {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  padding: 10px 12px;
+}
+
+:root[data-theme="atelier"] .atelier-tool-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+:root[data-theme="atelier"] .atelier-tool-name {
+  font-family: var(--font-display-sans);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+:root[data-theme="atelier"] .atelier-tool-dur {
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  color: var(--ink-mute);
+}
+
+:root[data-theme="atelier"] .atelier-tool-rows {
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  color: var(--ink-faint);
+}
+
+:root[data-theme="atelier"] .atelier-tool-badge {
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border: 1px solid;
+}
+
+:root[data-theme="atelier"] .atelier-tool-badge-ok {
+  color: var(--olive);
+  border-color: var(--olive);
+}
+
+:root[data-theme="atelier"] .atelier-tool-badge-error {
+  color: var(--coral);
+  border-color: var(--coral);
+}
+
+:root[data-theme="atelier"] .atelier-tool-input {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  background: var(--paper-dark);
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  color: var(--ink-mute);
+  white-space: pre-wrap;
+  word-break: break-all;
+  overflow-x: auto;
+  line-height: 1.45;
+}
+
+:root[data-theme="atelier"] .atelier-tool-error {
+  margin-top: 6px;
+  font-family: var(--font-display-sans);
+  font-size: 11px;
   color: var(--coral);
 }
