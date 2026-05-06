@@ -5,6 +5,9 @@ import HRVLedger from "@/components/recovery/atelier/HRVLedger";
 import RHRBaseline from "@/components/recovery/atelier/RHRBaseline";
 import ZoneDistribution from "@/components/recovery/atelier/ZoneDistribution";
 import DayLedger from "@/components/recovery/atelier/DayLedger";
+import AtelierHRVTrend from "@/components/recovery/atelier/AtelierHRVTrend";
+import AtelierStrainScatter from "@/components/recovery/atelier/AtelierStrainScatter";
+import AtelierDayOfWeekRecovery from "@/components/recovery/atelier/AtelierDayOfWeekRecovery";
 import TrendChart from "@/components/charts/TrendChart";
 import HRVTrend from "@/components/charts/HRVTrend";
 import StrainRecoveryScatter from "@/components/charts/StrainRecoveryScatter";
@@ -153,10 +156,15 @@ export default async function RecoveryPage({
           respRate={data.latestSleep?.respiratory_rate ?? null}
         />
         <RecoveryScoreChart rows={trend30} />
-        <HRVLedger rows={trend30} />
-        <RHRBaseline rows={trend30} />
+        <div className="atelier-recovery-row-2">
+          <HRVLedger rows={trend30} />
+          <RHRBaseline rows={trend30} />
+        </div>
         <ZoneDistribution rows={trend30} />
         <DayLedger rows={trend30} />
+        <AtelierHRVTrend rows={trend30} />
+        <AtelierStrainScatter rows={scatterRows} />
+        <AtelierDayOfWeekRecovery rows={dowRecovery} />
       </div>
     </>
   );

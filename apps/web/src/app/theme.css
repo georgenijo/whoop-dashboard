@@ -1293,6 +1293,10 @@ a:hover { border-bottom-color: var(--brand-strain); }
    ========================================================================= */
 
 :root[data-theme="atelier"] .atelier-strain {
+   ATELIER RECOVERY — scoped layout + components
+   ========================================================================= */
+
+:root[data-theme="atelier"] .atelier-recovery {
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -1300,6 +1304,8 @@ a:hover { border-bottom-color: var(--brand-strain); }
 }
 
 :root[data-theme="atelier"] .atelier-strain-row-2 {
+/* ── Two-column row for side-by-side chart blocks ── */
+:root[data-theme="atelier"] .atelier-recovery-row-2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 20px;
@@ -1307,6 +1313,7 @@ a:hover { border-bottom-color: var(--brand-strain); }
 
 @media (max-width: 768px) {
   :root[data-theme="atelier"] .atelier-strain-row-2 {
+  :root[data-theme="atelier"] .atelier-recovery-row-2 {
     grid-template-columns: 1fr;
   }
 }
@@ -1339,6 +1346,8 @@ a:hover { border-bottom-color: var(--brand-strain); }
 :root[data-theme="atelier"] .bulletin-headline em {
 /* ── StrainHero ── */
 :root[data-theme="atelier"] .atelier-strain-hero {
+/* ── RecoveryHero ── */
+:root[data-theme="atelier"] .atelier-recovery-hero {
   border: 1px solid var(--line);
   padding: 24px 28px 20px;
   background: var(--bone);
@@ -2364,6 +2373,57 @@ a:hover { border-bottom-color: var(--brand-strain); }
 }
 
 :root[data-theme="atelier"] .atelier-strain-kpi-roman {
+:root[data-theme="atelier"] .atelier-recovery-headline {
+  font-family: var(--font-display-serif);
+  font-size: 28px;
+  font-weight: 400;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  margin: 0 0 20px;
+  line-height: 1.2;
+}
+
+:root[data-theme="atelier"] .atelier-recovery-headline em {
+  font-style: italic;
+  color: var(--ink-mute);
+}
+
+:root[data-theme="atelier"] .atelier-recovery-hero-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 28px;
+}
+
+@media (max-width: 640px) {
+  :root[data-theme="atelier"] .atelier-recovery-hero-body {
+    flex-direction: column;
+    align-items: center;
+  }
+}
+
+:root[data-theme="atelier"] .atelier-recovery-ring {
+  width: 128px;
+  height: 128px;
+  flex-shrink: 0;
+}
+
+:root[data-theme="atelier"] .atelier-recovery-metrics-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  flex: 1;
+  border-top: 1px solid var(--line);
+}
+
+:root[data-theme="atelier"] .atelier-recovery-metric-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+:root[data-theme="atelier"] .atelier-recovery-metric-roman {
   font-family: var(--font-display-sans);
   font-size: 9px;
   font-weight: 700;
@@ -2413,12 +2473,72 @@ a:hover { border-bottom-color: var(--brand-strain); }
 
 /* ── StrainBars ── */
 :root[data-theme="atelier"] .atelier-strain-bars-plate {
+  color: var(--ink-faint);
+  min-width: 20px;
+  flex-shrink: 0;
+}
+
+:root[data-theme="atelier"] .atelier-recovery-metric-label {
+  font-family: var(--font-display-sans);
+  font-size: 11px;
+  color: var(--ink-mute);
+  letter-spacing: 0.01em;
+  flex: 1;
+}
+
+:root[data-theme="atelier"] .atelier-recovery-metric-value {
+  font-family: var(--font-display-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Shared chart block (RecoveryScoreChart / HRVLedger / RHRBaseline) ── */
+:root[data-theme="atelier"] .atelier-recovery-chart-block {
   border: 1px solid var(--line);
   padding: 20px 24px 16px;
   background: var(--bone);
 }
 
 :root[data-theme="atelier"] .atelier-strain-bars-body {
+:root[data-theme="atelier"] .atelier-recovery-chart-title {
+  font-family: var(--font-display-serif);
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--ink-mute);
+  margin: 0 0 14px;
+  line-height: 1.3;
+}
+
+:root[data-theme="atelier"] .atelier-recovery-chart-title em {
+  font-style: italic;
+  color: var(--ink);
+}
+
+/* ── ZoneDistribution ── */
+:root[data-theme="atelier"] .atelier-recovery-zone-dist {
+  border: 1px solid var(--line);
+  padding: 20px 24px 16px;
+  background: var(--bone);
+}
+
+:root[data-theme="atelier"] .atelier-zone-stacked-bar {
+  display: flex;
+  height: 10px;
+  border-radius: 1px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  gap: 1px;
+}
+
+:root[data-theme="atelier"] .atelier-zone-bar-seg {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+:root[data-theme="atelier"] .atelier-zone-legend {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -2484,6 +2604,58 @@ a:hover { border-bottom-color: var(--brand-strain); }
 }
 
 :root[data-theme="atelier"] .atelier-section-table {
+:root[data-theme="atelier"] .atelier-zone-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+:root[data-theme="atelier"] .atelier-zone-roman {
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--ink-faint);
+  min-width: 16px;
+}
+
+:root[data-theme="atelier"] .atelier-zone-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+:root[data-theme="atelier"] .atelier-zone-label {
+  font-family: var(--font-display-sans);
+  font-size: 11px;
+  color: var(--ink-mute);
+  flex: 1;
+}
+
+:root[data-theme="atelier"] .atelier-zone-count {
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-theme="atelier"] .atelier-zone-pct {
+  font-size: 10px;
+  color: var(--ink-faint);
+  font-weight: 400;
+}
+
+/* ── DayLedger ── */
+:root[data-theme="atelier"] .atelier-recovery-ledger {
+  border: 1px solid var(--line);
+  padding: 20px 24px 16px;
+  background: var(--bone);
+  overflow-x: auto;
+}
+
+:root[data-theme="atelier"] .atelier-day-ledger-tbl {
   width: 100%;
   border-collapse: collapse;
   font-family: var(--font-display-sans);
@@ -2498,6 +2670,7 @@ a:hover { border-bottom-color: var(--brand-strain); }
 
 :root[data-theme="atelier"] .atelier-section-table th {
   padding: 8px 14px;
+:root[data-theme="atelier"] .atelier-day-ledger-tbl th {
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -2657,6 +2830,33 @@ a:hover { border-bottom-color: var(--brand-strain); }
 :root[data-theme="atelier"] .atelier-section-badge {
   display: inline-block;
   padding: 2px 7px;
+}
+
+:root[data-theme="atelier"] .atelier-day-ledger-tbl td {
+  padding: 6px 12px 6px 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-variant-numeric: tabular-nums;
+  vertical-align: middle;
+}
+
+:root[data-theme="atelier"] .atelier-day-ledger-tbl tr:last-child td {
+  border-bottom: none;
+}
+
+:root[data-theme="atelier"] .atelier-ledger-date {
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+
+:root[data-theme="atelier"] .atelier-ledger-score {
+  color: var(--ink);
+  font-weight: 500;
+  font-size: 13px;
+}
+
+:root[data-theme="atelier"] .atelier-ledger-tag {
+  display: inline-block;
+  padding: 1px 6px;
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.1em;
@@ -2665,6 +2865,7 @@ a:hover { border-bottom-color: var(--brand-strain); }
 }
 
 :root[data-theme="atelier"] .atelier-section-badge-ok {
+:root[data-theme="atelier"] .atelier-ledger-tag.tag-olive {
   color: var(--olive);
   border-color: var(--olive);
   background: transparent;
@@ -2677,6 +2878,7 @@ a:hover { border-bottom-color: var(--brand-strain); }
 }
 
 :root[data-theme="atelier"] .atelier-section-badge-warn {
+:root[data-theme="atelier"] .atelier-ledger-tag.tag-mustard {
   color: var(--mustard);
   border-color: var(--mustard);
   background: transparent;
@@ -2728,6 +2930,169 @@ a:hover { border-bottom-color: var(--brand-strain); }
 }
 
 :root[data-theme="atelier"] .atelier-detail-label {
+:root[data-theme="atelier"] .atelier-ledger-tag.tag-coral {
+  color: var(--coral);
+  border-color: var(--coral);
+  background: transparent;
+}
+
+:root[data-theme="atelier"] .atelier-ledger-bar-cell {
+  min-width: 100px;
+  max-width: 140px;
+}
+
+:root[data-theme="atelier"] .atelier-ledger-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+:root[data-theme="atelier"] .atelier-ledger-bar {
+  height: 6px;
+  border-radius: 1px;
+  flex-shrink: 0;
+  min-width: 2px;
+}
+
+:root[data-theme="atelier"] .atelier-ledger-bar.hrv-bar {
+  background: var(--olive);
+}
+
+:root[data-theme="atelier"] .atelier-ledger-bar.rhr-bar {
+  background: var(--mustard);
+}
+
+:root[data-theme="atelier"] .atelier-ledger-bar-val {
+  font-family: var(--font-display-sans);
+  font-size: 11px;
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+:root[data-theme="atelier"] .atelier-ledger-null {
+  color: var(--ink-faint);
+}
+
+/* ── New analytics blocks: AtelierHRVTrend / AtelierStrainScatter / AtelierDayOfWeekRecovery ── */
+
+:root[data-theme="atelier"] .atelier-recovery-analytic {
+  border: 1px solid var(--line);
+  padding: 20px 24px 16px;
+  background: var(--bone);
+}
+
+/* scatter uses taller chart body */
+:root[data-theme="atelier"] .atelier-chart-body-tall {
+  width: 100%;
+  height: 220px;
+  position: relative;
+}
+
+:root[data-theme="atelier"] .atelier-chart-body-tall svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* scatter axis labels */
+:root[data-theme="atelier"] .atelier-scatter-axis-x {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  color: var(--ink-faint);
+  letter-spacing: 0.04em;
+}
+
+:root[data-theme="atelier"] .atelier-scatter-axis-y {
+  position: absolute;
+  left: -22px;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  color: var(--ink-faint);
+  letter-spacing: 0.04em;
+}
+
+:root[data-theme="atelier"] .atelier-scatter-wrap {
+  position: relative;
+  margin-left: 28px;
+}
+
+/* day-of-week bar chart */
+:root[data-theme="atelier"] .atelier-dow-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 120px;
+  margin-bottom: 6px;
+}
+
+:root[data-theme="atelier"] .atelier-dow-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1;
+  height: 100%;
+  gap: 4px;
+}
+
+:root[data-theme="atelier"] .atelier-dow-bar {
+  width: 100%;
+  border-radius: 1px 1px 0 0;
+  min-height: 2px;
+  transition: opacity 0.15s;
+}
+
+:root[data-theme="atelier"] .atelier-dow-bar.empty {
+  opacity: 0.2;
+}
+
+:root[data-theme="atelier"] .atelier-dow-label {
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  color: var(--ink-faint);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+:root[data-theme="atelier"] .atelier-dow-val {
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  color: var(--ink-mute);
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-theme="atelier"] .atelier-dow-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-family: var(--font-display-sans);
+  font-size: 9px;
+  color: var(--ink-faint);
+}
+
+/* HRV trend tooltip pin line — pure SVG, no absolute overlay needed */
+:root[data-theme="atelier"] .atelier-hrv-kpi-row {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 10px;
+}
+
+:root[data-theme="atelier"] .atelier-hrv-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+:root[data-theme="atelier"] .atelier-hrv-kpi-label {
   font-family: var(--font-display-sans);
   font-size: 9px;
   font-weight: 600;
@@ -2956,7 +3321,6 @@ a:hover { border-bottom-color: var(--brand-strain); }
   font-family: var(--font-display-sans);
   font-size: 11px;
   color: var(--coral);
-=======
 :root[data-theme="atelier"] .atelier-tool-progress.running .atelier-tool-dot {
   animation: atelier-pulse 1.2s ease-in-out infinite;
 }
@@ -3197,4 +3561,38 @@ a:hover { border-bottom-color: var(--brand-strain); }
 :root[data-theme="atelier"] .atelier-chat-stream::-webkit-scrollbar-thumb {
   background: var(--line);
   border-radius: 2px;
+=======
+  color: var(--ink-faint);
+}
+
+:root[data-theme="atelier"] .atelier-hrv-kpi-value {
+  font-family: var(--font-display-sans);
+  font-size: 18px;
+  font-weight: 300;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-theme="atelier"] .atelier-scatter-legend {
+  display: flex;
+  gap: 14px;
+  margin-top: 10px;
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  color: var(--ink-mute);
+  flex-wrap: wrap;
+}
+
+:root[data-theme="atelier"] .atelier-scatter-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+:root[data-theme="atelier"] .atelier-scatter-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
 }
