@@ -1213,6 +1213,44 @@ a:hover { border-bottom-color: var(--brand-strain); }
 }
 
 :root[data-theme="atelier"] .bulletin-section-label {
+   ATELIER COACH WORKSPACE — comprehensive layout + components
+   ========================================================================= */
+
+/* Outer visibility wrapper: override the generic display:block with a
+   height-constrained block so the 2-col shell can fill it. */
+:root[data-theme="atelier"] .atelier-coach {
+  display: block;
+  height: calc(100vh - 72px);
+  overflow: hidden;
+}
+
+/* ── 2-column shell (sidebar | chat) ── */
+:root[data-theme="atelier"] .atelier-coach-shell {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── Right column: flex column so stream + composer stack correctly ── */
+:root[data-theme="atelier"] .atelier-coach-chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--paper);
+}
+
+/* ── Chat header ── */
+:root[data-theme="atelier"] .atelier-chat-head {
+  flex-shrink: 0;
+  padding: 20px 28px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bone);
+}
+
+:root[data-theme="atelier"] .atelier-eyebrow-tag {
+  display: block;
   font-family: var(--font-display-sans);
   font-size: 10px;
   font-weight: 700;
@@ -1443,6 +1481,78 @@ a:hover { border-bottom-color: var(--brand-strain); }
 }
 
 :root[data-theme="atelier"] .bm-value {
+  margin-bottom: 6px;
+}
+
+:root[data-theme="atelier"] .atelier-chat-title {
+  font-family: var(--font-display-serif);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 4px;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+:root[data-theme="atelier"] .atelier-chat-subtitle {
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+/* =========================================================================
+   CHAPTER INDEX (sidebar)
+   ========================================================================= */
+
+:root[data-theme="atelier"] .atelier-chapter-index {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bone);
+  border-right: 1px solid var(--line);
+}
+
+/* ── Head block ── */
+:root[data-theme="atelier"] .atelier-hist-head {
+  flex-shrink: 0;
+  padding: 20px 16px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+:root[data-theme="atelier"] .atelier-eyebrow {
+  display: block;
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin-bottom: 6px;
+}
+
+:root[data-theme="atelier"] .atelier-hist-title {
+  font-family: var(--font-display-serif);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--ink-soft);
+  margin: 0 0 12px;
+  line-height: 1.4;
+}
+
+:root[data-theme="atelier"] .atelier-hist-title em {
+  font-style: italic;
+  color: var(--ink-mute);
+}
+
+:root[data-theme="atelier"] .atelier-new-thread {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  background: var(--paper-warm);
+  border: 1px solid var(--line);
   font-family: var(--font-display-sans);
   font-size: 11px;
   font-weight: 600;
@@ -1669,6 +1779,397 @@ a:hover { border-bottom-color: var(--brand-strain); }
 :root[data-theme="atelier"] .atelier-sleep-dot {
   width: 7px;
   height: 7px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+:root[data-theme="atelier"] .atelier-new-thread:hover {
+  background: var(--paper-dark);
+}
+
+/* ── Search row ── */
+:root[data-theme="atelier"] .atelier-hist-search {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--ink-mute);
+}
+
+:root[data-theme="atelier"] .atelier-hist-search input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  color: var(--ink);
+  padding: 0;
+}
+
+:root[data-theme="atelier"] .atelier-hist-search input::placeholder {
+  color: var(--ink-faint);
+}
+
+/* ── Filter pills ── */
+:root[data-theme="atelier"] .atelier-hist-filters {
+  flex-shrink: 0;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+:root[data-theme="atelier"] .atelier-pill {
+  padding: 3px 8px;
+  background: transparent;
+  border: 1px solid var(--line);
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+:root[data-theme="atelier"] .atelier-pill:hover {
+  background: var(--paper-warm);
+}
+
+:root[data-theme="atelier"] .atelier-pill.active {
+  background: var(--coral);
+  border-color: var(--coral);
+  color: #fff;
+}
+
+:root[data-theme="atelier"] .atelier-pill.decorative {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ── Thread list ── */
+:root[data-theme="atelier"] .atelier-hist-list {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 16px;
+}
+
+:root[data-theme="atelier"] .atelier-hist-bucket {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 4px;
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+:root[data-theme="atelier"] .atelier-bucket-roman {
+  font-family: var(--font-display-serif);
+  font-size: 12px;
+  font-weight: 700;
+  font-style: italic;
+  color: var(--coral);
+  min-width: 14px;
+}
+
+:root[data-theme="atelier"] .atelier-hist-item {
+  position: relative;
+  padding: 8px 14px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+:root[data-theme="atelier"] .atelier-hist-item:hover {
+  background: var(--paper-warm);
+}
+
+:root[data-theme="atelier"] .atelier-hist-item.active {
+  background: var(--paper-warm);
+  border-left-color: var(--coral);
+}
+
+:root[data-theme="atelier"] .atelier-hist-row1 {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  color: var(--ink-faint);
+  margin-bottom: 3px;
+  letter-spacing: 0.02em;
+}
+
+:root[data-theme="atelier"] .atelier-hist-preview {
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: calc(260px - 44px);
+  line-height: 1.4;
+}
+
+:root[data-theme="atelier"] .atelier-hist-delete {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: var(--ink-faint);
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color 0.12s;
+}
+
+:root[data-theme="atelier"] .atelier-hist-delete:hover {
+  color: var(--coral);
+}
+
+:root[data-theme="atelier"] .atelier-hist-empty {
+  padding: 20px 14px;
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+/* =========================================================================
+   CHAT STREAM
+   ========================================================================= */
+
+:root[data-theme="atelier"] .atelier-chat-stream {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 24px 28px 16px;
+}
+
+/* ── Empty state ── */
+:root[data-theme="atelier"] .atelier-chat-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 60px 24px;
+  text-align: center;
+}
+
+:root[data-theme="atelier"] .atelier-chat-empty-mark {
+  display: inline-block;
+  font-family: var(--font-display-serif);
+  font-size: 13px;
+  font-weight: 700;
+  font-style: italic;
+  letter-spacing: 0.04em;
+  color: var(--ink-faint);
+  border: 1px solid var(--line);
+  padding: 4px 12px;
+  background: var(--bone);
+}
+
+:root[data-theme="atelier"] .atelier-chat-empty-title {
+  font-family: var(--font-display-sans);
+  font-size: 14px;
+  color: var(--ink-mute);
+  max-width: 280px;
+  line-height: 1.5;
+}
+
+/* ── Day divider ── */
+:root[data-theme="atelier"] .atelier-day-marker {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0 12px;
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+:root[data-theme="atelier"] .atelier-day-marker::before,
+:root[data-theme="atelier"] .atelier-day-marker::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line-soft);
+}
+
+:root[data-theme="atelier"] .atelier-day-roman {
+  font-family: var(--font-display-serif);
+  font-size: 12px;
+  font-style: italic;
+  color: var(--coral);
+}
+
+/* ── Message wrapper ── */
+:root[data-theme="atelier"] .atelier-msg {
+  margin-bottom: 20px;
+}
+
+/* ── Who + timestamp strip ── */
+:root[data-theme="atelier"] .atelier-msg-who {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin-bottom: 6px;
+}
+
+:root[data-theme="atelier"] .atelier-msg-ts {
+  font-weight: 400;
+  color: var(--ink-faint);
+  letter-spacing: 0.02em;
+}
+
+:root[data-theme="atelier"] .atelier-msg-plate {
+  margin-left: auto;
+  font-weight: 400;
+  color: var(--ink-faint);
+}
+
+/* ── User bubble ── */
+:root[data-theme="atelier"] .atelier-msg.user {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+:root[data-theme="atelier"] .atelier-msg.user .atelier-msg-who {
+  flex-direction: row-reverse;
+}
+
+:root[data-theme="atelier"] .atelier-bubble {
+  max-width: 72%;
+  background: var(--paper-warm);
+  border: 1px solid var(--line);
+  padding: 10px 14px;
+  font-family: var(--font-display-sans);
+  font-size: 14px;
+  color: var(--ink);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── AI editorial card ── */
+:root[data-theme="atelier"] .atelier-msg.ai {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+:root[data-theme="atelier"] .atelier-ed-card {
+  position: relative;
+  background: var(--bone);
+  border: 1px solid var(--line);
+  width: 100%;
+  max-width: 720px;
+}
+
+/* Corner bracket decorations */
+:root[data-theme="atelier"] .bk-bl,
+:root[data-theme="atelier"] .bk-br {
+  position: absolute;
+  bottom: -1px;
+  width: 8px;
+  height: 8px;
+  border-bottom: 1px solid var(--coral);
+  pointer-events: none;
+}
+
+:root[data-theme="atelier"] .bk-bl {
+  left: -1px;
+  border-left: 1px solid var(--coral);
+}
+
+:root[data-theme="atelier"] .bk-br {
+  right: -1px;
+  border-right: 1px solid var(--coral);
+}
+
+/* ── Editorial card header strip ── */
+:root[data-theme="atelier"] .atelier-plate-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper-warm);
+}
+
+:root[data-theme="atelier"] .atelier-plate-strip-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+:root[data-theme="atelier"] .atelier-plate-roman {
+  font-family: var(--font-display-serif);
+  font-size: 12px;
+  font-style: italic;
+  font-weight: 700;
+  color: var(--coral);
+}
+
+:root[data-theme="atelier"] .atelier-plate-author {
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--ink-faint);
+  letter-spacing: 0.04em;
+}
+
+/* ── Tool progress indicator ── */
+:root[data-theme="atelier"] .atelier-tool-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+
+:root[data-theme="atelier"] .atelier-tool-progress.running {
+  color: var(--ink-soft);
+}
+
+:root[data-theme="atelier"] .atelier-tool-dot {
+  width: 7px;
+  height: 7px;
+  background: var(--coral);
   border-radius: 50%;
   flex-shrink: 0;
 }
@@ -2086,7 +2587,6 @@ a:hover { border-bottom-color: var(--brand-strain); }
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.12em;
-=======
 :root[data-theme="atelier"] .atelier-section-table td {
   padding: 8px 14px;
   border-bottom: 1px solid var(--line-soft);
@@ -2456,4 +2956,245 @@ a:hover { border-bottom-color: var(--brand-strain); }
   font-family: var(--font-display-sans);
   font-size: 11px;
   color: var(--coral);
+=======
+:root[data-theme="atelier"] .atelier-tool-progress.running .atelier-tool-dot {
+  animation: atelier-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes atelier-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.75); }
+}
+
+:root[data-theme="atelier"] .atelier-thinking {
+  padding: 12px 16px;
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  font-style: italic;
+  color: var(--ink-faint);
+}
+
+/* ── Editorial body (markdown) ── */
+:root[data-theme="atelier"] .atelier-ed-body {
+  padding: 16px 20px;
+  font-family: var(--font-display-sans);
+  font-size: 14px;
+  color: var(--ink);
+  line-height: 1.7;
+}
+
+:root[data-theme="atelier"] .atelier-ed-body p {
+  margin: 0 0 12px;
+}
+
+:root[data-theme="atelier"] .atelier-ed-body p:last-child {
+  margin-bottom: 0;
+}
+
+:root[data-theme="atelier"] .atelier-ed-body .lede {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  line-height: 1.6;
+}
+
+:root[data-theme="atelier"] .atelier-ed-body h2 {
+  font-family: var(--font-display-serif);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 20px 0 8px;
+  letter-spacing: -0.01em;
+}
+
+:root[data-theme="atelier"] .atelier-ed-body h3 {
+  font-family: var(--font-display-serif);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  margin: 16px 0 6px;
+}
+
+:root[data-theme="atelier"] .atelier-ed-body ul,
+:root[data-theme="atelier"] .atelier-ed-body ol {
+  margin: 0 0 12px;
+  padding-left: 20px;
+}
+
+:root[data-theme="atelier"] .atelier-ed-body li {
+  margin-bottom: 4px;
+}
+
+:root[data-theme="atelier"] .atelier-ed-body code {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  background: var(--paper-warm);
+  border: 1px solid var(--line-soft);
+  padding: 1px 5px;
+  color: var(--ink-soft);
+}
+
+:root[data-theme="atelier"] .atelier-ed-body pre {
+  background: var(--paper-warm);
+  border: 1px solid var(--line);
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 0 0 12px;
+}
+
+:root[data-theme="atelier"] .atelier-ed-body pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+:root[data-theme="atelier"] .atelier-ed-body strong {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+:root[data-theme="atelier"] .atelier-ed-body em {
+  font-style: italic;
+  color: var(--ink-soft);
+}
+
+:root[data-theme="atelier"] .atelier-ed-body blockquote {
+  border-left: 2px solid var(--coral);
+  padding-left: 12px;
+  margin: 0 0 12px;
+  color: var(--ink-mute);
+  font-style: italic;
+}
+
+/* ── Card footer annotation ── */
+:root[data-theme="atelier"] .atelier-ann {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 6px 14px 8px;
+  border-top: 1px solid var(--line-soft);
+}
+
+:root[data-theme="atelier"] .atelier-fin {
+  font-family: var(--font-display-serif);
+  font-size: 11px;
+  font-style: italic;
+  color: var(--ink-faint);
+  letter-spacing: 0.02em;
+}
+
+/* =========================================================================
+   COMPOSER
+   ========================================================================= */
+
+:root[data-theme="atelier"] .atelier-composer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--line);
+  background: var(--bone);
+}
+
+:root[data-theme="atelier"] .atelier-composer-wrap {
+  padding: 14px 20px 10px;
+}
+
+:root[data-theme="atelier"] .atelier-composer-input {
+  display: block;
+  width: 100%;
+  background: var(--paper-warm);
+  border: 1px solid var(--line);
+  padding: 10px 14px;
+  font-family: var(--font-display-sans);
+  font-size: 14px;
+  color: var(--ink);
+  line-height: 1.6;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+  min-height: 60px;
+  max-height: 240px;
+  transition: border-color 0.15s;
+}
+
+:root[data-theme="atelier"] .atelier-composer-input:focus {
+  border-color: var(--ink-mute);
+}
+
+:root[data-theme="atelier"] .atelier-composer-input::placeholder {
+  color: var(--ink-faint);
+  font-style: italic;
+}
+
+:root[data-theme="atelier"] .atelier-composer-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+:root[data-theme="atelier"] .atelier-composer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+:root[data-theme="atelier"] .atelier-composer-hint {
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  color: var(--ink-faint);
+  letter-spacing: 0.03em;
+}
+
+:root[data-theme="atelier"] .atelier-composer-send {
+  background: var(--coral);
+  border: none;
+  color: #fff;
+  padding: 6px 16px;
+  font-family: var(--font-display-sans);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+:root[data-theme="atelier"] .atelier-composer-send:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+:root[data-theme="atelier"] .atelier-composer-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+:root[data-theme="atelier"] .atelier-composer-footnote {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 20px 10px;
+  border-top: 1px solid var(--line-soft);
+  font-family: var(--font-display-sans);
+  font-size: 10px;
+  color: var(--ink-faint);
+}
+
+:root[data-theme="atelier"] .atelier-composer-footnote em {
+  font-style: italic;
+}
+
+/* ── Scrollbar styling for sidebar and stream ── */
+:root[data-theme="atelier"] .atelier-hist-list::-webkit-scrollbar,
+:root[data-theme="atelier"] .atelier-chat-stream::-webkit-scrollbar {
+  width: 4px;
+}
+
+:root[data-theme="atelier"] .atelier-hist-list::-webkit-scrollbar-track,
+:root[data-theme="atelier"] .atelier-chat-stream::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+:root[data-theme="atelier"] .atelier-hist-list::-webkit-scrollbar-thumb,
+:root[data-theme="atelier"] .atelier-chat-stream::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 2px;
 }
