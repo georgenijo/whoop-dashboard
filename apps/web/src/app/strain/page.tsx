@@ -8,6 +8,7 @@ import StrainBars from "@/components/strain/atelier/StrainBars";
 import HRTrend from "@/components/strain/atelier/HRTrend";
 import KcalTrend from "@/components/strain/atelier/KcalTrend";
 import WorkoutsTable from "@/components/strain/atelier/WorkoutsTable";
+import AtelierTSBCurve from "@/components/strain/atelier/AtelierTSBCurve";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +83,7 @@ export default async function StrainPage({
           <KcalTrend rows={trend30} />
         </div>
         <WorkoutsTable rows={recentWorkouts} />
+        <AtelierTSBCurve rows={tsbTrend} />
       </div>
     </>
   );
