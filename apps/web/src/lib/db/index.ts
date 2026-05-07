@@ -6,6 +6,8 @@ export {
   getSessionByToken,
   createSession,
   getPrimaryUser,
+  getUserByAppleSub,
+  upsertUserByAppleSub,
 } from "./auth";
 
 export type { RecoveryRow, DayOfWeekRecoveryRow } from "./recovery";

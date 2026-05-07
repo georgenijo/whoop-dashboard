@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import { getPrimaryUser, getSessionByToken, getUserById, type User } from "./db";
+import { verifySessionToken } from "./auth/jwt";
 
 export const WHOOP_AUTH_URL = "https://api.prod.whoop.com/oauth/oauth2/auth";
 export const WHOOP_TOKEN_URL = "https://api.prod.whoop.com/oauth/oauth2/token";
@@ -103,14 +104,32 @@ export async function requireAuth(req: Request): Promise<User> {
     return getBootstrapUser();
   }
 
-  const token = header.replace(/^Bearer\s+/i, "");
-  const session = getSessionByToken(token);
-  if (!session) throw new Response("Invalid token", { status: 401 });
-  if (new Date(session.expires_at) < new Date()) {
-    throw new Response("Expired token", { status: 401 });
+  // Bearer scheme: try JWT (Sign in with Apple) first, then fall back to the
+  // legacy opaque session-token path so existing clients keep working.
+  const bearerMatch = header.match(/^Bearer\s+(.+)$/i);
+  if (bearerMatch) {
+    const token = bearerMatch[1].trim();
+    const claims = await verifySessionToken(token);
+    if (claims) {
+      const user = getUserById(claims.userId);
+      if (!user) throw new Response("User not found", { status: 401 });
+      return user;
+    }
+
+    const session = getSessionByToken(token);
+    if (session) {
+      if (new Date(session.expires_at) < new Date()) {
+        throw new Response("Expired token", { status: 401 });
+      }
+      const user = getUserById(session.user_id);
+      if (!user) throw new Response("User not found", { status: 401 });
+      return user;
+    }
+
+    throw new Response("Invalid token", { status: 401 });
   }
 
-  const user = getUserById(session.user_id);
-  if (!user) throw new Response("User not found", { status: 401 });
-  return user;
+  // Authorization header present but not a Bearer scheme we recognize. Reject
+  // explicitly rather than silently falling through to the bootstrap user.
+  throw new Response("Invalid token", { status: 401 });
 }
