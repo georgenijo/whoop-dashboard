@@ -12,7 +12,8 @@ Production lives on an Oracle Cloud VM. Public traffic: DNS → Cloudflare (prox
 | Item | Value |
 |---|---|
 | VM host | `129.80.134.194` |
-| Public domain | `whoop.georgenijo.com` (Cloudflare proxy + Access → VM nginx → `localhost:8501`) |
+| Public web domain | `coach.georgenijo.com` (Cloudflare proxy + Access → VM nginx → `localhost:8501`) |
+| iOS API domain | `coach-api.georgenijo.com` (Cloudflare proxy, **no** Access — bearer-only → VM nginx → `localhost:8501`) |
 | SSH user | `ubuntu` (sudo) |
 | App user | `george` (NO sudo — see "Two-user dance") |
 | SSH key | `~/.ssh/id_ed25519` |
@@ -51,7 +52,7 @@ Local repo (mac): `/Users/georgenijo/Documents/code/whoop-dashboard/`. Same layo
 
 ## Service: `whoop-web.service`
 
-Runs `next start -p 8501` as `george`, restarts on crash, capped at 512M RAM. nginx (`/etc/nginx/sites-enabled/whoop`) listens on 443 with a letsencrypt cert and `proxy_pass`es all of `whoop.georgenijo.com` to `localhost:8501`. Cloudflare Access enforces auth at the edge before requests reach the VM.
+Runs `next start -p 8501` as `george`, restarts on crash, capped at 512M RAM. nginx (`/etc/nginx/sites-enabled/coach`) listens on 443 with a single letsencrypt cert covering both `coach.georgenijo.com` and `coach-api.georgenijo.com`, and `proxy_pass`es to `localhost:8501`. Cloudflare Access enforces auth at the edge for `coach.*`; `coach-api.*` is bearer-only (no Access).
 
 The unit file is tracked at `systemd/whoop-web.service` in the repo. `infra/terraform/cloud-init.sh` copies it to `/etc/systemd/system/` on fresh VMs via the `*.service` glob, but it does **not** enable the unit and does **not** install its runtime prereqs — see "Fresh VM provisioning" below before bringing up `whoop-web` on a new box.
 
@@ -64,7 +65,7 @@ sudo journalctl -u whoop-web -f                  # tail live
 
 ## Cloudflare Access (auth gate)
 
-Public traffic to `whoop.georgenijo.com` is gated by **Cloudflare Access**, not by anything in the Next.js app. Unauthenticated requests get `302` to `https://georgnijo.cloudflareaccess.com/...`. Allowed identity: `george.nijo8@gmail.com`.
+Public traffic to `coach.georgenijo.com` is gated by **Cloudflare Access**, not by anything in the Next.js app. Unauthenticated requests get `302` to `https://georgnijo.cloudflareaccess.com/...`. Allowed identity: `george.nijo8@gmail.com`.
 
 **Account / app IDs** (account: `George.nijo8@gmail.com's Account`):
 
@@ -72,10 +73,11 @@ Public traffic to `whoop.georgenijo.com` is gated by **Cloudflare Access**, not 
 |---|---|
 | account_id | `38cc18a41f7705126a99fbac7cd526ba` |
 | zone_id (`georgenijo.com`) | `9d6aac41d48f9da8b5e821dc769c477a` |
-| Access app `Whoop Dashboard` (gates whole host) | `c2a34753-ebc7-4365-a79e-f55545de3add` |
-| Access app `Whoop Webhook (bypass)` (path `/api/whoop/webhook`) | `6b005c56-0982-43ad-8f2e-d86a3a78182e` |
+| Access app `Coach Dashboard` (gates whole host) | `839d958e-7cec-4062-9ae3-b9f4451b86f9` |
+| Access app `Coach Webhook (bypass)` (path `/api/whoop/webhook`) | `1ca713c6-3d3a-4f20-989e-8bdcbdd79cf4` |
+| Access app `Coach ACME challenge (bypass)` (path `/.well-known/acme-challenge/`) | `9b6b82f4-9f9c-4cc0-8930-e443872f91a3` |
 
-**Path-scoped bypass pattern.** To exempt a single path from Access, create a SEPARATE self_hosted Access app whose `domain` is the full `host/path` (e.g. `whoop.georgenijo.com/api/whoop/webhook`) and attach a single policy with `decision: "bypass"` and `include: [{everyone: {}}]`. CF evaluates the more-specific app first, so that path skips auth while the broader app continues to gate everything else. Used today for the Whoop webhook receiver (issue #27) — the route-level HMAC check is the real auth.
+**Path-scoped bypass pattern.** To exempt a single path from Access, create a SEPARATE self_hosted Access app whose `domain` is the full `host/path` (e.g. `coach.georgenijo.com/api/whoop/webhook`) and attach a single policy with `decision: "bypass"` and `include: [{everyone: {}}]`. CF evaluates the more-specific app first, so that path skips auth while the broader app continues to gate everything else. Used today for the Whoop webhook receiver (issue #27) — the route-level HMAC check is the real auth.
 
 **API token.** Stored in macOS Keychain (service `cloudflare-api-token-whoop`, account `$USER`). `~/.zshrc` exports it as `CLOUDFLARE_API_TOKEN` on shell start. Manual fetch:
 
@@ -83,7 +85,7 @@ Public traffic to `whoop.georgenijo.com` is gated by **Cloudflare Access**, not 
 security find-generic-password -a "$USER" -s 'cloudflare-api-token-whoop' -w
 ```
 
-Token has `Account.Access (Apps + Policies, Edit)` and `Zone.DNS` scopes. Sufficient for managing Access apps + policies on this account and editing DNS for `georgenijo.com`.
+Token has `Account.Access (Apps + Policies, Edit)`, `Zone.Read`, and `Zone.DNS:Edit` scopes (scoped to `georgenijo.com`). Sufficient for managing Access apps + policies on this account and editing DNS records.
 
 **Useful API recipes:**
 
@@ -95,13 +97,13 @@ curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
   | python3 -c "import sys,json; [print(a['id'],'|',a.get('domain','-'),'|',a['name']) for a in json.load(sys.stdin)['result']]"
 
 # Read one app's full policy block
-APP=c2a34753-ebc7-4365-a79e-f55545de3add
+APP=839d958e-7cec-4062-9ae3-b9f4451b86f9
 curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
   "https://api.cloudflare.com/client/v4/accounts/$ACCT/access/apps/$APP" | python3 -m json.tool
 
 # Verify the gate is intact (root → 302) and bypass works (webhook → reaches origin)
-curl -sI https://whoop.georgenijo.com/                       # expect: HTTP/2 302
-curl -sI https://whoop.georgenijo.com/api/whoop/webhook      # expect: HTTP/2 404 (no route yet) or 200
+curl -sI https://coach.georgenijo.com/                       # expect: HTTP/2 302
+curl -sI https://coach.georgenijo.com/api/whoop/webhook      # expect: HTTP/2 404 (no route yet) or 200
 ```
 
 If you're locked out of the dashboard from a new device, it's the IdP — log in via the redirected `cloudflareaccess.com` URL with `george.nijo8@gmail.com`.
@@ -156,7 +158,7 @@ cd /Users/georgenijo/Documents/code/whoop-dashboard \
       && sudo systemctl restart whoop-web"
 ```
 
-Build takes ~50s on the VM. After restart, hit `whoop.georgenijo.com` to verify — and close any old tabs (see "Browser cache bites hard" gotcha).
+Build takes ~50s on the VM. After restart, hit `coach.georgenijo.com` to verify — and close any old tabs (see "Browser cache bites hard" gotcha).
 
 ## DB inspection
 
@@ -230,7 +232,7 @@ When in doubt: SSH in, look around as `george`, and check `journalctl -u whoop-w
 
 ### SSH times out (TCP connect, not auth)
 
-Symptom: `ssh ubuntu@129.80.134.194` hangs and dies with `connect to address ... port 22: Operation timed out`. `curl https://whoop.georgenijo.com` still works (Cloudflare proxy → nginx path is unaffected).
+Symptom: `ssh ubuntu@129.80.134.194` hangs and dies with `connect to address ... port 22: Operation timed out`. `curl https://coach.georgenijo.com` still works (Cloudflare proxy → nginx path is unaffected).
 
 Cause: the Oracle VCN security list allowlists SSH ingress to specific `/32` source IPs only. When your home/ISP IP rotates, your new IP is not in the list and TCP connects to port 22 are silently dropped at the cloud edge. The web app keeps working because port 443 is open to the Cloudflare proxy IP ranges.
 
