@@ -19,7 +19,7 @@ export type Session = {
 export function getUserById(id: number): User | null {
   return safeWriteQuery((db) => {
     const row = db
-      .prepare("SELECT id, email, name FROM users WHERE id = ? LIMIT 1")
+      .prepare("SELECT id, email, name, apple_sub FROM users WHERE id = ? LIMIT 1")
       .get(id) as User | undefined;
     return row ?? null;
   });
