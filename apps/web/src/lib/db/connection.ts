@@ -241,6 +241,11 @@ export function openWrite(): DB | null {
         db.exec(`ALTER TABLE sleep ADD COLUMN ${col} TEXT`);
       }
     }
+    const userCols = db.prepare("PRAGMA table_info(users)").all() as { name: string }[];
+    if (!userCols.some((c) => c.name === "apple_sub")) {
+      db.exec("ALTER TABLE users ADD COLUMN apple_sub TEXT");
+      db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_apple_sub ON users(apple_sub)");
+    }
     return db;
   } catch {
     db?.close();
