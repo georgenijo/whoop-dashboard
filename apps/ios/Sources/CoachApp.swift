@@ -14,17 +14,28 @@ struct CoachApp: App {
         return true
     }()
 
+    private let api = APIClient()
+
     var body: some Scene {
         WindowGroup {
-            if isSignedIn {
-                RootView(onSignOut: {
+            content
+                .environment(\.api, api)
+                .onReceive(NotificationCenter.default.publisher(for: .apiUnauthorized)) { _ in
                     isSignedIn = false
-                })
-            } else {
-                AuthView(onSignedIn: {
-                    isSignedIn = true
-                })
-            }
+                }
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if isSignedIn {
+            RootView(onSignOut: {
+                isSignedIn = false
+            })
+        } else {
+            AuthView(onSignedIn: {
+                isSignedIn = true
+            })
         }
     }
 }
