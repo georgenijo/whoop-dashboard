@@ -85,7 +85,7 @@ function chatStreamResponse(body: BodyInit, threadId: number): Response {
 
 export async function POST(req: Request) {
   try {
-    const user = await requireAuth(req);
+    const { user, source } = await requireAuth(req);
     const { lastUser, requestedThreadId, days } = await parseChatRequest(req);
 
     const thread =
@@ -104,7 +104,7 @@ export async function POST(req: Request) {
 
     if (!wantsStream(req)) {
       try {
-        const reply = await runAndPersistCoachTurn(thread, lastUser, conversation, days, {
+        const reply = await runAndPersistCoachTurn(thread, lastUser, conversation, days, source, {
           signal: req.signal,
         });
         if (shouldAutoTitle) {
@@ -145,19 +145,26 @@ export async function POST(req: Request) {
         };
 
         try {
-          const reply = await runAndPersistCoachTurn(thread, lastUser, conversation, days, {
-            signal: abortController.signal,
-            onTextDelta: (text) => send("text_delta", { text }),
-            onToolUseStart: ({ name, input }) => send("tool_use_start", { name, input }),
-            onToolUseEnd: ({ name, duration_ms, rows, status, error }) =>
-              send("tool_use_end", {
-                name,
-                duration_ms,
-                rows,
-                status,
-                ...(error ? { error } : {}),
-              }),
-          });
+          const reply = await runAndPersistCoachTurn(
+            thread,
+            lastUser,
+            conversation,
+            days,
+            source,
+            {
+              signal: abortController.signal,
+              onTextDelta: (text) => send("text_delta", { text }),
+              onToolUseStart: ({ name, input }) => send("tool_use_start", { name, input }),
+              onToolUseEnd: ({ name, duration_ms, rows, status, error }) =>
+                send("tool_use_end", {
+                  name,
+                  duration_ms,
+                  rows,
+                  status,
+                  ...(error ? { error } : {}),
+                }),
+            }
+          );
 
           if (abortController.signal.aborted) {
             close();

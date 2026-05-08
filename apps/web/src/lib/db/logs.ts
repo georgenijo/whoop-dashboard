@@ -50,6 +50,7 @@ export type ChatLog = {
   error_message: string | null;
   days_context: number | null;
   type: "cli" | "api" | null;
+  source: "web" | "ios" | "dev" | null;
   details?: string | null;
 };
 
@@ -58,7 +59,7 @@ export function addChatLog(log: Omit<ChatLog, "id">): void {
   if (!db) return;
   try {
     db.prepare(
-      "INSERT INTO chat_logs (started_at, prompt_preview, duration_ms, status, response_length, error_message, days_context, type, details) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO chat_logs (started_at, prompt_preview, duration_ms, status, response_length, error_message, days_context, type, source, details) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(
       log.started_at,
       log.prompt_preview,
@@ -68,6 +69,7 @@ export function addChatLog(log: Omit<ChatLog, "id">): void {
       log.error_message,
       log.days_context,
       log.type,
+      log.source,
       log.details ?? null
     );
   } finally {
@@ -79,9 +81,12 @@ export function getChatLogs(limit = 200): ChatLog[] {
   return (
     safeQuery((db) => {
       if (!hasTable(db, "chat_logs")) return [] as ChatLog[];
+      const sourceSelect = hasColumn(db, "chat_logs", "source")
+        ? "source"
+        : "NULL AS source";
       return db
         .prepare(
-          "SELECT id, started_at, prompt_preview, duration_ms, status, response_length, error_message, days_context, type, details FROM chat_logs ORDER BY id DESC LIMIT ?"
+          `SELECT id, started_at, prompt_preview, duration_ms, status, response_length, error_message, days_context, type, ${sourceSelect}, details FROM chat_logs ORDER BY id DESC LIMIT ?`
         )
         .all(limit) as ChatLog[];
     }) ?? []

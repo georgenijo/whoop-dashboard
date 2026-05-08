@@ -13,7 +13,7 @@ export async function GET(
   ctx: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await requireAuth(req);
+    const { user } = await requireAuth(req);
     const { id } = await ctx.params;
     const threadId = parseId(id);
     if (threadId == null) {
@@ -38,7 +38,7 @@ export async function DELETE(
   ctx: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await requireAuth(req);
+    const { user } = await requireAuth(req);
     const { id } = await ctx.params;
     const threadId = parseId(id);
     if (threadId == null) {

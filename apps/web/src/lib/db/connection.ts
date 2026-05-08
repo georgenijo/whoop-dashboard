@@ -131,6 +131,7 @@ export function openWrite(): DB | null {
         error_message TEXT,
         days_context INTEGER,
         type TEXT,
+        source TEXT,
         details TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_chat_logs_started ON chat_logs(started_at DESC);
@@ -188,6 +189,9 @@ export function openWrite(): DB | null {
     }
     if (!cols.some((c) => c.name === "details")) {
       db.exec("ALTER TABLE chat_logs ADD COLUMN details TEXT");
+    }
+    if (!cols.some((c) => c.name === "source")) {
+      db.exec("ALTER TABLE chat_logs ADD COLUMN source TEXT");
     }
     const syncCols = db.prepare("PRAGMA table_info(sync_logs)").all() as { name: string }[];
     if (!syncCols.some((c) => c.name === "details")) {

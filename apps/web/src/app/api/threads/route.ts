@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
-    const user = await requireAuth(req);
+    const { user } = await requireAuth(req);
     return Response.json(getChatThreads(user.id));
   } catch (err) {
     if (err instanceof Response) return err;
@@ -15,7 +15,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const user = await requireAuth(req);
+    const { user } = await requireAuth(req);
     const thread = createChatThread(user.id);
     if (!thread) {
       return new Response("Error: thread creation failed", { status: 500 });
