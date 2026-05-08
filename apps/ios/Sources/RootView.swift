@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct RootView: View {
+    var onSignOut: () -> Void
+
     var body: some View {
         TabView {
             DashboardView()
@@ -13,7 +15,7 @@ struct RootView: View {
                     Label("Coach", systemImage: "bubble.left.and.bubble.right.fill")
                 }
 
-            SettingsView()
+            SettingsView(onSignOut: onSignOut)
                 .tabItem {
                     Label("Settings", systemImage: "gear")
                 }
@@ -22,5 +24,5 @@ struct RootView: View {
 }
 
 #Preview {
-    RootView()
+    RootView(onSignOut: {})
 }
