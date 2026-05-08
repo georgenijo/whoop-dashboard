@@ -23,11 +23,26 @@ function combineSignals(
   const timeout = AbortSignal.timeout(timeoutMs);
   if (!external) return timeout;
   const ctrl = new AbortController();
-  const onAbort = (reason: unknown) => ctrl.abort(reason);
-  if (external.aborted) ctrl.abort(external.reason);
-  if (timeout.aborted) ctrl.abort(timeout.reason);
-  external.addEventListener("abort", () => onAbort(external.reason), { once: true });
-  timeout.addEventListener("abort", () => onAbort(timeout.reason), { once: true });
+  if (external.aborted) {
+    ctrl.abort(external.reason);
+    return ctrl.signal;
+  }
+  if (timeout.aborted) {
+    ctrl.abort(timeout.reason);
+    return ctrl.signal;
+  }
+  // Whichever fires first aborts the controller and removes the other listener
+  // so a long-lived `external` signal doesn't accumulate dead handlers.
+  const onExternal = () => {
+    timeout.removeEventListener("abort", onTimeout);
+    ctrl.abort(external.reason);
+  };
+  const onTimeout = () => {
+    external.removeEventListener("abort", onExternal);
+    ctrl.abort(timeout.reason);
+  };
+  external.addEventListener("abort", onExternal, { once: true });
+  timeout.addEventListener("abort", onTimeout, { once: true });
   return ctrl.signal;
 }
 

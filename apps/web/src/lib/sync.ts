@@ -21,9 +21,8 @@ import {
   type WhoopWorkoutRecord,
 } from "@/lib/whoop/upsert";
 
-// KEEP IN SYNC WITH sync/daily_sync.py — TypeScript port of the Python
-// daily-sync pipeline. Do NOT delete daily_sync.py until Phase 3-C ships and
-// this path has been observed in prod for ~1 week (see issue #212 step 6).
+// Do NOT delete sync/daily_sync.py until Phase 3-C ships and this path has
+// been observed in prod for ~1 week (see issue #212 step 6).
 
 export type SyncCounts = {
   recovery: number;
@@ -48,10 +47,11 @@ export type SyncResult = {
     window_days: number;
     fetch_ms: number;
     sync_db_ms: number;
-    summary_ms: number;
+    body_ms: number;
     fetch_breakdown: Record<string, number>;
     page_counts: Record<string, number>;
     summary_dates: number;
+    body_error?: string;
   };
   error?: string;
 };
@@ -61,9 +61,7 @@ const DEFAULT_DAYS = 7;
 function isoUtcRange(days: number): { start: string; end: string } {
   const end = new Date();
   const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);
-  // Match Python's strftime "%Y-%m-%dT%H:%M:%S.000Z" exactly.
-  const fmt = (d: Date) =>
-    d.toISOString().replace(/\.\d+Z$/, ".000Z");
+  const fmt = (d: Date) => d.toISOString().replace(/\.\d+Z$/, ".000Z");
   return { start: fmt(start), end: fmt(end) };
 }
 
@@ -100,7 +98,6 @@ async function fetchAllParallel(
   pageCounts: Record<string, number>;
 }> {
   const params = { start, end };
-  // Run all fetches concurrently (Promise.all == parallel I/O).
   const [
     bodyRes,
     cyclesRes,
@@ -219,9 +216,13 @@ function syncedDates(data: FetchedData): string[] {
 }
 
 /**
- * Apply all upserts inside a single connection + transaction. If the caller's
- * AbortSignal fires during the synchronous transaction body, better-sqlite3
- * will automatically roll back (the throw escapes the transaction wrapper).
+ * Apply all upserts (recovery / cycles / sleep / workouts + daily_summary
+ * recompute) inside a single connection + transaction. If the caller's
+ * AbortSignal fires during the synchronous transaction body, the throw
+ * escapes the transaction wrapper and better-sqlite3 rolls back.
+ *
+ * Body measurement and the latest_*_date reads run separately *after* this
+ * function returns — see `runWhoopSync` for those.
  */
 function persistAll(data: FetchedData, signal?: AbortSignal): SyncCounts {
   const counts: SyncCounts = {
@@ -376,16 +377,28 @@ function persistAll(data: FetchedData, signal?: AbortSignal): SyncCounts {
   }
 }
 
-function latestDate(table: "recovery" | "sleep" | "cycles"): string | null {
+type LatestDates = {
+  recovery: string | null;
+  sleep: string | null;
+  strain: string | null;
+};
+
+/** Single read open + 3 queries; called once per sync (success or error). */
+function latestDates(): LatestDates {
   const db = openWrite();
-  if (!db) return null;
+  if (!db) return { recovery: null, sleep: null, strain: null };
   try {
-    const sql =
-      table === "sleep"
-        ? `SELECT date FROM sleep WHERE COALESCE(nap, 0) = 0 ORDER BY date DESC LIMIT 1`
-        : `SELECT date FROM ${table} ORDER BY date DESC LIMIT 1`;
-    const row = db.prepare(sql).get() as { date: string } | undefined;
-    return row?.date ?? null;
+    const pick = (sql: string): string | null => {
+      const row = db.prepare(sql).get() as { date: string } | undefined;
+      return row?.date ?? null;
+    };
+    return {
+      recovery: pick("SELECT date FROM recovery ORDER BY date DESC LIMIT 1"),
+      sleep: pick(
+        "SELECT date FROM sleep WHERE COALESCE(nap, 0) = 0 ORDER BY date DESC LIMIT 1",
+      ),
+      strain: pick("SELECT date FROM cycles ORDER BY date DESC LIMIT 1"),
+    };
   } finally {
     db.close();
   }
@@ -400,7 +413,7 @@ export async function runWhoopSync(
     window_days: days,
     fetch_ms: 0,
     sync_db_ms: 0,
-    summary_ms: 0,
+    body_ms: 0,
     fetch_breakdown: {},
     page_counts: {},
     summary_dates: 0,
@@ -435,15 +448,17 @@ export async function runWhoopSync(
     details.sync_db_ms = Date.now() - dbT0;
 
     // Body measurement is deduped against the latest stored row, so it's safe
-    // to run after the main transaction. Failures here don't roll back recovery
-    // /sleep/cycles/workouts.
-    const summaryT0 = Date.now();
+    // to run after the main transaction. Failures here surface in details
+    // (sync_logs) but don't fail the sync — recovery / sleep / cycles /
+    // workouts are already committed.
+    const bodyT0 = Date.now();
     try {
       upsertBodyMeasurement(data.body);
-    } catch {
-      // Non-fatal; body is auxiliary.
+    } catch (err) {
+      details.body_error =
+        err instanceof Error ? err.message : String(err);
     }
-    details.summary_ms = Date.now() - summaryT0;
+    details.body_ms = Date.now() - bodyT0;
     details.summary_dates = syncedDates(data).length;
 
     const fetched: SyncCounts = {
@@ -453,19 +468,20 @@ export async function runWhoopSync(
       workouts: data.workouts.length,
     };
 
+    const latest = latestDates();
     return {
       success: true,
-      latest_recovery_date: latestDate("recovery"),
-      latest_sleep_date: latestDate("sleep"),
-      latest_strain_date: latestDate("cycles"),
+      latest_recovery_date: latest.recovery,
+      latest_sleep_date: latest.sleep,
+      latest_strain_date: latest.strain,
       rows_inserted: counts,
       fetched_counts: fetched,
       details,
     };
   } catch (err) {
-    const isAbort =
-      err instanceof Error &&
-      (err.name === "AbortError" || (err as DOMException).name === "AbortError");
+    // DOMException (e.g. AbortError) extends Error in Node 20+, so the
+    // single Error-name check covers both branches.
+    const isAbort = err instanceof Error && err.name === "AbortError";
     let message: string;
     if (isAbort) {
       message = "aborted";
@@ -478,13 +494,14 @@ export async function runWhoopSync(
     } else {
       message = String(err);
     }
+    const latest = latestDates();
     return {
       ...baseResult,
       success: false,
       error: message,
-      latest_recovery_date: latestDate("recovery"),
-      latest_sleep_date: latestDate("sleep"),
-      latest_strain_date: latestDate("cycles"),
+      latest_recovery_date: latest.recovery,
+      latest_sleep_date: latest.sleep,
+      latest_strain_date: latest.strain,
     };
   }
 }
