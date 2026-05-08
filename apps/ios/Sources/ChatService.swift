@@ -14,17 +14,30 @@ struct ChatService {
     func send(threadId: Int?, content: String) async throws -> ChatSendResponse {
         struct Body: Encodable {
             let messages: [Message]
-            let thread_id: Int?
+            let threadId: Int?
 
             struct Message: Encodable {
                 let role: String
                 let content: String
             }
+
+            enum CodingKeys: String, CodingKey {
+                case messages
+                case threadId = "thread_id"
+            }
+
+            // Explicit `encode(to:)` so a nil threadId emits `"thread_id": null`
+            // instead of being omitted by Swift's synthesized encodeIfPresent.
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(messages, forKey: .messages)
+                try container.encode(threadId, forKey: .threadId)
+            }
         }
 
         let body = Body(
             messages: [.init(role: "user", content: content)],
-            thread_id: threadId
+            threadId: threadId
         )
 
         return try await api.post(

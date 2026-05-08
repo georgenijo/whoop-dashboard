@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct ChatView: View {
-    let initialThreadId: Int?
     let initialTitle: String?
 
     @Environment(\.api) private var api
@@ -14,7 +13,6 @@ struct ChatView: View {
     @State private var didLoadInitial = false
 
     init(threadId: Int?, initialTitle: String?) {
-        self.initialThreadId = threadId
         self.initialTitle = initialTitle
         self._threadId = State(initialValue: threadId)
     }
@@ -88,9 +86,9 @@ struct ChatView: View {
                     }
                     .padding()
                 }
-                .onChange(of: rows.count) { _, _ in
-                    if let last = rows.last {
-                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                .onChange(of: rows.last?.id) { _, newLastId in
+                    if let newLastId {
+                        withAnimation { proxy.scrollTo(newLastId, anchor: .bottom) }
                     }
                 }
             }
@@ -103,8 +101,6 @@ struct ChatView: View {
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(1...5)
                 .disabled(isSending)
-                .submitLabel(.send)
-                .onSubmit { Task { await send() } }
 
             Button {
                 Task { await send() }
@@ -162,7 +158,8 @@ struct ChatView: View {
             let detail = try await ChatService(api: api).threadDetail(id: response.threadId)
             rows = detail.messages.map { .persisted($0) }
         } catch APIError.unauthorized {
-            sendError = "Session expired. Sign in again."
+            // RootView observes .apiUnauthorized and swaps to AuthView;
+            // skip the in-view error so we don't flash a stale message.
             rollbackOptimistic(optimisticId: optimisticId, restore: trimmed)
         } catch APIError.network(let err) {
             sendError = "Network error: \(err.localizedDescription)"
