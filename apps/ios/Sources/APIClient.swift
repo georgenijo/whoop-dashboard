@@ -94,7 +94,9 @@ final class APIClient {
                 throw APIError.decode(error)
             }
         case 401:
-            await handleUnauthorized()
+            if request.value(forHTTPHeaderField: "Authorization") != nil {
+                await handleUnauthorized()
+            }
             throw APIError.unauthorized
         default:
             throw APIError.serverError(http.statusCode)

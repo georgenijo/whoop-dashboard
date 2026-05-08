@@ -66,15 +66,11 @@ struct AuthView: View {
         }
     }
 
+    @MainActor
     private func exchange(identityToken: String) async {
-        await MainActor.run {
-            isExchanging = true
-            errorMessage = nil
-        }
-
-        defer {
-            Task { @MainActor in isExchanging = false }
-        }
+        isExchanging = true
+        errorMessage = nil
+        defer { isExchanging = false }
 
         do {
             let response: AuthResponse = try await api.post(
@@ -82,24 +78,23 @@ struct AuthView: View {
                 body: ["identity_token": identityToken]
             )
             guard KeychainStore.saveSessionToken(response.sessionToken) else {
-                await MainActor.run { errorMessage = "Could not save session" }
+                errorMessage = "Could not save session"
                 return
             }
             KeychainStore.saveSessionExpiresAt(response.expiresAt)
-            await MainActor.run { onSignedIn() }
+            onSignedIn()
         } catch APIError.unauthorized {
-            await MainActor.run { errorMessage = "Apple token rejected by server" }
+            errorMessage = "Apple token rejected by server"
         } catch APIError.serverError(let code) {
-            await MainActor.run { errorMessage = "Server error (\(code))" }
+            errorMessage = "Server error (\(code))"
         } catch APIError.network(let err) {
-            let message = err.localizedDescription
-            await MainActor.run { errorMessage = "Network error: \(message)" }
+            errorMessage = "Network error: \(err.localizedDescription)"
         } catch APIError.decode {
-            await MainActor.run { errorMessage = "Bad response from server" }
+            errorMessage = "Bad response from server"
         } catch APIError.badResponse {
-            await MainActor.run { errorMessage = "Bad response from server" }
+            errorMessage = "Bad response from server"
         } catch {
-            await MainActor.run { errorMessage = "Unexpected error" }
+            errorMessage = "Unexpected error"
         }
     }
 
