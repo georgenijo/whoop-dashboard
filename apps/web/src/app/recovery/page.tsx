@@ -23,6 +23,13 @@ import { parseDays, formatRangeLabel } from "@/lib/range";
 
 export const dynamic = "force-dynamic";
 
+// getRecoveryTrend / getStrainTrend each `LIMIT N` ordered by date desc within
+// their own table, so a recovery row dated D and a cycles row dated D might not
+// both appear in the same N-day window if either table has gaps. Over-fetch and
+// let computeOTS do the inner-join + slice(-7) (cost is negligible — it always
+// trims to the last 7 paired days).
+const OTS_LOOKBACK_DAYS = 30;
+
 export default async function RecoveryPage({
   searchParams,
 }: {
@@ -34,8 +41,8 @@ export default async function RecoveryPage({
   const data = getOverview(days);
   const trend = getRecoveryTrend(days);
   const trend30 = getRecoveryTrend(30);
-  const otsRecovery = getRecoveryTrend(7);
-  const otsCycles = getStrainTrend(7);
+  const otsRecovery = getRecoveryTrend(OTS_LOOKBACK_DAYS);
+  const otsCycles = getStrainTrend(OTS_LOOKBACK_DAYS);
 
   const recoveryData = trend.map((r) => ({ date: r.date, value: r.recovery_score }));
   const hrvSeries = trend.map((r) => ({ date: r.date, hrv: r.hrv }));
