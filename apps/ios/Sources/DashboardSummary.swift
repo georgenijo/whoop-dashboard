@@ -57,7 +57,7 @@ struct DashboardSummary: Decodable {
         let apnea: Apnea?
 
         struct OTS: Decodable {
-            let score: Double
+            let score: Int
             let severity: String
         }
 

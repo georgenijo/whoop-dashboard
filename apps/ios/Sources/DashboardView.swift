@@ -231,7 +231,7 @@ private struct SignalsSection: View {
                     SignalRow(
                         icon: "figure.run",
                         title: "Overtraining",
-                        detail: "\(ots.severity.capitalized) (score \(Int(ots.score.rounded())))",
+                        detail: "\(ots.severity.capitalized) (score \(ots.score))",
                         tint: severityTint(ots.severity)
                     )
                 }
@@ -260,8 +260,8 @@ private struct SignalsSection: View {
 
     private func severityTint(_ severity: String) -> Color {
         switch severity.lowercased() {
-        case "high", "severe": return .red
-        case "elevated", "moderate": return .orange
+        case "high": return .red
+        case "moderate": return .orange
         default: return .secondary
         }
     }
