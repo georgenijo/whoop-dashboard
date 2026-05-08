@@ -30,15 +30,23 @@ final class APIClient {
         decoder.dateDecodingStrategy = .custom { dec in
             let container = try dec.singleValueContainer()
             let raw = try container.decode(String.self)
+            // Backend emits two formats:
+            //   chat_messages.created_at → Date.toISOString() ("…T…Z" w/ ms)
+            //   chat_threads.updated_at  → SQLite datetime('now') ("YYYY-MM-DD HH:MM:SS" UTC)
             let withFractional = ISO8601DateFormatter()
             withFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             if let date = withFractional.date(from: raw) { return date }
             let plain = ISO8601DateFormatter()
             plain.formatOptions = [.withInternetDateTime]
             if let date = plain.date(from: raw) { return date }
+            let sqlite = DateFormatter()
+            sqlite.locale = Locale(identifier: "en_US_POSIX")
+            sqlite.timeZone = TimeZone(identifier: "UTC")
+            sqlite.dateFormat = "yyyy-MM-dd HH:mm:ss"
+            if let date = sqlite.date(from: raw) { return date }
             throw DecodingError.dataCorruptedError(
                 in: container,
-                debugDescription: "Expected ISO 8601 date, got \(raw)"
+                debugDescription: "Unrecognized date: \(raw)"
             )
         }
         self.decoder = decoder
