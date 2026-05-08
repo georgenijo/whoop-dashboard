@@ -109,23 +109,10 @@ export async function saveTokens(tokens: StoredTokens): Promise<void> {
   await fs.rename(tmp, p);
 }
 
-/**
- * Resolve the authenticated user for an inbound request.
- *
- * Resolution order (first match wins):
- *   1. `Authorization: Bearer <jwt>` — Sign in with Apple session token (iOS).
- *   2. `Cf-Access-Jwt-Assertion` — Cloudflare Access assertion (web behind CF
- *      Access). Resolves the verified email to a user row, creating one if
- *      none exists yet. Same email as SIWA → same `user.id` → threads merge.
- *   3. Dev-only bootstrap: in `NODE_ENV !== "production"` we fall through to
- *      `getBootstrapUser()` so `npm run dev` still works without setting up
- *      CF Access locally.
- *   4. Otherwise: 401.
- */
+// Precedence: Bearer > CF Access > dev bootstrap. Don't flip without auditing all routes.
 export async function requireAuth(req: Request): Promise<User> {
   const header = req.headers.get("authorization");
 
-  // 1. Bearer (SIWA / legacy session token).
   if (header) {
     const bearerMatch = header.match(/^Bearer\s+(.+)$/i);
     if (bearerMatch) {
@@ -149,12 +136,9 @@ export async function requireAuth(req: Request): Promise<User> {
 
       throw new Response("Invalid token", { status: 401 });
     }
-
-    // Authorization header present but not a Bearer scheme we recognize.
     throw new Response("Invalid token", { status: 401 });
   }
 
-  // 2. CF Access JWT.
   const cfAssertion = req.headers.get(CF_ACCESS_HEADER);
   if (cfAssertion) {
     let identity: { email: string };
@@ -169,11 +153,9 @@ export async function requireAuth(req: Request): Promise<User> {
     return findOrCreateUserByEmail(identity.email);
   }
 
-  // 3. Dev-only bootstrap.
   if (process.env.NODE_ENV !== "production") {
     return getBootstrapUser();
   }
 
-  // 4. Reject.
   throw new Response("Unauthorized", { status: 401 });
 }

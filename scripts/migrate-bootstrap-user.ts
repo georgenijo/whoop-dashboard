@@ -1,29 +1,13 @@
 #!/usr/bin/env -S node --experimental-strip-types --no-warnings
 /**
- * One-shot data migration: collapse the legacy bootstrap user (`user_id = 1`)
- * onto the canonical SIWA user row.
+ * One-shot migration: collapse the legacy bootstrap user (`user_id = 1`) onto
+ * the canonical SIWA user row matched by CANONICAL_EMAIL.
  *
- * Pre-Phase-3.A:
- *   - Web requests (no Authorization header) → bootstrap user (id=1)
- *   - iOS requests (SIWA bearer) → user row with apple_sub set, often id=2
- *   Result: chat_threads.user_id = 1 for web threads, = 2 for iOS threads.
+ * Idempotent. Single transaction. Repoints every user_id FK in the schema
+ * (kept in sync with apps/web/src/lib/db/connection.ts).
  *
- * Phase 3.A unifies both surfaces by email. After this migration runs, both
- * surfaces resolve to the SIWA-created row, and any pre-existing chat threads
- * stamped with user_id=1 are reattributed onto that same row.
- *
- * Resolution rules:
- *   - Canonical user = the row whose email matches CANONICAL_EMAIL.
- *   - If no such row exists, no-op (SIWA hasn't run yet — nothing to merge).
- *   - If the canonical row IS the bootstrap row (id=1), no-op.
- *   - Otherwise: move chat_threads.user_id from 1 → canonical.id inside a
- *     single transaction. chat_messages have no user_id column (scoped by
- *     thread_id) so they follow automatically.
- *
- * Idempotent: running twice produces zero rows moved on the second run.
- *
- * Usage (run from anywhere — script resolves `better-sqlite3` from
- * `apps/web/node_modules`):
+ * Usage (run from anywhere — script resolves better-sqlite3 from
+ * apps/web/node_modules):
  *   node --experimental-strip-types scripts/migrate-bootstrap-user.ts
  *
  * Override target email:
@@ -38,8 +22,6 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// `better-sqlite3` lives in apps/web. Resolve through apps/web's require()
-// so the script works from any cwd.
 const here = path.dirname(fileURLToPath(import.meta.url));
 const requireFromApp = createRequire(
   path.join(here, "..", "apps", "web", "package.json")
@@ -51,11 +33,12 @@ const CANONICAL_EMAIL = (
 ).trim().toLowerCase();
 const BOOTSTRAP_USER_ID = 1;
 
+// Tables with a `user_id` FK to users(id). MUST match USER_FK_TABLES in
+// apps/web/src/lib/db/auth.ts and the schema in connection.ts.
+const USER_FK_TABLES = ["chat_threads", "body_measurements", "sessions"] as const;
+
 function dbPath(): string {
   if (process.env.WHOOP_DB_PATH) return process.env.WHOOP_DB_PATH;
-  // Default: shared/whoop_data.db at repo root, resolved relative to this
-  // script (works regardless of CWD).
-  const here = path.dirname(fileURLToPath(import.meta.url));
   return path.resolve(here, "..", "shared", "whoop_data.db");
 }
 
@@ -64,6 +47,25 @@ type UserRow = {
   email: string | null;
   apple_sub: string | null;
 };
+
+function tableExists(db: InstanceType<typeof Database>, name: string): boolean {
+  const row = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?")
+    .get(name);
+  return !!row;
+}
+
+function countByUser(
+  db: InstanceType<typeof Database>,
+  table: string,
+  userId: number
+): number {
+  if (!tableExists(db, table)) return 0;
+  const row = db
+    .prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE user_id = ?`)
+    .get(userId) as { n: number };
+  return row.n;
+}
 
 function main(): void {
   const p = dbPath();
@@ -74,6 +76,7 @@ function main(): void {
 
   console.log(`[migrate] db=${p}`);
   console.log(`[migrate] canonical_email=${CANONICAL_EMAIL}`);
+  console.log(`[migrate] tables=${USER_FK_TABLES.join(",")}`);
 
   const db = new Database(p);
   try {
@@ -101,46 +104,47 @@ function main(): void {
       return;
     }
 
-    const beforeBootstrap = db
-      .prepare("SELECT COUNT(*) AS n FROM chat_threads WHERE user_id = ?")
-      .get(BOOTSTRAP_USER_ID) as { n: number };
-    const beforeCanonical = db
-      .prepare("SELECT COUNT(*) AS n FROM chat_threads WHERE user_id = ?")
-      .get(canonical.id) as { n: number };
-
-    console.log(
-      `[migrate] before: bootstrap(id=${BOOTSTRAP_USER_ID})=${beforeBootstrap.n} threads, ` +
-        `canonical(id=${canonical.id})=${beforeCanonical.n} threads`
-    );
-
-    const updateThreads = db.prepare(
-      "UPDATE chat_threads SET user_id = ? WHERE user_id = ?"
-    );
+    console.log(`[migrate] before:`);
+    for (const table of USER_FK_TABLES) {
+      const b = countByUser(db, table, BOOTSTRAP_USER_ID);
+      const c = countByUser(db, table, canonical.id);
+      console.log(`  ${table}: bootstrap=${b}, canonical=${c}`);
+    }
 
     const merge = db.transaction(() => {
-      const result = updateThreads.run(canonical.id, BOOTSTRAP_USER_ID);
-      return result.changes;
+      const moves: Record<string, number> = {};
+      for (const table of USER_FK_TABLES) {
+        if (!tableExists(db, table)) {
+          moves[table] = 0;
+          continue;
+        }
+        const result = db
+          .prepare(`UPDATE ${table} SET user_id = ? WHERE user_id = ?`)
+          .run(canonical.id, BOOTSTRAP_USER_ID);
+        moves[table] = result.changes;
+      }
+      return moves;
     });
 
     const moved = merge();
 
-    const afterBootstrap = db
-      .prepare("SELECT COUNT(*) AS n FROM chat_threads WHERE user_id = ?")
-      .get(BOOTSTRAP_USER_ID) as { n: number };
-    const afterCanonical = db
-      .prepare("SELECT COUNT(*) AS n FROM chat_threads WHERE user_id = ?")
-      .get(canonical.id) as { n: number };
-
     console.log(
-      `[migrate] moved ${moved} chat_threads from user_id=${BOOTSTRAP_USER_ID} → user_id=${canonical.id}`
+      `[migrate] moved per table (user_id=${BOOTSTRAP_USER_ID} → user_id=${canonical.id}):`
     );
-    console.log(
-      `[migrate] after:  bootstrap(id=${BOOTSTRAP_USER_ID})=${afterBootstrap.n} threads, ` +
-        `canonical(id=${canonical.id})=${afterCanonical.n} threads`
-    );
+    let total = 0;
+    for (const [t, n] of Object.entries(moved)) {
+      console.log(`  ${t}: ${n}`);
+      total += n;
+    }
+    console.log(`[migrate] total rows moved: ${total}`);
 
-    // chat_messages have no user_id column (scoped by thread_id) so no
-    // separate update is needed — they ride along with the thread.
+    console.log(`[migrate] after:`);
+    for (const table of USER_FK_TABLES) {
+      const b = countByUser(db, table, BOOTSTRAP_USER_ID);
+      const c = countByUser(db, table, canonical.id);
+      console.log(`  ${table}: bootstrap=${b}, canonical=${c}`);
+    }
+
     console.log(`[migrate] done.`);
   } finally {
     db.close();

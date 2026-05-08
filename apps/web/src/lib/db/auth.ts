@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { openWrite, safeWriteQuery } from "./connection";
+import { openWrite, safeWriteQuery, type DB } from "./connection";
 
 export type User = {
   id: number;
@@ -15,6 +15,10 @@ export type Session = {
   token: string;
   expires_at: string;
 };
+
+// Tables with a `user_id` FK to users(id). Kept in sync with connection.ts.
+// Used by upsertUserByAppleSub (split-brain merge) and the migration script.
+const USER_FK_TABLES = ["chat_threads", "body_measurements", "sessions"] as const;
 
 export function getUserById(id: number): User | null {
   return safeWriteQuery((db) => {
@@ -77,91 +81,138 @@ export function getUserByEmail(email: string): User | null {
   });
 }
 
-/**
- * Find or insert a user keyed by email. Used by CF Access on the web side —
- * lets web requests resolve to the same row a SIWA-authenticated iOS request
- * already created (assuming SIWA stamped the email on first login).
- *
- * Email is matched case-insensitively but stored verbatim on insert.
- */
+function selectUserByEmail(db: DB, email: string): User | undefined {
+  return db
+    .prepare(
+      "SELECT id, email, name, apple_sub FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1"
+    )
+    .get(email) as User | undefined;
+}
+
 export function findOrCreateUserByEmail(email: string): User {
   const trimmed = email.trim();
   if (!trimmed) throw new Error("Email is required");
   const db = openWrite();
   if (!db) throw new Error("Database unavailable");
   try {
-    const existing = db
-      .prepare(
-        "SELECT id, email, name, apple_sub FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1"
-      )
-      .get(trimmed) as User | undefined;
-    if (existing) return existing;
-
-    const result = db
-      .prepare("INSERT INTO users (email) VALUES (?)")
-      .run(trimmed);
-    return {
-      id: Number(result.lastInsertRowid),
-      email: trimmed,
-      name: null,
-      apple_sub: null,
-    };
+    // Wrapped in a transaction so a concurrent insert that loses the unique
+    // index race can re-SELECT inside the same logical operation. Relies on
+    // the partial unique index on LOWER(email) (see connection.ts).
+    const upsert = db.transaction((value: string): User => {
+      const existing = selectUserByEmail(db, value);
+      if (existing) return existing;
+      try {
+        const result = db
+          .prepare("INSERT INTO users (email) VALUES (?)")
+          .run(value);
+        return {
+          id: Number(result.lastInsertRowid),
+          email: value,
+          name: null,
+          apple_sub: null,
+        };
+      } catch (err) {
+        const code = (err as { code?: string }).code;
+        if (code === "SQLITE_CONSTRAINT_UNIQUE" || code === "SQLITE_CONSTRAINT") {
+          const winner = selectUserByEmail(db, value);
+          if (winner) return winner;
+        }
+        throw err;
+      }
+    });
+    return upsert(trimmed);
   } finally {
     db.close();
   }
 }
 
 /**
- * Find a user by Apple `sub` claim, or insert a new row with that sub.
+ * Resolve a SIWA login to a user row.
  *
- * Resolution order on miss:
- *   1. If an `email` is provided and matches an existing row, claim that row by
- *      stamping `apple_sub` onto it. This is the link that lets a CF-Access
- *      session (web) and a SIWA session (iOS) resolve to the same `user.id`.
- *   2. Otherwise insert a fresh row.
+ * Three states matter:
+ *   - bySub exists, byEmail does not → return bySub (backfill email if missing).
+ *   - byEmail exists, bySub does not → claim that row by stamping apple_sub.
+ *   - both exist as distinct rows → split-brain. Merge byEmail INTO bySub by
+ *     repointing every user_id FK at bySub.id, then delete byEmail. Apple sub
+ *     is the more authoritative key (Apple guarantees stability; email can
+ *     change at the IdP).
  *
- * If the Apple-sub row exists but has no email yet and an email is now
- * provided, persist it. Apple only sends email on first authentication.
+ * Apple only sends `email` on first authentication, so the merge case only
+ * fires once (the first time SIWA runs after CF Access has already created a
+ * user row by email).
  */
 export function upsertUserByAppleSub(appleSub: string, email?: string | null): User {
   const db = openWrite();
   if (!db) throw new Error("Database unavailable");
   try {
-    const bySub = db
-      .prepare("SELECT id, email, name, apple_sub FROM users WHERE apple_sub = ? LIMIT 1")
-      .get(appleSub) as User | undefined;
-    if (bySub) {
-      if (email && !bySub.email) {
-        db.prepare("UPDATE users SET email = ? WHERE id = ?").run(email, bySub.id);
-        bySub.email = email;
-      }
-      return bySub;
-    }
+    const txn = db.transaction((): User => {
+      const bySub = db
+        .prepare("SELECT id, email, name, apple_sub FROM users WHERE apple_sub = ? LIMIT 1")
+        .get(appleSub) as User | undefined;
 
-    if (email) {
-      const byEmail = db
-        .prepare(
-          "SELECT id, email, name, apple_sub FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1"
-        )
-        .get(email) as User | undefined;
+      const byEmail =
+        email != null && email.length > 0
+          ? selectUserByEmail(db, email)
+          : undefined;
+
+      // bySub exists.
+      if (bySub) {
+        if (byEmail && byEmail.id !== bySub.id) {
+          mergeUserInto(db, byEmail.id, bySub.id);
+          if (email && bySub.email !== email) {
+            db.prepare("UPDATE users SET email = ? WHERE id = ?").run(email, bySub.id);
+            bySub.email = email;
+          }
+          return bySub;
+        }
+        if (email && !bySub.email) {
+          db.prepare("UPDATE users SET email = ? WHERE id = ?").run(email, bySub.id);
+          bySub.email = email;
+        }
+        return bySub;
+      }
+
+      // No sub-row. Claim an email-row if one exists.
       if (byEmail) {
         db.prepare("UPDATE users SET apple_sub = ? WHERE id = ?").run(appleSub, byEmail.id);
         byEmail.apple_sub = appleSub;
         return byEmail;
       }
-    }
 
-    const result = db
-      .prepare("INSERT INTO users (apple_sub, email) VALUES (?, ?)")
-      .run(appleSub, email ?? null);
-    const id = Number(result.lastInsertRowid);
-    return {
-      id,
-      email: email ?? null,
-      name: null,
-      apple_sub: appleSub,
-    };
+      // Fresh insert.
+      const result = db
+        .prepare("INSERT INTO users (apple_sub, email) VALUES (?, ?)")
+        .run(appleSub, email ?? null);
+      return {
+        id: Number(result.lastInsertRowid),
+        email: email ?? null,
+        name: null,
+        apple_sub: appleSub,
+      };
+    });
+    return txn();
   } finally {
     db.close();
   }
+}
+
+/**
+ * Repoint every `user_id` FK from `fromId` onto `toId`, then delete `fromId`.
+ * Caller must wrap in a transaction.
+ */
+function mergeUserInto(db: DB, fromId: number, toId: number): void {
+  const moves: Record<string, number> = {};
+  for (const table of USER_FK_TABLES) {
+    const result = db
+      .prepare(`UPDATE ${table} SET user_id = ? WHERE user_id = ?`)
+      .run(toId, fromId);
+    moves[table] = result.changes;
+  }
+  db.prepare("DELETE FROM users WHERE id = ?").run(fromId);
+  console.log(
+    `[upsertUserByAppleSub] merged user id=${fromId} → id=${toId}; ` +
+      Object.entries(moves)
+        .map(([t, n]) => `${t}=${n}`)
+        .join(", ")
+  );
 }
