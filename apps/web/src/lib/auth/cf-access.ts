@@ -7,8 +7,10 @@ const CF_ACCESS_TEAM_DOMAIN_ENV = process.env.CF_ACCESS_TEAM_DOMAIN;
 const CF_ACCESS_AUD_ENV = process.env.CF_ACCESS_AUD;
 const CF_ACCESS_TEAM_DOMAIN =
   CF_ACCESS_TEAM_DOMAIN_ENV ?? "https://georgnijo.cloudflareaccess.com";
+// Application Audience (AUD) Tag — the hex hash CF puts in JWT `aud`.
+// NOT the Access App UUID (that's a different field; JWT verification fails if you use it).
 const CF_ACCESS_AUD =
-  CF_ACCESS_AUD_ENV ?? "839d958e-7cec-4062-9ae3-b9f4451b86f9";
+  CF_ACCESS_AUD_ENV ?? "de902ab4cf7ccc627fdf7efb620bdd7c21065c7028fdb05ae35e5ed01b7573e1";
 const CF_ACCESS_JWKS_URL = new URL(`${CF_ACCESS_TEAM_DOMAIN}/cdn-cgi/access/certs`);
 
 if (process.env.NODE_ENV === "production") {
