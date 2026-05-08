@@ -45,24 +45,39 @@ final class APIClient {
         self.encoder = JSONEncoder()
     }
 
-    func get<T: Decodable>(_ path: String) async throws -> T {
-        let request = makeRequest(path: path, method: "GET", bodyData: nil)
+    func get<T: Decodable>(_ path: String, query: [URLQueryItem]? = nil) async throws -> T {
+        let request = makeRequest(path: path, query: query, method: "GET", bodyData: nil)
         return try await execute(request)
     }
 
-    func post<T: Decodable, U: Encodable>(_ path: String, body: U) async throws -> T {
+    func post<T: Decodable, U: Encodable>(
+        _ path: String,
+        query: [URLQueryItem]? = nil,
+        body: U
+    ) async throws -> T {
         let bodyData: Data
         do {
             bodyData = try encoder.encode(body)
         } catch {
             throw APIError.decode(error)
         }
-        let request = makeRequest(path: path, method: "POST", bodyData: bodyData)
+        let request = makeRequest(path: path, query: query, method: "POST", bodyData: bodyData)
         return try await execute(request)
     }
 
-    private func makeRequest(path: String, method: String, bodyData: Data?) -> URLRequest {
-        let url = baseURL.appendingPathComponent(path)
+    private func makeRequest(
+        path: String,
+        query: [URLQueryItem]?,
+        method: String,
+        bodyData: Data?
+    ) -> URLRequest {
+        let pathURL = baseURL.appendingPathComponent(path)
+        var components = URLComponents(url: pathURL, resolvingAgainstBaseURL: false)
+            ?? URLComponents()
+        if let query, !query.isEmpty {
+            components.queryItems = (components.queryItems ?? []) + query
+        }
+        let url = components.url ?? pathURL
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
