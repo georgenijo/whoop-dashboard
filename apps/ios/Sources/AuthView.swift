@@ -47,6 +47,9 @@ struct AuthView: View {
     private func handle(_ result: Result<ASAuthorization, Error>) {
         switch result {
         case .failure(let error):
+            if let authError = error as? ASAuthorizationError, authError.code == .canceled {
+                return
+            }
             errorMessage = "Sign-in failed: \(error.localizedDescription)"
         case .success(let auth):
             guard
@@ -90,11 +93,27 @@ struct AuthView: View {
 
             switch http.statusCode {
             case 200:
-                let decoded = try JSONDecoder().decode(AuthResponse.self, from: data)
+                let decoder = JSONDecoder()
+                decoder.dateDecodingStrategy = .custom { dec in
+                    let container = try dec.singleValueContainer()
+                    let raw = try container.decode(String.self)
+                    let withFractional = ISO8601DateFormatter()
+                    withFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+                    if let date = withFractional.date(from: raw) { return date }
+                    let plain = ISO8601DateFormatter()
+                    plain.formatOptions = [.withInternetDateTime]
+                    if let date = plain.date(from: raw) { return date }
+                    throw DecodingError.dataCorruptedError(
+                        in: container,
+                        debugDescription: "Expected ISO 8601 date, got \(raw)"
+                    )
+                }
+                let decoded = try decoder.decode(AuthResponse.self, from: data)
                 guard KeychainStore.saveSessionToken(decoded.sessionToken) else {
                     await MainActor.run { errorMessage = "Could not save session" }
                     return
                 }
+                KeychainStore.saveSessionExpiresAt(decoded.expiresAt)
                 await MainActor.run { onSignedIn() }
             case 401:
                 await MainActor.run { errorMessage = "Apple token rejected by server" }
@@ -110,7 +129,7 @@ struct AuthView: View {
 
     private struct AuthResponse: Decodable {
         let sessionToken: String
-        let expiresAt: String
+        let expiresAt: Date
 
         enum CodingKeys: String, CodingKey {
             case sessionToken = "session_token"
