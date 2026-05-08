@@ -10,9 +10,8 @@ export async function POST(req: Request) {
   const startedAt = new Date().toISOString();
   const t0 = Date.now();
 
-  // Short-circuit: if a successful sync ran in the last SYNC_COOLDOWN_MS,
-  // skip the upstream Whoop fetch. We deliberately do NOT write a sync_logs
-  // row on skip so the history stays clean.
+  // No sync_logs row on skip — keeps history clean.
+  // Best-effort gate, not a lock — ok for manual button cadence.
   const lastOk = getLastSuccessfulSyncAt();
   if (lastOk && Date.now() - lastOk.getTime() < SYNC_COOLDOWN_MS) {
     return Response.json({
