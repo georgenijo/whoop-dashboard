@@ -8,6 +8,7 @@ export type WhoopSleepRecord = {
   id: string;
   start: string;
   end?: string;
+  timezone_offset?: string;
   nap?: boolean;
   score_state?: string;
   score?: {
@@ -31,6 +32,25 @@ export type WhoopSleepRecord = {
       need_from_recent_nap_milli: number;
     };
   };
+};
+
+export type WhoopCycleRecord = {
+  id?: number;
+  start: string;
+  end?: string;
+  score_state?: string;
+  score?: {
+    strain: number;
+    kilojoule: number;
+    average_heart_rate: number;
+    max_heart_rate: number;
+  };
+};
+
+export type WhoopBodyMeasurement = {
+  height_meter?: number | null;
+  weight_kilogram?: number | null;
+  max_heart_rate?: number | null;
 };
 
 export type WhoopRecoveryRecord = {
@@ -89,6 +109,38 @@ export function recoverySummaryDate(r: WhoopRecoveryRecord): string {
   return parseDate(r.created_at);
 }
 
+export function cycleSummaryDate(r: WhoopCycleRecord): string {
+  return parseDate(r.start);
+}
+
+// Mirrors streamlit/whoop/db.py:_to_local_iso — convert UTC ISO + "+HH:MM" offset
+// to a naive local ISO string (YYYY-MM-DDTHH:MM:SS).
+export function toLocalIso(
+  utcIso: string | null | undefined,
+  tzOffset: string | null | undefined,
+): string | null {
+  if (!utcIso || !tzOffset) return null;
+  try {
+    const utcMs = new Date(utcIso).getTime();
+    if (Number.isNaN(utcMs)) return null;
+    const sign = tzOffset[0] === "+" ? 1 : tzOffset[0] === "-" ? -1 : 0;
+    if (sign === 0) return null;
+    const [hh, mm] = tzOffset.slice(1).split(":");
+    const offsetMin = sign * (parseInt(hh, 10) * 60 + parseInt(mm, 10));
+    const localMs = utcMs + offsetMin * 60_000;
+    const d = new Date(localMs);
+    // Use UTC getters so we read back the shifted value verbatim, with no
+    // additional local-zone offset applied.
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return (
+      `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}` +
+      `T${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`
+    );
+  } catch {
+    return null;
+  }
+}
+
 export function upsertSleep(record: WhoopSleepRecord): boolean {
   if (record.score_state !== "SCORED" || !record.score) return false;
   const db = openWrite();
@@ -96,19 +148,21 @@ export function upsertSleep(record: WhoopSleepRecord): boolean {
   try {
     const ss = record.score.stage_summary;
     const sn = record.score.sleep_needed;
-    // KEEP IN SYNC WITH streamlit/whoop/db.py:200-227 (sync_sleep column order)
+    // KEEP IN SYNC WITH streamlit/whoop/db.py:223-275 (sync_sleep column order)
     db.prepare(`
       INSERT OR REPLACE INTO sleep
         (date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms, sleep_need_ms,
          performance, efficiency, consistency, respiratory_rate,
          disturbances, cycles, nap,
          need_from_baseline_ms, need_from_debt_ms, need_from_strain_ms, need_from_nap_ms,
+         start_local, end_local,
          raw)
       VALUES
         (@date, @in_bed_ms, @light_ms, @deep_ms, @rem_ms, @awake_ms, @sleep_need_ms,
          @performance, @efficiency, @consistency, @respiratory_rate,
          @disturbances, @cycles, @nap,
          @need_from_baseline_ms, @need_from_debt_ms, @need_from_strain_ms, @need_from_nap_ms,
+         @start_local, @end_local,
          @raw)
     `).run({
       date: parseDate(record.start),
@@ -133,8 +187,89 @@ export function upsertSleep(record: WhoopSleepRecord): boolean {
       need_from_debt_ms: sn.need_from_sleep_debt_milli,
       need_from_strain_ms: sn.need_from_recent_strain_milli,
       need_from_nap_ms: sn.need_from_recent_nap_milli,
+      start_local: toLocalIso(record.start, record.timezone_offset),
+      end_local: toLocalIso(record.end, record.timezone_offset),
       raw: JSON.stringify(record),
     });
+    return true;
+  } finally {
+    db.close();
+  }
+}
+
+export function upsertCycle(record: WhoopCycleRecord): boolean {
+  if (record.score_state !== "SCORED" || !record.score) return false;
+  const db = openWrite();
+  if (!db) return false;
+  try {
+    // KEEP IN SYNC WITH streamlit/whoop/db.py:187-206 (sync_cycles column order)
+    db.prepare(`
+      INSERT OR REPLACE INTO cycles
+        (date, strain, kilojoule, avg_hr, max_hr, raw)
+      VALUES
+        (@date, @strain, @kilojoule, @avg_hr, @max_hr, @raw)
+    `).run({
+      date: parseDate(record.start),
+      strain: record.score.strain,
+      kilojoule: record.score.kilojoule,
+      avg_hr: record.score.average_heart_rate,
+      max_hr: record.score.max_heart_rate,
+      raw: JSON.stringify(record),
+    });
+    return true;
+  } finally {
+    db.close();
+  }
+}
+
+// KEEP IN SYNC WITH streamlit/whoop/db.py:314-360 (sync_body_measurement).
+// Whoop's payload has no timestamp — values are "current". Dedupe by comparing
+// against the latest stored row, so we don't pile up identical rows per sync.
+export function upsertBodyMeasurement(
+  body: WhoopBodyMeasurement | null | undefined,
+  userId: number = 1,
+): boolean {
+  if (!body) return false;
+  const height = body.height_meter ?? null;
+  const weight = body.weight_kilogram ?? null;
+  const maxHr = body.max_heart_rate ?? null;
+  if (height === null && weight === null && maxHr === null) return false;
+  const db = openWrite();
+  if (!db) return false;
+  try {
+    const latest = db
+      .prepare(
+        "SELECT height_meter, weight_kilogram, max_heart_rate " +
+          "FROM body_measurements WHERE user_id = ? " +
+          "ORDER BY measured_at DESC LIMIT 1",
+      )
+      .get(userId) as
+      | {
+          height_meter: number | null;
+          weight_kilogram: number | null;
+          max_heart_rate: number | null;
+        }
+      | undefined;
+    if (
+      latest &&
+      latest.height_meter === height &&
+      latest.weight_kilogram === weight &&
+      latest.max_heart_rate === maxHr
+    ) {
+      return false;
+    }
+    db.prepare(
+      "INSERT INTO body_measurements " +
+        "(user_id, height_meter, weight_kilogram, max_heart_rate, measured_at, raw) " +
+        "VALUES (?, ?, ?, ?, ?, ?)",
+    ).run(
+      userId,
+      height,
+      weight,
+      maxHr,
+      new Date().toISOString(),
+      JSON.stringify(body),
+    );
     return true;
   } finally {
     db.close();

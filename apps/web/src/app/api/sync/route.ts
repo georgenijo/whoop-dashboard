@@ -1,152 +1,81 @@
-import { spawn } from "child_process";
-import path from "path";
 import { addSyncLog } from "@/lib/db";
+import { runWhoopSync } from "@/lib/sync";
 
 export const dynamic = "force-dynamic";
 
-type ParsedCounts = {
-  recovery: number | null;
-  sleep: number | null;
-  workouts: number | null;
-};
+const SYNC_TIMEOUT_MS = 120_000;
 
-type ParsedSyncOutput = {
-  counts: ParsedCounts;
-  details: string | null;
-};
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function numberOrNull(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function parseCounts(stdout: string): ParsedCounts {
-  // daily_sync.py prints: "Synced: 7 recovery, 7 sleep, 2 workouts"
-  const m = stdout.match(/Synced:\s+(\d+)\s+recovery,\s+(\d+)\s+sleep,\s+(\d+)\s+workouts/);
-  if (!m) return { recovery: null, sleep: null, workouts: null };
-  return {
-    recovery: parseInt(m[1], 10),
-    sleep: parseInt(m[2], 10),
-    workouts: parseInt(m[3], 10),
-  };
-}
-
-function parseStructuredOutput(stdout: string): ParsedSyncOutput | null {
-  const lines = stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .reverse();
-
-  for (const line of lines) {
-    if (!line.startsWith("{") || !line.endsWith("}")) continue;
-    try {
-      const parsed = JSON.parse(line) as unknown;
-      if (!isRecord(parsed)) continue;
-
-      const countsValue = parsed.counts;
-      const detailsValue = parsed.details;
-      const counts = isRecord(countsValue)
-        ? {
-            recovery: numberOrNull(countsValue.recovery),
-            sleep: numberOrNull(countsValue.sleep),
-            workouts: numberOrNull(countsValue.workouts),
-          }
-        : { recovery: null, sleep: null, workouts: null };
-
-      return {
-        counts,
-        details: isRecord(detailsValue) ? JSON.stringify(detailsValue) : null,
-      };
-    } catch {
-      // Keep scanning older stdout lines; human-readable sync output is not JSON.
-    }
-  }
-
-  return null;
-}
-
-function runSync(): Promise<{ ok: boolean; stdout: string; stderr: string }> {
-  return new Promise((resolve) => {
-    const repoRoot = path.resolve(process.cwd(), "..", "..");
-    const py = path.join(repoRoot, "venv/bin/python");
-    const script = path.join(repoRoot, "sync", "daily_sync.py");
-
-    const child = spawn(py, [script], {
-      cwd: repoRoot,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (d) => (stdout += d.toString()));
-    child.stderr.on("data", (d) => (stderr += d.toString()));
-
-    const timeout = setTimeout(() => {
-      child.kill("SIGTERM");
-    }, 120_000);
-
-    child.on("close", (code) => {
-      clearTimeout(timeout);
-      resolve({ ok: code === 0, stdout, stderr });
-    });
-
-    child.on("error", (err) => {
-      clearTimeout(timeout);
-      resolve({ ok: false, stdout, stderr: stderr + "\n" + err.message });
-    });
-  });
-}
-
-export async function POST() {
+export async function POST(req: Request) {
   const startedAt = new Date().toISOString();
   const t0 = Date.now();
-  const { ok, stdout, stderr } = await runSync();
-  const durationMs = Date.now() - t0;
-  const structured = parseStructuredOutput(stdout);
-  const fallbackCounts = parseCounts(stdout);
-  const counts = structured
-    ? {
-        recovery: structured.counts.recovery ?? fallbackCounts.recovery,
-        sleep: structured.counts.sleep ?? fallbackCounts.sleep,
-        workouts: structured.counts.workouts ?? fallbackCounts.workouts,
-      }
-    : fallbackCounts;
-  const details = structured?.details ?? null;
 
-  if (ok) {
+  // 120s timeout matches the previous Python subprocess SIGTERM ceiling.
+  const timeoutCtrl = new AbortController();
+  const timer = setTimeout(() => timeoutCtrl.abort(), SYNC_TIMEOUT_MS);
+
+  // Honor the request's own AbortSignal (if any) alongside our timeout.
+  const composite = new AbortController();
+  const onUpstreamAbort = () => composite.abort(timeoutCtrl.signal.reason);
+  const onRequestAbort = () => composite.abort(req.signal.reason);
+  if (timeoutCtrl.signal.aborted) onUpstreamAbort();
+  else timeoutCtrl.signal.addEventListener("abort", onUpstreamAbort, { once: true });
+  if (req.signal.aborted) onRequestAbort();
+  else req.signal.addEventListener("abort", onRequestAbort, { once: true });
+
+  let result;
+  try {
+    result = await runWhoopSync({ signal: composite.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+
+  const durationMs = Date.now() - t0;
+
+  if (result.success) {
     addSyncLog({
       started_at: startedAt,
       duration_ms: durationMs,
       status: "ok",
-      recovery_count: counts.recovery,
-      sleep_count: counts.sleep,
-      workouts_count: counts.workouts,
+      // Match Python sync_logs semantics — total records returned by the API.
+      // Per-endpoint inserted counts are in `details.rows_inserted`.
+      recovery_count: result.fetched_counts.recovery,
+      sleep_count: result.fetched_counts.sleep,
+      workouts_count: result.fetched_counts.workouts,
       error_message: null,
       source: "manual",
-      details,
+      details: JSON.stringify({
+        ...result.details,
+        rows_inserted: result.rows_inserted,
+        fetched_counts: result.fetched_counts,
+        latest_recovery_date: result.latest_recovery_date,
+        latest_sleep_date: result.latest_sleep_date,
+        latest_strain_date: result.latest_strain_date,
+      }),
     });
     return Response.json({
       ok: true,
       durationMs,
-      ...counts,
+      recovery: result.fetched_counts.recovery,
+      sleep: result.fetched_counts.sleep,
+      workouts: result.fetched_counts.workouts,
     });
   }
 
-  const errorMsg = (stderr || stdout).slice(0, 800);
+  const errorMsg = (result.error ?? "sync failed").slice(0, 800);
   addSyncLog({
     started_at: startedAt,
     duration_ms: durationMs,
     status: "error",
-    recovery_count: counts.recovery,
-    sleep_count: counts.sleep,
-    workouts_count: counts.workouts,
+    recovery_count: result.fetched_counts.recovery,
+    sleep_count: result.fetched_counts.sleep,
+    workouts_count: result.fetched_counts.workouts,
     error_message: errorMsg,
     source: "manual",
-    details,
+    details: JSON.stringify({
+      ...result.details,
+      rows_inserted: result.rows_inserted,
+      fetched_counts: result.fetched_counts,
+    }),
   });
   return Response.json({ ok: false, error: errorMsg, durationMs }, { status: 500 });
 }
