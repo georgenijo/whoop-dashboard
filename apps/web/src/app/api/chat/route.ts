@@ -65,6 +65,13 @@ function encodeSse(event: ChatSseEvent, data: unknown): Uint8Array {
   return encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
+function wantsStream(req: Request): boolean {
+  const value = new URL(req.url).searchParams.get("stream");
+  if (value === null) return true;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "true" || normalized === "1";
+}
+
 function chatStreamResponse(body: BodyInit, threadId: number): Response {
   return new Response(body, {
     headers: {
@@ -94,6 +101,29 @@ export async function POST(req: Request) {
       !thread.title?.trim() &&
       !conversation.some((message) => message.role === "assistant");
     conversation.push({ role: "user", content: lastUser });
+
+    if (!wantsStream(req)) {
+      try {
+        const reply = await runAndPersistCoachTurn(thread, lastUser, conversation, days, {
+          signal: req.signal,
+        });
+        if (shouldAutoTitle) {
+          after(() => {
+            void titleChatThread(thread.id, lastUser);
+          });
+        }
+        return Response.json({ thread_id: thread.id, reply });
+      } catch (err) {
+        console.error("[chat] non-stream turn failed", {
+          thread_id: thread.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return Response.json(
+          { error: "Coach call failed. Please try again." },
+          { status: 500 }
+        );
+      }
+    }
 
     const abortController = new AbortController();
     const relayAbort = () => abortController.abort();
