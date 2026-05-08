@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import CoachWorkspace from "@/components/coach/CoachWorkspace";
 import {
@@ -7,7 +8,7 @@ import {
   getChatThreads,
   getLatestChatThread,
 } from "@/lib/db";
-import { getBootstrapUser } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,8 @@ export default async function CoachPage({
 }: {
   searchParams: Promise<{ thread?: string | string[] }>;
 }) {
-  const user = getBootstrapUser();
+  const headerList = await headers();
+  const user = await requireAuth(new Request("http://localhost", { headers: headerList }));
   const { thread } = await searchParams;
   const requestedThreadId = parseThreadId(thread);
 
