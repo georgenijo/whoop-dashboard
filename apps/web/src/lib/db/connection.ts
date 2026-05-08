@@ -246,6 +246,11 @@ export function openWrite(): DB | null {
       db.exec("ALTER TABLE users ADD COLUMN apple_sub TEXT");
       db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_apple_sub ON users(apple_sub)");
     }
+    // Case-insensitive uniqueness on email lets findOrCreateUserByEmail rely on
+    // a SQLITE_CONSTRAINT race-loser to retry instead of TOCTOU SELECT+INSERT.
+    db.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON users(LOWER(email)) WHERE email IS NOT NULL"
+    );
     return db;
   } catch {
     db?.close();

@@ -2,8 +2,19 @@ import "server-only";
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
-import { getPrimaryUser, getSessionByToken, getUserById, type User } from "./db";
+import {
+  findOrCreateUserByEmail,
+  getPrimaryUser,
+  getSessionByToken,
+  getUserById,
+  type User,
+} from "./db";
 import { verifySessionToken } from "./auth/jwt";
+import {
+  CF_ACCESS_HEADER,
+  CFAccessAuthError,
+  verifyCFAccessJWT,
+} from "./auth/cf-access";
 
 export const WHOOP_AUTH_URL = "https://api.prod.whoop.com/oauth/oauth2/auth";
 export const WHOOP_TOKEN_URL = "https://api.prod.whoop.com/oauth/oauth2/token";
@@ -98,38 +109,53 @@ export async function saveTokens(tokens: StoredTokens): Promise<void> {
   await fs.rename(tmp, p);
 }
 
+// Precedence: Bearer > CF Access > dev bootstrap. Don't flip without auditing all routes.
 export async function requireAuth(req: Request): Promise<User> {
   const header = req.headers.get("authorization");
-  if (!header) {
-    return getBootstrapUser();
-  }
 
-  // Bearer scheme: try JWT (Sign in with Apple) first, then fall back to the
-  // legacy opaque session-token path so existing clients keep working.
-  const bearerMatch = header.match(/^Bearer\s+(.+)$/i);
-  if (bearerMatch) {
-    const token = bearerMatch[1].trim();
-    const claims = await verifySessionToken(token);
-    if (claims) {
-      const user = getUserById(claims.userId);
-      if (!user) throw new Response("User not found", { status: 401 });
-      return user;
-    }
-
-    const session = getSessionByToken(token);
-    if (session) {
-      if (new Date(session.expires_at) < new Date()) {
-        throw new Response("Expired token", { status: 401 });
+  if (header) {
+    const bearerMatch = header.match(/^Bearer\s+(.+)$/i);
+    if (bearerMatch) {
+      const token = bearerMatch[1].trim();
+      const claims = await verifySessionToken(token);
+      if (claims) {
+        const user = getUserById(claims.userId);
+        if (!user) throw new Response("User not found", { status: 401 });
+        return user;
       }
-      const user = getUserById(session.user_id);
-      if (!user) throw new Response("User not found", { status: 401 });
-      return user;
-    }
 
+      const session = getSessionByToken(token);
+      if (session) {
+        if (new Date(session.expires_at) < new Date()) {
+          throw new Response("Expired token", { status: 401 });
+        }
+        const user = getUserById(session.user_id);
+        if (!user) throw new Response("User not found", { status: 401 });
+        return user;
+      }
+
+      throw new Response("Invalid token", { status: 401 });
+    }
     throw new Response("Invalid token", { status: 401 });
   }
 
-  // Authorization header present but not a Bearer scheme we recognize. Reject
-  // explicitly rather than silently falling through to the bootstrap user.
-  throw new Response("Invalid token", { status: 401 });
+  const cfAssertion = req.headers.get(CF_ACCESS_HEADER);
+  if (cfAssertion) {
+    let identity: { email: string };
+    try {
+      identity = await verifyCFAccessJWT(cfAssertion);
+    } catch (err) {
+      if (err instanceof CFAccessAuthError) {
+        throw new Response("Invalid CF Access token", { status: 401 });
+      }
+      throw err;
+    }
+    return findOrCreateUserByEmail(identity.email);
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    return getBootstrapUser();
+  }
+
+  throw new Response("Unauthorized", { status: 401 });
 }
