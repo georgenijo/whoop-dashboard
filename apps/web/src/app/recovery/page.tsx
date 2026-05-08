@@ -34,8 +34,10 @@ export default async function RecoveryPage({
   const data = getOverview(days);
   const trend = getRecoveryTrend(days);
   const trend30 = getRecoveryTrend(30);
-  const otsRecovery = getRecoveryTrend(7);
-  const otsCycles = getStrainTrend(7);
+  // Pull 14 days so computeOTS can walk back past gaps and still find 7 paired
+  // days; inner-join + slice(-7) lives inside computeOTS itself.
+  const otsRecovery = getRecoveryTrend(14);
+  const otsCycles = getStrainTrend(14);
 
   const recoveryData = trend.map((r) => ({ date: r.date, value: r.recovery_score }));
   const hrvSeries = trend.map((r) => ({ date: r.date, hrv: r.hrv }));
