@@ -67,8 +67,9 @@ function encodeSse(event: ChatSseEvent, data: unknown): Uint8Array {
 
 function wantsStream(req: Request): boolean {
   const value = new URL(req.url).searchParams.get("stream");
-  if (value === "false" || value === "0") return false;
-  return true;
+  if (value === null) return true;
+  const normalized = value.trim().toLowerCase();
+  return normalized === "true" || normalized === "1";
 }
 
 function chatStreamResponse(body: BodyInit, threadId: number): Response {
@@ -113,8 +114,14 @@ export async function POST(req: Request) {
         }
         return Response.json({ thread_id: thread.id, reply });
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return Response.json({ error: message }, { status: 500 });
+        console.error("[chat] non-stream turn failed", {
+          thread_id: thread.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return Response.json(
+          { error: "Coach call failed. Please try again." },
+          { status: 500 }
+        );
       }
     }
 
