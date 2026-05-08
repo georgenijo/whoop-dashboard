@@ -25,7 +25,7 @@ export default async function CoachPage({
   searchParams: Promise<{ thread?: string | string[] }>;
 }) {
   const headerList = await headers();
-  const user = await requireAuth(new Request("http://localhost", { headers: headerList }));
+  const { user } = await requireAuth(new Request("http://localhost", { headers: headerList }));
   const { thread } = await searchParams;
   const requestedThreadId = parseThreadId(thread);
 
