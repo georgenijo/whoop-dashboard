@@ -8,11 +8,11 @@ Auto-build and ship to TestFlight Internal whenever `apps/ios/**` changes on `ma
 |---|---|
 | Name | `Beta` |
 | Trigger | Branch changes, branch `main`, files match `apps/ios/**` |
-| Environment | macOS latest, Xcode latest stable |
+| Environment | macOS latest, Xcode 16.2 (pinned) |
 | Action | Archive — Platform iOS, Scheme `Coach`, Configuration `Release` |
 | Post-action | TestFlight Internal Testing — Group `Internal` |
 
-The file pattern keeps non-iOS commits (web, sync, docs) from burning build hours.
+The file pattern keeps non-iOS commits (web, sync, docs) from burning build hours. In the Xcode Cloud UI, pick the specific Xcode version (not "Latest Release") so the workflow matches what's documented here. Pinned to avoid drift; bump intentionally and re-test.
 
 ## App identifiers
 
@@ -27,16 +27,17 @@ The file pattern keeps non-iOS commits (web, sync, docs) from burning build hour
 3. On first save Xcode prompts for GitHub OAuth — grant access to `georgenijo/whoop-dashboard`.
 4. Configure the workflow per the table above.
 5. Confirm signing uses the team `P2U3P8B923` (Xcode Cloud manages certs/profiles automatically).
+6. Resolve export compliance once in App Store Connect, or set `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption=NO` in `project.yml` so TestFlight doesn't prompt on each build.
 
 ## Acceptance
 
 Push a trivial change under `apps/ios/` to `main`. Within ~10 minutes:
 
 - Xcode Cloud build appears in App Store Connect → Xcode Cloud, status `Succeeded`.
-- TestFlight build shows up under Internal Testing with state `Ready to Test` (no manual export-compliance prompt — already handled in `Info.plist` via `INFOPLIST_KEY_ITSAppUsesNonExemptEncryption=NO` if added; otherwise resolve once in ASC).
+- TestFlight build shows up under Internal Testing with state `Ready to Test`.
 - Auto-distribution to the `Internal` group fires.
 - TestFlight push notification lands on the test iPhone.
 
 ## Free-tier note
 
-Xcode Cloud free tier: 25 compute hours per month. A Coach archive runs ~5–8 minutes, so monthly cadence (or even per-merge) stays well inside the cap.
+Xcode Cloud free tier: 25 compute hours per month (as of January 2024 — see https://developer.apple.com/xcode-cloud/). A Coach archive runs ~5–8 minutes, so monthly cadence (or even per-merge) stays well inside the cap.
