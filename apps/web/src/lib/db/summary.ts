@@ -62,6 +62,18 @@ export type Overview = {
   hasData: boolean;
 };
 
+/** Type guard: true only for finite numbers (excludes null, undefined, NaN, ±Infinity). */
+function isFiniteNum(v: number | null | undefined): v is number {
+  return typeof v === "number" && Number.isFinite(v);
+}
+
+/** Mean of a number array. Returns null on empty input so callers can branch
+ *  instead of rendering NaN. Inputs are assumed pre-filtered via isFiniteNum. */
+function mean(values: number[]): number | null {
+  if (values.length === 0) return null;
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
 function rawTimestampMs(row: { date: string | null; raw: string | null }): number | null {
   if (row.raw) {
     try {
@@ -182,31 +194,34 @@ export function getHealthContext(days = 30): string {
   if (recovery.length) {
     lines.push("RECOVERY (newest first):");
     for (const r of recovery) {
-      const spo2 = r.spo2 != null ? `, SpO2=${r.spo2}%` : "";
-      const temp = r.skin_temp != null ? `, Skin=${r.skin_temp}°C` : "";
+      const score = isFiniteNum(r.recovery_score) ? `${r.recovery_score.toFixed(0)}%` : "n/a";
+      const hrv = isFiniteNum(r.hrv) ? `${r.hrv.toFixed(1)}ms` : "n/a";
+      const rhr = isFiniteNum(r.rhr) ? `${r.rhr.toFixed(0)}bpm` : "n/a";
+      const spo2 = isFiniteNum(r.spo2) ? `, SpO2=${r.spo2}%` : "";
+      const temp = isFiniteNum(r.skin_temp) ? `, Skin=${r.skin_temp}°C` : "";
       lines.push(
-        `  ${r.date}: Recovery=${r.recovery_score?.toFixed(0)}%, HRV=${r.hrv?.toFixed(1)}ms, RHR=${r.rhr?.toFixed(0)}bpm${spo2}${temp}`
+        `  ${r.date}: Recovery=${score}, HRV=${hrv}, RHR=${rhr}${spo2}${temp}`
       );
     }
-    const scores = recovery
-      .map((r) => r.recovery_score)
-      .filter((v): v is number => v != null);
-    const hrvs = recovery
-      .map((r) => r.hrv)
-      .filter((v): v is number => v != null);
-    const rhrs = recovery
-      .map((r) => r.rhr)
-      .filter((v): v is number => v != null);
-    if (scores.length && hrvs.length && rhrs.length)
-      lines.push(
-        `\n  Averages: Recovery=${(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)}%, HRV=${(hrvs.reduce((a, b) => a + b, 0) / hrvs.length).toFixed(1)}ms, RHR=${(rhrs.reduce((a, b) => a + b, 0) / rhrs.length).toFixed(1)}bpm`
-      );
+    const scores = recovery.map((r) => r.recovery_score).filter(isFiniteNum);
+    const hrvs = recovery.map((r) => r.hrv).filter(isFiniteNum);
+    const rhrs = recovery.map((r) => r.rhr).filter(isFiniteNum);
+    const avgScore = mean(scores);
+    const avgHrv = mean(hrvs);
+    const avgRhr = mean(rhrs);
+    if (avgScore != null || avgHrv != null || avgRhr != null) {
+      const parts: string[] = [];
+      if (avgScore != null) parts.push(`Recovery=${avgScore.toFixed(1)}%`);
+      if (avgHrv != null) parts.push(`HRV=${avgHrv.toFixed(1)}ms`);
+      if (avgRhr != null) parts.push(`RHR=${avgRhr.toFixed(1)}bpm`);
+      lines.push(`\n  Averages: ${parts.join(", ")}`);
+    }
     if (scores.length >= 7) {
-      const r7 = scores.slice(0, 7);
-      const o7 = scores.slice(7, 14);
-      if (o7.length)
+      const r7 = mean(scores.slice(0, 7));
+      const o7 = mean(scores.slice(7, 14));
+      if (r7 != null && o7 != null)
         lines.push(
-          `  7-day avg: ${(r7.reduce((a, b) => a + b, 0) / r7.length).toFixed(1)}% vs prior 7-day: ${(o7.reduce((a, b) => a + b, 0) / o7.length).toFixed(1)}%`
+          `  7-day avg: ${r7.toFixed(1)}% vs prior 7-day: ${o7.toFixed(1)}%`
         );
     }
   }
