@@ -1,13 +1,27 @@
-import { addSyncLog } from "@/lib/db";
+import { addSyncLog, getLastSuccessfulSyncAt } from "@/lib/db";
 import { runWhoopSync } from "@/lib/sync";
 
 export const dynamic = "force-dynamic";
 
 const SYNC_TIMEOUT_MS = 120_000;
+const SYNC_COOLDOWN_MS = 5 * 60 * 1000;
 
 export async function POST(req: Request) {
   const startedAt = new Date().toISOString();
   const t0 = Date.now();
+
+  // Short-circuit: if a successful sync ran in the last SYNC_COOLDOWN_MS,
+  // skip the upstream Whoop fetch. We deliberately do NOT write a sync_logs
+  // row on skip so the history stays clean.
+  const lastOk = getLastSuccessfulSyncAt();
+  if (lastOk && Date.now() - lastOk.getTime() < SYNC_COOLDOWN_MS) {
+    return Response.json({
+      ok: true,
+      skipped: true,
+      reason: "recent_sync",
+      lastSyncAt: lastOk.toISOString(),
+    });
+  }
 
   // 120s timeout matches the previous Python subprocess SIGTERM ceiling.
   const timeoutCtrl = new AbortController();

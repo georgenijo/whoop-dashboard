@@ -1,10 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 const RANGES = ["7d", "14d", "30d", "90d", "all"] as const;
 type Range = (typeof RANGES)[number];
+
+const SYNC_MESSAGE_TIMEOUT_MS = 4000;
+
+function formatAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.max(0, Math.round(diffMs / 60000));
+  if (mins < 1) return "just now";
+  if (mins === 1) return "1 min ago";
+  return `${mins} min ago`;
+}
 
 const TITLES: Record<string, string> = {
   "/": "Overview",
@@ -40,6 +50,20 @@ export default function TopBar() {
   const range = (searchParams.get("range") as Range) ?? "30d";
   const subtitle = useMemo(formatToday, []);
   const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const messageTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (messageTimer.current) clearTimeout(messageTimer.current);
+    };
+  }, []);
+
+  function flashMessage(text: string) {
+    setSyncMessage(text);
+    if (messageTimer.current) clearTimeout(messageTimer.current);
+    messageTimer.current = setTimeout(() => setSyncMessage(null), SYNC_MESSAGE_TIMEOUT_MS);
+  }
 
   function setRange(r: Range) {
     const params = new URLSearchParams(searchParams.toString());
@@ -52,9 +76,16 @@ export default function TopBar() {
     setSyncing(true);
     try {
       const r = await fetch("/api/sync", { method: "POST" });
-      const data = await r.json();
+      const data = (await r.json()) as {
+        ok?: boolean;
+        skipped?: boolean;
+        reason?: string;
+        lastSyncAt?: string;
+      };
       if (!r.ok) {
         console.error("Sync failed", data);
+      } else if (data.skipped && data.lastSyncAt) {
+        flashMessage(`Already up to date (synced ${formatAgo(data.lastSyncAt)})`);
       }
       router.refresh();
     } catch (e) {
@@ -92,6 +123,24 @@ export default function TopBar() {
                 {r}
               </button>
             ))}
+          </div>
+        )}
+        {syncMessage && (
+          <div
+            role="status"
+            aria-live="polite"
+            style={{
+              fontFamily: "var(--font-sans)",
+              fontSize: 12,
+              color: "var(--fg-2)",
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: 6,
+              padding: "4px 10px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {syncMessage}
           </div>
         )}
         <button
