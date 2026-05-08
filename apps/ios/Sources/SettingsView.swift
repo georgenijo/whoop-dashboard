@@ -1,16 +1,22 @@
 import SwiftUI
 
 struct SettingsView: View {
+    var onSignOut: () -> Void
+
     var body: some View {
         NavigationStack {
             List {
-                Section("Account") {
-                    Text("Sign in with Apple — coming in #195")
-                        .foregroundStyle(.secondary)
+                Section {
+                    LabeledContent("Version", value: "0.1.0")
                 }
 
                 Section {
-                    LabeledContent("Version", value: "0.1.0")
+                    Button(role: .destructive) {
+                        KeychainStore.deleteSessionToken()
+                        onSignOut()
+                    } label: {
+                        Text("Sign out")
+                    }
                 }
             }
             .navigationTitle("Settings")
@@ -19,5 +25,5 @@ struct SettingsView: View {
 }
 
 #Preview {
-    SettingsView()
+    SettingsView(onSignOut: {})
 }

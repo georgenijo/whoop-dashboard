@@ -18,6 +18,13 @@ targets:
     platform: iOS
     sources:
       - path: Sources
+    entitlements:
+      path: Coach.entitlements
+      properties:
+        com.apple.developer.applesignin:
+          - Default
+    dependencies:
+      - sdk: AuthenticationServices.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.georgenijo.coach
