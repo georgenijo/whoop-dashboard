@@ -8,7 +8,7 @@ function parseThreadId(value: string | null): number {
 
 export async function GET(req: Request) {
   try {
-    const user = await requireAuth(req);
+    const { user } = await requireAuth(req);
     const threadId = parseThreadId(new URL(req.url).searchParams.get("thread_id"));
     return Response.json(getChatThreadMessages(user.id, threadId));
   } catch (err) {
@@ -19,7 +19,7 @@ export async function GET(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    const user = await requireAuth(req);
+    const { user } = await requireAuth(req);
     const threadId = parseThreadId(new URL(req.url).searchParams.get("thread_id"));
     const thread = getChatThreadById(user.id, threadId);
     if (!thread) {

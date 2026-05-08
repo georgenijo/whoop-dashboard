@@ -12,6 +12,7 @@ type ChatLogRow = {
   error_message: string | null;
   days_context: number | null;
   type: "cli" | "api" | null;
+  source: "web" | "ios" | "dev" | null;
   details?: string | null;
 };
 
@@ -109,6 +110,32 @@ function DetailMetric({ label, value }: { label: string; value: string | number 
   );
 }
 
+function SourceBadge({ source }: { source: ChatLogRow["source"] }) {
+  if (!source) {
+    return <span style={{ color: "var(--fg-3)", fontFamily: "var(--font-mono)", fontSize: 12 }}>-</span>;
+  }
+  const styles = {
+    web: { background: "rgba(82,145,255,0.15)", color: "#7fb0ff" },
+    ios: { background: "rgba(123,97,255,0.15)", color: "#a08aff" },
+    dev: { background: "rgba(255,255,255,0.06)", color: "var(--fg-2)" },
+  }[source];
+
+  return (
+    <span style={{
+      display: "inline-block",
+      padding: "2px 8px",
+      borderRadius: 4,
+      fontSize: 11,
+      fontFamily: "var(--font-mono)",
+      background: styles.background,
+      color: styles.color,
+      textTransform: "uppercase",
+    }}>
+      {source}
+    </span>
+  );
+}
+
 function Chevron({ open }: { open: boolean }) {
   return (
     <svg
@@ -159,6 +186,9 @@ function LogRow({ log }: { log: ChatLogRow }) {
           {log.response_length > 0 ? `${log.response_length}` : "-"}
         </td>
         <td style={{ padding: "10px 16px", textAlign: "center" }}>
+          <SourceBadge source={log.source} />
+        </td>
+        <td style={{ padding: "10px 16px", textAlign: "center" }}>
           {log.type ? (
             <span style={{
               display: "inline-block",
@@ -198,7 +228,7 @@ function LogRow({ log }: { log: ChatLogRow }) {
       </tr>
       {open && hasDetails && (
         <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-          <td id={detailsId} colSpan={8} style={{ padding: "14px 20px", background: "rgba(255,255,255,0.02)" }}>
+          <td id={detailsId} colSpan={9} style={{ padding: "14px 20px", background: "rgba(255,255,255,0.02)" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 14, minWidth: 620 }}>
               <div>
                 <div style={{ color: "var(--fg-3)", fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
@@ -303,6 +333,7 @@ export default function ChatLogsTable({ logs }: { logs: ChatLogRow[] }) {
             <th style={{ padding: "10px 16px", textAlign: "left", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Prompt</th>
             <th style={{ padding: "10px 16px", textAlign: "right", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Duration</th>
             <th style={{ padding: "10px 16px", textAlign: "right", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Resp</th>
+            <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Source</th>
             <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Type</th>
             <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Range</th>
             <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 500 }}>Status</th>

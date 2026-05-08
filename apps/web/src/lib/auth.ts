@@ -109,8 +109,15 @@ export async function saveTokens(tokens: StoredTokens): Promise<void> {
   await fs.rename(tmp, p);
 }
 
+export type AuthSource = "web" | "ios" | "dev";
+
+export type AuthResult = {
+  user: User;
+  source: AuthSource;
+};
+
 // Precedence: Bearer > CF Access > dev bootstrap. Don't flip without auditing all routes.
-export async function requireAuth(req: Request): Promise<User> {
+export async function requireAuth(req: Request): Promise<AuthResult> {
   const header = req.headers.get("authorization");
 
   if (header) {
@@ -121,7 +128,7 @@ export async function requireAuth(req: Request): Promise<User> {
       if (claims) {
         const user = getUserById(claims.userId);
         if (!user) throw new Response("User not found", { status: 401 });
-        return user;
+        return { user, source: "ios" };
       }
 
       const session = getSessionByToken(token);
@@ -131,7 +138,7 @@ export async function requireAuth(req: Request): Promise<User> {
         }
         const user = getUserById(session.user_id);
         if (!user) throw new Response("User not found", { status: 401 });
-        return user;
+        return { user, source: "ios" };
       }
 
       throw new Response("Invalid token", { status: 401 });
@@ -150,11 +157,11 @@ export async function requireAuth(req: Request): Promise<User> {
       }
       throw err;
     }
-    return findOrCreateUserByEmail(identity.email);
+    return { user: findOrCreateUserByEmail(identity.email), source: "web" };
   }
 
   if (process.env.NODE_ENV !== "production") {
-    return getBootstrapUser();
+    return { user: getBootstrapUser(), source: "dev" };
   }
 
   throw new Response("Unauthorized", { status: 401 });

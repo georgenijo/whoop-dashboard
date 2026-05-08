@@ -1,6 +1,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
+import type { AuthSource } from "@/lib/auth";
 import { addChatLog, addChatMessages, setChatThreadTitle } from "@/lib/db";
 import {
   type DetailState,
@@ -17,6 +18,7 @@ export async function runAndPersistCoachTurn(
   lastUser: string,
   conversation: MessageParam[],
   days: number | null,
+  source: AuthSource,
   options: RunAnthropicOptions = {}
 ): Promise<string> {
   const startedAt = new Date().toISOString();
@@ -63,6 +65,7 @@ export async function runAndPersistCoachTurn(
       error_message: null,
       days_context: days,
       type: "api",
+      source,
       details: buildDetails(),
     });
     return result.reply;
@@ -77,6 +80,7 @@ export async function runAndPersistCoachTurn(
       error_message: msg.slice(0, 500),
       days_context: days,
       type: "api",
+      source,
       details: buildDetails(),
     });
     throw err;
