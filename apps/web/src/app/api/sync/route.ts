@@ -1,13 +1,26 @@
-import { addSyncLog } from "@/lib/db";
+import { addSyncLog, getLastSuccessfulSyncAt } from "@/lib/db";
 import { runWhoopSync } from "@/lib/sync";
 
 export const dynamic = "force-dynamic";
 
 const SYNC_TIMEOUT_MS = 120_000;
+const SYNC_COOLDOWN_MS = 5 * 60 * 1000;
 
 export async function POST(req: Request) {
   const startedAt = new Date().toISOString();
   const t0 = Date.now();
+
+  // No sync_logs row on skip — keeps history clean.
+  // Best-effort gate, not a lock — ok for manual button cadence.
+  const lastOk = getLastSuccessfulSyncAt();
+  if (lastOk && Date.now() - lastOk.getTime() < SYNC_COOLDOWN_MS) {
+    return Response.json({
+      ok: true,
+      skipped: true,
+      reason: "recent_sync",
+      lastSyncAt: lastOk.toISOString(),
+    });
+  }
 
   // 120s timeout matches the previous Python subprocess SIGTERM ceiling.
   const timeoutCtrl = new AbortController();
