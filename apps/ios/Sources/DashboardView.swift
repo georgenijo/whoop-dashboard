@@ -2,7 +2,12 @@ import SwiftUI
 
 struct DashboardView: View {
     @Environment(\.api) private var api
+    @Environment(\.scenePhase) private var scenePhase
     @State private var phase: Phase = .loading
+    @State private var lastFetched: Date?
+    @State private var isLoading = false
+
+    private static let staleInterval: TimeInterval = 300
 
     enum Phase {
         case loading
@@ -17,6 +22,14 @@ struct DashboardView: View {
                 .refreshable { await load(showSpinner: false) }
         }
         .task { await load(showSpinner: true) }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            guard !isLoading else { return }
+            if let last = lastFetched, Date().timeIntervalSince(last) < Self.staleInterval {
+                return
+            }
+            Task { await load(showSpinner: false) }
+        }
     }
 
     @ViewBuilder
@@ -63,24 +76,32 @@ struct DashboardView: View {
 
     @MainActor
     private func load(showSpinner: Bool) async {
-        if showSpinner {
-            if case .loaded = phase {} else { phase = .loading }
+        guard !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
+
+        let hadLoadedData: Bool
+        if case .loaded = phase { hadLoadedData = true } else { hadLoadedData = false }
+
+        if showSpinner, !hadLoadedData {
+            phase = .loading
         }
         do {
             let summary = try await DashboardService(api: api).today()
             phase = .loaded(summary)
+            lastFetched = Date()
         } catch APIError.unauthorized {
-            phase = .error("Session expired. Sign in again.")
+            if !hadLoadedData { phase = .error("Session expired. Sign in again.") }
         } catch APIError.network(let err) {
-            phase = .error("Network error: \(err.localizedDescription)")
+            if !hadLoadedData { phase = .error("Network error: \(err.localizedDescription)") }
         } catch APIError.serverError(let code) {
-            phase = .error("Server error (\(code))")
+            if !hadLoadedData { phase = .error("Server error (\(code))") }
         } catch APIError.decode {
-            phase = .error("Bad response from server")
+            if !hadLoadedData { phase = .error("Bad response from server") }
         } catch APIError.badResponse {
-            phase = .error("Bad response from server")
+            if !hadLoadedData { phase = .error("Bad response from server") }
         } catch {
-            phase = .error("Could not load")
+            if !hadLoadedData { phase = .error("Could not load") }
         }
     }
 }
