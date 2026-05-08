@@ -62,13 +62,10 @@ export type Overview = {
   hasData: boolean;
 };
 
-/** Type guard: true only for finite numbers (excludes null, undefined, NaN, ±Infinity). */
 function isFiniteNum(v: number | null | undefined): v is number {
   return typeof v === "number" && Number.isFinite(v);
 }
 
-/** Mean of a number array. Returns null on empty input so callers can branch
- *  instead of rendering NaN. Inputs are assumed pre-filtered via isFiniteNum. */
 function mean(values: number[]): number | null {
   if (values.length === 0) return null;
   return values.reduce((a, b) => a + b, 0) / values.length;
@@ -235,8 +232,11 @@ export function getHealthContext(days = 30): string {
 
   if (cycles.length) {
     lines.push("\nDAILY STRAIN (newest first):");
-    for (const c of cycles)
-      lines.push(`  ${c.date}: Strain=${c.strain?.toFixed(1)}, Calories=${((c.kilojoule ?? 0) / 4.184).toFixed(0)}kcal`);
+    for (const c of cycles) {
+      const strain = isFiniteNum(c.strain) ? c.strain.toFixed(1) : "n/a";
+      const kcal = isFiniteNum(c.kilojoule) ? `${(c.kilojoule / 4.184).toFixed(0)}kcal` : "n/a";
+      lines.push(`  ${c.date}: Strain=${strain}, Calories=${kcal}`);
+    }
   }
 
   type FullSleepRow = SleepRow & { disturbances: number | null; respiratory_rate: number | null };
@@ -250,15 +250,22 @@ export function getHealthContext(days = 30): string {
   if (sleep.length) {
     lines.push("\nSLEEP (newest first):");
     for (const s of sleep) {
-      const actualHrs = ((s.in_bed_ms ?? 0) - (s.awake_ms ?? 0)) / 3_600_000;
-      const needHrs = (s.sleep_need_ms ?? 0) / 3_600_000;
-      const deepHrs = (s.deep_ms ?? 0) / 3_600_000;
-      const remHrs = (s.rem_ms ?? 0) / 3_600_000;
-      const perf = s.performance != null ? `, Perf=${s.performance.toFixed(0)}%` : "";
-      const eff = s.efficiency != null ? `, Eff=${s.efficiency.toFixed(0)}%` : "";
-      const rr = s.respiratory_rate != null ? `, RespRate=${s.respiratory_rate.toFixed(1)}bpm` : "";
+      const inBed = isFiniteNum(s.in_bed_ms) ? s.in_bed_ms : 0;
+      const awake = isFiniteNum(s.awake_ms) ? s.awake_ms : 0;
+      const actualHrs = (inBed - awake) / 3_600_000;
+      const needHrs = (isFiniteNum(s.sleep_need_ms) ? s.sleep_need_ms : 0) / 3_600_000;
+      const deepHrs = (isFiniteNum(s.deep_ms) ? s.deep_ms : 0) / 3_600_000;
+      const remHrs = (isFiniteNum(s.rem_ms) ? s.rem_ms : 0) / 3_600_000;
+      const slept = isFiniteNum(s.in_bed_ms) ? `${actualHrs.toFixed(1)}h` : "n/a";
+      const need = isFiniteNum(s.sleep_need_ms) ? `${needHrs.toFixed(1)}h` : "n/a";
+      const deep = isFiniteNum(s.deep_ms) ? `${deepHrs.toFixed(1)}h` : "n/a";
+      const rem = isFiniteNum(s.rem_ms) ? `${remHrs.toFixed(1)}h` : "n/a";
+      const dist = isFiniteNum(s.disturbances) ? `${s.disturbances}` : "n/a";
+      const perf = isFiniteNum(s.performance) ? `, Perf=${s.performance.toFixed(0)}%` : "";
+      const eff = isFiniteNum(s.efficiency) ? `, Eff=${s.efficiency.toFixed(0)}%` : "";
+      const rr = isFiniteNum(s.respiratory_rate) ? `, RespRate=${s.respiratory_rate.toFixed(1)}bpm` : "";
       lines.push(
-        `  ${s.date}: Slept=${actualHrs.toFixed(1)}h (need=${needHrs.toFixed(1)}h), Deep=${deepHrs.toFixed(1)}h, REM=${remHrs.toFixed(1)}h, Disturbances=${s.disturbances ?? 0}${perf}${eff}${rr}`
+        `  ${s.date}: Slept=${slept} (need=${need}), Deep=${deep}, REM=${rem}, Disturbances=${dist}${perf}${eff}${rr}`
       );
     }
   }
