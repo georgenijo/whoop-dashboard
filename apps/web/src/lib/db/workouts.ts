@@ -22,7 +22,22 @@ export type WorkoutRow = {
 const WORKOUT_COLUMNS =
   "id, date, sport, duration_sec, avg_hr, max_hr, strain, kilojoule, distance_m, zone_0_ms, zone_1_ms, zone_2_ms, zone_3_ms, zone_4_ms, zone_5_ms";
 
-export function getWorkouts(limit: number): WorkoutRow[] {
+// Workouts are typically 1-3/day, so 500 covers ~6 months — plenty for any
+// single dashboard view or Coach tool call. Cap defends against unbounded
+// queries from API callers (or, indirectly, the LLM coach via tool_use)
+// that could OOM the process or generate a huge response.
+const DEFAULT_WORKOUTS_LIMIT = 50;
+const MAX_WORKOUTS_LIMIT = 500;
+
+function sanitizeLimit(limit: unknown): number {
+  if (typeof limit !== "number" || !Number.isFinite(limit) || limit <= 0) {
+    return DEFAULT_WORKOUTS_LIMIT;
+  }
+  return Math.min(Math.floor(limit), MAX_WORKOUTS_LIMIT);
+}
+
+export function getWorkouts(limit?: number): WorkoutRow[] {
+  const safeLimit = sanitizeLimit(limit);
   return (
     safeQuery((db) => {
       if (!hasTable(db, "workouts")) return [];
@@ -30,7 +45,7 @@ export function getWorkouts(limit: number): WorkoutRow[] {
         .prepare(
           `SELECT ${WORKOUT_COLUMNS} FROM workouts ORDER BY date DESC LIMIT ?`
         )
-        .all(limit) as WorkoutRow[];
+        .all(safeLimit) as WorkoutRow[];
     }) ?? []
   );
 }
