@@ -16,9 +16,17 @@ export const dynamic = "force-dynamic";
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MS_PER_MINUTE = 60_000;
 const SIGNAL_LOOKBACK_DAYS = 45;
+const FALLBACK_LOOKBACK_DAYS = 7;
 
 type DashboardTodayResponse = {
   date: string;
+  // Echo of the date asked for (defaults to server-local today when ?date= omitted).
+  requested_date: string;
+  // The date whose data is actually returned. Null only when no data exists in the
+  // 7-day lookback window — i.e., a genuinely empty DB / fresh install.
+  data_date: string | null;
+  // True iff the route walked back to a prior day (data_date < requested_date).
+  is_fallback: boolean;
   recovery: {
     score: number | null;
     hrv_ms: number | null;
@@ -59,27 +67,100 @@ export async function GET(req: Request) {
   }
 }
 
-function buildDashboardToday(date: string): DashboardTodayResponse {
-  const recovery = first(getRecoveryRange(date, date));
-  const sleep = first(getSleepRange(date, date));
-  const strain = first(getStrainRange(date, date));
+function buildDashboardToday(requestedDate: string): DashboardTodayResponse {
+  // One range query per table over the widest window we may need:
+  //   [requested - (SIGNAL_LOOKBACK + FALLBACK_LOOKBACK), requested]
+  // This single fetch covers (a) the requested-day lookup, (b) the 7-day fallback
+  // search, and (c) up to 45 days of history anchored to whichever data_date we
+  // resolve to. No second round-trip is needed even when fallback fires.
+  const historyStart = addDays(
+    requestedDate,
+    -(SIGNAL_LOOKBACK_DAYS + FALLBACK_LOOKBACK_DAYS),
+  );
+  const recoveryWindow = getRecoveryRange(historyStart, requestedDate);
+  const sleepWindow = getSleepRange(historyStart, requestedDate);
+  const strainWindow = getStrainRange(historyStart, requestedDate);
 
-  const historyStart = addDays(date, -SIGNAL_LOOKBACK_DAYS);
-  const recoveryHistory = getRecoveryRange(historyStart, date);
-  const sleepHistory = getSleepRange(historyStart, date);
-  const strainHistory = getStrainRange(historyStart, date);
+  const requestedHasData =
+    findOnDate(recoveryWindow, requestedDate) !== null ||
+    findOnDate(sleepWindow, requestedDate) !== null ||
+    findOnDate(strainWindow, requestedDate) !== null;
+
+  const dataDate = requestedHasData
+    ? requestedDate
+    : findFallbackDate(requestedDate, recoveryWindow, sleepWindow, strainWindow);
+
+  if (dataDate === null) {
+    // 7-day window completely empty — fresh install / wiped DB. Surface the
+    // genuine empty state without a fallback marker.
+    return {
+      date: requestedDate,
+      requested_date: requestedDate,
+      data_date: null,
+      is_fallback: false,
+      recovery: null,
+      sleep: null,
+      strain: null,
+      signals: { ots: null, illness: null, apnea: null },
+    };
+  }
+
+  const recovery = findOnDate(recoveryWindow, dataDate);
+  const sleep = findOnDate(sleepWindow, dataDate);
+  const strain = findOnDate(strainWindow, dataDate);
+
+  // Slice each table's history to the SIGNAL_LOOKBACK window anchored on dataDate.
+  // The original fetch start is far enough back that this slice is always populated.
+  const signalStart = addDays(dataDate, -SIGNAL_LOOKBACK_DAYS);
+  const recoveryHistory = sliceWithin(recoveryWindow, signalStart, dataDate);
+  const sleepHistory = sliceWithin(sleepWindow, signalStart, dataDate);
+  const strainHistory = sliceWithin(strainWindow, signalStart, dataDate);
 
   return {
-    date,
+    date: requestedDate,
+    requested_date: requestedDate,
+    data_date: dataDate,
+    is_fallback: dataDate !== requestedDate,
     recovery: recovery ? shapeRecovery(recovery) : null,
     sleep: sleep ? shapeSleep(sleep) : null,
     strain: strain ? shapeStrain(strain) : null,
     signals: {
-      ots: shapeOTS(date, recovery, strain, recoveryHistory, strainHistory),
-      illness: shapeIllness(date, recovery, recoveryHistory, sleepHistory),
-      apnea: shapeApnea(date, sleep, sleepHistory, recoveryHistory),
+      ots: shapeOTS(dataDate, recovery, strain, recoveryHistory, strainHistory),
+      illness: shapeIllness(dataDate, recovery, recoveryHistory, sleepHistory),
+      apnea: shapeApnea(dataDate, sleep, sleepHistory, recoveryHistory),
     },
   };
+}
+
+/**
+ * Walks back up to FALLBACK_LOOKBACK_DAYS from `requested - 1d` and returns the
+ * MAX date that appears in any of the three windows. Returns null if every day
+ * in the lookback range is empty across recovery, sleep, and cycles.
+ */
+function findFallbackDate(
+  requested: string,
+  recovery: RecoveryRow[],
+  sleep: SleepRow[],
+  strain: CycleRow[],
+): string | null {
+  const lookbackStart = addDays(requested, -FALLBACK_LOOKBACK_DAYS);
+  const lookbackEnd = addDays(requested, -1);
+  const present = new Set<string>();
+  for (const r of recovery) {
+    if (r.date >= lookbackStart && r.date <= lookbackEnd) present.add(r.date);
+  }
+  for (const s of sleep) {
+    if (s.date >= lookbackStart && s.date <= lookbackEnd) present.add(s.date);
+  }
+  for (const c of strain) {
+    if (c.date >= lookbackStart && c.date <= lookbackEnd) present.add(c.date);
+  }
+  if (present.size === 0) return null;
+  let max: string | null = null;
+  for (const d of present) {
+    if (max === null || d > max) max = d;
+  }
+  return max;
 }
 
 function parseDateParam(req: Request): string | null {
@@ -108,8 +189,15 @@ function addDays(date: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function first<T>(rows: T[]): T | null {
-  return rows.length > 0 ? rows[0] : null;
+function findOnDate<T extends { date: string }>(rows: T[], date: string): T | null {
+  for (const r of rows) if (r.date === date) return r;
+  return null;
+}
+
+function sliceWithin<T extends { date: string }>(rows: T[], start: string, end: string): T[] {
+  const out: T[] = [];
+  for (const r of rows) if (r.date >= start && r.date <= end) out.push(r);
+  return out;
 }
 
 function finiteOrNull(value: number | null): number | null {
