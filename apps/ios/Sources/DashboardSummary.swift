@@ -2,10 +2,37 @@ import Foundation
 
 struct DashboardSummary: Decodable {
     let date: String
+    let requestedDate: String
+    let dataDate: String?
+    let isFallback: Bool
     let recovery: Recovery?
     let sleep: Sleep?
     let strain: Strain?
     let signals: Signals
+
+    enum CodingKeys: String, CodingKey {
+        case date
+        case requestedDate = "requested_date"
+        case dataDate = "data_date"
+        case isFallback = "is_fallback"
+        case recovery
+        case sleep
+        case strain
+        case signals
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let date = try container.decode(String.self, forKey: .date)
+        self.date = date
+        self.requestedDate = try container.decodeIfPresent(String.self, forKey: .requestedDate) ?? date
+        self.dataDate = try container.decodeIfPresent(String.self, forKey: .dataDate)
+        self.isFallback = try container.decodeIfPresent(Bool.self, forKey: .isFallback) ?? false
+        self.recovery = try container.decodeIfPresent(Recovery.self, forKey: .recovery)
+        self.sleep = try container.decodeIfPresent(Sleep.self, forKey: .sleep)
+        self.strain = try container.decodeIfPresent(Strain.self, forKey: .strain)
+        self.signals = try container.decode(Signals.self, forKey: .signals)
+    }
 
     struct Recovery: Decodable {
         let score: Double?
@@ -75,6 +102,6 @@ struct DashboardSummary: Decodable {
     }
 
     var hasAnyData: Bool {
-        recovery != nil || sleep != nil || strain != nil
+        dataDate != nil
     }
 }
