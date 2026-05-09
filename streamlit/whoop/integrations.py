@@ -56,6 +56,7 @@ def _ensure_table(conn: sqlite3.Connection) -> None:
             token_type TEXT,
             raw TEXT,
             key_version INTEGER NOT NULL DEFAULT 1,
+            needs_reauth INTEGER NOT NULL DEFAULT 0,
             updated_at TEXT NOT NULL,
             PRIMARY KEY (user_id, provider)
         )
@@ -65,6 +66,10 @@ def _ensure_table(conn: sqlite3.Connection) -> None:
     if cols and "key_version" not in cols:
         conn.execute(
             "ALTER TABLE integrations ADD COLUMN key_version INTEGER NOT NULL DEFAULT 1"
+        )
+    if cols and "needs_reauth" not in cols:
+        conn.execute(
+            "ALTER TABLE integrations ADD COLUMN needs_reauth INTEGER NOT NULL DEFAULT 0"
         )
 
 

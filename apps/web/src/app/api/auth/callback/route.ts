@@ -21,5 +21,7 @@ export async function GET(req: NextRequest) {
     return new NextResponse(message, { status: 500 });
   }
 
-  return NextResponse.redirect(new URL("/", req.nextUrl.origin));
+  return NextResponse.redirect(
+    new URL("/settings?reconnected=1", req.nextUrl.origin)
+  );
 }

@@ -300,4 +300,41 @@ describe("integrations + vault", () => {
   // surface doesn't expose a Disconnect action). The test for "clearTokens
   // preserves tokens.json" lives in tests/test_integrations.py. If a Node
   // clearTokens is added later, mirror that test here.
+
+  it("setIntegrationNeedsReauth flips the flag and getIntegration reflects it", async () => {
+    const { integrations } = await loadModules();
+    integrations.upsertIntegration({
+      user_id: 1,
+      provider: "whoop",
+      access_token: "a",
+      refresh_token: "r",
+      expires_at: "2026-05-09T00:00:00+00:00",
+    });
+    // Fresh write defaults to false.
+    expect(integrations.getIntegration(1, "whoop")?.needs_reauth).toBe(false);
+    integrations.setIntegrationNeedsReauth(1, "whoop", true);
+    expect(integrations.getIntegration(1, "whoop")?.needs_reauth).toBe(true);
+  });
+
+  it("upsertIntegration resets needs_reauth to false on every write", async () => {
+    const { integrations } = await loadModules();
+    integrations.upsertIntegration({
+      user_id: 1,
+      provider: "whoop",
+      access_token: "a",
+      refresh_token: "r",
+      expires_at: "2026-05-09T00:00:00+00:00",
+    });
+    integrations.setIntegrationNeedsReauth(1, "whoop", true);
+    expect(integrations.getIntegration(1, "whoop")?.needs_reauth).toBe(true);
+    // Simulate a successful refresh — saveTokens → upsertIntegration.
+    integrations.upsertIntegration({
+      user_id: 1,
+      provider: "whoop",
+      access_token: "a2",
+      refresh_token: "r2",
+      expires_at: "2026-05-10T00:00:00+00:00",
+    });
+    expect(integrations.getIntegration(1, "whoop")?.needs_reauth).toBe(false);
+  });
 });

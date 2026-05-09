@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type LocalSetting = {
   key: string;
@@ -78,6 +79,9 @@ function Row({ label, description, children, isFirst }: { label: string; descrip
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const reconnected = searchParams.get("reconnected") === "1";
   const [localValues, setLocalValues] = useState<Record<string, boolean>>({});
   const [useApi, setUseApi] = useState(false);
   const [apiKeyPresent, setApiKeyPresent] = useState(false);
@@ -86,6 +90,7 @@ export default function SettingsPage() {
   const [defaultSystemPrompt, setDefaultSystemPrompt] = useState("");
   const [savedSystemPrompt, setSavedSystemPrompt] = useState("");
   const [saving, setSaving] = useState(false);
+  const [needsReauth, setNeedsReauth] = useState(false);
 
   useEffect(() => {
     const loaded: Record<string, boolean> = {};
@@ -111,6 +116,17 @@ export default function SettingsPage() {
       .catch(() => {})
       .finally(() => setServerLoaded(true));
   }, []);
+
+  useEffect(() => {
+    fetch("/api/integrations/whoop/status")
+      .then((r) => r.json())
+      .then((d: { needs_reauth: boolean }) => setNeedsReauth(!!d.needs_reauth))
+      .catch(() => {});
+    if (reconnected) {
+      // Strip the param so a refresh doesn't keep refetching.
+      router.replace("/settings");
+    }
+  }, [reconnected, router]);
 
   function toggleLocal(key: string, val: boolean) {
     localStorage.setItem(key, val ? "1" : "0");
@@ -146,6 +162,48 @@ export default function SettingsPage() {
 
   return (
     <div style={{ maxWidth: 720, display: "flex", flexDirection: "column", gap: 18 }}>
+      {needsReauth && (
+        <div
+          className="card"
+          style={{
+            borderLeft: "3px solid #ff4444",
+            background:
+              "linear-gradient(135deg, rgba(255,68,68,0.08), rgba(255,255,255,0.01))",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 16,
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: "var(--fg-0)",
+                  marginBottom: 4,
+                }}
+              >
+                Whoop disconnected
+              </div>
+              <div style={{ fontSize: 12, color: "var(--fg-3)" }}>
+                Sync and Coach will fail until you reconnect.
+              </div>
+            </div>
+            <a
+              href="/api/auth/login"
+              className="empty-state"
+              style={{ textDecoration: "none", border: "none" }}
+            >
+              <span className="cta">Reconnect →</span>
+            </a>
+          </div>
+        </div>
+      )}
       <div className="card">
         <div className="card-head">
           <div className="card-title">Coach</div>

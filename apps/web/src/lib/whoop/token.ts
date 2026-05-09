@@ -12,6 +12,7 @@ import {
 import {
   getIntegration,
   integrationRowExists,
+  setIntegrationNeedsReauth,
 } from "@/lib/db/integrations";
 
 // KEEP IN SYNC WITH streamlit/whoop/auth.py (load/refresh/save semantics).
@@ -119,18 +120,49 @@ async function refreshTokens(current: StoredTokens): Promise<StoredTokens | null
     client_id: clientId(),
     client_secret: clientSecret(),
   });
-  const resp = await fetch(WHOOP_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!resp.ok) return null;
+  let resp: Response;
+  try {
+    resp = await fetch(WHOOP_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (err) {
+    // Transient (timeout / network). Log but do NOT flip needs_reauth — a
+    // brief outage isn't a credential failure and a spurious banner would
+    // train the user to ignore it.
+    console.error(
+      `[token] refresh network error: ${err instanceof Error ? err.message : String(err)}`
+    );
+    return null;
+  }
+  if (!resp.ok) {
+    const bodyExcerpt: Record<string, unknown> = {};
+    try {
+      const parsed = (await resp.json()) as Record<string, unknown>;
+      // Allowlist — never log raw body so we can't leak future token-shaped fields.
+      for (const k of ["error", "error_description", "error_hint"]) {
+        if (k in parsed) bodyExcerpt[k] = parsed[k];
+      }
+    } catch {
+      // body wasn't JSON; status alone is the signal.
+    }
+    console.error(
+      `[token] refresh failed status=${resp.status} body=${JSON.stringify(bodyExcerpt)}`
+    );
+    if (resp.status >= 400 && resp.status < 500) {
+      setIntegrationNeedsReauth(DEFAULT_USER_ID, WHOOP_PROVIDER, true);
+    }
+    return null;
+  }
   const data = (await resp.json()) as Omit<StoredTokens, "expires_at">;
   const stored: StoredTokens = {
     ...data,
     expires_at: computeExpiresAtIso(data.expires_in),
   };
+  // saveTokens → upsertIntegration writes needs_reauth = 0 on every successful
+  // write, so the flag self-resets here on a healthy refresh.
   await saveTokens(stored);
   return stored;
 }

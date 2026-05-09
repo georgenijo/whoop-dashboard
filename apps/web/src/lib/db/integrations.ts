@@ -31,6 +31,7 @@ export type Integration = {
   token_type: string | null;
   raw: Record<string, unknown> | null;
   key_version: number;
+  needs_reauth: boolean;
   updated_at: string;
 };
 
@@ -71,17 +72,23 @@ function ensureIntegrationsTable(db: DB): void {
       token_type TEXT,
       raw TEXT,
       key_version INTEGER NOT NULL DEFAULT 1,
+      needs_reauth INTEGER NOT NULL DEFAULT 0,
       updated_at TEXT NOT NULL,
       PRIMARY KEY (user_id, provider)
     );
   `);
-  // Lazy ALTER for an older shape that pre-dated key_version.
+  // Lazy ALTER for older shapes.
   const cols = db.prepare("PRAGMA table_info(integrations)").all() as {
     name: string;
   }[];
   if (!cols.some((c) => c.name === "key_version")) {
     db.exec(
       "ALTER TABLE integrations ADD COLUMN key_version INTEGER NOT NULL DEFAULT 1"
+    );
+  }
+  if (!cols.some((c) => c.name === "needs_reauth")) {
+    db.exec(
+      "ALTER TABLE integrations ADD COLUMN needs_reauth INTEGER NOT NULL DEFAULT 0"
     );
   }
 }
@@ -125,8 +132,8 @@ export function upsertIntegration(input: IntegrationInput): void {
       `
       INSERT INTO integrations (
         user_id, provider, access_token, refresh_token, expires_at,
-        scopes, token_type, raw, key_version, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        scopes, token_type, raw, key_version, needs_reauth, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
       ON CONFLICT(user_id, provider) DO UPDATE SET
         access_token = excluded.access_token,
         refresh_token = excluded.refresh_token,
@@ -135,6 +142,7 @@ export function upsertIntegration(input: IntegrationInput): void {
         token_type = excluded.token_type,
         raw = excluded.raw,
         key_version = excluded.key_version,
+        needs_reauth = 0,
         updated_at = excluded.updated_at
       `
     ).run(
@@ -164,6 +172,7 @@ type IntegrationRowRaw = {
   token_type: string | null;
   raw: string | null;
   key_version: number;
+  needs_reauth: number;
   updated_at: string;
 };
 
@@ -218,7 +227,7 @@ export function getIntegration(
       .prepare(
         `
         SELECT user_id, provider, access_token, refresh_token, expires_at,
-               scopes, token_type, raw, key_version, updated_at
+               scopes, token_type, raw, key_version, needs_reauth, updated_at
         FROM integrations
         WHERE user_id = ? AND provider = ?
         `
@@ -247,6 +256,7 @@ export function getIntegration(
         token_type: row.token_type,
         raw,
         key_version: row.key_version,
+        needs_reauth: row.needs_reauth === 1,
         updated_at: row.updated_at,
       };
     } catch (err) {
@@ -262,6 +272,23 @@ export function getIntegration(
       }
       throw err;
     }
+  } finally {
+    db.close();
+  }
+}
+
+export function setIntegrationNeedsReauth(
+  user_id: number,
+  provider: string,
+  value: boolean
+): void {
+  const db = openWrite();
+  if (!db) return;
+  try {
+    if (!hasTable(db, "integrations")) return;
+    db.prepare(
+      "UPDATE integrations SET needs_reauth = ?, updated_at = ? WHERE user_id = ? AND provider = ?"
+    ).run(value ? 1 : 0, new Date().toISOString(), user_id, provider);
   } finally {
     db.close();
   }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 
@@ -28,6 +29,19 @@ export default function Sidebar() {
   const searchParams = useSearchParams();
   const range = searchParams.get("range");
   const withRange = (href: string) => (range ? `${href}?range=${range}` : href);
+  const [needsReauth, setNeedsReauth] = useState(false);
+
+  useEffect(() => {
+    const fetchStatus = () => {
+      fetch("/api/integrations/whoop/status")
+        .then((r) => r.json())
+        .then((d: { needs_reauth: boolean }) => setNeedsReauth(!!d.needs_reauth))
+        .catch(() => {});
+    };
+    fetchStatus();
+    window.addEventListener("focus", fetchStatus);
+    return () => window.removeEventListener("focus", fetchStatus);
+  }, []);
 
   return (
     <aside className="sidebar">
@@ -57,10 +71,26 @@ export default function Sidebar() {
             key={n.href}
             href={n.href}
             className={`sb-link ${pathname === n.href ? "active" : ""}`}
+            style={{ position: "relative" }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={icon(n.icon)} alt="" />
             {n.label}
+            {n.href === "/settings" && needsReauth && (
+              <span
+                aria-label="Whoop disconnected"
+                style={{
+                  position: "absolute",
+                  top: 8,
+                  right: 10,
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  background: "#ff4444",
+                  boxShadow: "0 0 6px #ff4444",
+                }}
+              />
+            )}
           </Link>
         ))}
       </div>
