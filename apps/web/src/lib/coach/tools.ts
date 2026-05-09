@@ -228,13 +228,13 @@ type SyncToolAlreadyAttempted = {
 type SyncToolResult = SyncResult | SyncToolSkipped | SyncToolAlreadyAttempted;
 
 async function handleTriggerWhoopSync(
-  signal?: AbortSignal,
-  turnState?: ToolTurnState
+  turnState: ToolTurnState,
+  signal?: AbortSignal
 ): Promise<SyncToolResult> {
   // Hard cap: one sync attempt per chat turn. Prevents tool-loop runaway
   // where the model retries trigger_whoop_sync after a non-cooldown failure.
   // Cooldown skips don't increment the counter — they're cheap.
-  if (turnState && turnState.syncAttempts >= 1) {
+  if (turnState.syncAttempts >= 1) {
     return {
       success: false,
       error: "Sync already attempted this turn",
@@ -255,7 +255,7 @@ async function handleTriggerWhoopSync(
     };
   }
 
-  if (turnState) turnState.syncAttempts += 1;
+  turnState.syncAttempts += 1;
 
   const startedAt = new Date().toISOString();
   const t0 = Date.now();
@@ -264,41 +264,52 @@ async function handleTriggerWhoopSync(
 
   // Persist a sync_logs row so Coach-driven syncs are visible in /logs and
   // — critically — feed the cooldown gate via getLastSuccessfulSyncAt().
-  // Mirror the route's payload shape so /logs renders consistently.
-  if (result.success) {
-    addSyncLog({
-      started_at: startedAt,
-      duration_ms: durationMs,
-      status: "ok",
-      recovery_count: result.fetched_counts.recovery,
-      sleep_count: result.fetched_counts.sleep,
-      workouts_count: result.fetched_counts.workouts,
-      error_message: null,
-      source: "coach",
-      details: JSON.stringify({
-        ...result.details,
-        rows_inserted: result.rows_inserted,
-        fetched_counts: result.fetched_counts,
-        latest_recovery_date: result.latest_recovery_date,
-        latest_sleep_date: result.latest_sleep_date,
-        latest_strain_date: result.latest_strain_date,
-      }),
-    });
-  } else {
-    addSyncLog({
-      started_at: startedAt,
-      duration_ms: durationMs,
-      status: "error",
-      recovery_count: result.fetched_counts.recovery,
-      sleep_count: result.fetched_counts.sleep,
-      workouts_count: result.fetched_counts.workouts,
-      error_message: (result.error ?? "sync failed").slice(0, 800),
-      source: "coach",
-      details: JSON.stringify({
-        ...result.details,
-        rows_inserted: result.rows_inserted,
-        fetched_counts: result.fetched_counts,
-      }),
+  // Mirror the route's payload shape so /logs renders consistently. Wrap in
+  // try/catch: if addSyncLog fails (DB locked, disk full, schema error),
+  // runWhoopSync has already committed data — losing the SyncResult to the
+  // model is a worse outcome than failing the cooldown gate open on the
+  // next request.
+  try {
+    if (result.success) {
+      addSyncLog({
+        started_at: startedAt,
+        duration_ms: durationMs,
+        status: "ok",
+        recovery_count: result.fetched_counts.recovery,
+        sleep_count: result.fetched_counts.sleep,
+        workouts_count: result.fetched_counts.workouts,
+        error_message: null,
+        source: "coach",
+        details: JSON.stringify({
+          ...result.details,
+          rows_inserted: result.rows_inserted,
+          fetched_counts: result.fetched_counts,
+          latest_recovery_date: result.latest_recovery_date,
+          latest_sleep_date: result.latest_sleep_date,
+          latest_strain_date: result.latest_strain_date,
+        }),
+      });
+    } else {
+      addSyncLog({
+        started_at: startedAt,
+        duration_ms: durationMs,
+        status: "error",
+        recovery_count: result.fetched_counts.recovery,
+        sleep_count: result.fetched_counts.sleep,
+        workouts_count: result.fetched_counts.workouts,
+        error_message: (result.error ?? "sync failed").slice(0, 800),
+        source: "coach",
+        details: JSON.stringify({
+          ...result.details,
+          rows_inserted: result.rows_inserted,
+          fetched_counts: result.fetched_counts,
+        }),
+      });
+    }
+  } catch (err) {
+    console.error("[coach] sync_log_write_failed", {
+      error: err instanceof Error ? err.message : String(err),
+      sync_success: result.success,
     });
   }
 
@@ -308,10 +319,10 @@ async function handleTriggerWhoopSync(
 export async function executeTool(
   name: string,
   input: unknown,
-  options: { signal?: AbortSignal; turnState?: ToolTurnState } = {}
+  options: { turnState: ToolTurnState; signal?: AbortSignal }
 ): Promise<unknown> {
   if (name === "trigger_whoop_sync") {
-    return handleTriggerWhoopSync(options.signal, options.turnState);
+    return handleTriggerWhoopSync(options.turnState, options.signal);
   }
 
   const { start_date: startDate, end_date: endDate } = parseDateRangeInput(input);
@@ -371,16 +382,16 @@ function toolErrorPayload(err: unknown): string {
 }
 
 export type ExecuteToolResultOptions = {
+  turnState: ToolTurnState;
   progress?: ToolProgressHandlers;
   signal?: AbortSignal;
-  turnState?: ToolTurnState;
 };
 
 export async function executeToolResult(
   threadId: number,
   toolUse: ToolUseBlock,
   toolDetails: ToolDetail[],
-  opts: ExecuteToolResultOptions = {}
+  opts: ExecuteToolResultOptions
 ): Promise<ToolResultBlockParam> {
   const { progress, signal, turnState } = opts;
   const startMs = Date.now();
@@ -392,7 +403,7 @@ export async function executeToolResult(
 
   let result: unknown;
   try {
-    result = await executeTool(toolUse.name, toolUse.input, { signal, turnState });
+    result = await executeTool(toolUse.name, toolUse.input, { turnState, signal });
   } catch (err) {
     const durationMs = Date.now() - startMs;
     const error = err instanceof Error ? err.message : String(err);

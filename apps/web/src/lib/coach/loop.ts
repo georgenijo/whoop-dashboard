@@ -229,26 +229,26 @@ export async function runAnthropicSdk(
 
     // If the model emits trigger_whoop_sync alongside query_* in the same
     // batch, the queries would race the sync — re-querying before fresh
-    // rows land. Run the sync FIRST and serially (positional indexes
-    // preserved so tool_use ↔ tool_result order matches), then run the
-    // rest in parallel. Common case (no sync in batch) is unchanged.
+    // rows land. Partition: ALL trigger_whoop_sync blocks run serially
+    // FIRST (the per-turn cap will short-circuit duplicates after the
+    // first), then ALL other blocks run in parallel. Original positional
+    // order preserved so tool_use ↔ tool_result alignment holds.
     const toolResults: Awaited<ReturnType<typeof executeToolResult>>[] = new Array(
       toolUses.length
     );
-    const syncIndex = toolUses.findIndex((t) => t.name === "trigger_whoop_sync");
-    if (syncIndex >= 0) {
-      toolResults[syncIndex] = await executeToolResult(
-        threadId,
-        toolUses[syncIndex],
-        toolDetails,
-        { progress: options, signal: options.signal, turnState }
-      );
+    const indexed = toolUses.map((toolUse, i) => ({ toolUse, i }));
+    const serial = indexed.filter(({ toolUse }) => toolUse.name === "trigger_whoop_sync");
+    const parallel = indexed.filter(({ toolUse }) => toolUse.name !== "trigger_whoop_sync");
+
+    for (const { toolUse, i } of serial) {
+      toolResults[i] = await executeToolResult(threadId, toolUse, toolDetails, {
+        progress: options,
+        signal: options.signal,
+        turnState,
+      });
     }
-    const remaining = toolUses
-      .map((toolUse, i) => ({ toolUse, i }))
-      .filter(({ i }) => i !== syncIndex);
-    const remainingResults = await Promise.all(
-      remaining.map(({ toolUse }) =>
+    const parallelResults = await Promise.all(
+      parallel.map(({ toolUse }) =>
         executeToolResult(threadId, toolUse, toolDetails, {
           progress: options,
           signal: options.signal,
@@ -256,8 +256,8 @@ export async function runAnthropicSdk(
         })
       )
     );
-    remaining.forEach(({ i }, idx) => {
-      toolResults[i] = remainingResults[idx];
+    parallel.forEach(({ i }, idx) => {
+      toolResults[i] = parallelResults[idx];
     });
     messagesToPersist.push({
       role: "user",
