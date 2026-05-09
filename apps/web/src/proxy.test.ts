@@ -18,10 +18,14 @@ afterEach(() => {
   else process.env.APPLE_SERVICES_ID = ORIGINAL_SERVICES_ID;
 });
 
-function makeRequest(pathname: string, opts: { cookie?: string } = {}): NextRequest {
-  return new NextRequest(`https://example.test${pathname}`, {
-    headers: opts.cookie ? { cookie: opts.cookie } : {},
-  });
+function makeRequest(
+  pathname: string,
+  opts: { cookie?: string; bearer?: string } = {}
+): NextRequest {
+  const headers: Record<string, string> = {};
+  if (opts.cookie) headers.cookie = opts.cookie;
+  if (opts.bearer) headers.authorization = `Bearer ${opts.bearer}`;
+  return new NextRequest(`https://example.test${pathname}`, { headers });
 }
 
 describe("proxy auth gate — exempt prefixes", () => {
@@ -81,6 +85,15 @@ describe("proxy auth gate — exempt prefixes", () => {
   it("lets a request with a session cookie through to a protected page", async () => {
     const { proxy } = await import("./proxy");
     const res = proxy(makeRequest("/sleep", { cookie: "__Host-coach_session=anything-truthy" }));
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("lets a request with Authorization: Bearer through (iOS path)", async () => {
+    // Regression: the original gate only checked the cookie, so iOS API
+    // calls (Bearer-authenticated, no cookie) got 307'd to /signin and the
+    // app saw HTML. requireAuth re-verifies inside the route.
+    const { proxy } = await import("./proxy");
+    const res = proxy(makeRequest("/api/threads", { bearer: "fake.jwt.token" }));
     expect(res.headers.get("location")).toBeNull();
   });
 
