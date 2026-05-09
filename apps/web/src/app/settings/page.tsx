@@ -211,9 +211,12 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleLogout() {
-    if (!confirm("Sign out?")) return;
-    window.location.href = "/api/auth/logout";
+  function handleLogoutSubmit(e: React.FormEvent<HTMLFormElement>) {
+    // POST-only logout: a GET would let any cross-origin link prefetch log
+    // the user out. Confirm-then-submit keeps the destructive-button UX.
+    if (!confirm("Sign out?")) {
+      e.preventDefault();
+    }
   }
 
   const promptDirty = systemPrompt !== savedSystemPrompt;
@@ -454,22 +457,28 @@ export default function SettingsPage() {
           <div className="card-title">Account</div>
         </div>
         <Row isFirst label="Sign out" description="Clear your session cookie and return to the sign-in page.">
-          <button
-            type="button"
-            onClick={handleLogout}
-            style={{
-              background: "transparent",
-              border: "1px solid rgba(255,80,80,0.3)",
-              color: "#ff8b8b",
-              padding: "6px 14px",
-              borderRadius: 6,
-              fontSize: 12,
-              fontFamily: "var(--font-sans)",
-              cursor: "pointer",
-            }}
+          <form
+            method="post"
+            action="/api/auth/logout"
+            onSubmit={handleLogoutSubmit}
+            style={{ margin: 0 }}
           >
-            Sign out
-          </button>
+            <button
+              type="submit"
+              style={{
+                background: "transparent",
+                border: "1px solid rgba(255,80,80,0.3)",
+                color: "#ff8b8b",
+                padding: "6px 14px",
+                borderRadius: 6,
+                fontSize: 12,
+                fontFamily: "var(--font-sans)",
+                cursor: "pointer",
+              }}
+            >
+              Sign out
+            </button>
+          </form>
         </Row>
       </div>
     </div>

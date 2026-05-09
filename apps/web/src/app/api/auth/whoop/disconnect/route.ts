@@ -22,8 +22,10 @@ export async function POST(req: Request) {
   let fileError: string | null = null;
 
   try {
-    deleteIntegration(auth.user.id, WHOOP_PROVIDER);
-    dbRemoved = true;
+    // `deleteIntegration` returns the rows-affected count. We surface the
+    // difference between "row was actually removed" vs "no-op (no row to
+    // delete)" so the Settings UI can render an honest result.
+    dbRemoved = deleteIntegration(auth.user.id, WHOOP_PROVIDER) > 0;
   } catch (err) {
     // Non-fatal: a missing row + missing file is the same desired end state.
     console.error(

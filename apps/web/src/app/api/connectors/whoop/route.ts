@@ -54,9 +54,12 @@ function expiresAtFromIso(iso: string | null): {
  *   - `disconnected`: no token at all on either layer.
  */
 export async function GET(req: Request) {
-  await requireAuth(req);
+  // Per-user lookup. Today single-user (auth.user.id is almost always 1),
+  // but the whole point of the SIWA unification is that integrations
+  // belong to a resolved user — never hardcode the bootstrap id here.
+  const auth = await requireAuth(req);
 
-  const integration = getIntegration(1, WHOOP_PROVIDER);
+  const integration = getIntegration(auth.user.id, WHOOP_PROVIDER);
   let status: WhoopConnectorStatus = "disconnected";
   let expiresAt: string | null = null;
   let scope: string | null = null;

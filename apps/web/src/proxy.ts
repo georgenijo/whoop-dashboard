@@ -15,6 +15,11 @@ const SENSITIVE_QUERY_KEY = /token|secret|code|state|key|password|auth/i;
  *
  * The matcher already drops most static traffic; this list is what the
  * AUTH GATE checks at runtime, after the matcher passes.
+ *
+ * Exact-match prefixes here MUST be the canonical (no trailing slash) form.
+ * `isAuthExempt` normalises a single trailing slash off the request path
+ * before comparison so `/api/whoop/webhook/` is treated identically to
+ * `/api/whoop/webhook`.
  */
 const AUTH_EXEMPT_PREFIXES: readonly string[] = [
   "/signin",
@@ -24,9 +29,17 @@ const AUTH_EXEMPT_PREFIXES: readonly string[] = [
 ];
 
 function isAuthExempt(pathname: string): boolean {
+  // Drop one trailing slash (but never collapse `/` itself). Apple POSTs to
+  // the exact callback URL we hand it, but Whoop's webhook + future
+  // partners may add a trailing slash unprompted, and Next.js does not
+  // canonicalise on the proxy hop.
+  const normalised =
+    pathname.length > 1 && pathname.endsWith("/")
+      ? pathname.slice(0, -1)
+      : pathname;
   for (const prefix of AUTH_EXEMPT_PREFIXES) {
-    if (pathname === prefix) return true;
-    if (prefix.endsWith("/") && pathname.startsWith(prefix)) return true;
+    if (normalised === prefix) return true;
+    if (prefix.endsWith("/") && normalised.startsWith(prefix)) return true;
   }
   return false;
 }

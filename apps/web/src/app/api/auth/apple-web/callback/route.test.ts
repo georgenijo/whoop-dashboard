@@ -210,4 +210,53 @@ describe("POST /api/auth/apple-web/callback — happy path", () => {
     const res = await route.POST(new NextRequest(req));
     expect(res.headers.get("location")).toContain("error=apple_user_cancelled_authorize");
   });
+
+  it("rejects on equal-length state mismatch (constant-time path)", async () => {
+    // Both values are exactly the same length (10 hex chars) so the early
+    // length-check branch in safeStringEqual is bypassed and we exercise
+    // crypto.timingSafeEqual itself. This is the regression that motivated
+    // the fix — `!==` is variable-time and would have leaked timing.
+    const req = makeRequest(
+      { code: "auth-code", state: "1234567890" },
+      { apple_oauth_state: "0987654321" }
+    );
+    const { NextRequest } = await import("next/server");
+    const res = await route.POST(new NextRequest(req));
+    expect(res.headers.get("location")).toContain("error=state_mismatch");
+  });
+
+  it("redirects to the `from` path captured at start when it is a safe path", async () => {
+    // Cookie now uses the JSON envelope from apple-state.ts. The decoder
+    // tolerates the legacy plain-string format, but the real start route
+    // writes JSON — we cover that wire shape here.
+    const cookieValue = JSON.stringify({ s: "state-from", f: "/sleep?range=7d" });
+    const req = makeRequest(
+      { code: "auth-code", state: "state-from" },
+      { apple_oauth_state: cookieValue }
+    );
+    const { NextRequest } = await import("next/server");
+    const res = await route.POST(new NextRequest(req));
+    expect(res.status).toBe(303);
+    const loc = res.headers.get("location") ?? "";
+    expect(loc).toContain("/sleep?range=7d");
+    expect(loc).not.toMatch(/^https?:\/\/[^/]+\/(?:$|\?)/);
+  });
+
+  it("falls back to / when the captured `from` is unsafe", async () => {
+    // Defence-in-depth: if anything bypasses the start-route validator and
+    // writes a non-path `from` into the cookie, the callback's allowlist
+    // re-check should silently downgrade to `/`. Note isSafeReturnPath is
+    // also applied at decode time, so this test exercises the layered guard.
+    const cookieValue = JSON.stringify({ s: "state-evil", f: "https://evil.com" });
+    const req = makeRequest(
+      { code: "auth-code", state: "state-evil" },
+      { apple_oauth_state: cookieValue }
+    );
+    const { NextRequest } = await import("next/server");
+    const res = await route.POST(new NextRequest(req));
+    expect(res.status).toBe(303);
+    const loc = res.headers.get("location") ?? "";
+    expect(loc).not.toContain("evil.com");
+    expect(loc).toMatch(/\/$/);
+  });
 });

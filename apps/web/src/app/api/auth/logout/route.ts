@@ -6,14 +6,15 @@ export const dynamic = "force-dynamic";
 /**
  * Sign out: clear the `__Host-coach_session` cookie and bounce to /signin.
  *
- * Accepts both GET (so it can be a plain `<a href>`) and POST (for forms /
- * fetch with credentials). The session JWT is stateless — we don't need to
- * call back into the DB; clearing the cookie is enough.
+ * POST-only by design. A GET handler would let any cross-origin `<img>` /
+ * link prefetch / drive-by request log the user out (CSRF). Convention
+ * elsewhere in this app: mutating actions are POST. Callers use a form
+ * with `method="post"` (see /settings Sign-out button).
  */
 
-function clearAndRedirect(req: NextRequest, status: number): NextResponse {
+export function POST(req: NextRequest) {
   const res = NextResponse.redirect(new URL("/signin", req.nextUrl.origin), {
-    status,
+    status: 303,
   });
   res.cookies.set({
     name: COACH_SESSION_COOKIE,
@@ -25,12 +26,4 @@ function clearAndRedirect(req: NextRequest, status: number): NextResponse {
     maxAge: 0,
   });
   return res;
-}
-
-export function GET(req: NextRequest) {
-  return clearAndRedirect(req, 303);
-}
-
-export function POST(req: NextRequest) {
-  return clearAndRedirect(req, 303);
 }

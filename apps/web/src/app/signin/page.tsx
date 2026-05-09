@@ -30,10 +30,26 @@ function errorMessage(code: string | undefined): string | null {
   );
 }
 
+// Server-side allowlist for the post-signin return path, mirroring the
+// validator used by the callback. Reject anything that isn't a same-origin
+// path so a hand-crafted /signin URL with `?from=https://evil/` cannot
+// trick us into forwarding off-site after sign-in.
+function safeFromParam(value: string | undefined): string | null {
+  if (!value) return null;
+  if (!value.startsWith("/")) return null;
+  if (value.startsWith("//")) return null;
+  if (value.startsWith("/\\")) return null;
+  if (value.length > 2048) return null;
+  return value;
+}
+
 export default async function SignInPage({ searchParams }: SignInPageProps) {
   const params = (await searchParams) ?? {};
   const errorText = errorMessage(params.error);
-  const startHref = "/api/auth/apple-web/start";
+  const safeFrom = safeFromParam(params.from);
+  const startHref = safeFrom
+    ? `/api/auth/apple-web/start?from=${encodeURIComponent(safeFrom)}`
+    : "/api/auth/apple-web/start";
 
   return (
     <div
@@ -110,9 +126,9 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
           {errorText}
         </div>
       )}
-      {params.from && (
+      {safeFrom && (
         <div style={{ fontSize: 11, opacity: 0.45 }}>
-          You will be returned to <code>{params.from}</code> after signing in.
+          You will be returned to <code>{safeFrom}</code> after signing in.
         </div>
       )}
     </div>

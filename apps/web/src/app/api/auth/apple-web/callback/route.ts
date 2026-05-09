@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import crypto from "node:crypto";
 import {
   AppleAuthError,
   verifyAppleIdentityToken,
@@ -11,10 +12,14 @@ import {
 import { signSessionToken } from "@/lib/auth/jwt";
 import { upsertUserByAppleSub } from "@/lib/db";
 import {
+  APPLE_OAUTH_STATE_COOKIE,
   COACH_SESSION_COOKIE,
   COACH_SESSION_MAX_AGE_SEC,
 } from "@/lib/auth/cookies";
-import { APPLE_OAUTH_STATE_COOKIE } from "../start/route";
+import {
+  decodeAppleOAuthState,
+  isSafeReturnPath,
+} from "@/lib/auth/apple-state";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +51,19 @@ function bail(req: NextRequest, reason: string, status = 400): NextResponse {
   return res;
 }
 
+/**
+ * Constant-time string compare. timingSafeEqual throws on length mismatch
+ * — we early-out for that and return false, so a wrong-length attacker
+ * input still leaks zero info beyond "wrong" via this branch.
+ */
+function safeStringEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ab, bb);
+}
+
 export async function POST(req: NextRequest) {
   let form: FormData;
   try {
@@ -68,11 +86,12 @@ export async function POST(req: NextRequest) {
     return bail(req, "missing_state", 400);
   }
 
-  const cookieState = req.cookies.get(APPLE_OAUTH_STATE_COOKIE)?.value;
-  if (!cookieState) {
+  const cookieRaw = req.cookies.get(APPLE_OAUTH_STATE_COOKIE)?.value;
+  const cookiePayload = decodeAppleOAuthState(cookieRaw);
+  if (!cookiePayload) {
     return bail(req, "state_cookie_missing", 400);
   }
-  if (cookieState !== state) {
+  if (!safeStringEqual(cookiePayload.state, state)) {
     return bail(req, "state_mismatch", 400);
   }
 
@@ -120,7 +139,15 @@ export async function POST(req: NextRequest) {
   const user = upsertUserByAppleSub(identity.sub, identity.email);
   const { token } = await signSessionToken(user.id);
 
-  const res = NextResponse.redirect(new URL("/", req.nextUrl.origin), {
+  // Honour `from` from the state cookie if it's a safe same-origin path.
+  // decodeAppleOAuthState already filtered junk; re-check anyway as a
+  // defence-in-depth — a future contributor adding fields shouldn't be
+  // able to drop the validator without this layer screaming.
+  const target =
+    cookiePayload.from && isSafeReturnPath(cookiePayload.from)
+      ? cookiePayload.from
+      : "/";
+  const res = NextResponse.redirect(new URL(target, req.nextUrl.origin), {
     status: 303,
   });
   // Clear the one-shot state cookie.
