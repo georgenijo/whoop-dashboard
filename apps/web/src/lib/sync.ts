@@ -128,11 +128,21 @@ async function fetchAllParallel(
   pageCounts: Record<string, number>;
 }> {
   const params = { start, end };
-  // Per-completion progress: each `fetching_*` event fires when its endpoint
-  // resolves, not in a synchronous burst before `Promise.all`. Order in the
-  // emit log reflects actual fetch latency, not source code order.
+
+  /** Fires `fetching_*` when this endpoint resolves — order in the emit
+   * log reflects actual fetch latency, not source code order. */
   const reporting = <T>(stage: SyncStage, p: Promise<T>): Promise<T> =>
     onProgress ? p.then((r) => { onProgress({ stage }); return r; }) : p;
+
+  // Defensive 401-retry inside `whoopGet` will force-refresh the token. The
+  // pre-warm in `runWhoopSync` already covers the common case, but if a
+  // token expires mid-fetch (revoked, edge cache stale, clock skew), this
+  // path emits `refreshing_token` so the user/model still sees the event.
+  const onTokenRefresh = onProgress
+    ? () => onProgress({ stage: "refreshing_token" })
+    : undefined;
+  const fetchOpts = { signal, onTokenRefresh };
+
   const [
     bodyRes,
     cyclesRes,
@@ -143,33 +153,31 @@ async function fetchAllParallel(
     reporting(
       "fetching_body",
       timed("body", async () =>
-        whoopGet<WhoopBodyMeasurement>(`/v2/user/measurement/body`, { signal }),
+        whoopGet<WhoopBodyMeasurement>(`/v2/user/measurement/body`, fetchOpts),
       ),
     ),
     reporting(
       "fetching_strain",
       timed("cycles", async () =>
-        whoopGetAll<WhoopCycleRecord>(`/v2/cycle`, params, { signal }),
+        whoopGetAll<WhoopCycleRecord>(`/v2/cycle`, params, fetchOpts),
       ),
     ),
     reporting(
       "fetching_recovery",
       timed("recovery", async () =>
-        whoopGetAll<WhoopRecoveryRecord>(`/v2/recovery`, params, { signal }),
+        whoopGetAll<WhoopRecoveryRecord>(`/v2/recovery`, params, fetchOpts),
       ),
     ),
     reporting(
       "fetching_sleep",
       timed("sleep", async () =>
-        whoopGetAll<WhoopSleepRecord>(`/v2/activity/sleep`, params, { signal }),
+        whoopGetAll<WhoopSleepRecord>(`/v2/activity/sleep`, params, fetchOpts),
       ),
     ),
     reporting(
       "fetching_workouts",
       timed("workouts", async () =>
-        whoopGetAll<WhoopWorkoutRecord>(`/v2/activity/workout`, params, {
-          signal,
-        }),
+        whoopGetAll<WhoopWorkoutRecord>(`/v2/activity/workout`, params, fetchOpts),
       ),
     ),
   ]);
@@ -491,8 +499,10 @@ export async function runWhoopSync(
     // event deterministically — before the parallel fetch burst. Seeds
     // `inflightRefresh` so the parallel `whoopGet` calls below either skip
     // refresh or join the same in-flight promise (single emit). No-op if
-    // token is fresh; throws nothing on refresh failure (downstream
-    // `whoopGet` will surface `WhoopAuthError`).
+    // token is fresh; returns null on auth failure (downstream `whoopGet`
+    // will surface `WhoopAuthError`). May still throw on transport failure
+    // (DNS / TLS / `AbortSignal.timeout`) — caught by the outer try and
+    // routed to the pre-commit failure branch.
     await getValidAccessToken(false, {
       onRefresh: () => opts.onProgress?.({ stage: "refreshing_token" }),
     });
@@ -545,11 +555,8 @@ export async function runWhoopSync(
     checkAborted(opts.signal);
 
     const latest = latestDates();
-    // Fire only on the fully-clean success path — placed AFTER the final
-    // `checkAborted` so a post-commit abort/exception (which routes to the
-    // `partial: true` catch branch) does not emit this stage. The summary
-    // recompute itself runs inside `persistAll`'s transaction; this event
-    // is the user-facing "all done with the summary phase" marker.
+    // Success-path only — placement after the final `checkAborted` is
+    // load-bearing; the partial branch must not emit this.
     opts.onProgress?.({ stage: "computing_summary" });
     return {
       success: true,

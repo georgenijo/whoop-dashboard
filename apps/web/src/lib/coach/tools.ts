@@ -400,9 +400,9 @@ export type ToolProgressHandlers = {
     error?: string;
   }) => void;
   /**
-   * Mid-tool progress for long-running tools. Currently emitted only by
-   * `trigger_whoop_sync` (per-stage). `query_*` tools resolve fast enough
-   * that progress events aren't worth the bandwidth.
+   * Mid-tool progress for long-running tools. Producer policy lives in
+   * `executeToolResult` — see the sync forwarder there. `query_*` tools
+   * resolve in <500ms and don't get a progress channel.
    */
   onToolProgress?: (event: {
     tool: string;

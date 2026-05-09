@@ -98,7 +98,16 @@ function mergeAssistantProgressStage(
     //    earlier `tool_use_start`.
     //  - different tool (or no current name match) → start a fresh
     //    running record with stage; clears stale duration/rows/status.
+    //    Today the producer only emits `tool_progress` for the running
+    //    tool, so this branch should be unreachable; warn so a producer
+    //    bug surfaces instead of silently re-mounting state.
     if (!cur || cur.name !== event.tool) {
+      if (cur) {
+        console.warn("[useChatSend] tool_progress for non-current tool", {
+          current: cur.name,
+          received: event.tool,
+        });
+      }
       return {
         ...message,
         progress: {

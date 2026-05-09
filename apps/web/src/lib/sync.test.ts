@@ -47,6 +47,17 @@ vi.mock("@/lib/whoop/token", () => ({
   ) => getValidAccessTokenMock(force, hooks),
 }));
 
+// Stub upsertBodyMeasurement so the partial-path test can hook abort into
+// it (semantic trigger) without coupling to checkAborted call counts. Other
+// tests don't assert on body upsert behavior, so the default no-op is fine.
+const upsertBodyMock = vi.fn();
+vi.mock("@/lib/whoop/upsert", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/whoop/upsert")>(
+    "@/lib/whoop/upsert",
+  );
+  return { ...actual, upsertBodyMeasurement: (...args: unknown[]) => upsertBodyMock(...args) };
+});
+
 type SyncModule = typeof import("./sync");
 let syncMod: SyncModule;
 
@@ -186,6 +197,7 @@ beforeEach(() => {
   whoopGetMock.mockReset();
   whoopGetAllMock.mockReset();
   getValidAccessTokenMock.mockReset();
+  upsertBodyMock.mockReset();
   // Default: token is fresh, no refresh fired.
   getValidAccessTokenMock.mockImplementation(async () => "stub-token");
   clearTables();
@@ -341,23 +353,20 @@ describe("runWhoopSync abort handling", () => {
     expect(result.partial).toBeUndefined();
 
     const stages = events.map((e) => e.stage);
-    expect(stages).toContain("fetching_recovery");
-    expect(stages).toContain("fetching_sleep");
-    expect(stages).toContain("fetching_strain");
-    expect(stages).toContain("fetching_workouts");
-    expect(stages).toContain("fetching_body");
-    expect(stages).toContain("upserting");
-    expect(stages).toContain("computing_summary");
-
-    for (const s of [
-      "fetching_recovery",
-      "fetching_sleep",
-      "fetching_strain",
-      "fetching_workouts",
-      "fetching_body",
-    ] as const) {
-      expect(stages.filter((x) => x === s)).toHaveLength(1);
-    }
+    // Hard length check guards against double-emit regressions.
+    expect(stages).toHaveLength(7);
+    // Set equality guards against unexpected stage names slipping in.
+    expect(new Set(stages)).toEqual(
+      new Set([
+        "fetching_recovery",
+        "fetching_sleep",
+        "fetching_strain",
+        "fetching_workouts",
+        "fetching_body",
+        "upserting",
+        "computing_summary",
+      ]),
+    );
 
     const idxUpsert = stages.indexOf("upserting");
     const idxSummary = stages.indexOf("computing_summary");
@@ -403,23 +412,17 @@ describe("runWhoopSync abort handling", () => {
 
   it("onProgress: abort-after-commit (partial path) does NOT emit computing_summary but DOES emit upserting", async () => {
     wireHappyPath();
-    let calls = 0;
-    const fakeSignal = {
-      get aborted() {
-        calls += 1;
-        return calls >= 8;
-      },
-      addEventListener: () => {},
-      removeEventListener: () => {},
-      dispatchEvent: () => true,
-      onabort: null,
-      reason: undefined,
-      throwIfAborted: () => {},
-    } as unknown as AbortSignal;
+    const ctrl = new AbortController();
+    // Semantic trigger: abort the signal during the body upsert. The next
+    // checkAborted (after body) trips → partial branch. No call-count
+    // coupling to runWhoopSync internals.
+    upsertBodyMock.mockImplementation(() => {
+      ctrl.abort();
+    });
 
     const events: import("./sync").SyncProgressEvent[] = [];
     const result = await syncMod.runWhoopSync({
-      signal: fakeSignal,
+      signal: ctrl.signal,
       onProgress: (e) => events.push(e),
     });
 

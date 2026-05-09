@@ -159,6 +159,10 @@ export async function getValidAccessToken(
 
   // Fire onRefresh only on the originating call — joiners above skip it so
   // a single refresh emits exactly one progress event.
+  // INVARIANT: no awaits between this fire and the `inflightRefresh`
+  // assignment below. Single-thread JS guarantees no other caller can
+  // observe `inflightRefresh === null` between these two lines, which is
+  // what prevents double-emit. Do NOT insert telemetry / logging here.
   hooks.onRefresh?.();
   const refreshPromise = refreshTokens(tokens);
   inflightRefresh = refreshPromise.finally(() => {
