@@ -414,7 +414,7 @@ def get_history_stats(days: int = 30) -> dict:
 
     sleep = conn.execute(
         "SELECT date, in_bed_ms, deep_ms, rem_ms, light_ms, awake_ms, sleep_need_ms, "
-        "performance, efficiency, disturbances, respiratory_rate FROM sleep WHERE nap = 0 ORDER BY date DESC LIMIT ?",
+        "performance, efficiency, disturbances, respiratory_rate FROM sleep WHERE COALESCE(nap, 0) = 0 ORDER BY date DESC LIMIT ?",
         (days,),
     ).fetchall()
     stats["sleep"] = [dict(r) for r in sleep]

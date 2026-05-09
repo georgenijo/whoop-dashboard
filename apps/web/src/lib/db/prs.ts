@@ -89,7 +89,7 @@ export function getStreaks(): {
     const sleepPerfDates = hasSleep
       ? (db
           .prepare(
-            "SELECT date FROM sleep WHERE nap = 0 AND performance >= 85 ORDER BY date ASC"
+            "SELECT date FROM sleep WHERE COALESCE(nap, 0) = 0 AND performance >= 85 ORDER BY date ASC"
           )
           .all() as { date: string }[]).map((r) => r.date)
       : [];
@@ -98,7 +98,7 @@ export function getStreaks(): {
     if (hasRecovery && hasSleep) {
       loggingDates = (db
         .prepare(
-          "SELECT date FROM recovery UNION SELECT date FROM sleep WHERE nap = 0 ORDER BY 1 ASC"
+          "SELECT date FROM recovery UNION SELECT date FROM sleep WHERE COALESCE(nap, 0) = 0 ORDER BY 1 ASC"
         )
         .all() as { date: string }[]).map((r) => r.date);
     } else if (hasRecovery) {
@@ -107,7 +107,7 @@ export function getStreaks(): {
         .all() as { date: string }[]).map((r) => r.date);
     } else if (hasSleep) {
       loggingDates = (db
-        .prepare("SELECT date FROM sleep WHERE nap = 0 ORDER BY date ASC")
+        .prepare("SELECT date FROM sleep WHERE COALESCE(nap, 0) = 0 ORDER BY date ASC")
         .all() as { date: string }[]).map((r) => r.date);
     }
 
