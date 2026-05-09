@@ -56,6 +56,7 @@ def _ensure_table(conn: sqlite3.Connection) -> None:
             token_type TEXT,
             raw TEXT,
             key_version INTEGER NOT NULL DEFAULT 1,
+            needs_reauth INTEGER NOT NULL DEFAULT 0,
             updated_at TEXT NOT NULL,
             PRIMARY KEY (user_id, provider)
         )
@@ -65,6 +66,17 @@ def _ensure_table(conn: sqlite3.Connection) -> None:
     if cols and "key_version" not in cols:
         conn.execute(
             "ALTER TABLE integrations ADD COLUMN key_version INTEGER NOT NULL DEFAULT 1"
+        )
+    if cols and "needs_reauth" not in cols:
+        # `needs_reauth` is owned by the Next.js refreshTokens path
+        # (apps/web/src/lib/whoop/token.ts). The flag is set on a definitive
+        # 4xx from Whoop's token endpoint and reset on any successful
+        # upsertIntegration. This Python column declaration exists for schema
+        # parity only — Python writers here don't touch the flag, so a
+        # concurrent Python refresh / sync can race against the TS-side
+        # set/reset. Acceptable today; P2 keepalive will reshape this.
+        conn.execute(
+            "ALTER TABLE integrations ADD COLUMN needs_reauth INTEGER NOT NULL DEFAULT 0"
         )
 
 

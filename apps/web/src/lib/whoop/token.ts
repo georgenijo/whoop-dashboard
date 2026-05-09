@@ -12,6 +12,7 @@ import {
 import {
   getIntegration,
   integrationRowExists,
+  setIntegrationNeedsReauth,
 } from "@/lib/db/integrations";
 
 // KEEP IN SYNC WITH streamlit/whoop/auth.py (load/refresh/save semantics).
@@ -24,6 +25,14 @@ import {
 const REFRESH_BUFFER_S = 60;
 const DEFAULT_USER_ID = 1;
 const WHOOP_PROVIDER = "whoop";
+
+// Definitive "credentials are dead, user must reconnect" error codes from
+// Whoop / RFC 6749 / RFC 6750. Excluded on purpose:
+//   - invalid_client / unauthorized_client → server-side config bugs (bad
+//     WHOOP_CLIENT_ID/SECRET); reconnecting tokens won't help, so the
+//     banner would mislead.
+//   - invalid_request → our client bug (malformed body, missing param).
+const REAUTH_ERROR_CODES = new Set(["invalid_grant", "invalid_token"]);
 
 let inflightRefresh: Promise<StoredTokens | null> | null = null;
 
@@ -119,18 +128,70 @@ async function refreshTokens(current: StoredTokens): Promise<StoredTokens | null
     client_id: clientId(),
     client_secret: clientSecret(),
   });
-  const resp = await fetch(WHOOP_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!resp.ok) return null;
+  let resp: Response;
+  try {
+    resp = await fetch(WHOOP_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (err) {
+    // Transient (timeout / network). Log but do NOT flip needs_reauth — a
+    // brief outage isn't a credential failure and a spurious banner would
+    // train the user to ignore it.
+    console.error(
+      `[token] refresh network error: ${err instanceof Error ? err.message : String(err)}`
+    );
+    return null;
+  }
+  if (!resp.ok) {
+    const bodyExcerpt: Record<string, unknown> = {};
+    try {
+      const parsed = (await resp.json()) as Record<string, unknown>;
+      // Allowlist — never log raw body so we can't leak future token-shaped fields.
+      // Truncate the free-text fields per RFC 6749 (description/hint are
+      // server-supplied prose; cap to limit accidental token echo).
+      for (const k of ["error", "error_description", "error_hint"]) {
+        if (!(k in parsed)) continue;
+        const v = parsed[k];
+        bodyExcerpt[k] =
+          typeof v === "string" && k !== "error" ? v.slice(0, 120) : v;
+      }
+    } catch {
+      // body wasn't JSON; status alone is the signal.
+    }
+    console.error(
+      `[token] refresh failed status=${resp.status} body=${JSON.stringify(bodyExcerpt)}`
+    );
+    // Flip flag only on definitive credential-rejection signals so a code
+    // bug or upstream config issue doesn't train the user to reconnect.
+    // Allowlist lives at module scope (REAUTH_ERROR_CODES); 401 catches
+    // the RFC-canonical token-rejection case when no parsable error code
+    // is present. 403 (scope/permission), 5xx, network, parse failure,
+    // and unknown error codes → log only.
+    //
+    // Non-atomic with the upsert. Single-process Next.js serializes via
+    // the `inflightRefresh` singleton, but a concurrent Python sync
+    // (sync/daily_sync.py) could in theory race a flag-set against a
+    // follow-up reset. Acceptable today; P2 keepalive will reshape this.
+    const errorCode =
+      typeof bodyExcerpt.error === "string" ? bodyExcerpt.error : null;
+    if (
+      (errorCode && REAUTH_ERROR_CODES.has(errorCode)) ||
+      resp.status === 401
+    ) {
+      setIntegrationNeedsReauth(DEFAULT_USER_ID, WHOOP_PROVIDER, true);
+    }
+    return null;
+  }
   const data = (await resp.json()) as Omit<StoredTokens, "expires_at">;
   const stored: StoredTokens = {
     ...data,
     expires_at: computeExpiresAtIso(data.expires_in),
   };
+  // saveTokens → upsertIntegration writes needs_reauth = 0 on every successful
+  // write, so the flag self-resets here on a healthy refresh.
   await saveTokens(stored);
   return stored;
 }
