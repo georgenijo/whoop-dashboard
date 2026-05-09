@@ -42,7 +42,8 @@ export function redirectUri(): string {
 export function tokensPath(): string {
   if (process.env.WHOOP_TOKENS_PATH) return process.env.WHOOP_TOKENS_PATH;
   // Default: repo-root `tokens.json` (matches streamlit/whoop/auth.py:17).
-  return path.resolve(process.cwd(), "..", "tokens.json");
+  // process.cwd() is `apps/web/`, so repo root is two levels up.
+  return path.resolve(process.cwd(), "..", "..", "tokens.json");
 }
 
 export function getBootstrapUser(): User {
