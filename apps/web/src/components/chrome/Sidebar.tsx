@@ -39,8 +39,13 @@ export default function Sidebar() {
         .catch(() => {});
     };
     fetchStatus();
-    window.addEventListener("focus", fetchStatus);
-    return () => window.removeEventListener("focus", fetchStatus);
+    // visibilitychange (not focus) — fires once per tab-return rather than
+    // per Cmd-Tab keystroke, so rapid switching doesn't spam DB+decrypt.
+    const onVis = () => {
+      if (document.visibilityState === "visible") fetchStatus();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
   return (
@@ -78,6 +83,7 @@ export default function Sidebar() {
             {n.label}
             {n.href === "/settings" && needsReauth && (
               <span
+                role="status"
                 aria-label="Whoop disconnected"
                 style={{
                   position: "absolute",

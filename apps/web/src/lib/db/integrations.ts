@@ -77,7 +77,7 @@ function ensureIntegrationsTable(db: DB): void {
       PRIMARY KEY (user_id, provider)
     );
   `);
-  // Lazy ALTER for older shapes.
+  // Lazy ALTERs for rows that pre-dated key_version / needs_reauth.
   const cols = db.prepare("PRAGMA table_info(integrations)").all() as {
     name: string;
   }[];

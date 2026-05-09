@@ -122,10 +122,17 @@ export default function SettingsPage() {
       .then((r) => r.json())
       .then((d: { needs_reauth: boolean }) => setNeedsReauth(!!d.needs_reauth))
       .catch(() => {});
-    if (reconnected) {
-      // Strip the param so a refresh doesn't keep refetching.
-      router.replace("/settings");
-    }
+  }, []);
+
+  useEffect(() => {
+    if (!reconnected) return;
+    // Refetch to capture the post-OAuth flag value, then strip ?reconnected=1
+    // so a hard reload doesn't appear "stuck" in the just-reconnected state.
+    fetch("/api/integrations/whoop/status")
+      .then((r) => r.json())
+      .then((d: { needs_reauth: boolean }) => setNeedsReauth(!!d.needs_reauth))
+      .catch(() => {});
+    router.replace("/settings");
   }, [reconnected, router]);
 
   function toggleLocal(key: string, val: boolean) {
@@ -171,29 +178,8 @@ export default function SettingsPage() {
               "linear-gradient(135deg, rgba(255,68,68,0.08), rgba(255,255,255,0.01))",
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 16,
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: "var(--fg-0)",
-                  marginBottom: 4,
-                }}
-              >
-                Whoop disconnected
-              </div>
-              <div style={{ fontSize: 12, color: "var(--fg-3)" }}>
-                Sync and Coach will fail until you reconnect.
-              </div>
-            </div>
+          <div className="card-head" style={{ alignItems: "center" }}>
+            <div className="card-title">Whoop disconnected</div>
             <a
               href="/api/auth/login"
               className="empty-state"
@@ -201,6 +187,9 @@ export default function SettingsPage() {
             >
               <span className="cta">Reconnect →</span>
             </a>
+          </div>
+          <div style={{ paddingTop: 4, fontSize: 12, color: "var(--fg-3)" }}>
+            Sync and Coach will fail until you reconnect.
           </div>
         </div>
       )}

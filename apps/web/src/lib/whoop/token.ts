@@ -142,8 +142,13 @@ async function refreshTokens(current: StoredTokens): Promise<StoredTokens | null
     try {
       const parsed = (await resp.json()) as Record<string, unknown>;
       // Allowlist — never log raw body so we can't leak future token-shaped fields.
+      // Truncate the free-text fields per RFC 6749 (description/hint are
+      // server-supplied prose; cap to limit accidental token echo).
       for (const k of ["error", "error_description", "error_hint"]) {
-        if (k in parsed) bodyExcerpt[k] = parsed[k];
+        if (!(k in parsed)) continue;
+        const v = parsed[k];
+        bodyExcerpt[k] =
+          typeof v === "string" && k !== "error" ? v.slice(0, 120) : v;
       }
     } catch {
       // body wasn't JSON; status alone is the signal.
@@ -151,7 +156,20 @@ async function refreshTokens(current: StoredTokens): Promise<StoredTokens | null
     console.error(
       `[token] refresh failed status=${resp.status} body=${JSON.stringify(bodyExcerpt)}`
     );
-    if (resp.status >= 400 && resp.status < 500) {
+    // Narrow flag flip: only definitive credential-rejection signals.
+    // Whoop returns 400 for both invalid_grant (refresh expired/revoked)
+    // AND invalid_request (our client bug — malformed body, missing param).
+    // Flipping on every 4xx would train the user to reconnect when the real
+    // fix is in our code. Key off the body's `error` code; fall back to 401
+    // (the RFC-correct expired/invalid-token signal). Body-parse failure or
+    // an unrecognized error → log only.
+    // Non-atomic with the upsert. Single-process Next.js serializes via the
+    // `inflightRefresh` singleton, but a concurrent Python sync
+    // (sync/daily_sync.py) could in theory race a flag-set against a
+    // follow-up reset. Acceptable today; P2 keepalive will reshape this.
+    const errorCode =
+      typeof bodyExcerpt.error === "string" ? bodyExcerpt.error : null;
+    if (errorCode === "invalid_grant" || resp.status === 401) {
       setIntegrationNeedsReauth(DEFAULT_USER_ID, WHOOP_PROVIDER, true);
     }
     return null;
