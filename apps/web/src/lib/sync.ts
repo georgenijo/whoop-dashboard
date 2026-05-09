@@ -54,6 +54,13 @@ export type SyncResult = {
     body_error?: string;
   };
   error?: string;
+  /**
+   * Set when `signal` aborted AFTER the SQLite transaction committed but
+   * before post-commit metadata work (body upsert, latest-date lookup) ran
+   * to completion. Rows ARE persisted; the result is still `success: true`,
+   * but skipped fields fall back to safe defaults (e.g. `latest_*_date: null`).
+   */
+  partial?: boolean;
 };
 
 const DEFAULT_DAYS = 7;
@@ -435,6 +442,11 @@ export async function runWhoopSync(
     details,
   };
 
+  let committed = false;
+  let committedCounts: SyncCounts | null = null;
+  let committedFetched: SyncCounts | null = null;
+  let committedData: FetchedData | null = null;
+
   try {
     checkAborted(opts.signal);
 
@@ -453,6 +465,15 @@ export async function runWhoopSync(
     const dbT0 = Date.now();
     const counts = persistAll(data, opts.signal);
     details.sync_db_ms = Date.now() - dbT0;
+    committed = true;
+    committedCounts = counts;
+    committedData = data;
+    committedFetched = {
+      recovery: data.recovery.length,
+      sleep: data.sleep.length,
+      cycles: data.cycles.length,
+      workouts: data.workouts.length,
+    };
 
     // Body measurement is deduped against the latest stored row, so it's safe
     // to run after the main transaction. Failures here surface in details
@@ -460,6 +481,7 @@ export async function runWhoopSync(
     // workouts are already committed.
     const bodyT0 = Date.now();
     try {
+      checkAborted(opts.signal);
       upsertBodyMeasurement(data.body);
     } catch (err) {
       details.body_error =
@@ -468,12 +490,7 @@ export async function runWhoopSync(
     details.body_ms = Date.now() - bodyT0;
     details.summary_dates = syncedDates(data).length;
 
-    const fetched: SyncCounts = {
-      recovery: data.recovery.length,
-      sleep: data.sleep.length,
-      cycles: data.cycles.length,
-      workouts: data.workouts.length,
-    };
+    checkAborted(opts.signal);
 
     const latest = latestDates();
     return {
@@ -482,13 +499,33 @@ export async function runWhoopSync(
       latest_sleep_date: latest.sleep,
       latest_strain_date: latest.strain,
       rows_inserted: counts,
-      fetched_counts: fetched,
+      fetched_counts: committedFetched,
       details,
     };
   } catch (err) {
     // DOMException (e.g. AbortError) extends Error in Node 20+, so the
     // single Error-name check covers both branches.
     const isAbort = err instanceof Error && err.name === "AbortError";
+
+    // Abort fired after the transaction committed: rows ARE in the DB, so
+    // report success rather than misleading the caller (Coach surfaces
+    // "sync failed" otherwise — see issue #242).
+    if (isAbort && committed && committedCounts && committedFetched) {
+      details.summary_dates = committedData
+        ? syncedDates(committedData).length
+        : details.summary_dates;
+      return {
+        success: true,
+        latest_recovery_date: null,
+        latest_sleep_date: null,
+        latest_strain_date: null,
+        rows_inserted: committedCounts,
+        fetched_counts: committedFetched,
+        details,
+        partial: true,
+      };
+    }
+
     let message: string;
     if (isAbort) {
       message = "aborted";
