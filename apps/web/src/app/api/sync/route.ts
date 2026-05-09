@@ -53,7 +53,7 @@ export async function POST(req: Request) {
       recovery_count: result.fetched_counts.recovery,
       sleep_count: result.fetched_counts.sleep,
       workouts_count: result.fetched_counts.workouts,
-      error_message: null,
+      error_message: result.partial ? (result.error ?? "partial").slice(0, 800) : null,
       source: "manual",
       details: JSON.stringify({
         ...result.details,
@@ -62,6 +62,7 @@ export async function POST(req: Request) {
         latest_recovery_date: result.latest_recovery_date,
         latest_sleep_date: result.latest_sleep_date,
         latest_strain_date: result.latest_strain_date,
+        ...(result.partial ? { partial: true } : {}),
       }),
     });
     return Response.json({
@@ -70,6 +71,7 @@ export async function POST(req: Request) {
       recovery: result.fetched_counts.recovery,
       sleep: result.fetched_counts.sleep,
       workouts: result.fetched_counts.workouts,
+      ...(result.partial ? { partial: true } : {}),
     });
   }
 
