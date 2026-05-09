@@ -9,6 +9,7 @@ import {
   getUserById,
   type User,
 } from "./db";
+import { upsertIntegration } from "./db/integrations";
 import { verifySessionToken } from "./auth/jwt";
 import {
   CF_ACCESS_HEADER,
@@ -74,7 +75,22 @@ type WhoopTokenResponse = {
   scope?: string;
 };
 
-export type StoredTokens = WhoopTokenResponse & { expires_at: number };
+/**
+ * Persisted Whoop tokens. `expires_at` is an ISO 8601 string (UTC), matching
+ * the integrations row + streamlit/whoop/auth.py. Numeric epoch is no longer
+ * supported anywhere — `isExpired` and friends parse the string directly.
+ */
+export type StoredTokens = Omit<WhoopTokenResponse, never> & {
+  expires_at: string;
+};
+
+const DEFAULT_USER_ID = 1;
+const WHOOP_PROVIDER = "whoop";
+
+/** Compute ISO 8601 expires_at from Whoop's `expires_in` (seconds). */
+export function computeExpiresAtIso(expiresIn: number): string {
+  return new Date(Date.now() + expiresIn * 1000).toISOString();
+}
 
 export async function exchangeCode(code: string): Promise<StoredTokens> {
   const body = new URLSearchParams({
@@ -96,18 +112,83 @@ export async function exchangeCode(code: string): Promise<StoredTokens> {
   const data = (await resp.json()) as WhoopTokenResponse;
   const stored: StoredTokens = {
     ...data,
-    expires_at: Date.now() / 1000 + data.expires_in,
+    expires_at: computeExpiresAtIso(data.expires_in),
   };
   await saveTokens(stored);
   return stored;
 }
 
-/** Atomic write (tmp + rename), matches streamlit/whoop/auth.py:69-73. */
+/**
+ * Persist Whoop tokens.
+ *
+ * Dual-write:
+ *   1. Encrypted `integrations` row (primary). The `raw` column is UNENCRYPTED
+ *      JSON, so we MUST NEVER pass credential fields (access_token /
+ *      refresh_token) into it — that would defeat the vault. Today nothing
+ *      else needs `raw`, so we always pass `raw=undefined`. If we later need
+ *      to persist non-credential metadata, add a tight allowlist or a
+ *      separately-encrypted column.
+ *   2. Atomic tmp+rename to `tokens.json` (parallel — file is the recovery
+ *      anchor; never delete from this layer). Matches Python save_tokens.
+ *
+ * Error handling: each write is logged on individual failure so the other can
+ * still serve as a persistent copy. If BOTH writes fail, we throw so the
+ * caller doesn't proceed assuming tokens were saved.
+ */
 export async function saveTokens(tokens: StoredTokens): Promise<void> {
-  const p = tokensPath();
-  const tmp = `${p}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(tokens), "utf8");
-  await fs.rename(tmp, p);
+  let dbOk = false;
+  let fileOk = false;
+  let dbErr: unknown;
+  let fileErr: unknown;
+
+  // 1) Encrypted DB write. `raw=undefined` — see docstring above.
+  try {
+    upsertIntegration({
+      user_id: DEFAULT_USER_ID,
+      provider: WHOOP_PROVIDER,
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expires_at: tokens.expires_at,
+      scope: tokens.scope ?? null,
+      token_type: tokens.token_type ?? null,
+      raw: undefined,
+    });
+    dbOk = true;
+  } catch (err) {
+    dbErr = err;
+    console.error(
+      `[auth] integrations upsert failed: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+  }
+
+  // 2) Parallel write to tokens.json (atomic tmp+rename), matches
+  // streamlit/whoop/auth.py save_tokens.
+  try {
+    const p = tokensPath();
+    const tmp = `${p}.tmp`;
+    await fs.writeFile(tmp, JSON.stringify(tokens), "utf8");
+    await fs.rename(tmp, p);
+    fileOk = true;
+  } catch (err) {
+    fileErr = err;
+    console.error(
+      `[auth] tokens.json write failed: ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+  }
+
+  if (!dbOk && !fileOk) {
+    const dbMsg =
+      dbErr instanceof Error ? dbErr.message : String(dbErr ?? "unknown");
+    const fileMsg =
+      fileErr instanceof Error ? fileErr.message : String(fileErr ?? "unknown");
+    throw new Error(
+      `saveTokens: both writes failed (db: ${dbMsg}; file: ${fileMsg})`
+    );
+  }
 }
 
 export type AuthSource = "web" | "ios" | "dev";
