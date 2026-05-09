@@ -23,6 +23,7 @@ type ParsedSyncDetails = {
   fetch_breakdown: Record<string, number>;
   page_counts: Record<string, number>;
   window_days: number | null;
+  partial: boolean;
 };
 
 type TimingStep = {
@@ -61,6 +62,7 @@ function parseDetails(details?: string | null): ParsedSyncDetails | null {
       fetch_breakdown: readNumberMap(parsed.fetch_breakdown),
       page_counts: readNumberMap(parsed.page_counts),
       window_days: readNumber(parsed.window_days),
+      partial: parsed.partial === true,
     };
     const hasTimings = [
       result.fetch_ms,
@@ -70,6 +72,7 @@ function parseDetails(details?: string | null): ParsedSyncDetails | null {
       result.window_days,
     ].some((value) => value !== null);
     if (
+      !result.partial &&
       !hasTimings &&
       Object.keys(result.fetch_breakdown).length === 0 &&
       Object.keys(result.page_counts).length === 0
@@ -139,7 +142,15 @@ function MetricPill({ label, value }: { label: string; value: string | number })
   );
 }
 
-function StatusBadge({ status }: { status: SyncLogRow["status"] }) {
+type BadgeStatus = SyncLogRow["status"] | "partial";
+
+function StatusBadge({ status }: { status: BadgeStatus }) {
+  const palette: Record<BadgeStatus, { bg: string; fg: string }> = {
+    ok: { bg: "rgba(0,212,170,0.15)", fg: "#00d4aa" },
+    partial: { bg: "rgba(255,170,0,0.15)", fg: "#ffaa00" },
+    error: { bg: "rgba(255,107,107,0.15)", fg: "#ff6b6b" },
+  };
+  const { bg, fg } = palette[status];
   return (
     <span style={{
       display: "inline-block",
@@ -147,8 +158,8 @@ function StatusBadge({ status }: { status: SyncLogRow["status"] }) {
       borderRadius: 4,
       fontSize: 11,
       fontFamily: "var(--font-mono)",
-      background: status === "ok" ? "rgba(0,212,170,0.15)" : "rgba(255,107,107,0.15)",
-      color: status === "ok" ? "#00d4aa" : "#ff6b6b",
+      background: bg,
+      color: fg,
     }}>
       {status}
     </span>
@@ -268,6 +279,12 @@ function LogRow({ log }: { log: SyncLogRow }) {
     })
   );
   const pageCounts = Object.entries(details?.page_counts ?? {});
+  const isPartial = log.status === "ok" && details?.partial === true;
+  const effectiveStatus: BadgeStatus = isPartial ? "partial" : log.status;
+  const showPartialError =
+    isPartial &&
+    log.error_message !== null &&
+    log.error_message !== "partial";
 
   return (
     <>
@@ -291,7 +308,7 @@ function LogRow({ log }: { log: SyncLogRow }) {
         <td style={cell}>{log.workouts_count ?? "-"}</td>
         <td style={cell}>{log.source ?? "-"}</td>
         <td style={{ padding: "10px 16px", textAlign: "center" }}>
-          <StatusBadge status={log.status} />
+          <StatusBadge status={effectiveStatus} />
         </td>
         <td style={{ padding: "10px 8px", textAlign: "center", width: 32 }}>
           {hasDetails ? <Chevron open={open} /> : null}
@@ -300,6 +317,41 @@ function LogRow({ log }: { log: SyncLogRow }) {
       {open && details && (
         <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
           <td id={detailsId} colSpan={8} style={{ padding: "14px 20px", background: "rgba(255,255,255,0.02)" }}>
+            {isPartial && (
+              <div
+                role="status"
+                style={{
+                  marginBottom: 14,
+                  padding: "10px 12px",
+                  borderRadius: 6,
+                  background: "rgba(255,170,0,0.08)",
+                  border: "1px solid rgba(255,170,0,0.3)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 12,
+                }}
+              >
+                <div style={{
+                  color: "#ffaa00",
+                  fontSize: 10,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.5,
+                }}>
+                  Partial sync
+                </div>
+                {showPartialError && (
+                  <div style={{
+                    marginTop: 6,
+                    color: "var(--fg-1)",
+                    wordBreak: "break-word",
+                  }}>
+                    {log.error_message}
+                  </div>
+                )}
+                <div style={{ marginTop: 6, color: "var(--fg-3)" }}>
+                  Rows committed; post-commit step did not complete.
+                </div>
+              </div>
+            )}
             <div style={{ display: "grid", gridTemplateColumns: "minmax(340px, 1.2fr) minmax(280px, 1fr)", gap: 18, minWidth: 720 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <div>
