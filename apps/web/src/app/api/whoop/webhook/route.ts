@@ -50,6 +50,7 @@ function logWebhook(args: {
     error_message: args.error ?? null,
     source: "webhook",
     details: JSON.stringify(args.details),
+    partial: false,
   });
 }
 

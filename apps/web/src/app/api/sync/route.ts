@@ -1,5 +1,6 @@
 import { addSyncLog, getLastSuccessfulSyncAt } from "@/lib/db";
 import { runWhoopSync, SYNC_COOLDOWN_MS } from "@/lib/sync";
+import { PARTIAL_ERROR_FALLBACK } from "@/lib/sync-meta";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +54,9 @@ export async function POST(req: Request) {
       recovery_count: result.fetched_counts.recovery,
       sleep_count: result.fetched_counts.sleep,
       workouts_count: result.fetched_counts.workouts,
-      error_message: result.partial ? (result.error ?? "partial").slice(0, 800) : null,
+      error_message: result.partial
+        ? (result.error ?? PARTIAL_ERROR_FALLBACK).slice(0, 800)
+        : null,
       source: "manual",
       details: JSON.stringify({
         ...result.details,
@@ -62,8 +65,8 @@ export async function POST(req: Request) {
         latest_recovery_date: result.latest_recovery_date,
         latest_sleep_date: result.latest_sleep_date,
         latest_strain_date: result.latest_strain_date,
-        ...(result.partial ? { partial: true } : {}),
       }),
+      partial: result.partial === true,
     });
     return Response.json({
       ok: true,
@@ -71,7 +74,6 @@ export async function POST(req: Request) {
       recovery: result.fetched_counts.recovery,
       sleep: result.fetched_counts.sleep,
       workouts: result.fetched_counts.workouts,
-      ...(result.partial ? { partial: true } : {}),
     });
   }
 
@@ -90,6 +92,7 @@ export async function POST(req: Request) {
       rows_inserted: result.rows_inserted,
       fetched_counts: result.fetched_counts,
     }),
+    partial: false,
   });
   return Response.json({ ok: false, error: errorMsg, durationMs }, { status: 500 });
 }

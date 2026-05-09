@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { PARTIAL_ERROR_FALLBACK } from "@/lib/sync-meta";
 
 type SyncLogRow = {
   id: number;
@@ -13,6 +14,7 @@ type SyncLogRow = {
   error_message: string | null;
   source: string | null;
   details?: string | null;
+  partial: boolean;
 };
 
 type ParsedSyncDetails = {
@@ -139,7 +141,15 @@ function MetricPill({ label, value }: { label: string; value: string | number })
   );
 }
 
-function StatusBadge({ status }: { status: SyncLogRow["status"] }) {
+type BadgeStatus = SyncLogRow["status"] | "partial";
+
+function StatusBadge({ status }: { status: BadgeStatus }) {
+  const palette: Record<BadgeStatus, { bg: string; fg: string }> = {
+    ok: { bg: "rgba(0,212,170,0.15)", fg: "#00d4aa" },
+    partial: { bg: "rgba(255,170,0,0.15)", fg: "#ffaa00" },
+    error: { bg: "rgba(255,107,107,0.15)", fg: "#ff6b6b" },
+  };
+  const { bg, fg } = palette[status];
   return (
     <span style={{
       display: "inline-block",
@@ -147,8 +157,8 @@ function StatusBadge({ status }: { status: SyncLogRow["status"] }) {
       borderRadius: 4,
       fontSize: 11,
       fontFamily: "var(--font-mono)",
-      background: status === "ok" ? "rgba(0,212,170,0.15)" : "rgba(255,107,107,0.15)",
-      color: status === "ok" ? "#00d4aa" : "#ff6b6b",
+      background: bg,
+      color: fg,
     }}>
       {status}
     </span>
@@ -238,7 +248,10 @@ function Chevron({ open }: { open: boolean }) {
 function LogRow({ log }: { log: SyncLogRow }) {
   const [open, setOpen] = useState(false);
   const details = useMemo(() => parseDetails(log.details), [log.details]);
-  const hasDetails = details !== null;
+  const isPartial = log.partial === true;
+  // Partial rows must always be expandable to surface the failure context,
+  // even if `details` JSON failed to parse or carries no timings.
+  const expandable = details !== null || isPartial;
   const dur = fmtDuration(log.duration_ms);
   const detailsId = `details-${log.id}`;
   const cell = {
@@ -268,16 +281,21 @@ function LogRow({ log }: { log: SyncLogRow }) {
     })
   );
   const pageCounts = Object.entries(details?.page_counts ?? {});
+  const effectiveStatus: BadgeStatus = isPartial ? "partial" : log.status;
+  const showPartialError =
+    isPartial &&
+    log.error_message !== null &&
+    log.error_message !== PARTIAL_ERROR_FALLBACK;
 
   return (
     <>
       <tr
-        onClick={hasDetails ? () => setOpen((value) => !value) : undefined}
-        aria-expanded={hasDetails ? open : undefined}
-        aria-controls={hasDetails ? detailsId : undefined}
+        onClick={expandable ? () => setOpen((value) => !value) : undefined}
+        aria-expanded={expandable ? open : undefined}
+        aria-controls={expandable ? detailsId : undefined}
         style={{
           borderBottom: "1px solid rgba(255,255,255,0.04)",
-          cursor: hasDetails ? "pointer" : "default",
+          cursor: expandable ? "pointer" : "default",
         }}
       >
         <td style={{ padding: "10px 16px", color: "var(--fg-2)", fontFamily: "var(--font-mono)", fontSize: 12, whiteSpace: "nowrap" }}>
@@ -291,68 +309,105 @@ function LogRow({ log }: { log: SyncLogRow }) {
         <td style={cell}>{log.workouts_count ?? "-"}</td>
         <td style={cell}>{log.source ?? "-"}</td>
         <td style={{ padding: "10px 16px", textAlign: "center" }}>
-          <StatusBadge status={log.status} />
+          <StatusBadge status={effectiveStatus} />
         </td>
         <td style={{ padding: "10px 8px", textAlign: "center", width: 32 }}>
-          {hasDetails ? <Chevron open={open} /> : null}
+          {expandable ? <Chevron open={open} /> : null}
         </td>
       </tr>
-      {open && details && (
+      {open && expandable && (
         <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
           <td id={detailsId} colSpan={8} style={{ padding: "14px 20px", background: "rgba(255,255,255,0.02)" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(340px, 1.2fr) minmax(280px, 1fr)", gap: 18, minWidth: 720 }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <div>
-                  <div style={{ color: "var(--fg-3)", fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase" }}>
-                    Step timings
-                  </div>
-                  <div style={{ marginTop: 8 }}>
-                    <TimingBars steps={mainSteps} />
-                  </div>
+            {isPartial && (
+              <div
+                role="note"
+                style={{
+                  marginBottom: details ? 14 : 0,
+                  padding: "10px 12px",
+                  borderRadius: 6,
+                  background: "rgba(255,170,0,0.08)",
+                  border: "1px solid rgba(255,170,0,0.3)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 12,
+                }}
+              >
+                <div style={{
+                  color: "#ffaa00",
+                  fontSize: 10,
+                  textTransform: "uppercase",
+                  letterSpacing: 0.5,
+                }}>
+                  Partial sync
                 </div>
-
-                <div>
-                  <div style={{ color: "var(--fg-3)", fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase" }}>
-                    Fetch breakdown
+                {showPartialError && (
+                  <div style={{
+                    marginTop: 6,
+                    color: "var(--fg-1)",
+                    wordBreak: "break-word",
+                  }}>
+                    {log.error_message}
                   </div>
-                  <div style={{ marginTop: 8 }}>
-                    <TimingBars steps={fetchSteps} />
-                  </div>
+                )}
+                <div style={{ marginTop: 6, color: "var(--fg-3)" }}>
+                  Rows committed; post-commit step did not complete.
                 </div>
               </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                <div>
-                  <div style={{ color: "var(--fg-3)", fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase" }}>
-                    Run window
+            )}
+            {details && (
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(340px, 1.2fr) minmax(280px, 1fr)", gap: 18, minWidth: 720 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div>
+                    <div style={{ color: "var(--fg-3)", fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase" }}>
+                      Step timings
+                    </div>
+                    <div style={{ marginTop: 8 }}>
+                      <TimingBars steps={mainSteps} />
+                    </div>
                   </div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-                    <MetricPill label="Window" value={details.window_days !== null ? `${details.window_days}d` : "-"} />
+
+                  <div>
+                    <div style={{ color: "var(--fg-3)", fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase" }}>
+                      Fetch breakdown
+                    </div>
+                    <div style={{ marginTop: 8 }}>
+                      <TimingBars steps={fetchSteps} />
+                    </div>
                   </div>
                 </div>
 
-                <div>
-                  <div style={{ color: "var(--fg-3)", fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase" }}>
-                    Page counts
-                  </div>
-                  {pageCounts.length === 0 ? (
-                    <div style={{ marginTop: 8, color: "var(--fg-3)", fontFamily: "var(--font-mono)", fontSize: 12 }}>
-                      No page count data
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  <div>
+                    <div style={{ color: "var(--fg-3)", fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase" }}>
+                      Run window
                     </div>
-                  ) : (
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
-                      {pageCounts.map(([endpoint, count]) => (
-                        <MetricPill
-                          key={endpoint}
-                          label={labelFor(endpoint)}
-                          value={`${count} ${count === 1 ? "page" : "pages"}`}
-                        />
-                      ))}
+                      <MetricPill label="Window" value={details.window_days !== null ? `${details.window_days}d` : "-"} />
                     </div>
-                  )}
+                  </div>
+
+                  <div>
+                    <div style={{ color: "var(--fg-3)", fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase" }}>
+                      Page counts
+                    </div>
+                    {pageCounts.length === 0 ? (
+                      <div style={{ marginTop: 8, color: "var(--fg-3)", fontFamily: "var(--font-mono)", fontSize: 12 }}>
+                        No page count data
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                        {pageCounts.map(([endpoint, count]) => (
+                          <MetricPill
+                            key={endpoint}
+                            label={labelFor(endpoint)}
+                            value={`${count} ${count === 1 ? "page" : "pages"}`}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </td>
         </tr>
       )}

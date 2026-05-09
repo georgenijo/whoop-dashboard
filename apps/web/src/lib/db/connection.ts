@@ -154,7 +154,8 @@ export function openWrite(): DB | null {
         workouts_count INTEGER,
         error_message TEXT,
         source TEXT,
-        details TEXT
+        details TEXT,
+        partial INTEGER NOT NULL DEFAULT 0
       );
       CREATE INDEX IF NOT EXISTS idx_sync_logs_started ON sync_logs(started_at DESC);
       CREATE TABLE IF NOT EXISTS route_logs (
@@ -215,6 +216,9 @@ export function openWrite(): DB | null {
     const syncCols = db.prepare("PRAGMA table_info(sync_logs)").all() as { name: string }[];
     if (!syncCols.some((c) => c.name === "details")) {
       db.exec("ALTER TABLE sync_logs ADD COLUMN details TEXT");
+    }
+    if (!syncCols.some((c) => c.name === "partial")) {
+      db.exec("ALTER TABLE sync_logs ADD COLUMN partial INTEGER NOT NULL DEFAULT 0");
     }
     const routeCols = db.prepare("PRAGMA table_info(route_logs)").all() as { name: string }[];
     if (!routeCols.some((c) => c.name === "details")) {

@@ -16,6 +16,7 @@ import {
   type SyncProgressEvent,
   type SyncResult,
 } from "@/lib/sync";
+import { PARTIAL_ERROR_FALLBACK } from "@/lib/sync-meta";
 
 export type CoachToolName =
   | "query_recovery"
@@ -285,7 +286,7 @@ async function handleTriggerWhoopSync(
         sleep_count: result.fetched_counts.sleep,
         workouts_count: result.fetched_counts.workouts,
         error_message: result.partial
-          ? (result.error ?? "partial").slice(0, 800)
+          ? (result.error ?? PARTIAL_ERROR_FALLBACK).slice(0, 800)
           : null,
         source: "coach",
         details: JSON.stringify({
@@ -295,8 +296,8 @@ async function handleTriggerWhoopSync(
           latest_recovery_date: result.latest_recovery_date,
           latest_sleep_date: result.latest_sleep_date,
           latest_strain_date: result.latest_strain_date,
-          ...(result.partial ? { partial: true } : {}),
         }),
+        partial: result.partial === true,
       });
     } else {
       addSyncLog({
@@ -313,6 +314,7 @@ async function handleTriggerWhoopSync(
           rows_inserted: result.rows_inserted,
           fetched_counts: result.fetched_counts,
         }),
+        partial: false,
       });
     }
   } catch (err) {

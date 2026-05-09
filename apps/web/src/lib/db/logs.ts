@@ -114,6 +114,7 @@ export type SyncLog = {
   error_message: string | null;
   source: string | null;
   details?: string | null;
+  partial: boolean;
 };
 
 export function addSyncLog(log: Omit<SyncLog, "id">): void {
@@ -121,7 +122,7 @@ export function addSyncLog(log: Omit<SyncLog, "id">): void {
   if (!db) return;
   try {
     db.prepare(
-      "INSERT INTO sync_logs (started_at, duration_ms, status, recovery_count, sleep_count, workouts_count, error_message, source, details) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO sync_logs (started_at, duration_ms, status, recovery_count, sleep_count, workouts_count, error_message, source, details, partial) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(
       log.started_at,
       log.duration_ms,
@@ -131,7 +132,8 @@ export function addSyncLog(log: Omit<SyncLog, "id">): void {
       log.workouts_count,
       log.error_message,
       log.source,
-      log.details ?? null
+      log.details ?? null,
+      log.partial ? 1 : 0
     );
   } finally {
     db.close();
@@ -145,11 +147,15 @@ export function getSyncLogs(limit = 200): SyncLog[] {
       const detailsSelect = hasColumn(db, "sync_logs", "details")
         ? "details"
         : "NULL AS details";
-      return db
+      const partialSelect = hasColumn(db, "sync_logs", "partial")
+        ? "partial"
+        : "0 AS partial";
+      const rows = db
         .prepare(
-          `SELECT id, started_at, duration_ms, status, recovery_count, sleep_count, workouts_count, error_message, source, ${detailsSelect} FROM sync_logs ORDER BY id DESC LIMIT ?`
+          `SELECT id, started_at, duration_ms, status, recovery_count, sleep_count, workouts_count, error_message, source, ${detailsSelect}, ${partialSelect} FROM sync_logs ORDER BY id DESC LIMIT ?`
         )
-        .all(limit) as SyncLog[];
+        .all(limit) as Array<Omit<SyncLog, "partial"> & { partial: number }>;
+      return rows.map((r) => ({ ...r, partial: r.partial === 1 }));
     }) ?? []
   );
 }
