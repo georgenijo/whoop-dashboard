@@ -278,7 +278,9 @@ async function handleTriggerWhoopSync(
         recovery_count: result.fetched_counts.recovery,
         sleep_count: result.fetched_counts.sleep,
         workouts_count: result.fetched_counts.workouts,
-        error_message: null,
+        error_message: result.partial
+          ? (result.error ?? "partial").slice(0, 800)
+          : null,
         source: "coach",
         details: JSON.stringify({
           ...result.details,
@@ -287,6 +289,7 @@ async function handleTriggerWhoopSync(
           latest_recovery_date: result.latest_recovery_date,
           latest_sleep_date: result.latest_sleep_date,
           latest_strain_date: result.latest_strain_date,
+          ...(result.partial ? { partial: true } : {}),
         }),
       });
     } else {

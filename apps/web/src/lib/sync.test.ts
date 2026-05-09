@@ -259,7 +259,7 @@ describe("runWhoopSync abort handling", () => {
     expect(rowCounts()).toEqual({ recovery: 0, cycles: 0, sleep: 0, workouts: 0 });
   });
 
-  it("abort AFTER commit, BEFORE return: returns success=true with partial=true and rows visible", async () => {
+  it("abort AFTER commit, BEFORE body upsert: returns success=true with partial=true and rows visible", async () => {
     wireHappyPath();
 
     // Custom signal whose `.aborted` getter only flips to true once enough
@@ -268,9 +268,10 @@ describe("runWhoopSync abort handling", () => {
     //   1. top of runWhoopSync (pre-fetch)
     //   2. after fetch, before persistAll
     //   3-7. five times inside persistAll's transaction body
-    //   8. before upsertBodyMeasurement (post-commit)  <-- we want to fire here
-    // We arm the signal on call #8 — the transaction has already committed
-    // by then because better-sqlite3 transactions are synchronous.
+    //   8. immediately after persistAll, BEFORE the body-upsert try  <-- fire here
+    //   9. after the body-upsert try, before latestDates
+    // Firing on #8 means the abort surfaces OUTSIDE the body try, so it does
+    // NOT get mislabeled as `body_error`. Body upsert never runs.
     let calls = 0;
     const fakeSignal = {
       get aborted() {
@@ -296,11 +297,85 @@ describe("runWhoopSync abort handling", () => {
       sleep: 1,
       workouts: 1,
     });
-    // Post-commit metadata work was skipped, so latest_*_date defaults to null.
+    // Abort surfaces outside the body try, so it is NOT mislabeled as a
+    // body failure. Locks in WARN #1 from PR #250 review.
+    expect(result.details.body_error).toBeUndefined();
+    // latestDates() is a separate read open and isn't cancelled by the abort
+    // signal — partial branch reads it, so the freshly-committed dates are
+    // visible.
+    expect(result.latest_recovery_date).toBe("2025-04-12");
+    expect(result.latest_sleep_date).toBe("2025-04-12");
+    expect(result.latest_strain_date).toBe("2025-04-12");
+    // Rows are visible in the DB.
+    expect(rowCounts()).toEqual({ recovery: 1, cycles: 1, sleep: 1, workouts: 1 });
+  });
+
+  it("non-abort exception AFTER commit: returns success=true with partial=true and error set", async () => {
+    // Fetchers succeed and persistAll commits. Then we make latestDates()
+    // throw on its first call by deleting the recovery table mid-flight via
+    // a wrapped openWrite. Easiest: monkeypatch better-sqlite3 prepare on
+    // the read open. Simpler still: trigger the body upsert with valid data
+    // (no throw there), then poison latestDates by replacing the table just
+    // before runWhoopSync calls it. We intercept via a fake signal whose
+    // .aborted getter, on the post-body call (#9), drops the recovery table,
+    // forcing latestDates' first prepare().get() to throw SQLITE_ERROR.
+    wireHappyPath();
+    let calls = 0;
+    const fakeSignal = {
+      get aborted() {
+        calls += 1;
+        if (calls === 9) {
+          const db = new Database(dbFile);
+          try {
+            // Rename the column so the SELECT fails with "no such column".
+            // (Dropping the table would lose the rows we want to keep
+            // visible after the partial branch returns.)
+            db.exec("ALTER TABLE recovery RENAME COLUMN date TO date_bak");
+          } finally {
+            db.close();
+          }
+        }
+        return false;
+      },
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => true,
+      onabort: null,
+      reason: undefined,
+      throwIfAborted: () => {},
+    } as unknown as AbortSignal;
+
+    let result;
+    try {
+      result = await syncMod.runWhoopSync({ signal: fakeSignal });
+    } finally {
+      // Restore schema for any later tests / afterAll cleanup.
+      const db = new Database(dbFile);
+      try {
+        const cols = db.prepare("PRAGMA table_info(recovery)").all() as {
+          name: string;
+        }[];
+        if (cols.some((c) => c.name === "date_bak")) {
+          db.exec("ALTER TABLE recovery RENAME COLUMN date_bak TO date");
+        }
+      } finally {
+        db.close();
+      }
+    }
+
+    expect(result.success).toBe(true);
+    expect(result.partial).toBe(true);
+    // The non-abort exception is surfaced via the error field.
+    expect(result.error).toBeDefined();
+    expect(result.rows_inserted).toEqual({
+      recovery: 1,
+      cycles: 1,
+      sleep: 1,
+      workouts: 1,
+    });
+    // latestDates() threw, so the partial branch falls back to null.
     expect(result.latest_recovery_date).toBeNull();
     expect(result.latest_sleep_date).toBeNull();
     expect(result.latest_strain_date).toBeNull();
-    // Rows are visible in the DB.
-    expect(rowCounts()).toEqual({ recovery: 1, cycles: 1, sleep: 1, workouts: 1 });
   });
 });

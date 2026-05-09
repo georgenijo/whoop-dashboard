@@ -55,10 +55,12 @@ export type SyncResult = {
   };
   error?: string;
   /**
-   * Set when `signal` aborted AFTER the SQLite transaction committed but
-   * before post-commit metadata work (body upsert, latest-date lookup) ran
-   * to completion. Rows ARE persisted; the result is still `success: true`,
-   * but skipped fields fall back to safe defaults (e.g. `latest_*_date: null`).
+   * True when the SQLite transaction committed but post-commit metadata work
+   * (body upsert, summary_dates count) was interrupted by an abort or post-
+   * commit exception. Callers should treat `partial: true` as success — rows
+   * ARE persisted — but should NOT rely on `details.body_ms`, `body_error`,
+   * or `summary_dates` reflecting a fully-completed sync.
+   * `latest_*_date` fields are still populated by a fresh read after commit.
    */
   partial?: boolean;
 };
@@ -442,10 +444,7 @@ export async function runWhoopSync(
     details,
   };
 
-  let committed = false;
-  let committedCounts: SyncCounts | null = null;
-  let committedFetched: SyncCounts | null = null;
-  let committedData: FetchedData | null = null;
+  let post: { counts: SyncCounts; fetched: SyncCounts } | null = null;
 
   try {
     checkAborted(opts.signal);
@@ -465,15 +464,19 @@ export async function runWhoopSync(
     const dbT0 = Date.now();
     const counts = persistAll(data, opts.signal);
     details.sync_db_ms = Date.now() - dbT0;
-    committed = true;
-    committedCounts = counts;
-    committedData = data;
-    committedFetched = {
-      recovery: data.recovery.length,
-      sleep: data.sleep.length,
-      cycles: data.cycles.length,
-      workouts: data.workouts.length,
+    post = {
+      counts,
+      fetched: {
+        recovery: data.recovery.length,
+        sleep: data.sleep.length,
+        cycles: data.cycles.length,
+        workouts: data.workouts.length,
+      },
     };
+
+    // Surface a post-commit abort BEFORE entering the body-upsert try/catch,
+    // so it doesn't get mislabeled as `body_error`.
+    checkAborted(opts.signal);
 
     // Body measurement is deduped against the latest stored row, so it's safe
     // to run after the main transaction. Failures here surface in details
@@ -481,7 +484,6 @@ export async function runWhoopSync(
     // workouts are already committed.
     const bodyT0 = Date.now();
     try {
-      checkAborted(opts.signal);
       upsertBodyMeasurement(data.body);
     } catch (err) {
       details.body_error =
@@ -499,7 +501,7 @@ export async function runWhoopSync(
       latest_sleep_date: latest.sleep,
       latest_strain_date: latest.strain,
       rows_inserted: counts,
-      fetched_counts: committedFetched,
+      fetched_counts: post.fetched,
       details,
     };
   } catch (err) {
@@ -507,23 +509,35 @@ export async function runWhoopSync(
     // single Error-name check covers both branches.
     const isAbort = err instanceof Error && err.name === "AbortError";
 
-    // Abort fired after the transaction committed: rows ARE in the DB, so
-    // report success rather than misleading the caller (Coach surfaces
-    // "sync failed" otherwise — see issue #242).
-    if (isAbort && committed && committedCounts && committedFetched) {
-      details.summary_dates = committedData
-        ? syncedDates(committedData).length
-        : details.summary_dates;
-      return {
+    // Anything that throws AFTER the transaction committed — abort signal
+    // OR a post-commit exception (latestDates SQLITE_BUSY, etc.) — must
+    // still report success. Rows ARE in the DB; returning `success: false`
+    // misleads callers (Coach surfaces "sync failed" — see issue #242).
+    // latestDates() is a separate read open and abort signals don't cancel
+    // it, so attempt the metadata read here too; fall back to null on its
+    // own throw.
+    if (post) {
+      let latestPost: LatestDates;
+      try {
+        latestPost = latestDates();
+      } catch {
+        latestPost = { recovery: null, sleep: null, strain: null };
+      }
+      const result: SyncResult = {
         success: true,
-        latest_recovery_date: null,
-        latest_sleep_date: null,
-        latest_strain_date: null,
-        rows_inserted: committedCounts,
-        fetched_counts: committedFetched,
+        latest_recovery_date: latestPost.recovery,
+        latest_sleep_date: latestPost.sleep,
+        latest_strain_date: latestPost.strain,
+        rows_inserted: post.counts,
+        fetched_counts: post.fetched,
         details,
         partial: true,
       };
+      if (!isAbort) {
+        result.error =
+          err instanceof Error ? err.message : String(err);
+      }
+      return result;
     }
 
     let message: string;
