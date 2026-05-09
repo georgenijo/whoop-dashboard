@@ -182,6 +182,24 @@ export function openWrite(): DB | null {
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
       CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
+      -- KEEP IN SYNC WITH streamlit/whoop/integrations.py (Python helpers).
+      -- access_token and refresh_token are encrypted with VAULT_KEY via NaCl
+      -- secretbox; key_version pairs the row with the key used to encrypt.
+      -- Column name is "scopes" (plural); public-API callers see "scope"
+      -- (singular) to match Whoop OAuth + tokens.json shape.
+      CREATE TABLE IF NOT EXISTS integrations (
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        provider TEXT NOT NULL,
+        access_token TEXT NOT NULL,
+        refresh_token TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        scopes TEXT,
+        token_type TEXT,
+        raw TEXT,
+        key_version INTEGER NOT NULL DEFAULT 1,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, provider)
+      );
     `);
     db.prepare("INSERT OR IGNORE INTO users (id) VALUES (1)").run();
     const cols = db.prepare("PRAGMA table_info(chat_logs)").all() as { name: string }[];
@@ -259,6 +277,18 @@ export function openWrite(): DB | null {
     db.exec(
       "CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON users(LOWER(email)) WHERE email IS NOT NULL"
     );
+    // Lazy ALTER for older `integrations` rows that pre-dated key_version.
+    const integrationCols = db
+      .prepare("PRAGMA table_info(integrations)")
+      .all() as { name: string }[];
+    if (
+      integrationCols.length > 0 &&
+      !integrationCols.some((c) => c.name === "key_version")
+    ) {
+      db.exec(
+        "ALTER TABLE integrations ADD COLUMN key_version INTEGER NOT NULL DEFAULT 1"
+      );
+    }
     return db;
   } catch {
     db?.close();
@@ -271,7 +301,10 @@ export function open(): DB | null {
   const p = dbPath();
   if (!existsSync(p)) return null;
   try {
-    return new Database(p, { readonly: true, fileMustExist: true });
+    // No `foreign_keys = ON` here — SQLite ignores FK pragmas on read-only
+    // handles, so it would just be cargo-culted noise.
+    const db = new Database(p, { readonly: true, fileMustExist: true });
+    return db;
   } catch {
     return null;
   }
