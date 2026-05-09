@@ -12,7 +12,13 @@ import type {
 } from "@anthropic-ai/sdk/resources/messages";
 import { type ChatMessageInsert } from "@/lib/db";
 import { COACH_MODEL, buildSystemPrompt } from "./prompts";
-import { TOOLS, executeToolResult, type ToolDetail, type ToolProgressHandlers } from "./tools";
+import {
+  TOOLS,
+  executeToolResult,
+  newToolTurnState,
+  type ToolDetail,
+  type ToolProgressHandlers,
+} from "./tools";
 
 const CACHE_EPHEMERAL = { type: "ephemeral", ttl: "1h" } as const;
 
@@ -161,6 +167,9 @@ export async function runAnthropicSdk(
   detailState: DetailState,
   options: RunAnthropicOptions = {}
 ): Promise<{ reply: string; iterations: number; messages: ChatMessageInsert[] }> {
+  // Per-turn state shared across all `executeToolResult` calls in this turn.
+  // Currently used to hard-cap `trigger_whoop_sync` at one attempt per turn.
+  const turnState = newToolTurnState();
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY is not configured");
   }
@@ -218,9 +227,38 @@ export async function runAnthropicSdk(
       throw new Error("Claude stopped for tool_use without requesting a tool");
     }
 
-    const toolResults = await Promise.all(
-      toolUses.map((toolUse) => executeToolResult(threadId, toolUse, toolDetails, options))
+    // If the model emits trigger_whoop_sync alongside query_* in the same
+    // batch, the queries would race the sync — re-querying before fresh
+    // rows land. Partition: ALL trigger_whoop_sync blocks run serially
+    // FIRST (the per-turn cap will short-circuit duplicates after the
+    // first), then ALL other blocks run in parallel. Original positional
+    // order preserved so tool_use ↔ tool_result alignment holds.
+    const toolResults: Awaited<ReturnType<typeof executeToolResult>>[] = new Array(
+      toolUses.length
     );
+    const indexed = toolUses.map((toolUse, i) => ({ toolUse, i }));
+    const serial = indexed.filter(({ toolUse }) => toolUse.name === "trigger_whoop_sync");
+    const parallel = indexed.filter(({ toolUse }) => toolUse.name !== "trigger_whoop_sync");
+
+    for (const { toolUse, i } of serial) {
+      toolResults[i] = await executeToolResult(threadId, toolUse, toolDetails, {
+        progress: options,
+        signal: options.signal,
+        turnState,
+      });
+    }
+    const parallelResults = await Promise.all(
+      parallel.map(({ toolUse }) =>
+        executeToolResult(threadId, toolUse, toolDetails, {
+          progress: options,
+          signal: options.signal,
+          turnState,
+        })
+      )
+    );
+    parallel.forEach(({ i }, idx) => {
+      toolResults[i] = parallelResults[idx];
+    });
     messagesToPersist.push({
       role: "user",
       content: "[tool_result]",
