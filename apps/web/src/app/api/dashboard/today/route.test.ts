@@ -309,11 +309,6 @@ describe("GET /api/dashboard/today", () => {
     const ots = signals.ots as { score: 0 | 1 | 2 | 3; severity: string };
     expect(typeof ots.score).toBe("number");
     expect(typeof ots.severity).toBe("string");
-
-    // Legacy `date` field carries pre-PR semantics (= the day the data is from)
-    // so old clients reading `let date: String` show the actual data day during
-    // fallback, not the requested day.
-    expect(body.date).toBe(dataDate);
   });
 
   it("(g) picks the union-MAX across asymmetric tables (recovery on day-1, sleep on day-3)", async () => {
@@ -344,7 +339,5 @@ describe("GET /api/dashboard/today", () => {
     expect(body.recovery).toMatchObject({ score: 70 });
     expect(body.sleep).toBeNull();
     expect(body.strain).toBeNull();
-    // Legacy `date` echoes data_date.
-    expect(body.date).toBe(dayMinus1);
   });
 });

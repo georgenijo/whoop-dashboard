@@ -19,12 +19,6 @@ const SIGNAL_LOOKBACK_DAYS = 45;
 const FALLBACK_LOOKBACK_DAYS = 7;
 
 type DashboardTodayResponse = {
-  // Legacy field. Pre-PR semantics were "the day the data is from" — preserved
-  // here so old TestFlight clients that still read `let date: String` show the
-  // actual data day (not the requested day) when fallback fires. New clients
-  // should consume `data_date` / `requested_date` / `is_fallback`. Drop after
-  // all clients migrate (tracked in follow-up issue).
-  date: string;
   requested_date: string;
   // The date whose data is actually returned. Null only when no data exists in the
   // 7-day lookback window — i.e., a genuinely empty DB / fresh install.
@@ -97,7 +91,6 @@ function buildDashboardToday(requestedDate: string): DashboardTodayResponse {
     // 7-day window completely empty — fresh install / wiped DB. Surface the
     // genuine empty state without a fallback marker.
     return {
-      date: requestedDate,
       requested_date: requestedDate,
       data_date: null,
       is_fallback: false,
@@ -120,7 +113,6 @@ function buildDashboardToday(requestedDate: string): DashboardTodayResponse {
   const strainHistory = sliceWithin(strainWindow, signalStart, dataDate);
 
   return {
-    date: dataDate,
     requested_date: requestedDate,
     data_date: dataDate,
     is_fallback: dataDate !== requestedDate,
