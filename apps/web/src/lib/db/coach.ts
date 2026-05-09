@@ -1,6 +1,11 @@
 import "server-only";
 import { type DB, hasTable, openWrite, safeWriteQuery } from "./connection";
 
+// Cap the conversation history sent to the model to keep input-token cost bounded.
+// Only applies to model-input fetches (getChatThreadConversation / getChatConversation).
+// UI fetches (getChatThreadMessages / getChatMessages) remain unbounded.
+const MAX_HISTORY_ROWS = 30;
+
 export type ChatThread = {
   id: number;
   user_id: number;
@@ -250,14 +255,18 @@ export function getChatThreadConversation(
       if (!hasChatThread(db, threadId, userId)) {
         return [] as { role: "user" | "assistant"; content: unknown }[];
       }
+      // Pull only the last MAX_HISTORY_ROWS rows by id DESC, then reverse to chronological order.
       const rows = db
-        .prepare("SELECT role, content, blocks FROM chat_messages WHERE thread_id = ? ORDER BY id ASC")
-        .all(threadId) as {
+        .prepare(
+          "SELECT role, content, blocks FROM chat_messages WHERE thread_id = ? ORDER BY id DESC LIMIT ?"
+        )
+        .all(threadId, MAX_HISTORY_ROWS) as {
           role: "user" | "assistant";
           content: string;
           blocks: string | null;
         }[];
-      return rows.map((row) => {
+      rows.reverse();
+      const conversation = rows.map((row) => {
         if (row.blocks !== null) {
           try {
             return {
@@ -276,6 +285,22 @@ export function getChatThreadConversation(
           content: row.content,
         };
       });
+      // Edge case: the LIMIT may slice between an assistant tool_use and the user
+      // tool_result that satisfies it. Anthropic rejects orphan tool_result blocks
+      // (user message whose tool_use_id has no preceding tool_use in the window).
+      // Trim leading orphan tool_result messages to keep the request valid; this
+      // shrinks the window slightly rather than expanding it past the cap.
+      let cut = 0;
+      while (cut < conversation.length) {
+        const msg = conversation[cut];
+        if (msg.role !== "user" || !Array.isArray(msg.content)) break;
+        const hasToolResult = (msg.content as { type?: unknown }[]).some(
+          (block) => block && block.type === "tool_result"
+        );
+        if (!hasToolResult) break;
+        cut += 1;
+      }
+      return cut > 0 ? conversation.slice(cut) : conversation;
     }) ?? []
   );
 }
