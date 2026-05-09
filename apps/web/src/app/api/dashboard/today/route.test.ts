@@ -306,7 +306,7 @@ describe("GET /api/dashboard/today", () => {
     // OTS should be present and computed (not null) since signals anchor on dataDate.
     const signals = body.signals as Record<string, unknown>;
     expect(signals.ots).not.toBeNull();
-    const ots = signals.ots as { score: number; severity: string };
+    const ots = signals.ots as { score: 0 | 1 | 2 | 3; severity: string };
     expect(typeof ots.score).toBe("number");
     expect(typeof ots.severity).toBe("string");
 
