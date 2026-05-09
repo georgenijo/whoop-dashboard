@@ -12,6 +12,14 @@ type ChatSseEvent =
   | "done"
   | "error";
 
+// Cloudflare and most CDN/proxy idle timeouts close SSE streams after 60-100s
+// of silence. Long-running tools (e.g. trigger_whoop_sync, 10-30s) leave the
+// stream idle long enough for the edge to drop it. A 15s comment-line keepalive
+// is well under those thresholds and ignored by EventSource clients.
+export const KEEPALIVE_INTERVAL_MS =
+  process.env.NODE_ENV === "test" ? 100 : 15_000;
+const KEEPALIVE_FRAME = new TextEncoder().encode(`: keepalive\n\n`);
+
 function parseThreadId(value: unknown): number | null {
   if (value === undefined || value === null || value === "") return null;
   const parsed = typeof value === "number" ? value : Number(value);
@@ -129,6 +137,14 @@ export async function POST(req: Request) {
     const relayAbort = () => abortController.abort();
     req.signal.addEventListener("abort", relayAbort, { once: true });
 
+    let keepaliveTimer: ReturnType<typeof setInterval> | null = null;
+    const stopKeepalive = () => {
+      if (keepaliveTimer !== null) {
+        clearInterval(keepaliveTimer);
+        keepaliveTimer = null;
+      }
+    };
+
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
         const send = (event: ChatSseEvent, data: unknown) => {
@@ -137,12 +153,25 @@ export async function POST(req: Request) {
           }
         };
         const close = () => {
+          stopKeepalive();
           try {
             controller.close();
           } catch {
             // The client may have already closed the connection.
           }
         };
+
+        keepaliveTimer = setInterval(() => {
+          if (abortController.signal.aborted) {
+            stopKeepalive();
+            return;
+          }
+          try {
+            controller.enqueue(KEEPALIVE_FRAME);
+          } catch {
+            stopKeepalive();
+          }
+        }, KEEPALIVE_INTERVAL_MS);
 
         try {
           const reply = await runAndPersistCoachTurn(
@@ -189,10 +218,12 @@ export async function POST(req: Request) {
           }
           close();
         } finally {
+          stopKeepalive();
           req.signal.removeEventListener("abort", relayAbort);
         }
       },
       cancel() {
+        stopKeepalive();
         abortController.abort();
         req.signal.removeEventListener("abort", relayAbort);
       },
