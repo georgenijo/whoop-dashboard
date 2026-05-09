@@ -181,6 +181,11 @@ describe("getWorkoutsRange", () => {
     expect(result.rows.length).toBe(500);
     expect(result.truncated).toBe(true);
     expect(result.total_count).toBe(510);
+    // The 500 most recent must be w-509 down to w-10; the oldest 10
+    // (w-0..w-9) are dropped. Locks both DESC ordering and the slice.
+    expect(result.rows[0].id).toBe("w-509");
+    expect(result.rows[result.rows.length - 1].id).toBe("w-10");
+    expect(result.rows.map((r) => r.id)).not.toContain("w-0");
   });
 
   it("returns rows in DESC date order (most recent first)", () => {
