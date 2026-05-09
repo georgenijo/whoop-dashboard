@@ -26,6 +26,14 @@ const REFRESH_BUFFER_S = 60;
 const DEFAULT_USER_ID = 1;
 const WHOOP_PROVIDER = "whoop";
 
+// Definitive "credentials are dead, user must reconnect" error codes from
+// Whoop / RFC 6749 / RFC 6750. Excluded on purpose:
+//   - invalid_client / unauthorized_client → server-side config bugs (bad
+//     WHOOP_CLIENT_ID/SECRET); reconnecting tokens won't help, so the
+//     banner would mislead.
+//   - invalid_request → our client bug (malformed body, missing param).
+const REAUTH_ERROR_CODES = new Set(["invalid_grant", "invalid_token"]);
+
 let inflightRefresh: Promise<StoredTokens | null> | null = null;
 
 function isStoredTokensShape(v: unknown): v is StoredTokens {
@@ -157,35 +165,21 @@ async function refreshTokens(current: StoredTokens): Promise<StoredTokens | null
       `[token] refresh failed status=${resp.status} body=${JSON.stringify(bodyExcerpt)}`
     );
     // Flip flag only on definitive credential-rejection signals so a code
-    // bug (e.g. `invalid_request` from a malformed body) doesn't masquerade
-    // as expired credentials and train the user to reconnect.
+    // bug or upstream config issue doesn't train the user to reconnect.
+    // Allowlist lives at module scope (REAUTH_ERROR_CODES); 401 catches
+    // the RFC-canonical token-rejection case when no parsable error code
+    // is present. 403 (scope/permission), 5xx, network, parse failure,
+    // and unknown error codes → log only.
     //
-    // Allowlisted error codes cover the realistic "credentials are dead"
-    // shapes Whoop / RFC 6749 / RFC 6750 emit on a refresh:
-    //   - invalid_grant       — refresh token expired or revoked
-    //   - invalid_token       — RFC 6750, server says token is no good
-    //   - invalid_client      — client credentials rejected
-    //   - unauthorized_client — client not allowed to use this grant
-    // Status 401 / 403 catch the same intent without a parsable body.
-    // Anything else (parse failure, unknown error code, 5xx, network) →
-    // log only; a transient outage shouldn't pop a Reconnect banner.
-    //
-    // Non-atomic with the upsert. Single-process Next.js serializes via the
-    // `inflightRefresh` singleton, but a concurrent Python sync
+    // Non-atomic with the upsert. Single-process Next.js serializes via
+    // the `inflightRefresh` singleton, but a concurrent Python sync
     // (sync/daily_sync.py) could in theory race a flag-set against a
     // follow-up reset. Acceptable today; P2 keepalive will reshape this.
-    const REAUTH_ERROR_CODES = new Set([
-      "invalid_grant",
-      "invalid_token",
-      "invalid_client",
-      "unauthorized_client",
-    ]);
     const errorCode =
       typeof bodyExcerpt.error === "string" ? bodyExcerpt.error : null;
     if (
       (errorCode && REAUTH_ERROR_CODES.has(errorCode)) ||
-      resp.status === 401 ||
-      resp.status === 403
+      resp.status === 401
     ) {
       setIntegrationNeedsReauth(DEFAULT_USER_ID, WHOOP_PROVIDER, true);
     }

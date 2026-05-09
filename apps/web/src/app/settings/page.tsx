@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 type LocalSetting = {
   key: string;
@@ -80,8 +80,6 @@ function Row({ label, description, children, isFirst }: { label: string; descrip
 
 export default function SettingsPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const reconnected = searchParams.get("reconnected") === "1";
   const [localValues, setLocalValues] = useState<Record<string, boolean>>({});
   const [useApi, setUseApi] = useState(false);
   const [apiKeyPresent, setApiKeyPresent] = useState(false);
@@ -123,13 +121,15 @@ export default function SettingsPage() {
       .then((d: { needs_reauth: boolean }) => setNeedsReauth(!!d.needs_reauth))
       .catch(() => {});
     // Strip ?reconnected=1 if we landed here from the OAuth callback, so a
-    // hard reload doesn't appear "stuck" in the just-reconnected state. Read
-    // `reconnected` from closure (mount-only) — putting it in the deps array
-    // would cause a redundant second fetch when router.replace flips it back
-    // to false.
-    if (reconnected) router.replace("/settings");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // hard reload doesn't appear "stuck" in the just-reconnected state.
+    // Read directly from window.location to avoid a useSearchParams() dep
+    // that would re-run this effect (and re-fetch) when router.replace
+    // flips the param away.
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("reconnected") === "1") router.replace("/settings");
+    }
+  }, [router]);
 
   function toggleLocal(key: string, val: boolean) {
     localStorage.setItem(key, val ? "1" : "0");
