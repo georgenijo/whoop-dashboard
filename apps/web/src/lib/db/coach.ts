@@ -1,6 +1,11 @@
 import "server-only";
 import { type DB, hasTable, openWrite, safeWriteQuery } from "./connection";
 
+// Cap the conversation history sent to the model to keep input-token cost bounded.
+// Only applies to model-input fetches (getChatThreadConversation / getChatConversation).
+// UI fetches (getChatThreadMessages / getChatMessages) remain unbounded.
+const MAX_HISTORY_ROWS = 30;
+
 export type ChatThread = {
   id: number;
   user_id: number;
@@ -251,13 +256,16 @@ export function getChatThreadConversation(
         return [] as { role: "user" | "assistant"; content: unknown }[];
       }
       const rows = db
-        .prepare("SELECT role, content, blocks FROM chat_messages WHERE thread_id = ? ORDER BY id ASC")
-        .all(threadId) as {
+        .prepare(
+          "SELECT role, content, blocks FROM chat_messages WHERE thread_id = ? ORDER BY id DESC LIMIT ?"
+        )
+        .all(threadId, MAX_HISTORY_ROWS) as {
           role: "user" | "assistant";
           content: string;
           blocks: string | null;
         }[];
-      return rows.map((row) => {
+      rows.reverse();
+      const conversation = rows.map((row) => {
         if (row.blocks !== null) {
           try {
             return {
@@ -276,6 +284,19 @@ export function getChatThreadConversation(
           content: row.content,
         };
       });
+      // Anthropic rejects orphan tool_result (no preceding tool_use in window),
+      // so drop any leading tool_result messages the LIMIT may have stranded.
+      let cut = 0;
+      while (cut < conversation.length) {
+        const msg = conversation[cut];
+        if (msg.role !== "user" || !Array.isArray(msg.content)) break;
+        const hasToolResult = (msg.content as { type?: unknown }[]).some(
+          (block) => block && block.type === "tool_result"
+        );
+        if (!hasToolResult) break;
+        cut += 1;
+      }
+      return conversation.slice(cut);
     }) ?? []
   );
 }
