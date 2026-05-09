@@ -208,7 +208,7 @@ private struct MessageBubble: View {
     private func bubble(role: ChatMessage.Role, content: String, dimmed: Bool) -> some View {
         HStack {
             if role == .user { Spacer(minLength: 40) }
-            Text(rendered(content: content, role: role))
+            bubbleContent(role: role, content: content)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(
@@ -218,23 +218,19 @@ private struct MessageBubble: View {
                 )
                 .foregroundStyle(role == .user ? .white : .primary)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
+                .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: role == .user ? .trailing : .leading)
             if role == .assistant { Spacer(minLength: 40) }
         }
     }
 
-    private func rendered(content: String, role: ChatMessage.Role) -> AttributedString {
-        if role == .assistant,
-           let attr = try? AttributedString(
-               markdown: content,
-               options: AttributedString.MarkdownParsingOptions(
-                   interpretedSyntax: .inlineOnlyPreservingWhitespace
-               )
-           )
-        {
-            return attr
+    @ViewBuilder
+    private func bubbleContent(role: ChatMessage.Role, content: String) -> some View {
+        if role == .assistant {
+            MarkdownView(content: content)
+        } else {
+            Text(content)
         }
-        return AttributedString(content)
     }
 }
 
