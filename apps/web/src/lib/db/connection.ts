@@ -201,6 +201,26 @@ export function openWrite(): DB | null {
         updated_at TEXT NOT NULL,
         PRIMARY KEY (user_id, provider)
       );
+      -- Dead-letter queue for Whoop webhook deliveries. Every signature-valid
+      -- event lands here pending; handler outcome moves it to succeeded /
+      -- failed / discarded. Failed rows can be replayed via
+      -- /api/admin/webhook/replay so a transient handler bug isn't a silent
+      -- data loss past Whoop's 5x retry window.
+      CREATE TABLE IF NOT EXISTS webhook_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        received_at TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        resource_id TEXT NOT NULL,
+        trace_id TEXT,
+        payload TEXT NOT NULL,
+        signature_valid INTEGER NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        last_attempt_at TEXT,
+        last_error TEXT,
+        status TEXT NOT NULL DEFAULT 'pending'
+      );
+      CREATE INDEX IF NOT EXISTS idx_webhook_events_status ON webhook_events(status);
+      CREATE INDEX IF NOT EXISTS idx_webhook_events_received_at ON webhook_events(received_at);
     `);
     db.prepare("INSERT OR IGNORE INTO users (id) VALUES (1)").run();
     const cols = db.prepare("PRAGMA table_info(chat_logs)").all() as { name: string }[];

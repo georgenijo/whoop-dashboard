@@ -1,37 +1,16 @@
 import { clientSecret } from "@/lib/auth";
-import { addSyncLog } from "@/lib/db";
 import {
-  whoopGet,
-  WhoopAuthError,
-  WhoopNotFoundError,
-  WhoopRecoveryListMissError,
-  WhoopUpstreamError,
-} from "@/lib/whoop/client";
+  addSyncLog,
+  insertWebhookEvent,
+  markWebhookDiscarded,
+  markWebhookFailed,
+  markWebhookSucceeded,
+} from "@/lib/db";
+import { WhoopNotFoundError } from "@/lib/whoop/client";
 import { verifyWhoopSignature } from "@/lib/whoop/signature";
-import {
-  deleteRecoveryAndRecompute,
-  deleteSleepAndRecompute,
-  deleteWorkoutAndRecompute,
-  recomputeDailySummary,
-  recoverySummaryDate,
-  sleepSummaryDate,
-  upsertRecovery,
-  upsertSleep,
-  upsertWorkout,
-  workoutSummaryDate,
-  type WhoopRecoveryRecord,
-  type WhoopSleepRecord,
-  type WhoopWorkoutRecord,
-} from "@/lib/whoop/upsert";
+import { handleEvent, type WhoopWebhookEvent } from "@/lib/whoop/webhook-handler";
 
 export const dynamic = "force-dynamic";
-
-type WebhookEvent = {
-  user_id: number;
-  id: string;
-  type: string;
-  trace_id?: string;
-};
 
 function logWebhook(args: {
   startedAt: string;
@@ -64,13 +43,15 @@ export async function POST(req: Request) {
   const verify = verifyWhoopSignature(raw, sig, ts, clientSecret());
   if (!verify.ok) {
     // Include req.url to aid misconfig debugging (e.g. path registered wrong in Whoop dashboard).
+    // Bad-signature events are NOT written to webhook_events for v1 — forensics on those
+    // is tracked separately. The reject path here is unchanged.
     console.warn(`[whoop-webhook] signature rejected: ${verify.reason} url=${req.url}`);
     return new Response(`Unauthorized: ${verify.reason}`, { status: 401 });
   }
 
-  let evt: WebhookEvent;
+  let evt: WhoopWebhookEvent;
   try {
-    evt = JSON.parse(raw) as WebhookEvent;
+    evt = JSON.parse(raw) as WhoopWebhookEvent;
   } catch {
     logWebhook({
       startedAt,
@@ -99,100 +80,56 @@ export async function POST(req: Request) {
     trace_id: evt.trace_id ?? null,
   };
 
-  try {
-    switch (evt.type) {
-      case "sleep.updated": {
-        const r = await whoopGet<WhoopSleepRecord>(`/v2/activity/sleep/${evt.id}`);
-        upsertSleep(r);
-        recomputeDailySummary(sleepSummaryDate(r));
-        break;
-      }
-      case "workout.updated": {
-        const r = await whoopGet<WhoopWorkoutRecord>(`/v2/activity/workout/${evt.id}`);
-        upsertWorkout(r);
-        recomputeDailySummary(workoutSummaryDate(r));
-        break;
-      }
-      case "recovery.updated": {
-        const list = await whoopGet<{ records: WhoopRecoveryRecord[] }>(
-          "/v2/recovery?limit=10",
-        );
-        const r = list.records.find((x) => x.sleep_id === evt.id);
-        if (!r) {
-          // Record not yet in latest 10 — likely a scoring race. 502 → Whoop retries.
-          throw new WhoopRecoveryListMissError(
-            `recovery sleep_id=${evt.id} not in latest 10`,
-          );
-        }
-        upsertRecovery(r);
-        recomputeDailySummary(recoverySummaryDate(r));
-        break;
-      }
-      case "sleep.deleted": {
-        const date = deleteSleepAndRecompute(evt.id);
-        if (!date) {
-          logWebhook({
-            startedAt,
-            durationMs: Date.now() - t0,
-            status: "ok",
-            details: { ...baseDetails, note: "already_deleted" },
-          });
-          return new Response("ok", { status: 200 });
-        }
-        break;
-      }
-      case "workout.deleted": {
-        const date = deleteWorkoutAndRecompute(evt.id);
-        if (!date) {
-          logWebhook({
-            startedAt,
-            durationMs: Date.now() - t0,
-            status: "ok",
-            details: { ...baseDetails, note: "already_deleted" },
-          });
-          return new Response("ok", { status: 200 });
-        }
-        break;
-      }
-      case "recovery.deleted": {
-        const date = deleteRecoveryAndRecompute(evt.id);
-        if (!date) {
-          logWebhook({
-            startedAt,
-            durationMs: Date.now() - t0,
-            status: "ok",
-            details: { ...baseDetails, note: "already_deleted" },
-          });
-          return new Response("ok", { status: 200 });
-        }
-        break;
-      }
-      default: {
-        logWebhook({
-          startedAt,
-          durationMs: Date.now() - t0,
-          status: "ok",
-          details: { ...baseDetails, note: "unknown_event_type" },
-        });
-        return new Response("ok", { status: 200 });
-      }
-    }
+  // DLQ row: created BEFORE dispatch so a handler that crashes mid-flight
+  // still leaves a durable record. dlqId may be null if the DB is unreachable
+  // (treat that as soft-fail — we still want to attempt dispatch and return
+  // a useful status to Whoop). Every status update below is a no-op if null.
+  const dlqId = insertWebhookEvent({
+    received_at: startedAt,
+    event_type: evt.type,
+    resource_id: evt.id,
+    trace_id: evt.trace_id ?? null,
+    payload: raw,
+    signature_valid: true,
+    attempts: 1,
+    last_attempt_at: startedAt,
+  });
 
-    logWebhook({
-      startedAt,
-      durationMs: Date.now() - t0,
-      status: "ok",
-      details: baseDetails,
-    });
+  try {
+    const outcome = await handleEvent(evt);
+    const finishedAt = new Date().toISOString();
+    if (dlqId !== null) markWebhookSucceeded(dlqId, finishedAt);
+    if (outcome.kind === "noop") {
+      logWebhook({
+        startedAt,
+        durationMs: Date.now() - t0,
+        status: "ok",
+        details: { ...baseDetails, note: outcome.reason },
+      });
+    } else {
+      logWebhook({
+        startedAt,
+        durationMs: Date.now() - t0,
+        status: "ok",
+        details: baseDetails,
+      });
+    }
     return new Response("ok", { status: 200 });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     // 404 from Whoop = resource permanently absent; discard silently, don't retry.
-    // Everything else → 502 so Whoop retries up to 5× with backoff. This intentionally
-    // includes non-upstream errors (DB lock, record-shape mismatch) on the assumption
-    // that a bounded retry window (5× ~1hr) is preferable to silently discarding data.
-    // Worst case: a code bug causes 5 retries before giving up. Acceptable trade-off.
+    // Everything else → 502 so Whoop retries up to 5× with backoff. The DLQ row
+    // is the durable record of any handler exception — failed rows are
+    // replayable via /api/admin/webhook/replay once the cause is fixed.
     const isHandledMiss = err instanceof WhoopNotFoundError;
+    const finishedAt = new Date().toISOString();
+    if (dlqId !== null) {
+      if (isHandledMiss) {
+        markWebhookDiscarded(dlqId, finishedAt);
+      } else {
+        markWebhookFailed(dlqId, msg, finishedAt);
+      }
+    }
     logWebhook({
       startedAt,
       durationMs: Date.now() - t0,

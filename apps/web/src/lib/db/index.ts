@@ -111,3 +111,14 @@ export {
   acquireSettingLock,
   releaseSettingLock,
 } from "./settings";
+
+export type { WebhookEventRow, WebhookEventStatus, InsertWebhookEventInput } from "./webhook";
+export {
+  insertWebhookEvent,
+  markWebhookSucceeded,
+  markWebhookFailed,
+  markWebhookDiscarded,
+  bumpWebhookAttempt,
+  getWebhookEvent,
+  listFailedWebhookEvents,
+} from "./webhook";
