@@ -40,7 +40,7 @@ export {
   getRecentNaps,
 } from "./sleep";
 
-export type { WorkoutRow } from "./workouts";
+export type { WorkoutRow, WorkoutsRangeResult } from "./workouts";
 export { getWorkouts, getWorkoutsRange } from "./workouts";
 
 export type { PRStats, PRValue, PRStreak } from "./prs";
