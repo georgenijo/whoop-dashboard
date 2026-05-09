@@ -50,7 +50,7 @@ type DashboardTodayResponse = {
     max_hr: number | null;
   } | null;
   signals: {
-    ots: { score: number; severity: string } | null;
+    ots: { score: 0 | 1 | 2 | 3; severity: string } | null;
     illness: { risk: string } | null;
     apnea: { high_risk_nights_7d: number } | null;
   };
