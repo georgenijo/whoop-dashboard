@@ -2,8 +2,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-// next/server's after() runs the callback after the response. The route imports
-// it but it's only invoked on the auto-title path, which we don't trigger here.
 vi.mock("next/server", () => ({
   after: (fn: () => void) => fn(),
 }));
@@ -81,16 +79,15 @@ describe("POST /api/chat — SSE keepalive", () => {
 
     const text = await readEntireStream(res.body as ReadableStream<Uint8Array>);
 
-    // Each keepalive frame is exactly `: keepalive\n\n`.
     const keepaliveMatches = text.match(/:\s*keepalive\n\n/g) ?? [];
     expect(keepaliveMatches.length).toBeGreaterThanOrEqual(3);
 
     // The done event must still arrive after all the keepalives.
     expect(text).toMatch(/event: done\ndata: \{"reply":"final reply"\}\n\n/);
 
-    // Keepalive frames must not interleave inside an event payload — verify
-    // the framing by splitting on blank lines and ensuring each non-empty
-    // chunk parses as either a comment or a complete event.
+    // Keepalive frames must not interleave inside an event payload — split on
+    // blank lines and assert each non-empty chunk is either a comment or a
+    // complete event.
     for (const chunk of text.split("\n\n")) {
       if (chunk === "") continue;
       const isComment = chunk.startsWith(":");
@@ -99,27 +96,31 @@ describe("POST /api/chat — SSE keepalive", () => {
     }
   });
 
-  it("stops emitting keepalives after the response stream closes (done path)", async () => {
-    runAndPersistImpl = async () => "quick";
+  it("clears the keepalive interval when the stream closes (no leak)", async () => {
+    const clearSpy = vi.spyOn(globalThis, "clearInterval");
+    const setSpy = vi.spyOn(globalThis, "setInterval");
 
-    const res = await POST(
-      makeRequest({ messages: [{ role: "user", content: "hi" }], thread_id: 42 })
-    );
-    const text = await readEntireStream(res.body as ReadableStream<Uint8Array>);
+    try {
+      runAndPersistImpl = async () => "quick";
 
-    // After draining, wait well past the keepalive interval — the stream is
-    // already closed, so no further bytes can arrive. The decoded string is
-    // final; we just need to verify the test's stream-close path didn't leak.
-    // (If the interval kept ticking, controller.enqueue would throw; the
-    // stopKeepalive path swallows it. Either way, this test verifies happy-
-    // path framing has the done event present and no trailing keepalives
-    // accumulate in the decoded body.)
-    await new Promise((r) => setTimeout(r, 350));
+      const res = await POST(
+        makeRequest({ messages: [{ role: "user", content: "hi" }], thread_id: 42 })
+      );
+      await readEntireStream(res.body as ReadableStream<Uint8Array>);
 
-    expect(text).toMatch(/event: done\ndata: /);
-    // The closing "done" frame should be the last non-comment payload.
-    const trimmed = text.trimEnd();
-    expect(trimmed.endsWith('"reply":"quick"}')).toBe(true);
+      // The route registered exactly one interval (the keepalive); capture it.
+      expect(setSpy).toHaveBeenCalledTimes(1);
+      const handle = setSpy.mock.results[0].value as ReturnType<typeof setInterval>;
+
+      // …and it was cleared at least once before the stream finished. Multiple
+      // calls are fine (close() + finally both invoke stopKeepalive); one is
+      // mandatory.
+      const clearedHandles = clearSpy.mock.calls.map((c) => c[0]);
+      expect(clearedHandles).toContain(handle);
+    } finally {
+      clearSpy.mockRestore();
+      setSpy.mockRestore();
+    }
   });
 
   it("does NOT add keepalives to the JSON path (?stream=false)", async () => {

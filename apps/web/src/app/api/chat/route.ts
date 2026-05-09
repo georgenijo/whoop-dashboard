@@ -16,6 +16,7 @@ type ChatSseEvent =
 // of silence. Long-running tools (e.g. trigger_whoop_sync, 10-30s) leave the
 // stream idle long enough for the edge to drop it. A 15s comment-line keepalive
 // is well under those thresholds and ignored by EventSource clients.
+/** @internal — exported only so route.test.ts can sanity-check the production constant. */
 export const KEEPALIVE_INTERVAL_MS =
   process.env.NODE_ENV === "test" ? 100 : 15_000;
 const KEEPALIVE_FRAME = new TextEncoder().encode(`: keepalive\n\n`);
@@ -134,8 +135,6 @@ export async function POST(req: Request) {
     }
 
     const abortController = new AbortController();
-    const relayAbort = () => abortController.abort();
-    req.signal.addEventListener("abort", relayAbort, { once: true });
 
     let keepaliveTimer: ReturnType<typeof setInterval> | null = null;
     const stopKeepalive = () => {
@@ -144,6 +143,14 @@ export async function POST(req: Request) {
         keepaliveTimer = null;
       }
     };
+
+    // Clear the heartbeat the moment the client aborts — don't wait for the
+    // next tick to self-stop, that lets one stale frame slip through.
+    const relayAbort = () => {
+      stopKeepalive();
+      abortController.abort();
+    };
+    req.signal.addEventListener("abort", relayAbort, { once: true });
 
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
@@ -200,6 +207,9 @@ export async function POST(req: Request) {
             return;
           }
 
+          // Stop the heartbeat before the terminal frame so no late tick can
+          // slip behind `done` on the wire.
+          stopKeepalive();
           send("done", { reply });
           if (shouldAutoTitle) {
             after(() => {
@@ -208,6 +218,7 @@ export async function POST(req: Request) {
           }
           close();
         } catch (err) {
+          stopKeepalive();
           if (!abortController.signal.aborted) {
             const msg = err instanceof Error ? err.message : String(err);
             try {
