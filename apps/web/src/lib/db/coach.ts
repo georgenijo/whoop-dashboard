@@ -255,7 +255,6 @@ export function getChatThreadConversation(
       if (!hasChatThread(db, threadId, userId)) {
         return [] as { role: "user" | "assistant"; content: unknown }[];
       }
-      // Pull only the last MAX_HISTORY_ROWS rows by id DESC, then reverse to chronological order.
       const rows = db
         .prepare(
           "SELECT role, content, blocks FROM chat_messages WHERE thread_id = ? ORDER BY id DESC LIMIT ?"
@@ -285,11 +284,8 @@ export function getChatThreadConversation(
           content: row.content,
         };
       });
-      // Edge case: the LIMIT may slice between an assistant tool_use and the user
-      // tool_result that satisfies it. Anthropic rejects orphan tool_result blocks
-      // (user message whose tool_use_id has no preceding tool_use in the window).
-      // Trim leading orphan tool_result messages to keep the request valid; this
-      // shrinks the window slightly rather than expanding it past the cap.
+      // Anthropic rejects orphan tool_result (no preceding tool_use in window),
+      // so drop any leading tool_result messages the LIMIT may have stranded.
       let cut = 0;
       while (cut < conversation.length) {
         const msg = conversation[cut];
@@ -300,7 +296,7 @@ export function getChatThreadConversation(
         if (!hasToolResult) break;
         cut += 1;
       }
-      return cut > 0 ? conversation.slice(cut) : conversation;
+      return conversation.slice(cut);
     }) ?? []
   );
 }
