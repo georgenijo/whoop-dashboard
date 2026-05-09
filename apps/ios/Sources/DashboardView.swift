@@ -15,10 +15,17 @@ struct DashboardView: View {
         case error(String)
     }
 
+    private var navigationTitle: String {
+        if case .loaded(let summary) = phase, summary.isFallback {
+            return "Dashboard"
+        }
+        return "Today"
+    }
+
     var body: some View {
         NavigationStack {
             content
-                .navigationTitle("Today")
+                .navigationTitle(navigationTitle)
                 .refreshable { await load(showSpinner: false) }
         }
         .task { await load(showSpinner: true) }
@@ -42,6 +49,7 @@ struct DashboardView: View {
             if summary.hasAnyData {
                 ScrollView {
                     VStack(spacing: 16) {
+                        DashboardHeader(summary: summary)
                         RecoveryRingCard(recovery: summary.recovery)
                         HStack(spacing: 16) {
                             SleepCard(sleep: summary.sleep)
@@ -104,6 +112,52 @@ struct DashboardView: View {
             if !hadLoadedData { phase = .error("Could not load") }
         }
     }
+}
+
+private struct DashboardHeader: View {
+    let summary: DashboardSummary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(headerTitle)
+                .font(.title3.weight(.semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if summary.isFallback {
+                Text("Today's data hasn't arrived yet")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var headerTitle: String {
+        let displayDate = summary.dataDate ?? summary.requestedDate
+        guard let parsed = Self.parser.date(from: displayDate) else {
+            return displayDate
+        }
+        if !summary.isFallback, Calendar.current.isDateInToday(parsed) {
+            return "Today"
+        }
+        return Self.formatter.string(from: parsed)
+    }
+
+    private static let parser: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .iso8601)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    private static let formatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale.current
+        formatter.timeZone = .current
+        formatter.setLocalizedDateFormatFromTemplate("EEEEMMMd")
+        return formatter
+    }()
 }
 
 private struct RecoveryRingCard: View {

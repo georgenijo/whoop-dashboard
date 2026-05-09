@@ -75,7 +75,10 @@ struct AuthView: View {
         do {
             let response: AuthResponse = try await api.post(
                 "/api/auth/apple",
-                body: ["identity_token": identityToken]
+                body: [
+                    "identity_token": identityToken,
+                    "tz": TimeZone.current.identifier,
+                ]
             )
             guard KeychainStore.saveSessionToken(response.sessionToken) else {
                 errorMessage = "Could not save session"
