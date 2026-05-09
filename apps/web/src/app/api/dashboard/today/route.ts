@@ -120,7 +120,6 @@ function buildDashboardToday(requestedDate: string): DashboardTodayResponse {
   const strainHistory = sliceWithin(strainWindow, signalStart, dataDate);
 
   return {
-    // Pre-PR semantics: `date` = day the data is from. Preserved for old clients.
     date: dataDate,
     requested_date: requestedDate,
     data_date: dataDate,
