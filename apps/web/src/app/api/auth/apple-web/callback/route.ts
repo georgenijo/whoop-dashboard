@@ -29,11 +29,28 @@ function callbackUrl(req: NextRequest): string {
   return new URL("/api/auth/apple-web/callback", req.nextUrl.origin).toString();
 }
 
+// Behind nginx + CF Access, `req.nextUrl.origin` resolves to the upstream
+// (e.g. `https://localhost:8501`) because Next doesn't trust forwarded
+// headers by default. Derive the public origin from APPLE_REDIRECT_URI when
+// set — Apple won't accept a localhost URL in prod, so this env is always
+// the canonical public origin in production.
+function publicOrigin(req: NextRequest): string {
+  const override = process.env.APPLE_REDIRECT_URI;
+  if (override && override.trim()) {
+    try {
+      return new URL(override.trim()).origin;
+    } catch {
+      // fall through
+    }
+  }
+  return req.nextUrl.origin;
+}
+
 function bail(req: NextRequest, reason: string, status = 400): NextResponse {
   // Send the user back to /signin with an error code rather than a raw 4xx —
   // they should see the page, not a JSON corpse. status= is preserved on
   // direct API testing because we mirror it onto the redirect.
-  const url = new URL("/signin", req.nextUrl.origin);
+  const url = new URL("/signin", publicOrigin(req));
   url.searchParams.set("error", reason);
   const res = NextResponse.redirect(url, { status: 303 });
   // Tear down the state cookie regardless — it's single-use.
@@ -147,7 +164,7 @@ export async function POST(req: NextRequest) {
     cookiePayload.from && isSafeReturnPath(cookiePayload.from)
       ? cookiePayload.from
       : "/";
-  const res = NextResponse.redirect(new URL(target, req.nextUrl.origin), {
+  const res = NextResponse.redirect(new URL(target, publicOrigin(req)), {
     status: 303,
   });
   // Clear the one-shot state cookie.
