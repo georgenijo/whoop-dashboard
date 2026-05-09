@@ -156,20 +156,37 @@ async function refreshTokens(current: StoredTokens): Promise<StoredTokens | null
     console.error(
       `[token] refresh failed status=${resp.status} body=${JSON.stringify(bodyExcerpt)}`
     );
-    // Narrow flag flip: only definitive credential-rejection signals.
-    // Whoop returns 400 for both invalid_grant (refresh expired/revoked)
-    // AND invalid_request (our client bug — malformed body, missing param).
-    // Flipping on every 4xx would train the user to reconnect when the real
-    // fix is in our code. Key off the body's `error` code; fall back to 401
-    // (the RFC-correct expired/invalid-token signal). Body-parse failure or
-    // an unrecognized error → log only.
+    // Flip flag only on definitive credential-rejection signals so a code
+    // bug (e.g. `invalid_request` from a malformed body) doesn't masquerade
+    // as expired credentials and train the user to reconnect.
+    //
+    // Allowlisted error codes cover the realistic "credentials are dead"
+    // shapes Whoop / RFC 6749 / RFC 6750 emit on a refresh:
+    //   - invalid_grant       — refresh token expired or revoked
+    //   - invalid_token       — RFC 6750, server says token is no good
+    //   - invalid_client      — client credentials rejected
+    //   - unauthorized_client — client not allowed to use this grant
+    // Status 401 / 403 catch the same intent without a parsable body.
+    // Anything else (parse failure, unknown error code, 5xx, network) →
+    // log only; a transient outage shouldn't pop a Reconnect banner.
+    //
     // Non-atomic with the upsert. Single-process Next.js serializes via the
     // `inflightRefresh` singleton, but a concurrent Python sync
     // (sync/daily_sync.py) could in theory race a flag-set against a
     // follow-up reset. Acceptable today; P2 keepalive will reshape this.
+    const REAUTH_ERROR_CODES = new Set([
+      "invalid_grant",
+      "invalid_token",
+      "invalid_client",
+      "unauthorized_client",
+    ]);
     const errorCode =
       typeof bodyExcerpt.error === "string" ? bodyExcerpt.error : null;
-    if (errorCode === "invalid_grant" || resp.status === 401) {
+    if (
+      (errorCode && REAUTH_ERROR_CODES.has(errorCode)) ||
+      resp.status === 401 ||
+      resp.status === 403
+    ) {
       setIntegrationNeedsReauth(DEFAULT_USER_ID, WHOOP_PROVIDER, true);
     }
     return null;

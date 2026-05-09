@@ -122,18 +122,14 @@ export default function SettingsPage() {
       .then((r) => r.json())
       .then((d: { needs_reauth: boolean }) => setNeedsReauth(!!d.needs_reauth))
       .catch(() => {});
+    // Strip ?reconnected=1 if we landed here from the OAuth callback, so a
+    // hard reload doesn't appear "stuck" in the just-reconnected state. Read
+    // `reconnected` from closure (mount-only) — putting it in the deps array
+    // would cause a redundant second fetch when router.replace flips it back
+    // to false.
+    if (reconnected) router.replace("/settings");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  useEffect(() => {
-    if (!reconnected) return;
-    // Refetch to capture the post-OAuth flag value, then strip ?reconnected=1
-    // so a hard reload doesn't appear "stuck" in the just-reconnected state.
-    fetch("/api/integrations/whoop/status")
-      .then((r) => r.json())
-      .then((d: { needs_reauth: boolean }) => setNeedsReauth(!!d.needs_reauth))
-      .catch(() => {});
-    router.replace("/settings");
-  }, [reconnected, router]);
 
   function toggleLocal(key: string, val: boolean) {
     localStorage.setItem(key, val ? "1" : "0");
