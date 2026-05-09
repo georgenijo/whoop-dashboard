@@ -198,6 +198,7 @@ export function openWrite(): DB | null {
         token_type TEXT,
         raw TEXT,
         key_version INTEGER NOT NULL DEFAULT 1,
+        needs_reauth INTEGER NOT NULL DEFAULT 0,
         updated_at TEXT NOT NULL,
         PRIMARY KEY (user_id, provider)
       );
@@ -310,6 +311,14 @@ export function openWrite(): DB | null {
     ) {
       db.exec(
         "ALTER TABLE integrations ADD COLUMN key_version INTEGER NOT NULL DEFAULT 1"
+      );
+    }
+    if (
+      integrationCols.length > 0 &&
+      !integrationCols.some((c) => c.name === "needs_reauth")
+    ) {
+      db.exec(
+        "ALTER TABLE integrations ADD COLUMN needs_reauth INTEGER NOT NULL DEFAULT 0"
       );
     }
     return db;

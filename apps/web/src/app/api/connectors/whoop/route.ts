@@ -48,9 +48,14 @@ function expiresAtFromIso(iso: string | null): {
  *
  * Status semantics:
  *   - `connected`: usable token (DB row decrypts cleanly OR tokens.json
- *     parses) AND not expired.
- *   - `needs_reconnect`: a token exists somewhere but it's expired and
- *     refresh has likely failed (or we have no expires_at to trust).
+ *     parses) AND not expired AND not flagged for reauth.
+ *   - `needs_reconnect`: a token exists somewhere but the refresh chain
+ *     has died — either expires_at has passed, OR Whoop's token endpoint
+ *     returned a definitive credential-rejection (invalid_grant /
+ *     invalid_token / 401) and the refresh path flipped `needs_reauth=1`.
+ *     The flag catches the silent-invalidation case from #263 where
+ *     Whoop kills the refresh server-side BEFORE expires_at — clock
+ *     check alone misses that window.
  *   - `disconnected`: no token at all on either layer.
  */
 export async function GET(req: Request) {
@@ -70,7 +75,10 @@ export async function GET(req: Request) {
     scope = integration.scope ?? null;
     const checked = expiresAtFromIso(integration.expires_at);
     expiresAt = checked.expires_at;
-    status = checked.expired ? "needs_reconnect" : "connected";
+    status =
+      integration.needs_reauth || checked.expired
+        ? "needs_reconnect"
+        : "connected";
   } else if (await fileTokensExist()) {
     source = "file";
     // tokens.json exists but no DB row — we trust the file as a fallback for
