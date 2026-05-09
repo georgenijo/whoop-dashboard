@@ -99,6 +99,16 @@ describe("POST /api/auth/apple", () => {
     expect(readUserBySub("apple-sub-route")?.timezone).toBeNull();
   });
 
+  it("canonicalizes a non-canonical IANA tz to the resolved name", async () => {
+    // Lowercase input must round-trip as the canonical mixed-case form so
+    // downstream jobs don't see two zones for what is the same region.
+    const res = await route.POST(
+      makeRequest({ identity_token: "fake.token.value", tz: "america/new_york" }),
+    );
+    expect(res.status).toBe(200);
+    expect(readUserBySub("apple-sub-route")?.timezone).toBe("America/New_York");
+  });
+
   it("does not clobber a saved tz when a later sign-in omits the field", async () => {
     // First call writes the TZ.
     await route.POST(

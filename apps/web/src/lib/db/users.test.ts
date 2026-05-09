@@ -43,6 +43,8 @@ function readUserById(id: number): { id: number; timezone: string | null } | nul
   }
 }
 
+// Mutates the bootstrap row (id=1) globally — safe because tmpRoot gives this
+// suite its own SQLite file; nothing else in the project shares the DB path.
 function resetUsers(): void {
   const db = new Database(dbFile);
   try {
@@ -140,7 +142,7 @@ describe("findOrCreateUserByEmail tz handling", () => {
   });
 });
 
-describe("invalid tz inputs", () => {
+describe("DB helper trusts caller (no validation at this layer)", () => {
   // Validation is enforced at the route layer (see apple/route.test.ts). The DB
   // helper trusts whatever it's handed — exercised here only to confirm we
   // don't crash on a junk string and that subsequent corrections still work.

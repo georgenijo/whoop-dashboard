@@ -12,19 +12,17 @@ type AppleAuthRequestBody = {
 
 const TZ_MAX_LENGTH = 100;
 
-/**
- * Accept the iOS-supplied IANA timezone if it parses through Intl. We never
- * reject the request when `tz` is missing or invalid — TZ is opt-in metadata
- * for downstream scheduled jobs (push notifications, morning summary), and an
- * old client without the field must keep authenticating successfully.
- */
+// TZ is opt-in; invalid input never rejects auth.
 function sanitizeTimezone(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > TZ_MAX_LENGTH) return null;
   try {
-    new Intl.DateTimeFormat("en-US", { timeZone: trimmed });
-    return trimmed;
+    // resolvedOptions().timeZone normalizes case and offset aliases (e.g.
+    // "america/new_york" → "America/New_York", "+00:00" → "UTC") so Phase 3
+    // jobs reading users.timezone get a single canonical IANA name.
+    return new Intl.DateTimeFormat("en-US", { timeZone: trimmed })
+      .resolvedOptions().timeZone;
   } catch {
     return null;
   }

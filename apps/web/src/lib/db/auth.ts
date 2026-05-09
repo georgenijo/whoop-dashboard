@@ -220,11 +220,7 @@ export function upsertUserByAppleSub(
   }
 }
 
-/**
- * Persist `tz` on `user` only when the caller supplied a value that differs
- * from what's already stored. null/undefined is "no opinion" — never clobber
- * a previously-saved TZ with a missing field on a later sign-in.
- */
+// null/undefined means "no opinion" — never clobber a saved TZ on later sign-ins.
 function applyTzUpdate(db: DB, user: User, tz: string | null | undefined): void {
   if (tz == null) return;
   if (user.timezone === tz) return;
