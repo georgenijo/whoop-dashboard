@@ -8,18 +8,10 @@ type ChatMessageInput = { role: "user" | "assistant"; content: string };
 type ChatSseEvent =
   | "tool_use_start"
   | "tool_use_end"
+  | "tool_progress"
   | "text_delta"
   | "done"
   | "error";
-
-// Cloudflare and most CDN/proxy idle timeouts close SSE streams after 60-100s
-// of silence. Long-running tools (e.g. trigger_whoop_sync, 10-30s) leave the
-// stream idle long enough for the edge to drop it. A 15s comment-line keepalive
-// is well under those thresholds and ignored by EventSource clients.
-/** @internal — exported only so route.test.ts can sanity-check the production constant. */
-export const KEEPALIVE_INTERVAL_MS =
-  process.env.NODE_ENV === "test" ? 100 : 15_000;
-const KEEPALIVE_FRAME = new TextEncoder().encode(`: keepalive\n\n`);
 
 function parseThreadId(value: unknown): number | null {
   if (value === undefined || value === null || value === "") return null;
@@ -135,21 +127,7 @@ export async function POST(req: Request) {
     }
 
     const abortController = new AbortController();
-
-    let keepaliveTimer: ReturnType<typeof setInterval> | null = null;
-    const stopKeepalive = () => {
-      if (keepaliveTimer !== null) {
-        clearInterval(keepaliveTimer);
-        keepaliveTimer = null;
-      }
-    };
-
-    // Clear the heartbeat the moment the client aborts — don't wait for the
-    // next tick to self-stop, that lets one stale frame slip through.
-    const relayAbort = () => {
-      stopKeepalive();
-      abortController.abort();
-    };
+    const relayAbort = () => abortController.abort();
     req.signal.addEventListener("abort", relayAbort, { once: true });
 
     const stream = new ReadableStream<Uint8Array>({
@@ -160,25 +138,12 @@ export async function POST(req: Request) {
           }
         };
         const close = () => {
-          stopKeepalive();
           try {
             controller.close();
           } catch {
             // The client may have already closed the connection.
           }
         };
-
-        keepaliveTimer = setInterval(() => {
-          if (abortController.signal.aborted) {
-            stopKeepalive();
-            return;
-          }
-          try {
-            controller.enqueue(KEEPALIVE_FRAME);
-          } catch {
-            stopKeepalive();
-          }
-        }, KEEPALIVE_INTERVAL_MS);
 
         try {
           const reply = await runAndPersistCoachTurn(
@@ -199,6 +164,12 @@ export async function POST(req: Request) {
                   status,
                   ...(error ? { error } : {}),
                 }),
+              onToolProgress: ({ tool, stage, message }) =>
+                send("tool_progress", {
+                  tool,
+                  stage,
+                  ...(message ? { message } : {}),
+                }),
             }
           );
 
@@ -207,9 +178,6 @@ export async function POST(req: Request) {
             return;
           }
 
-          // Stop the heartbeat before the terminal frame so no late tick can
-          // slip behind `done` on the wire.
-          stopKeepalive();
           send("done", { reply });
           if (shouldAutoTitle) {
             after(() => {
@@ -218,7 +186,6 @@ export async function POST(req: Request) {
           }
           close();
         } catch (err) {
-          stopKeepalive();
           if (!abortController.signal.aborted) {
             const msg = err instanceof Error ? err.message : String(err);
             try {
@@ -229,12 +196,10 @@ export async function POST(req: Request) {
           }
           close();
         } finally {
-          stopKeepalive();
           req.signal.removeEventListener("abort", relayAbort);
         }
       },
       cancel() {
-        stopKeepalive();
         abortController.abort();
         req.signal.removeEventListener("abort", relayAbort);
       },

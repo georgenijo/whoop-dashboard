@@ -135,7 +135,10 @@ async function refreshTokens(current: StoredTokens): Promise<StoredTokens | null
   return stored;
 }
 
-export async function getValidAccessToken(forceRefresh = false): Promise<string | null> {
+export async function getValidAccessToken(
+  forceRefresh = false,
+  hooks: { onRefresh?: () => void } = {},
+): Promise<string | null> {
   const existing = inflightRefresh;
   if (existing) {
     return (await existing)?.access_token ?? null;
@@ -154,6 +157,9 @@ export async function getValidAccessToken(forceRefresh = false): Promise<string 
     return (await existingAfterLoad)?.access_token ?? null;
   }
 
+  // Fire onRefresh only on the originating call — joiners above skip it so
+  // a single refresh emits exactly one progress event.
+  hooks.onRefresh?.();
   const refreshPromise = refreshTokens(tokens);
   inflightRefresh = refreshPromise.finally(() => {
     inflightRefresh = null;

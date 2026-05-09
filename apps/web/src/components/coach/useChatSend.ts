@@ -13,6 +13,9 @@ export type ChatMessage = { id: number; role: "user" | "assistant"; content: str
 export type ToolProgress = {
   name: string;
   state: "running" | "done";
+  /** Mid-tool progress sub-state (e.g. "fetching_sleep" for trigger_whoop_sync). */
+  stage?: string;
+  stageMessage?: string;
   duration_ms?: number;
   rows?: number | null;
   status?: "ok" | "error";
@@ -30,6 +33,7 @@ type SendParams = Omit<UseChatSendParams, "initialMessages"> & { text: string; m
 type StreamHandlers = {
   appendText: (text: string) => void;
   setProgress: (progress: ToolProgress | null) => void;
+  mergeProgressStage: (event: { tool: string; stage: string; message?: string }) => void;
 };
 
 function setAssistantMessage(
@@ -81,6 +85,41 @@ function setAssistantProgress(
   }));
 }
 
+function mergeAssistantProgressStage(
+  setMessages: Dispatch<SetStateAction<ComposerMessage[]>>,
+  index: number,
+  event: { tool: string; stage: string; message?: string }
+) {
+  updateAssistantMessage(setMessages, index, (message) => {
+    const cur = message.progress;
+    // Merge rule:
+    //  - same tool (or no current progress) → preserve everything, only
+    //    overwrite stage / stageMessage. Keeps `state: "running"` from the
+    //    earlier `tool_use_start`.
+    //  - different tool (or no current name match) → start a fresh
+    //    running record with stage; clears stale duration/rows/status.
+    if (!cur || cur.name !== event.tool) {
+      return {
+        ...message,
+        progress: {
+          name: event.tool,
+          state: "running",
+          stage: event.stage,
+          stageMessage: event.message,
+        },
+      };
+    }
+    return {
+      ...message,
+      progress: {
+        ...cur,
+        stage: event.stage,
+        stageMessage: event.message,
+      },
+    };
+  });
+}
+
 function applyThreadHeader(res: Response, setThreadId: Dispatch<SetStateAction<number>>) {
   const value = res.headers.get("x-thread-id");
   if (!value) return;
@@ -126,11 +165,28 @@ function formatDuration(ms: number | undefined): string {
   return `${ms}ms`;
 }
 
+function formatStage(stage: string): string {
+  return stage.replaceAll("_", " ");
+}
+
 export function formatToolProgressLabel(progress: ToolProgress | null | undefined): string | null {
   if (!progress) return null;
   const name = toolLabel(progress.name);
-  if (progress.state === "running") return `Querying ${name}...`;
+  if (progress.state === "running") {
+    if (progress.name === "trigger_whoop_sync") {
+      return progress.stage
+        ? `Syncing Whoop… (${formatStage(progress.stage)})`
+        : "Syncing Whoop…";
+    }
+    return `Querying ${name}...`;
+  }
   const duration = formatDuration(progress.duration_ms);
+  if (progress.name === "trigger_whoop_sync") {
+    if (progress.status === "error") {
+      return duration ? `Sync failed in ${duration}` : "Sync failed";
+    }
+    return duration ? `Synced Whoop in ${duration}` : "Synced Whoop";
+  }
   if (progress.status === "error") {
     return duration ? `Query ${name} failed in ${duration}` : `Query ${name} failed`;
   }
@@ -185,6 +241,18 @@ async function readChatStream(res: Response, handlers: StreamHandlers): Promise<
           duration_ms: typeof payload.duration_ms === "number" ? payload.duration_ms : undefined,
           rows: typeof payload.rows === "number" || payload.rows === null ? payload.rows : undefined,
           status: payload.status === "error" ? "error" : "ok",
+        });
+      }
+      return;
+    }
+    if (event === "tool_progress") {
+      const tool = payload.tool;
+      const stage = payload.stage;
+      if (typeof tool === "string" && typeof stage === "string") {
+        handlers.mergeProgressStage({
+          tool,
+          stage,
+          message: typeof payload.message === "string" ? payload.message : undefined,
         });
       }
       return;
@@ -273,6 +341,8 @@ async function sendChatMessage(params: SendParams) {
     const reply = await readChatStream(res, {
       appendText: (text) => appendAssistantText(params.setMessages, assistantIdx, text),
       setProgress: (progress) => setAssistantProgress(params.setMessages, assistantIdx, progress),
+      mergeProgressStage: (event) =>
+        mergeAssistantProgressStage(params.setMessages, assistantIdx, event),
     });
     if (!isCurrent()) return;
     setAssistantMessage(params.setMessages, assistantIdx, reply);

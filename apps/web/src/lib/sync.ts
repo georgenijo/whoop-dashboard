@@ -6,6 +6,7 @@ import {
   whoopGetAll,
   WhoopUpstreamError,
 } from "@/lib/whoop/client";
+import { getValidAccessToken } from "@/lib/whoop/token";
 import {
   cycleSummaryDate,
   parseDate,
@@ -20,6 +21,18 @@ import {
   type WhoopSleepRecord,
   type WhoopWorkoutRecord,
 } from "@/lib/whoop/upsert";
+
+export type SyncStage =
+  | "refreshing_token"
+  | "fetching_recovery"
+  | "fetching_sleep"
+  | "fetching_strain"
+  | "fetching_workouts"
+  | "fetching_body"
+  | "upserting"
+  | "computing_summary";
+
+export type SyncProgressEvent = { stage: SyncStage; message?: string };
 
 // Do NOT delete sync/daily_sync.py until Phase 3-C ships and this path has
 // been observed in prod for ~1 week (see issue #212 step 6).
@@ -108,12 +121,18 @@ async function fetchAllParallel(
   start: string,
   end: string,
   signal?: AbortSignal,
+  onProgress?: (e: SyncProgressEvent) => void,
 ): Promise<{
   data: FetchedData;
   fetchBreakdown: Record<string, number>;
   pageCounts: Record<string, number>;
 }> {
   const params = { start, end };
+  // Per-completion progress: each `fetching_*` event fires when its endpoint
+  // resolves, not in a synchronous burst before `Promise.all`. Order in the
+  // emit log reflects actual fetch latency, not source code order.
+  const reporting = <T>(stage: SyncStage, p: Promise<T>): Promise<T> =>
+    onProgress ? p.then((r) => { onProgress({ stage }); return r; }) : p;
   const [
     bodyRes,
     cyclesRes,
@@ -121,22 +140,37 @@ async function fetchAllParallel(
     sleepRes,
     workoutsRes,
   ] = await Promise.all([
-    timed("body", async () =>
-      whoopGet<WhoopBodyMeasurement>(`/v2/user/measurement/body`, { signal }),
+    reporting(
+      "fetching_body",
+      timed("body", async () =>
+        whoopGet<WhoopBodyMeasurement>(`/v2/user/measurement/body`, { signal }),
+      ),
     ),
-    timed("cycles", async () =>
-      whoopGetAll<WhoopCycleRecord>(`/v2/cycle`, params, { signal }),
+    reporting(
+      "fetching_strain",
+      timed("cycles", async () =>
+        whoopGetAll<WhoopCycleRecord>(`/v2/cycle`, params, { signal }),
+      ),
     ),
-    timed("recovery", async () =>
-      whoopGetAll<WhoopRecoveryRecord>(`/v2/recovery`, params, { signal }),
+    reporting(
+      "fetching_recovery",
+      timed("recovery", async () =>
+        whoopGetAll<WhoopRecoveryRecord>(`/v2/recovery`, params, { signal }),
+      ),
     ),
-    timed("sleep", async () =>
-      whoopGetAll<WhoopSleepRecord>(`/v2/activity/sleep`, params, { signal }),
+    reporting(
+      "fetching_sleep",
+      timed("sleep", async () =>
+        whoopGetAll<WhoopSleepRecord>(`/v2/activity/sleep`, params, { signal }),
+      ),
     ),
-    timed("workouts", async () =>
-      whoopGetAll<WhoopWorkoutRecord>(`/v2/activity/workout`, params, {
-        signal,
-      }),
+    reporting(
+      "fetching_workouts",
+      timed("workouts", async () =>
+        whoopGetAll<WhoopWorkoutRecord>(`/v2/activity/workout`, params, {
+          signal,
+        }),
+      ),
     ),
   ]);
 
@@ -421,7 +455,11 @@ function latestDates(): LatestDates {
 }
 
 export async function runWhoopSync(
-  opts: { days?: number; signal?: AbortSignal } = {},
+  opts: {
+    days?: number;
+    signal?: AbortSignal;
+    onProgress?: (e: SyncProgressEvent) => void;
+  } = {},
 ): Promise<SyncResult> {
   const days = opts.days ?? DEFAULT_DAYS;
   const { start, end } = isoUtcRange(days);
@@ -449,11 +487,22 @@ export async function runWhoopSync(
   try {
     checkAborted(opts.signal);
 
+    // Pre-warm the access token so `refreshing_token` is the first stage
+    // event deterministically — before the parallel fetch burst. Seeds
+    // `inflightRefresh` so the parallel `whoopGet` calls below either skip
+    // refresh or join the same in-flight promise (single emit). No-op if
+    // token is fresh; throws nothing on refresh failure (downstream
+    // `whoopGet` will surface `WhoopAuthError`).
+    await getValidAccessToken(false, {
+      onRefresh: () => opts.onProgress?.({ stage: "refreshing_token" }),
+    });
+
     const fetchT0 = Date.now();
     const { data, fetchBreakdown, pageCounts } = await fetchAllParallel(
       start,
       end,
       opts.signal,
+      opts.onProgress,
     );
     details.fetch_ms = Date.now() - fetchT0;
     details.fetch_breakdown = fetchBreakdown;
@@ -461,6 +510,7 @@ export async function runWhoopSync(
 
     checkAborted(opts.signal);
 
+    opts.onProgress?.({ stage: "upserting" });
     const dbT0 = Date.now();
     const counts = persistAll(data, opts.signal);
     details.sync_db_ms = Date.now() - dbT0;
@@ -495,6 +545,12 @@ export async function runWhoopSync(
     checkAborted(opts.signal);
 
     const latest = latestDates();
+    // Fire only on the fully-clean success path — placed AFTER the final
+    // `checkAborted` so a post-commit abort/exception (which routes to the
+    // `partial: true` catch branch) does not emit this stage. The summary
+    // recompute itself runs inside `persistAll`'s transaction; this event
+    // is the user-facing "all done with the summary phase" marker.
+    opts.onProgress?.({ stage: "computing_summary" });
     return {
       success: true,
       latest_recovery_date: latest.recovery,

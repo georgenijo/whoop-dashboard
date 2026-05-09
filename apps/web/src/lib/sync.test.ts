@@ -31,6 +31,22 @@ vi.mock("@/lib/whoop/client", async () => {
   };
 });
 
+// Default token mock: pre-warm returns a token without firing onRefresh.
+// Specific tests override the implementation to simulate a refresh.
+const getValidAccessTokenMock = vi.fn<
+  (
+    force?: boolean,
+    hooks?: { onRefresh?: () => void },
+  ) => Promise<string | null>
+>(async () => "stub-token");
+
+vi.mock("@/lib/whoop/token", () => ({
+  getValidAccessToken: (
+    force?: boolean,
+    hooks?: { onRefresh?: () => void },
+  ) => getValidAccessTokenMock(force, hooks),
+}));
+
 type SyncModule = typeof import("./sync");
 let syncMod: SyncModule;
 
@@ -169,6 +185,9 @@ beforeAll(async () => {
 beforeEach(() => {
   whoopGetMock.mockReset();
   whoopGetAllMock.mockReset();
+  getValidAccessTokenMock.mockReset();
+  // Default: token is fresh, no refresh fired.
+  getValidAccessTokenMock.mockImplementation(async () => "stub-token");
   clearTables();
 });
 
@@ -308,6 +327,108 @@ describe("runWhoopSync abort handling", () => {
     expect(result.latest_strain_date).toBe("2025-04-12");
     // Rows are visible in the DB.
     expect(rowCounts()).toEqual({ recovery: 1, cycles: 1, sleep: 1, workouts: 1 });
+  });
+
+  it("onProgress: happy path emits expected stage set; upserting precedes computing_summary; no refreshing_token by default", async () => {
+    wireHappyPath();
+    const events: import("./sync").SyncProgressEvent[] = [];
+
+    const result = await syncMod.runWhoopSync({
+      onProgress: (e) => events.push(e),
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.partial).toBeUndefined();
+
+    const stages = events.map((e) => e.stage);
+    expect(stages).toContain("fetching_recovery");
+    expect(stages).toContain("fetching_sleep");
+    expect(stages).toContain("fetching_strain");
+    expect(stages).toContain("fetching_workouts");
+    expect(stages).toContain("fetching_body");
+    expect(stages).toContain("upserting");
+    expect(stages).toContain("computing_summary");
+
+    for (const s of [
+      "fetching_recovery",
+      "fetching_sleep",
+      "fetching_strain",
+      "fetching_workouts",
+      "fetching_body",
+    ] as const) {
+      expect(stages.filter((x) => x === s)).toHaveLength(1);
+    }
+
+    const idxUpsert = stages.indexOf("upserting");
+    const idxSummary = stages.indexOf("computing_summary");
+    expect(idxUpsert).toBeGreaterThan(-1);
+    expect(idxSummary).toBeGreaterThan(idxUpsert);
+    for (const fetchStage of [
+      "fetching_recovery",
+      "fetching_sleep",
+      "fetching_strain",
+      "fetching_workouts",
+      "fetching_body",
+    ] as const) {
+      expect(stages.indexOf(fetchStage)).toBeLessThan(idxUpsert);
+    }
+
+    expect(stages).not.toContain("refreshing_token");
+  });
+
+  it("onProgress: refreshing_token fires before any fetching_* when pre-warm triggers a refresh", async () => {
+    wireHappyPath();
+    getValidAccessTokenMock.mockImplementation(async (_force, hooks) => {
+      hooks?.onRefresh?.();
+      return "stub-token";
+    });
+
+    const events: import("./sync").SyncProgressEvent[] = [];
+    await syncMod.runWhoopSync({ onProgress: (e) => events.push(e) });
+
+    const stages = events.map((e) => e.stage);
+    const idxRefresh = stages.indexOf("refreshing_token");
+    expect(idxRefresh).toBeGreaterThanOrEqual(0);
+    for (const fetchStage of [
+      "fetching_recovery",
+      "fetching_sleep",
+      "fetching_strain",
+      "fetching_workouts",
+      "fetching_body",
+    ] as const) {
+      const i = stages.indexOf(fetchStage);
+      expect(i).toBeGreaterThan(idxRefresh);
+    }
+  });
+
+  it("onProgress: abort-after-commit (partial path) does NOT emit computing_summary but DOES emit upserting", async () => {
+    wireHappyPath();
+    let calls = 0;
+    const fakeSignal = {
+      get aborted() {
+        calls += 1;
+        return calls >= 8;
+      },
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => true,
+      onabort: null,
+      reason: undefined,
+      throwIfAborted: () => {},
+    } as unknown as AbortSignal;
+
+    const events: import("./sync").SyncProgressEvent[] = [];
+    const result = await syncMod.runWhoopSync({
+      signal: fakeSignal,
+      onProgress: (e) => events.push(e),
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.partial).toBe(true);
+
+    const stages = events.map((e) => e.stage);
+    expect(stages).toContain("upserting");
+    expect(stages).not.toContain("computing_summary");
   });
 
   it("non-abort exception AFTER commit: returns success=true with partial=true and error set", async () => {
