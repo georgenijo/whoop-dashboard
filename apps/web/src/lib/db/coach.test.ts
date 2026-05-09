@@ -66,10 +66,8 @@ function resetMessages(): void {
 }
 
 beforeAll(async () => {
-  // Importing here triggers openWrite() once via the first DB call below, which
-  // builds the schema lazily.
   coach = await import("./coach");
-  // Force schema bootstrap by running any write through openWrite().
+  // First write goes through openWrite(), which builds the schema lazily.
   coach.createChatThread(1, null);
   resetMessages();
 });
@@ -113,6 +111,45 @@ describe("getChatThreadConversation", () => {
     expect(conversation).toHaveLength(2);
     expect(conversation[0]).toEqual({ role: "assistant", content: "follow-up text" });
     expect(conversation[1]).toEqual({ role: "user", content: "next user turn" });
+  });
+
+  it("caps the returned history at 30 rows and keeps the most recent", () => {
+    const threadId = insertThread(1);
+    // Insert 35 rows; oldest 5 should be dropped, leaving rows 6..35.
+    for (let i = 1; i <= 35; i++) {
+      insertMessage(threadId, i % 2 === 0 ? "assistant" : "user", `msg-${i}`);
+    }
+
+    const conversation = coach.getChatThreadConversation(1, threadId);
+
+    expect(conversation).toHaveLength(30);
+    expect(conversation[0].content).toBe("msg-6");
+    expect(conversation[conversation.length - 1].content).toBe("msg-35");
+    // Chronological order preserved.
+    const contents = conversation.map((m) => m.content);
+    expect(contents).toEqual(
+      Array.from({ length: 30 }, (_, i) => `msg-${i + 6}`),
+    );
+  });
+
+  it("drops multiple consecutive leading orphan tool_result rows", () => {
+    const threadId = insertThread(1);
+    // Two parallel tool_results stranded at the head (their tool_use rows fell
+    // outside the window), then a normal assistant text turn.
+    insertMessage(threadId, "user", "[tool_result]", [
+      { type: "tool_result", tool_use_id: "toolu_a", content: "rows..." },
+    ]);
+    insertMessage(threadId, "user", "[tool_result]", [
+      { type: "tool_result", tool_use_id: "toolu_b", content: "rows..." },
+    ]);
+    insertMessage(threadId, "assistant", "kept");
+    insertMessage(threadId, "user", "next");
+
+    const conversation = coach.getChatThreadConversation(1, threadId);
+
+    expect(conversation).toHaveLength(2);
+    expect(conversation[0]).toEqual({ role: "assistant", content: "kept" });
+    expect(conversation[1]).toEqual({ role: "user", content: "next" });
   });
 
   it("scopes results to the requested thread", () => {
