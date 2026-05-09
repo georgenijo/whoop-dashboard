@@ -8,6 +8,7 @@ import {
   getStrainRange,
   getWorkoutsRange,
 } from "@/lib/db";
+import { runWhoopSync } from "@/lib/sync";
 
 export type CoachToolName =
   | "query_recovery"
@@ -15,14 +16,15 @@ export type CoachToolName =
   | "query_strain"
   | "query_workouts"
   | "query_journal"
-  | "query_naps";
+  | "query_naps"
+  | "trigger_whoop_sync";
 
 type DateRangeInput = {
   start_date: string;
   end_date: string;
 };
 
-type ToolSchema = Tool & {
+type DateRangeToolSchema = Tool & {
   name: CoachToolName;
   description: string;
   input_schema: {
@@ -37,7 +39,21 @@ type ToolSchema = Tool & {
   strict: true;
 };
 
-const DATE_RANGE_SCHEMA: ToolSchema["input_schema"] = {
+type EmptyInputToolSchema = Tool & {
+  name: CoachToolName;
+  description: string;
+  input_schema: {
+    type: "object";
+    properties: Record<string, never>;
+    required: [];
+    additionalProperties: false;
+  };
+  strict: true;
+};
+
+type ToolSchema = DateRangeToolSchema | EmptyInputToolSchema;
+
+const DATE_RANGE_SCHEMA: DateRangeToolSchema["input_schema"] = {
   type: "object",
   properties: {
     start_date: {
@@ -50,6 +66,13 @@ const DATE_RANGE_SCHEMA: ToolSchema["input_schema"] = {
     },
   },
   required: ["start_date", "end_date"],
+  additionalProperties: false,
+};
+
+const EMPTY_INPUT_SCHEMA: EmptyInputToolSchema["input_schema"] = {
+  type: "object",
+  properties: {},
+  required: [],
   additionalProperties: false,
 };
 
@@ -94,6 +117,13 @@ export const TOOLS: ToolSchema[] = [
     description:
       "Query journal rows for a date range when journal data exists. Returns an empty array when no journal table is available.",
     input_schema: DATE_RANGE_SCHEMA,
+    strict: true,
+  },
+  {
+    name: "trigger_whoop_sync",
+    description:
+      "Pull the latest Whoop data into the local DB. Use ONLY when a query_* tool returns no rows for a recent date the user expects to have data for. Don't sync proactively. Idempotent. Takes 10-30s.",
+    input_schema: EMPTY_INPUT_SCHEMA,
     strict: true,
     cache_control: { type: "ephemeral", ttl: "1h" },
   },
@@ -162,7 +192,15 @@ function parseDateRangeInput(input: unknown): DateRangeInput {
   return { start_date: startDate, end_date: endDate };
 }
 
-export async function executeTool(name: string, input: unknown): Promise<unknown> {
+export async function executeTool(
+  name: string,
+  input: unknown,
+  options: { signal?: AbortSignal } = {}
+): Promise<unknown> {
+  if (name === "trigger_whoop_sync") {
+    return runWhoopSync({ signal: options.signal });
+  }
+
   const { start_date: startDate, end_date: endDate } = parseDateRangeInput(input);
 
   switch (name) {
@@ -223,7 +261,8 @@ export async function executeToolResult(
   threadId: number,
   toolUse: ToolUseBlock,
   toolDetails: ToolDetail[],
-  progress?: ToolProgressHandlers
+  progress?: ToolProgressHandlers,
+  options: { signal?: AbortSignal } = {}
 ): Promise<ToolResultBlockParam> {
   const startMs = Date.now();
   progress?.onToolUseStart?.({ name: toolUse.name, input: toolUse.input });
@@ -234,7 +273,7 @@ export async function executeToolResult(
 
   let result: unknown;
   try {
-    result = await executeTool(toolUse.name, toolUse.input);
+    result = await executeTool(toolUse.name, toolUse.input, { signal: options.signal });
   } catch (err) {
     const durationMs = Date.now() - startMs;
     const error = err instanceof Error ? err.message : String(err);

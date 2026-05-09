@@ -219,7 +219,11 @@ export async function runAnthropicSdk(
     }
 
     const toolResults = await Promise.all(
-      toolUses.map((toolUse) => executeToolResult(threadId, toolUse, toolDetails, options))
+      toolUses.map((toolUse) =>
+        executeToolResult(threadId, toolUse, toolDetails, options, {
+          signal: options.signal,
+        })
+      )
     );
     messagesToPersist.push({
       role: "user",
