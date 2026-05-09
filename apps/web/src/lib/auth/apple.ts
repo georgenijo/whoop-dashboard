@@ -49,21 +49,37 @@ export type AppleIdentity = {
   email?: string;
 };
 
+export type VerifyAppleOpts = {
+  /**
+   * Audience claim(s) to accept. Defaults to `[APPLE_BUNDLE_ID]` (iOS native
+   * flow). Web flow passes the Services ID instead. jose's `audience` option
+   * matches a string or any element of an array, so a single verifier path
+   * serves both surfaces without a fork.
+   */
+  audience?: string | string[];
+};
+
 /**
  * Verify a Sign in with Apple identity token.
  *
- * Validates signature against Apple's published JWKS, audience equals the
- * configured iOS bundle ID, issuer equals https://appleid.apple.com, and
- * expiry has not passed. Throws `AppleAuthError` on any failure.
+ * Validates signature against Apple's published JWKS, audience matches the
+ * supplied value(s) (default: iOS bundle ID), issuer equals
+ * https://appleid.apple.com, and expiry has not passed. Throws
+ * `AppleAuthError` on any failure.
+ *
+ * The web Sign in with Apple flow MUST pass `audience: APPLE_SERVICES_ID`,
+ * since Apple sets `aud` to the Services ID (not the iOS bundle ID) for
+ * tokens minted from a web OAuth round-trip.
  */
 export async function verifyAppleIdentityToken(
-  token: string
+  token: string,
+  opts: VerifyAppleOpts = {}
 ): Promise<AppleIdentity> {
   if (!token || typeof token !== "string") {
     throw new AppleAuthError("Missing identity token");
   }
 
-  const aud = bundleId();
+  const aud = opts.audience ?? bundleId();
   let payload: JWTPayload;
   try {
     const result = await jwtVerify(token, getJWKS(), {

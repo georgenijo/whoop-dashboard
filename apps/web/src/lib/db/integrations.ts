@@ -267,14 +267,23 @@ export function getIntegration(
   }
 }
 
-export function deleteIntegration(user_id: number, provider: string): void {
+/**
+ * Delete the (user, provider) integrations row. Returns the number of rows
+ * deleted (0 or 1) so callers can report whether the action was a no-op
+ * vs. an actual removal. Returns 0 when the DB is unavailable or the
+ * integrations table doesn't exist — the desired end-state ("no row for
+ * this pair") is satisfied either way, but the count is honest about
+ * having done nothing.
+ */
+export function deleteIntegration(user_id: number, provider: string): number {
   const db = openWrite();
-  if (!db) return;
+  if (!db) return 0;
   try {
-    if (!hasTable(db, "integrations")) return;
-    db.prepare(
-      "DELETE FROM integrations WHERE user_id = ? AND provider = ?"
-    ).run(user_id, provider);
+    if (!hasTable(db, "integrations")) return 0;
+    const result = db
+      .prepare("DELETE FROM integrations WHERE user_id = ? AND provider = ?")
+      .run(user_id, provider);
+    return result.changes;
   } finally {
     db.close();
   }
