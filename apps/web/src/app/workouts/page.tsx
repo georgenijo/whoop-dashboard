@@ -32,8 +32,8 @@ function isoNDaysAgo(n: number): string {
 export default function WorkoutsPage() {
   const workouts = getWorkouts(50);
   const today = new Date().toISOString().slice(0, 10);
-  const last90 = getWorkoutsRange(isoNDaysAgo(90), today);
-  const last180 = getWorkoutsRange(isoNDaysAgo(180), today);
+  const last90 = getWorkoutsRange(isoNDaysAgo(90), today).rows;
+  const last180 = getWorkoutsRange(isoNDaysAgo(180), today).rows;
   const body = getBodyMeasurements();
   const maxHR = body?.max_heart_rate ?? null;
   const driftReport = computeCardiacDrift(last180);

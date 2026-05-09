@@ -334,8 +334,21 @@ export async function executeTool(
       return getSleepRange(startDate, endDate);
     case "query_strain":
       return getStrainRange(startDate, endDate);
-    case "query_workouts":
-      return getWorkoutsRange(startDate, endDate);
+    case "query_workouts": {
+      const result = getWorkoutsRange(startDate, endDate);
+      if (result.truncated) {
+        return {
+          rows: result.rows,
+          _meta: {
+            truncated: true,
+            total_count: result.total_count,
+            returned: result.rows.length,
+            note: `Showing the ${result.rows.length} most recent workouts in this range. Total in range: ${result.total_count}.`,
+          },
+        };
+      }
+      return { rows: result.rows };
+    }
     case "query_naps":
       return getNaps(startDate, endDate);
     case "query_journal":

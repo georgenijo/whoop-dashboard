@@ -49,16 +49,51 @@ export function getWorkouts(limit?: number): WorkoutRow[] {
   );
 }
 
-export function getWorkoutsRange(startDate: string, endDate: string): WorkoutRow[] {
+export type WorkoutsRangeResult = {
+  rows: WorkoutRow[];
+  truncated: boolean;
+  total_count: number;
+};
+
+// Caps Coach `query_workouts` payloads. Without this, a 5-year range from the
+// LLM dumps every workout into the tool result and balloons token cost.
+// Fetches LIMIT+1 so a count > LIMIT trips truncated without a separate
+// COUNT(*) round-trip; total_count then resolves via COUNT only when needed.
+export function getWorkoutsRange(
+  startDate: string,
+  endDate: string
+): WorkoutsRangeResult {
   return (
     safeQuery((db) => {
-      if (!hasTable(db, "workouts")) return [];
+      if (!hasTable(db, "workouts")) {
+        return { rows: [], truncated: false, total_count: 0 };
+      }
       const range = dateRangeClause(startDate, endDate);
-      return db
+      const fetched = db
         .prepare(
-          `SELECT ${WORKOUT_COLUMNS} FROM workouts WHERE ${range.clause} ORDER BY date ASC`
+          `SELECT ${WORKOUT_COLUMNS} FROM workouts WHERE ${range.clause} ORDER BY date DESC LIMIT ?`
         )
-        .all(...range.params) as WorkoutRow[];
-    }) ?? []
+        .all(...range.params, MAX_WORKOUTS_LIMIT + 1) as WorkoutRow[];
+
+      if (fetched.length <= MAX_WORKOUTS_LIMIT) {
+        return {
+          rows: fetched,
+          truncated: false,
+          total_count: fetched.length,
+        };
+      }
+
+      const rows = fetched.slice(0, MAX_WORKOUTS_LIMIT);
+      const countRow = db
+        .prepare(
+          `SELECT COUNT(*) as c FROM workouts WHERE ${range.clause}`
+        )
+        .get(...range.params) as { c: number } | undefined;
+      return {
+        rows,
+        truncated: true,
+        total_count: countRow?.c ?? rows.length,
+      };
+    }) ?? { rows: [], truncated: false, total_count: 0 }
   );
 }
