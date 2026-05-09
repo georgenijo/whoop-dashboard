@@ -58,6 +58,13 @@ export type SyncResult = {
 
 const DEFAULT_DAYS = 7;
 
+/**
+ * Minimum interval between successful syncs. Shared between the manual
+ * `/api/sync` route and the Coach `trigger_whoop_sync` tool so a single
+ * fresh sync covers both surfaces.
+ */
+export const SYNC_COOLDOWN_MS = 5 * 60 * 1000;
+
 function isoUtcRange(days: number): { start: string; end: string } {
   const end = new Date();
   const start = new Date(end.getTime() - days * 24 * 60 * 60 * 1000);

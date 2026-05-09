@@ -1,10 +1,9 @@
 import { addSyncLog, getLastSuccessfulSyncAt } from "@/lib/db";
-import { runWhoopSync } from "@/lib/sync";
+import { runWhoopSync, SYNC_COOLDOWN_MS } from "@/lib/sync";
 
 export const dynamic = "force-dynamic";
 
 const SYNC_TIMEOUT_MS = 120_000;
-const SYNC_COOLDOWN_MS = 5 * 60 * 1000;
 
 export async function POST(req: Request) {
   const startedAt = new Date().toISOString();

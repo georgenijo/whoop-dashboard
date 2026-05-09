@@ -12,7 +12,13 @@ import type {
 } from "@anthropic-ai/sdk/resources/messages";
 import { type ChatMessageInsert } from "@/lib/db";
 import { COACH_MODEL, buildSystemPrompt } from "./prompts";
-import { TOOLS, executeToolResult, type ToolDetail, type ToolProgressHandlers } from "./tools";
+import {
+  TOOLS,
+  executeToolResult,
+  newToolTurnState,
+  type ToolDetail,
+  type ToolProgressHandlers,
+} from "./tools";
 
 const CACHE_EPHEMERAL = { type: "ephemeral", ttl: "1h" } as const;
 
@@ -161,6 +167,9 @@ export async function runAnthropicSdk(
   detailState: DetailState,
   options: RunAnthropicOptions = {}
 ): Promise<{ reply: string; iterations: number; messages: ChatMessageInsert[] }> {
+  // Per-turn state shared across all `executeToolResult` calls in this turn.
+  // Currently used to hard-cap `trigger_whoop_sync` at one attempt per turn.
+  const turnState = newToolTurnState();
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY is not configured");
   }
@@ -218,13 +227,38 @@ export async function runAnthropicSdk(
       throw new Error("Claude stopped for tool_use without requesting a tool");
     }
 
-    const toolResults = await Promise.all(
-      toolUses.map((toolUse) =>
-        executeToolResult(threadId, toolUse, toolDetails, options, {
+    // If the model emits trigger_whoop_sync alongside query_* in the same
+    // batch, the queries would race the sync — re-querying before fresh
+    // rows land. Run the sync FIRST and serially (positional indexes
+    // preserved so tool_use ↔ tool_result order matches), then run the
+    // rest in parallel. Common case (no sync in batch) is unchanged.
+    const toolResults: Awaited<ReturnType<typeof executeToolResult>>[] = new Array(
+      toolUses.length
+    );
+    const syncIndex = toolUses.findIndex((t) => t.name === "trigger_whoop_sync");
+    if (syncIndex >= 0) {
+      toolResults[syncIndex] = await executeToolResult(
+        threadId,
+        toolUses[syncIndex],
+        toolDetails,
+        { progress: options, signal: options.signal, turnState }
+      );
+    }
+    const remaining = toolUses
+      .map((toolUse, i) => ({ toolUse, i }))
+      .filter(({ i }) => i !== syncIndex);
+    const remainingResults = await Promise.all(
+      remaining.map(({ toolUse }) =>
+        executeToolResult(threadId, toolUse, toolDetails, {
+          progress: options,
           signal: options.signal,
+          turnState,
         })
       )
     );
+    remaining.forEach(({ i }, idx) => {
+      toolResults[i] = remainingResults[idx];
+    });
     messagesToPersist.push({
       role: "user",
       content: "[tool_result]",
