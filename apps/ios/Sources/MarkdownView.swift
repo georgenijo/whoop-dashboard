@@ -15,13 +15,13 @@ struct MarkdownView: View {
     private func blockView(_ block: MarkdownBlock) -> some View {
         switch block {
         case .heading(let level, let text):
-            Text(inline(text))
-                .font(headingFont(level: level))
+            Text(Self.inline(text))
+                .font(Self.headingFont(level: level))
                 .fontWeight(.semibold)
                 .fixedSize(horizontal: false, vertical: true)
 
         case .paragraph(let text):
-            Text(inline(text))
+            Text(Self.inline(text))
                 .fixedSize(horizontal: false, vertical: true)
 
         case .bulletList(let items):
@@ -29,7 +29,7 @@ struct MarkdownView: View {
                 ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text("•")
-                        Text(inline(item))
+                        Text(Self.inline(item))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -41,7 +41,7 @@ struct MarkdownView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text("\(idx + 1).")
                             .monospacedDigit()
-                        Text(inline(item))
+                        Text(Self.inline(item))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -58,7 +58,7 @@ struct MarkdownView: View {
         }
     }
 
-    private func headingFont(level: Int) -> Font {
+    private static func headingFont(level: Int) -> Font {
         switch level {
         case 1: return .title2
         case 2: return .title3
@@ -66,7 +66,7 @@ struct MarkdownView: View {
         }
     }
 
-    private func inline(_ text: String) -> AttributedString {
+    private static func inline(_ text: String) -> AttributedString {
         if let attr = try? AttributedString(
             markdown: text,
             options: AttributedString.MarkdownParsingOptions(
@@ -200,13 +200,12 @@ enum MarkdownBlock: Hashable {
     }
 
     private static func parseOrdered(_ trimmed: String) -> String? {
-        var digits = ""
         var idx = trimmed.startIndex
+        let start = idx
         while idx < trimmed.endIndex, trimmed[idx].isNumber {
-            digits.append(trimmed[idx])
             idx = trimmed.index(after: idx)
         }
-        guard !digits.isEmpty, idx < trimmed.endIndex, trimmed[idx] == "." else { return nil }
+        guard idx > start, idx < trimmed.endIndex, trimmed[idx] == "." else { return nil }
         let after = trimmed.index(after: idx)
         guard after < trimmed.endIndex, trimmed[after] == " " else { return nil }
         return String(trimmed[trimmed.index(after: after)...])
