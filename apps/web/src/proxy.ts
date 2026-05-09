@@ -59,6 +59,11 @@ function authGate(req: NextRequest): NextResponse | null {
   if (isAuthExempt(pathname)) return null;
   const cookie = req.cookies.get(COACH_SESSION_COOKIE);
   if (cookie?.value) return null;
+  // iOS authenticates via Authorization: Bearer, no cookie. Let the request
+  // through here; requireAuth re-verifies inside the route. Without this,
+  // every iOS API call gets a 307 to /signin (HTML) and the app fails.
+  const authz = req.headers.get("authorization");
+  if (authz && /^Bearer\s+\S/i.test(authz)) return null;
   const url = new URL("/signin", req.nextUrl.origin);
   if (pathname && pathname !== "/") {
     url.searchParams.set("from", pathname);
