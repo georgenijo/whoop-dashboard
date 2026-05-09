@@ -8,7 +8,7 @@ vi.mock("server-only", () => ({}));
 
 // WHOOP_DB_PATH must be set BEFORE importing any module that touches the DB —
 // connection.ts reads it via dbPath() which lazy-creates the schema on first
-// openWrite(). Same dance as src/lib/db/coach.test.ts.
+// openWrite().
 const tmpRoot = mkdtempSync(path.join(tmpdir(), "dashboard-today-db-"));
 const dbFile = path.join(tmpRoot, "test.db");
 process.env.WHOOP_DB_PATH = dbFile;
@@ -126,9 +126,13 @@ function makeRequest(query?: string): Request {
   return new Request(url);
 }
 
-function todayUtc(): string {
+function localToday(): string {
+  // Mirror the route's localToday(): server-local YYYY-MM-DD.
   const d = new Date();
-  return d.toISOString().slice(0, 10);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function shiftDate(date: string, days: number): string {
@@ -140,20 +144,9 @@ function shiftDate(date: string, days: number): string {
 beforeAll(async () => {
   // Force the route's auth path to fall through to the bootstrap user.
   process.env.NODE_ENV = "test";
-  // Bootstrap the schema by writing once; better-sqlite3 file already exists.
-  // We exploit the lazy CREATE TABLE in openWrite() by writing a no-op row.
-  const d = db();
-  try {
-    // Seed a minimal user row required by other tables; openWrite() does this on
-    // first call, but the route may not write at all — call openWrite via a
-    // settings module to force schema bootstrap.
-    d.close();
-  } catch {
-    // ignore
-  }
-  // Import any db-touching module to trigger openWrite() and create tables.
-  await import("@/lib/db");
-  // Importing alone doesn't open the DB. Force it via a settings write.
+  // Force schema bootstrap. Importing @/lib/db alone doesn't open the DB; a
+  // write through settings.setSetting goes via openWrite() which lazy-creates
+  // every CREATE TABLE in connection.ts.
   const settings = await import("@/lib/db/settings");
   settings.setSetting("test_bootstrap", "1");
 
@@ -241,23 +234,18 @@ describe("GET /api/dashboard/today", () => {
   });
 
   it("(d) defaults requested_date to localToday() when ?date= is omitted", async () => {
-    const today = todayUtc();
+    // Use server-local today (matches the route's localToday() exactly), so
+    // the assertion runs unconditionally regardless of the runner's TZ.
+    const today = localToday();
     insertRecovery(today, { score: 80, hrv: 60, rhr: 48 });
 
     const res = await route.GET(makeRequest());
     expect(res.status).toBe(200);
     const body = (await res.json()) as Record<string, unknown>;
 
-    // localToday() reads server-local; UTC vs local can differ at day boundaries.
-    // Accept either today's UTC date or that ±1 — what matters is the field is
-    // non-null and ISO-shaped, and that data_date equals requested_date when the
-    // server-local row exists (we inserted at UTC today as a best-effort match).
-    expect(typeof body.requested_date).toBe("string");
-    expect(body.requested_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    if (body.requested_date === today) {
-      expect(body.data_date).toBe(today);
-      expect(body.is_fallback).toBe(false);
-    }
+    expect(body.requested_date).toBe(today);
+    expect(body.data_date).toBe(today);
+    expect(body.is_fallback).toBe(false);
   });
 
   it("(e) rejects a malformed ?date= with HTTP 400", async () => {
@@ -321,5 +309,42 @@ describe("GET /api/dashboard/today", () => {
     const ots = signals.ots as { score: number; severity: string };
     expect(typeof ots.score).toBe("number");
     expect(typeof ots.severity).toBe("string");
+
+    // Legacy `date` field carries pre-PR semantics (= the day the data is from)
+    // so old clients reading `let date: String` show the actual data day during
+    // fallback, not the requested day.
+    expect(body.date).toBe(dataDate);
+  });
+
+  it("(g) picks the union-MAX across asymmetric tables (recovery on day-1, sleep on day-3)", async () => {
+    const requested = "2026-05-09";
+    const dayMinus1 = shiftDate(requested, -1); // 2026-05-08 — recovery only
+    const dayMinus3 = shiftDate(requested, -3); // 2026-05-06 — sleep only
+
+    insertRecovery(dayMinus1, { score: 70, hrv: 55, rhr: 50 });
+    insertSleep(dayMinus3, {
+      in_bed_ms: 7 * 60 * 60_000,
+      light_ms: 2 * 60 * 60_000,
+      deep_ms: 2 * 60 * 60_000,
+      rem_ms: 2 * 60 * 60_000,
+      sleep_need_ms: 8 * 60 * 60_000,
+      performance: 78,
+      efficiency: 90,
+    });
+
+    const res = await route.GET(makeRequest(`date=${requested}`));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+
+    expect(body.requested_date).toBe(requested);
+    // Union-MAX wins: recovery's day-1 is more recent than sleep's day-3.
+    expect(body.data_date).toBe(dayMinus1);
+    expect(body.is_fallback).toBe(true);
+    // Recovery row at data_date populated; sleep null (no row on day-1).
+    expect(body.recovery).toMatchObject({ score: 70 });
+    expect(body.sleep).toBeNull();
+    expect(body.strain).toBeNull();
+    // Legacy `date` echoes data_date.
+    expect(body.date).toBe(dayMinus1);
   });
 });
