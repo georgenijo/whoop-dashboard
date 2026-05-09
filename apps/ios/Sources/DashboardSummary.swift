@@ -1,7 +1,6 @@
 import Foundation
 
 struct DashboardSummary: Decodable {
-    let date: String
     let requestedDate: String
     let dataDate: String?
     let isFallback: Bool
@@ -11,7 +10,6 @@ struct DashboardSummary: Decodable {
     let signals: Signals
 
     enum CodingKeys: String, CodingKey {
-        case date
         case requestedDate = "requested_date"
         case dataDate = "data_date"
         case isFallback = "is_fallback"
@@ -23,10 +21,20 @@ struct DashboardSummary: Decodable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        let date = try container.decode(String.self, forKey: .date)
-        self.date = date
-        self.requestedDate = try container.decodeIfPresent(String.self, forKey: .requestedDate) ?? date
         self.dataDate = try container.decodeIfPresent(String.self, forKey: .dataDate)
+        if let requested = try container.decodeIfPresent(String.self, forKey: .requestedDate) {
+            self.requestedDate = requested
+        } else if let data = self.dataDate {
+            self.requestedDate = data
+        } else {
+            throw DecodingError.keyNotFound(
+                CodingKeys.requestedDate,
+                DecodingError.Context(
+                    codingPath: container.codingPath,
+                    debugDescription: "Missing required key 'requested_date' (and no 'data_date' fallback present)."
+                )
+            )
+        }
         self.isFallback = try container.decodeIfPresent(Bool.self, forKey: .isFallback) ?? false
         self.recovery = try container.decodeIfPresent(Recovery.self, forKey: .recovery)
         self.sleep = try container.decodeIfPresent(Sleep.self, forKey: .sleep)
