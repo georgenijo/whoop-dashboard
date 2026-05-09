@@ -42,9 +42,7 @@ export async function POST(req: Request) {
 
   const verify = verifyWhoopSignature(raw, sig, ts, clientSecret());
   if (!verify.ok) {
-    // Include req.url to aid misconfig debugging (e.g. path registered wrong in Whoop dashboard).
-    // Bad-signature events are NOT written to webhook_events for v1 — forensics on those
-    // is tracked separately. The reject path here is unchanged.
+    // Bad-sig events are not persisted in v1.
     console.warn(`[whoop-webhook] signature rejected: ${verify.reason} url=${req.url}`);
     return new Response(`Unauthorized: ${verify.reason}`, { status: 401 });
   }
@@ -90,7 +88,6 @@ export async function POST(req: Request) {
     resource_id: evt.id,
     trace_id: evt.trace_id ?? null,
     payload: raw,
-    signature_valid: true,
     attempts: 1,
     last_attempt_at: startedAt,
   });

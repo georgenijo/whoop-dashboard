@@ -213,7 +213,6 @@ export function openWrite(): DB | null {
         resource_id TEXT NOT NULL,
         trace_id TEXT,
         payload TEXT NOT NULL,
-        signature_valid INTEGER NOT NULL,
         attempts INTEGER NOT NULL DEFAULT 0,
         last_attempt_at TEXT,
         last_error TEXT,

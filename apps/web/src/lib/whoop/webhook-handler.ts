@@ -31,13 +31,8 @@ export type HandleEventOutcome =
   | { kind: "handled" }
   | { kind: "noop"; reason: "already_deleted" | "unknown_event_type" };
 
-/**
- * Re-dispatch a single Whoop webhook event. Decoupled from request/response so
- * it can be reused by the replay endpoint. Throws on transient failure
- * (Whoop 5xx, list-miss race, DB error, etc.). `WhoopNotFoundError` from the
- * client is caller-discardable — surface it raw and let the caller decide
- * whether to mark `discarded`.
- */
+/** Surfaces `WhoopNotFoundError` raw because callers handle it differently
+ * (webhook route discards; replay marks discarded). */
 export async function handleEvent(evt: WhoopWebhookEvent): Promise<HandleEventOutcome> {
   switch (evt.type) {
     case "sleep.updated": {

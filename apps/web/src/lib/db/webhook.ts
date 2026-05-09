@@ -15,7 +15,6 @@ export type WebhookEventRow = {
   resource_id: string;
   trace_id: string | null;
   payload: string;
-  signature_valid: number;
   attempts: number;
   last_attempt_at: string | null;
   last_error: string | null;
@@ -28,7 +27,6 @@ export type InsertWebhookEventInput = {
   resource_id: string;
   trace_id?: string | null;
   payload: string;
-  signature_valid: boolean;
   // attempts starts at 1 — the row is created at the moment of the first
   // dispatch. Replays bump this via markWebhook* helpers.
   attempts?: number;
@@ -47,8 +45,8 @@ export function insertWebhookEvent(input: InsertWebhookEventInput): number | nul
       .prepare(
         `INSERT INTO webhook_events (
           received_at, event_type, resource_id, trace_id, payload,
-          signature_valid, attempts, last_attempt_at, last_error, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 'pending')`
+          attempts, last_attempt_at, last_error, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'pending')`
       )
       .run(
         input.received_at,
@@ -56,7 +54,6 @@ export function insertWebhookEvent(input: InsertWebhookEventInput): number | nul
         input.resource_id,
         input.trace_id ?? null,
         input.payload,
-        input.signature_valid ? 1 : 0,
         input.attempts ?? 1,
         input.last_attempt_at ?? null
       );
@@ -108,8 +105,6 @@ export function markWebhookDiscarded(id: number, attemptedAt: string): void {
   }
 }
 
-/** Bump `attempts` by 1 and refresh `last_attempt_at`. Used by the replay
- * endpoint before re-dispatching so a flapping handler is visible in the row. */
 export function bumpWebhookAttempt(id: number, attemptedAt: string): void {
   const db = openWrite();
   if (!db) return;
@@ -131,7 +126,7 @@ export function getWebhookEvent(id: number): WebhookEventRow | null {
       const row = db
         .prepare(
           `SELECT id, received_at, event_type, resource_id, trace_id, payload,
-                  signature_valid, attempts, last_attempt_at, last_error, status
+                  attempts, last_attempt_at, last_error, status
            FROM webhook_events WHERE id = ?`
         )
         .get(id) as WebhookEventRow | undefined;
@@ -147,7 +142,7 @@ export function listFailedWebhookEvents(limit = 20): WebhookEventRow[] {
       return db
         .prepare(
           `SELECT id, received_at, event_type, resource_id, trace_id, payload,
-                  signature_valid, attempts, last_attempt_at, last_error, status
+                  attempts, last_attempt_at, last_error, status
            FROM webhook_events
            WHERE status = 'failed'
            ORDER BY id DESC

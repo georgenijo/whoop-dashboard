@@ -37,7 +37,7 @@ function readRow(id: number) {
     return db
       .prepare(
         `SELECT id, received_at, event_type, resource_id, trace_id, payload,
-                signature_valid, attempts, last_attempt_at, last_error, status
+                attempts, last_attempt_at, last_error, status
          FROM webhook_events WHERE id = ?`
       )
       .get(id) as
@@ -48,7 +48,6 @@ function readRow(id: number) {
           resource_id: string;
           trace_id: string | null;
           payload: string;
-          signature_valid: number;
           attempts: number;
           last_attempt_at: string | null;
           last_error: string | null;
@@ -96,7 +95,6 @@ describe("webhook_events schema", () => {
         "resource_id",
         "trace_id",
         "payload",
-        "signature_valid",
         "attempts",
         "last_attempt_at",
         "last_error",
@@ -130,7 +128,6 @@ describe("insertWebhookEvent", () => {
       resource_id: "sleep-abc",
       trace_id: "trace-xyz",
       payload: '{"id":"sleep-abc","type":"sleep.updated"}',
-      signature_valid: true,
     });
     expect(id).not.toBeNull();
     const row = readRow(id!);
@@ -138,7 +135,6 @@ describe("insertWebhookEvent", () => {
     expect(row!.event_type).toBe("sleep.updated");
     expect(row!.resource_id).toBe("sleep-abc");
     expect(row!.trace_id).toBe("trace-xyz");
-    expect(row!.signature_valid).toBe(1);
     expect(row!.status).toBe("pending");
     expect(row!.attempts).toBe(1);
     expect(row!.last_error).toBeNull();
@@ -150,7 +146,6 @@ describe("insertWebhookEvent", () => {
       event_type: "workout.updated",
       resource_id: "workout-1",
       payload: "{}",
-      signature_valid: true,
     });
     const row = readRow(id!);
     expect(row!.attempts).toBe(1);
@@ -165,7 +160,6 @@ describe("status transitions", () => {
       event_type: "sleep.updated",
       resource_id: "s",
       payload: "{}",
-      signature_valid: true,
     });
     webhook.markWebhookFailed(id!, "boom", "2026-05-09T12:00:01.000Z");
     webhook.markWebhookSucceeded(id!, "2026-05-09T12:00:02.000Z");
@@ -181,7 +175,6 @@ describe("status transitions", () => {
       event_type: "sleep.updated",
       resource_id: "s",
       payload: "{}",
-      signature_valid: true,
     });
     const huge = "x".repeat(2000);
     webhook.markWebhookFailed(id!, huge, "2026-05-09T12:00:01.000Z");
@@ -196,7 +189,6 @@ describe("status transitions", () => {
       event_type: "sleep.deleted",
       resource_id: "s",
       payload: "{}",
-      signature_valid: true,
     });
     webhook.markWebhookDiscarded(id!, "2026-05-09T12:00:01.000Z");
     const row = readRow(id!);
@@ -210,7 +202,6 @@ describe("status transitions", () => {
       event_type: "sleep.updated",
       resource_id: "s",
       payload: "{}",
-      signature_valid: true,
     });
     webhook.bumpWebhookAttempt(id!, "2026-05-09T12:00:01.000Z");
     webhook.bumpWebhookAttempt(id!, "2026-05-09T12:00:02.000Z");
@@ -231,7 +222,6 @@ describe("getWebhookEvent / listFailedWebhookEvents", () => {
       event_type: "sleep.updated",
       resource_id: "s",
       payload: "{}",
-      signature_valid: true,
     });
     const row = webhook.getWebhookEvent(id!);
     expect(row?.id).toBe(id);
@@ -246,7 +236,6 @@ describe("getWebhookEvent / listFailedWebhookEvents", () => {
         event_type: "sleep.updated",
         resource_id: `s${i}`,
         payload: "{}",
-        signature_valid: true,
       });
       ids.push(id!);
     }

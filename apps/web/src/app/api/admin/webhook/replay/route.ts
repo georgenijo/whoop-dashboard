@@ -69,8 +69,7 @@ export async function POST(req: Request) {
   try {
     const { user } = await requireAuth(req);
 
-    // Single-user admin gate. Bootstrap user is id=1; everyone else gets 403.
-    // Multi-user admin role is out of scope for v1 (issue #257).
+    // v1 single-user gate.
     if (user.id !== 1) {
       return new Response("Forbidden", { status: 403 });
     }
