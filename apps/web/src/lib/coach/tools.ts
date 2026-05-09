@@ -10,7 +10,12 @@ import {
   getStrainRange,
   getWorkoutsRange,
 } from "@/lib/db";
-import { runWhoopSync, SYNC_COOLDOWN_MS, type SyncResult } from "@/lib/sync";
+import {
+  runWhoopSync,
+  SYNC_COOLDOWN_MS,
+  type SyncProgressEvent,
+  type SyncResult,
+} from "@/lib/sync";
 
 export type CoachToolName =
   | "query_recovery"
@@ -229,7 +234,8 @@ type SyncToolResult = SyncResult | SyncToolSkipped | SyncToolAlreadyAttempted;
 
 async function handleTriggerWhoopSync(
   turnState: ToolTurnState,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onProgress?: (e: SyncProgressEvent) => void,
 ): Promise<SyncToolResult> {
   // Hard cap: one sync attempt per chat turn. Prevents tool-loop runaway
   // where the model retries trigger_whoop_sync after a non-cooldown failure.
@@ -259,7 +265,7 @@ async function handleTriggerWhoopSync(
 
   const startedAt = new Date().toISOString();
   const t0 = Date.now();
-  const result = await runWhoopSync({ signal });
+  const result = await runWhoopSync({ signal, onProgress });
   const durationMs = Date.now() - t0;
 
   // Persist a sync_logs row so Coach-driven syncs are visible in /logs and
@@ -322,10 +328,18 @@ async function handleTriggerWhoopSync(
 export async function executeTool(
   name: string,
   input: unknown,
-  options: { turnState: ToolTurnState; signal?: AbortSignal }
+  options: {
+    turnState: ToolTurnState;
+    signal?: AbortSignal;
+    onSyncProgress?: (e: SyncProgressEvent) => void;
+  }
 ): Promise<unknown> {
   if (name === "trigger_whoop_sync") {
-    return handleTriggerWhoopSync(options.turnState, options.signal);
+    return handleTriggerWhoopSync(
+      options.turnState,
+      options.signal,
+      options.onSyncProgress,
+    );
   }
 
   const { start_date: startDate, end_date: endDate } = parseDateRangeInput(input);
@@ -385,6 +399,16 @@ export type ToolProgressHandlers = {
     status: "ok" | "error";
     error?: string;
   }) => void;
+  /**
+   * Mid-tool progress for long-running tools. Producer policy lives in
+   * `executeToolResult` — see the sync forwarder there. `query_*` tools
+   * resolve in <500ms and don't get a progress channel.
+   */
+  onToolProgress?: (event: {
+    tool: string;
+    stage: string;
+    message?: string;
+  }) => void;
 };
 
 function toolErrorPayload(err: unknown): string {
@@ -419,9 +443,25 @@ export async function executeToolResult(
     name: toolUse.name,
   });
 
+  // Build a sync-progress forwarder only for trigger_whoop_sync; other tools
+  // don't emit progress and don't need the closure allocated.
+  const onSyncProgress =
+    toolUse.name === "trigger_whoop_sync" && progress?.onToolProgress
+      ? (e: SyncProgressEvent) =>
+          progress.onToolProgress!({
+            tool: "trigger_whoop_sync",
+            stage: e.stage,
+            ...(e.message ? { message: e.message } : {}),
+          })
+      : undefined;
+
   let result: unknown;
   try {
-    result = await executeTool(toolUse.name, toolUse.input, { turnState, signal });
+    result = await executeTool(toolUse.name, toolUse.input, {
+      turnState,
+      signal,
+      onSyncProgress,
+    });
   } catch (err) {
     const durationMs = Date.now() - startMs;
     const error = err instanceof Error ? err.message : String(err);

@@ -6,6 +6,7 @@ import {
   whoopGetAll,
   WhoopUpstreamError,
 } from "@/lib/whoop/client";
+import { getValidAccessToken } from "@/lib/whoop/token";
 import {
   cycleSummaryDate,
   parseDate,
@@ -20,6 +21,18 @@ import {
   type WhoopSleepRecord,
   type WhoopWorkoutRecord,
 } from "@/lib/whoop/upsert";
+
+export type SyncStage =
+  | "refreshing_token"
+  | "fetching_recovery"
+  | "fetching_sleep"
+  | "fetching_strain"
+  | "fetching_workouts"
+  | "fetching_body"
+  | "upserting"
+  | "computing_summary";
+
+export type SyncProgressEvent = { stage: SyncStage; message?: string };
 
 // Do NOT delete sync/daily_sync.py until Phase 3-C ships and this path has
 // been observed in prod for ~1 week (see issue #212 step 6).
@@ -108,12 +121,28 @@ async function fetchAllParallel(
   start: string,
   end: string,
   signal?: AbortSignal,
+  onProgress?: (e: SyncProgressEvent) => void,
 ): Promise<{
   data: FetchedData;
   fetchBreakdown: Record<string, number>;
   pageCounts: Record<string, number>;
 }> {
   const params = { start, end };
+
+  /** Fires `fetching_*` when this endpoint resolves — order in the emit
+   * log reflects actual fetch latency, not source code order. */
+  const reporting = <T>(stage: SyncStage, p: Promise<T>): Promise<T> =>
+    onProgress ? p.then((r) => { onProgress({ stage }); return r; }) : p;
+
+  // Defensive 401-retry inside `whoopGet` will force-refresh the token. The
+  // pre-warm in `runWhoopSync` already covers the common case, but if a
+  // token expires mid-fetch (revoked, edge cache stale, clock skew), this
+  // path emits `refreshing_token` so the user/model still sees the event.
+  const onTokenRefresh = onProgress
+    ? () => onProgress({ stage: "refreshing_token" })
+    : undefined;
+  const fetchOpts = { signal, onTokenRefresh };
+
   const [
     bodyRes,
     cyclesRes,
@@ -121,22 +150,35 @@ async function fetchAllParallel(
     sleepRes,
     workoutsRes,
   ] = await Promise.all([
-    timed("body", async () =>
-      whoopGet<WhoopBodyMeasurement>(`/v2/user/measurement/body`, { signal }),
+    reporting(
+      "fetching_body",
+      timed("body", async () =>
+        whoopGet<WhoopBodyMeasurement>(`/v2/user/measurement/body`, fetchOpts),
+      ),
     ),
-    timed("cycles", async () =>
-      whoopGetAll<WhoopCycleRecord>(`/v2/cycle`, params, { signal }),
+    reporting(
+      "fetching_strain",
+      timed("cycles", async () =>
+        whoopGetAll<WhoopCycleRecord>(`/v2/cycle`, params, fetchOpts),
+      ),
     ),
-    timed("recovery", async () =>
-      whoopGetAll<WhoopRecoveryRecord>(`/v2/recovery`, params, { signal }),
+    reporting(
+      "fetching_recovery",
+      timed("recovery", async () =>
+        whoopGetAll<WhoopRecoveryRecord>(`/v2/recovery`, params, fetchOpts),
+      ),
     ),
-    timed("sleep", async () =>
-      whoopGetAll<WhoopSleepRecord>(`/v2/activity/sleep`, params, { signal }),
+    reporting(
+      "fetching_sleep",
+      timed("sleep", async () =>
+        whoopGetAll<WhoopSleepRecord>(`/v2/activity/sleep`, params, fetchOpts),
+      ),
     ),
-    timed("workouts", async () =>
-      whoopGetAll<WhoopWorkoutRecord>(`/v2/activity/workout`, params, {
-        signal,
-      }),
+    reporting(
+      "fetching_workouts",
+      timed("workouts", async () =>
+        whoopGetAll<WhoopWorkoutRecord>(`/v2/activity/workout`, params, fetchOpts),
+      ),
     ),
   ]);
 
@@ -421,7 +463,11 @@ function latestDates(): LatestDates {
 }
 
 export async function runWhoopSync(
-  opts: { days?: number; signal?: AbortSignal } = {},
+  opts: {
+    days?: number;
+    signal?: AbortSignal;
+    onProgress?: (e: SyncProgressEvent) => void;
+  } = {},
 ): Promise<SyncResult> {
   const days = opts.days ?? DEFAULT_DAYS;
   const { start, end } = isoUtcRange(days);
@@ -449,11 +495,24 @@ export async function runWhoopSync(
   try {
     checkAborted(opts.signal);
 
+    // Pre-warm the access token so `refreshing_token` is the first stage
+    // event deterministically — before the parallel fetch burst. Seeds
+    // `inflightRefresh` so the parallel `whoopGet` calls below either skip
+    // refresh or join the same in-flight promise (single emit). No-op if
+    // token is fresh; returns null on auth failure (downstream `whoopGet`
+    // will surface `WhoopAuthError`). May still throw on transport failure
+    // (DNS / TLS / `AbortSignal.timeout`) — caught by the outer try and
+    // routed to the pre-commit failure branch.
+    await getValidAccessToken(false, {
+      onRefresh: () => opts.onProgress?.({ stage: "refreshing_token" }),
+    });
+
     const fetchT0 = Date.now();
     const { data, fetchBreakdown, pageCounts } = await fetchAllParallel(
       start,
       end,
       opts.signal,
+      opts.onProgress,
     );
     details.fetch_ms = Date.now() - fetchT0;
     details.fetch_breakdown = fetchBreakdown;
@@ -461,6 +520,7 @@ export async function runWhoopSync(
 
     checkAborted(opts.signal);
 
+    opts.onProgress?.({ stage: "upserting" });
     const dbT0 = Date.now();
     const counts = persistAll(data, opts.signal);
     details.sync_db_ms = Date.now() - dbT0;
@@ -495,6 +555,9 @@ export async function runWhoopSync(
     checkAborted(opts.signal);
 
     const latest = latestDates();
+    // Success-path only — placement after the final `checkAborted` is
+    // load-bearing; the partial branch must not emit this.
+    opts.onProgress?.({ stage: "computing_summary" });
     return {
       success: true,
       latest_recovery_date: latest.recovery,

@@ -46,11 +46,19 @@ function combineSignals(
   return ctrl.signal;
 }
 
-type GetOpts = { signal?: AbortSignal };
+type GetOpts = {
+  signal?: AbortSignal;
+  /**
+   * Fired when this call originates a Whoop token refresh (proactive on
+   * expiry or 401-retry). Does NOT fire when the call joins an in-flight
+   * refresh from another caller — see `getValidAccessToken`.
+   */
+  onTokenRefresh?: () => void;
+};
 
 export async function whoopGet<T>(path: string, opts: GetOpts = {}): Promise<T> {
   const url = `${BASE_URL}${path}`;
-  let token = await getValidAccessToken();
+  let token = await getValidAccessToken(false, { onRefresh: opts.onTokenRefresh });
   if (!token) throw new WhoopAuthError("No valid Whoop token; re-auth required");
 
   let resp = await fetch(url, {
@@ -60,7 +68,7 @@ export async function whoopGet<T>(path: string, opts: GetOpts = {}): Promise<T> 
   });
 
   if (resp.status === 401) {
-    token = await getValidAccessToken(true);
+    token = await getValidAccessToken(true, { onRefresh: opts.onTokenRefresh });
     if (!token) throw new WhoopAuthError("Refresh failed; re-auth required");
     resp = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
