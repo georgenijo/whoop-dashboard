@@ -1,12 +1,43 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 type LocalSetting = {
   key: string;
   label: string;
   description: string;
 };
+
+type WhoopConnectorStatus = "connected" | "needs_reconnect" | "disconnected";
+
+type WhoopConnector = {
+  provider: "whoop";
+  status: WhoopConnectorStatus;
+  expires_at: string | null;
+  scope: string | null;
+  source: "db" | "file" | null;
+  last_sync_at: string | null;
+};
+
+const CONNECTOR_STATUS_COPY: Record<WhoopConnectorStatus, { label: string; color: string }> = {
+  connected: { label: "Connected", color: "#4ade80" },
+  needs_reconnect: { label: "Needs reconnect", color: "#fbbf24" },
+  disconnected: { label: "Disconnected", color: "rgba(255,255,255,0.4)" },
+};
+
+function formatRelative(iso: string | null): string | null {
+  if (!iso) return null;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return iso;
+  const diffMs = Date.now() - t;
+  const mins = Math.round(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs} hr ago`;
+  const days = Math.round(hrs / 24);
+  return `${days}d ago`;
+}
 
 const LOCAL_SETTINGS: LocalSetting[] = [
   {
@@ -86,6 +117,27 @@ export default function SettingsPage() {
   const [defaultSystemPrompt, setDefaultSystemPrompt] = useState("");
   const [savedSystemPrompt, setSavedSystemPrompt] = useState("");
   const [saving, setSaving] = useState(false);
+  const [whoop, setWhoop] = useState<WhoopConnector | null>(null);
+  const [whoopWorking, setWhoopWorking] = useState(false);
+
+  const refreshWhoop = useCallback(() => {
+    // Promise chain (not async/await) so the function returns synchronously
+    // — the eslint rule react-hooks/set-state-in-effect flags only the
+    // synchronous `setState` calls during effect setup, and an unawaited
+    // chain qualifies as side-effectful, not effect-body work.
+    fetch("/api/connectors/whoop")
+      .then((r) => (r.ok ? (r.json() as Promise<WhoopConnector>) : null))
+      .then((data) => {
+        if (data) setWhoop(data);
+      })
+      .catch(() => {
+        // Connector status is non-critical — silent failure is fine.
+      });
+  }, []);
+
+  useEffect(() => {
+    refreshWhoop();
+  }, [refreshWhoop]);
 
   useEffect(() => {
     const loaded: Record<string, boolean> = {};
@@ -142,10 +194,162 @@ export default function SettingsPage() {
     setSystemPrompt(defaultSystemPrompt);
   }
 
+  async function handleConnectWhoop() {
+    // Connect / Reconnect both go through the same Whoop OAuth start route.
+    window.location.href = "/api/auth/login";
+  }
+
+  async function handleDisconnectWhoop() {
+    if (whoopWorking) return;
+    if (!confirm("Disconnect Whoop? You'll need to reconnect to resume syncing.")) return;
+    setWhoopWorking(true);
+    try {
+      await fetch("/api/auth/whoop/disconnect", { method: "POST" });
+      await refreshWhoop();
+    } finally {
+      setWhoopWorking(false);
+    }
+  }
+
+  async function handleLogout() {
+    if (!confirm("Sign out?")) return;
+    window.location.href = "/api/auth/logout";
+  }
+
   const promptDirty = systemPrompt !== savedSystemPrompt;
+  const whoopStatus = whoop?.status ?? "disconnected";
+  const whoopCopy = CONNECTOR_STATUS_COPY[whoopStatus];
 
   return (
     <div style={{ maxWidth: 720, display: "flex", flexDirection: "column", gap: 18 }}>
+      <div className="card">
+        <div className="card-head">
+          <div className="card-title">Connectors</div>
+        </div>
+        <div style={{ paddingTop: 12 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 16,
+              padding: "12px 14px",
+              background: "rgba(0,0,0,0.2)",
+              border: "1px solid rgba(255,255,255,0.06)",
+              borderRadius: 8,
+            }}
+          >
+            <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: "var(--fg-0)",
+                }}
+              >
+                Whoop
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    fontSize: 11,
+                    fontWeight: 400,
+                    color: whoopCopy.color,
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    style={{
+                      display: "inline-block",
+                      width: 7,
+                      height: 7,
+                      borderRadius: "50%",
+                      background: whoopCopy.color,
+                    }}
+                  />
+                  {whoopCopy.label}
+                </span>
+              </div>
+              <div style={{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--fg-3)" }}>
+                {whoop
+                  ? whoop.last_sync_at
+                    ? `Last sync ${formatRelative(whoop.last_sync_at)}`
+                    : "No sync yet"
+                  : "Loading…"}
+                {whoop?.expires_at && whoopStatus !== "disconnected" && (
+                  <>
+                    {" · "}token{" "}
+                    {formatRelative(whoop.expires_at)?.replace("ago", "old")}
+                  </>
+                )}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+              {whoopStatus !== "disconnected" ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleConnectWhoop}
+                    style={{
+                      background: "rgba(255,255,255,0.08)",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      color: "var(--fg-0)",
+                      padding: "6px 12px",
+                      borderRadius: 6,
+                      fontSize: 12,
+                      fontFamily: "var(--font-sans)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Reconnect
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDisconnectWhoop}
+                    disabled={whoopWorking}
+                    style={{
+                      background: "transparent",
+                      border: "1px solid rgba(255,80,80,0.3)",
+                      color: "#ff8b8b",
+                      padding: "6px 12px",
+                      borderRadius: 6,
+                      fontSize: 12,
+                      fontFamily: "var(--font-sans)",
+                      cursor: whoopWorking ? "wait" : "pointer",
+                      opacity: whoopWorking ? 0.5 : 1,
+                    }}
+                  >
+                    Disconnect
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleConnectWhoop}
+                  style={{
+                    background: "#7b61ff",
+                    border: "none",
+                    color: "#fff",
+                    padding: "6px 14px",
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontFamily: "var(--font-sans)",
+                    cursor: "pointer",
+                  }}
+                >
+                  Connect
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="card">
         <div className="card-head">
           <div className="card-title">Coach</div>
@@ -243,6 +447,30 @@ export default function SettingsPage() {
             </Row>
           ))}
         </div>
+      </div>
+
+      <div className="card">
+        <div className="card-head">
+          <div className="card-title">Account</div>
+        </div>
+        <Row isFirst label="Sign out" description="Clear your session cookie and return to the sign-in page.">
+          <button
+            type="button"
+            onClick={handleLogout}
+            style={{
+              background: "transparent",
+              border: "1px solid rgba(255,80,80,0.3)",
+              color: "#ff8b8b",
+              padding: "6px 14px",
+              borderRadius: 6,
+              fontSize: 12,
+              fontFamily: "var(--font-sans)",
+              cursor: "pointer",
+            }}
+          >
+            Sign out
+          </button>
+        </Row>
       </div>
     </div>
   );

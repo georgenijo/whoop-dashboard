@@ -16,6 +16,7 @@ import {
   CFAccessAuthError,
   verifyCFAccessJWT,
 } from "./auth/cf-access";
+import { COACH_SESSION_COOKIE } from "./auth/cookies";
 
 export const WHOOP_AUTH_URL = "https://api.prod.whoop.com/oauth/oauth2/auth";
 export const WHOOP_TOKEN_URL = "https://api.prod.whoop.com/oauth/oauth2/token";
@@ -198,7 +199,25 @@ export type AuthResult = {
   source: AuthSource;
 };
 
-// Precedence: Bearer > CF Access > dev bootstrap. Don't flip without auditing all routes.
+/**
+ * Look up a single cookie value out of a `Cookie:` header. Hand-rolled to
+ * keep `requireAuth` dependency-free at the edge — the standard library
+ * doesn't expose a cookie parser. RFC 6265 says values can't contain commas
+ * or semicolons, so a naive split-on-`;` is sufficient here.
+ */
+function readCookie(header: string | null, name: string): string | null {
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const idx = part.indexOf("=");
+    if (idx < 0) continue;
+    const key = part.slice(0, idx).trim();
+    if (key !== name) continue;
+    return part.slice(idx + 1).trim();
+  }
+  return null;
+}
+
+// Precedence: Bearer > Cookie > CF Access > dev bootstrap. Don't flip without auditing all routes.
 export async function requireAuth(req: Request): Promise<AuthResult> {
   const header = req.headers.get("authorization");
 
@@ -226,6 +245,21 @@ export async function requireAuth(req: Request): Promise<AuthResult> {
       throw new Response("Invalid token", { status: 401 });
     }
     throw new Response("Invalid token", { status: 401 });
+  }
+
+  // Cookie auth (web). Only the `__Host-coach_session` cookie is recognised
+  // — issued by /api/auth/apple-web/callback after a verified SIWA round-trip.
+  const cookieHeader = req.headers.get("cookie");
+  const sessionCookie = readCookie(cookieHeader, COACH_SESSION_COOKIE);
+  if (sessionCookie) {
+    const claims = await verifySessionToken(sessionCookie);
+    if (claims) {
+      const user = getUserById(claims.userId);
+      if (!user) throw new Response("User not found", { status: 401 });
+      return { user, source: "web" };
+    }
+    // An invalid/expired cookie shouldn't lock the user out if CF Access
+    // can vouch for them — fall through to the next layer rather than 401.
   }
 
   const cfAssertion = req.headers.get(CF_ACCESS_HEADER);

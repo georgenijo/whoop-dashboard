@@ -142,6 +142,73 @@ describe("findOrCreateUserByEmail tz handling", () => {
   });
 });
 
+describe("upsertUserByAppleSub branch coverage (issue #262)", () => {
+  // The three-branch contract from the issue:
+  //   1. row with this apple_sub exists  → return it
+  //   2. user_id=1 exists with apple_sub IS NULL → bind it (preserve data)
+  //   3. else → fresh insert
+  //
+  // The existing test fixture already nulls out user_id=1 in resetUsers, so
+  // each test starts in a state where the bootstrap row is unbound.
+
+  it("branch 1 — returns the existing user when apple_sub already matches", async () => {
+    // First call binds user_id=1 (branch 2). Second call hits branch 1.
+    const first = auth.upsertUserByAppleSub("apple-sub-existing", "first@example.com");
+    const second = auth.upsertUserByAppleSub("apple-sub-existing");
+    expect(second.id).toBe(first.id);
+    expect(second.apple_sub).toBe("apple-sub-existing");
+    expect(second.email).toBe("first@example.com");
+  });
+
+  it("branch 2 — binds the unbound bootstrap user_id=1 instead of creating a new row", async () => {
+    const user = auth.upsertUserByAppleSub("apple-sub-bootstrap", "boot@example.com", "America/New_York");
+    expect(user.id).toBe(1);
+    expect(user.apple_sub).toBe("apple-sub-bootstrap");
+    expect(user.email).toBe("boot@example.com");
+    expect(user.timezone).toBe("America/New_York");
+    // Persisted to disk, not just in the returned object.
+    const db = new Database(dbFile);
+    try {
+      const row = db
+        .prepare("SELECT id, apple_sub, email FROM users WHERE id = 1")
+        .get() as { id: number; apple_sub: string; email: string };
+      expect(row.apple_sub).toBe("apple-sub-bootstrap");
+      expect(row.email).toBe("boot@example.com");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("branch 3 — creates a fresh user when bootstrap is already bound to someone else", async () => {
+    // First sign-in binds id=1 to alice.
+    const alice = auth.upsertUserByAppleSub("apple-sub-alice", "alice@example.com");
+    expect(alice.id).toBe(1);
+    // Second sign-in is bob — fresh insert (bootstrap is now taken).
+    const bob = auth.upsertUserByAppleSub("apple-sub-bob", "bob@example.com");
+    expect(bob.id).not.toBe(1);
+    expect(bob.apple_sub).toBe("apple-sub-bob");
+    expect(bob.email).toBe("bob@example.com");
+  });
+
+  it("branch 2 — does not clobber bootstrap email/tz when those are already populated", async () => {
+    // Pre-populate bootstrap with values from CF Access flow (email-only login).
+    const db = new Database(dbFile);
+    try {
+      db.prepare(
+        "UPDATE users SET email = ?, timezone = ?, apple_sub = NULL WHERE id = 1"
+      ).run("preset@example.com", "Europe/London");
+    } finally {
+      db.close();
+    }
+    const user = auth.upsertUserByAppleSub("apple-sub-bind", "different@example.com", "America/Chicago");
+    expect(user.id).toBe(1);
+    expect(user.apple_sub).toBe("apple-sub-bind");
+    // COALESCE(email, ?) keeps preset value; same for timezone.
+    expect(user.email).toBe("preset@example.com");
+    expect(user.timezone).toBe("Europe/London");
+  });
+});
+
 describe("DB helper trusts caller (no validation at this layer)", () => {
   // Validation is enforced at the route layer (see apple/route.test.ts). The DB
   // helper trusts whatever it's handed — exercised here only to confirm we

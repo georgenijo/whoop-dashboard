@@ -202,6 +202,30 @@ export function upsertUserByAppleSub(
         return byEmail;
       }
 
+      // Bootstrap binding. Single-user phase: user_id=1 owns all data and is
+      // implicitly created by openWrite()'s INSERT OR IGNORE. On the first
+      // SIWA sign-in (web OR ios) we adopt that row instead of leaving it
+      // orphaned and creating a fresh user — otherwise every chat / body
+      // measurement / FK pointing at user_id=1 silently disconnects from the
+      // signed-in user.
+      const bootstrap = db
+        .prepare(
+          "SELECT id, email, name, apple_sub, timezone FROM users WHERE id = 1 AND apple_sub IS NULL LIMIT 1"
+        )
+        .get() as User | undefined;
+      if (bootstrap) {
+        db.prepare(
+          "UPDATE users SET apple_sub = ?, email = COALESCE(email, ?), timezone = COALESCE(timezone, ?) WHERE id = 1"
+        ).run(appleSub, email ?? null, tz ?? null);
+        return {
+          id: 1,
+          email: bootstrap.email ?? email ?? null,
+          name: bootstrap.name ?? null,
+          apple_sub: appleSub,
+          timezone: bootstrap.timezone ?? tz ?? null,
+        };
+      }
+
       // Fresh insert.
       const result = db
         .prepare("INSERT INTO users (apple_sub, email, timezone) VALUES (?, ?, ?)")
