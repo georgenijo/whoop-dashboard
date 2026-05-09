@@ -171,6 +171,7 @@ export function openWrite(): DB | null {
         apple_sub TEXT UNIQUE,
         email TEXT,
         name TEXT,
+        timezone TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
       CREATE TABLE IF NOT EXISTS sessions (
@@ -249,6 +250,12 @@ export function openWrite(): DB | null {
     if (!userCols.some((c) => c.name === "apple_sub")) {
       db.exec("ALTER TABLE users ADD COLUMN apple_sub TEXT");
       db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_apple_sub ON users(apple_sub)");
+    }
+    // IANA TZ string (e.g. "America/New_York"). NULL until iOS sends `tz` on
+    // sign-in; consumed by future scheduled jobs (push notifications, morning
+    // recovery summary) that need the user's local clock.
+    if (!userCols.some((c) => c.name === "timezone")) {
+      db.exec("ALTER TABLE users ADD COLUMN timezone TEXT");
     }
     // Case-insensitive uniqueness on email lets findOrCreateUserByEmail rely on
     // a SQLITE_CONSTRAINT race-loser to retry instead of TOCTOU SELECT+INSERT.

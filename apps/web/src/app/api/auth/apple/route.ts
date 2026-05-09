@@ -7,7 +7,28 @@ export const dynamic = "force-dynamic";
 
 type AppleAuthRequestBody = {
   identity_token?: unknown;
+  tz?: unknown;
 };
+
+const TZ_MAX_LENGTH = 100;
+
+/**
+ * Accept the iOS-supplied IANA timezone if it parses through Intl. We never
+ * reject the request when `tz` is missing or invalid — TZ is opt-in metadata
+ * for downstream scheduled jobs (push notifications, morning summary), and an
+ * old client without the field must keep authenticating successfully.
+ */
+function sanitizeTimezone(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > TZ_MAX_LENGTH) return null;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: trimmed });
+    return trimmed;
+  } catch {
+    return null;
+  }
+}
 
 export async function POST(req: Request) {
   let body: AppleAuthRequestBody;
@@ -22,6 +43,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid_request" }, { status: 400 });
   }
 
+  const tz = sanitizeTimezone(body?.tz);
+
   let identity: { sub: string; email?: string };
   try {
     identity = await verifyAppleIdentityToken(identityToken);
@@ -32,7 +55,7 @@ export async function POST(req: Request) {
     throw err;
   }
 
-  const user = upsertUserByAppleSub(identity.sub, identity.email);
+  const user = upsertUserByAppleSub(identity.sub, identity.email, tz);
   const { token, expiresAt } = await signSessionToken(user.id);
 
   return NextResponse.json({

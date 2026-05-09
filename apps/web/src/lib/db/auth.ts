@@ -7,6 +7,7 @@ export type User = {
   email: string | null;
   name: string | null;
   apple_sub?: string | null;
+  timezone?: string | null;
 };
 
 export type Session = {
@@ -23,7 +24,7 @@ const USER_FK_TABLES = ["chat_threads", "body_measurements", "sessions"] as cons
 export function getUserById(id: number): User | null {
   return safeWriteQuery((db) => {
     const row = db
-      .prepare("SELECT id, email, name, apple_sub FROM users WHERE id = ? LIMIT 1")
+      .prepare("SELECT id, email, name, apple_sub, timezone FROM users WHERE id = ? LIMIT 1")
       .get(id) as User | undefined;
     return row ?? null;
   });
@@ -62,7 +63,7 @@ export function getPrimaryUser(): User | null {
 export function getUserByAppleSub(appleSub: string): User | null {
   return safeWriteQuery((db) => {
     const row = db
-      .prepare("SELECT id, email, name, apple_sub FROM users WHERE apple_sub = ? LIMIT 1")
+      .prepare("SELECT id, email, name, apple_sub, timezone FROM users WHERE apple_sub = ? LIMIT 1")
       .get(appleSub) as User | undefined;
     return row ?? null;
   });
@@ -74,7 +75,7 @@ export function getUserByEmail(email: string): User | null {
   return safeWriteQuery((db) => {
     const row = db
       .prepare(
-        "SELECT id, email, name, apple_sub FROM users WHERE LOWER(email) = ? LIMIT 1"
+        "SELECT id, email, name, apple_sub, timezone FROM users WHERE LOWER(email) = ? LIMIT 1"
       )
       .get(normalized) as User | undefined;
     return row ?? null;
@@ -84,12 +85,12 @@ export function getUserByEmail(email: string): User | null {
 function selectUserByEmail(db: DB, email: string): User | undefined {
   return db
     .prepare(
-      "SELECT id, email, name, apple_sub FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1"
+      "SELECT id, email, name, apple_sub, timezone FROM users WHERE LOWER(email) = LOWER(?) LIMIT 1"
     )
     .get(email) as User | undefined;
 }
 
-export function findOrCreateUserByEmail(email: string): User {
+export function findOrCreateUserByEmail(email: string, tz?: string | null): User {
   const trimmed = email.trim();
   if (!trimmed) throw new Error("Email is required");
   const db = openWrite();
@@ -100,22 +101,37 @@ export function findOrCreateUserByEmail(email: string): User {
     // the partial unique index on LOWER(email) (see connection.ts).
     const upsert = db.transaction((value: string): User => {
       const existing = selectUserByEmail(db, value);
-      if (existing) return existing;
+      if (existing) {
+        // Only overwrite an existing tz when the caller provided a non-null
+        // value AND it changed — null/undefined means "no opinion, leave it".
+        if (tz != null && existing.timezone !== tz) {
+          db.prepare("UPDATE users SET timezone = ? WHERE id = ?").run(tz, existing.id);
+          existing.timezone = tz;
+        }
+        return existing;
+      }
       try {
         const result = db
-          .prepare("INSERT INTO users (email) VALUES (?)")
-          .run(value);
+          .prepare("INSERT INTO users (email, timezone) VALUES (?, ?)")
+          .run(value, tz ?? null);
         return {
           id: Number(result.lastInsertRowid),
           email: value,
           name: null,
           apple_sub: null,
+          timezone: tz ?? null,
         };
       } catch (err) {
         const code = (err as { code?: string }).code;
         if (code === "SQLITE_CONSTRAINT_UNIQUE" || code === "SQLITE_CONSTRAINT") {
           const winner = selectUserByEmail(db, value);
-          if (winner) return winner;
+          if (winner) {
+            if (tz != null && winner.timezone !== tz) {
+              db.prepare("UPDATE users SET timezone = ? WHERE id = ?").run(tz, winner.id);
+              winner.timezone = tz;
+            }
+            return winner;
+          }
         }
         throw err;
       }
@@ -141,13 +157,17 @@ export function findOrCreateUserByEmail(email: string): User {
  * fires once (the first time SIWA runs after CF Access has already created a
  * user row by email).
  */
-export function upsertUserByAppleSub(appleSub: string, email?: string | null): User {
+export function upsertUserByAppleSub(
+  appleSub: string,
+  email?: string | null,
+  tz?: string | null,
+): User {
   const db = openWrite();
   if (!db) throw new Error("Database unavailable");
   try {
     const txn = db.transaction((): User => {
       const bySub = db
-        .prepare("SELECT id, email, name, apple_sub FROM users WHERE apple_sub = ? LIMIT 1")
+        .prepare("SELECT id, email, name, apple_sub, timezone FROM users WHERE apple_sub = ? LIMIT 1")
         .get(appleSub) as User | undefined;
 
       const byEmail =
@@ -163,12 +183,14 @@ export function upsertUserByAppleSub(appleSub: string, email?: string | null): U
             db.prepare("UPDATE users SET email = ? WHERE id = ?").run(email, bySub.id);
             bySub.email = email;
           }
+          applyTzUpdate(db, bySub, tz);
           return bySub;
         }
         if (email && !bySub.email) {
           db.prepare("UPDATE users SET email = ? WHERE id = ?").run(email, bySub.id);
           bySub.email = email;
         }
+        applyTzUpdate(db, bySub, tz);
         return bySub;
       }
 
@@ -176,24 +198,38 @@ export function upsertUserByAppleSub(appleSub: string, email?: string | null): U
       if (byEmail) {
         db.prepare("UPDATE users SET apple_sub = ? WHERE id = ?").run(appleSub, byEmail.id);
         byEmail.apple_sub = appleSub;
+        applyTzUpdate(db, byEmail, tz);
         return byEmail;
       }
 
       // Fresh insert.
       const result = db
-        .prepare("INSERT INTO users (apple_sub, email) VALUES (?, ?)")
-        .run(appleSub, email ?? null);
+        .prepare("INSERT INTO users (apple_sub, email, timezone) VALUES (?, ?, ?)")
+        .run(appleSub, email ?? null, tz ?? null);
       return {
         id: Number(result.lastInsertRowid),
         email: email ?? null,
         name: null,
         apple_sub: appleSub,
+        timezone: tz ?? null,
       };
     });
     return txn();
   } finally {
     db.close();
   }
+}
+
+/**
+ * Persist `tz` on `user` only when the caller supplied a value that differs
+ * from what's already stored. null/undefined is "no opinion" — never clobber
+ * a previously-saved TZ with a missing field on a later sign-in.
+ */
+function applyTzUpdate(db: DB, user: User, tz: string | null | undefined): void {
+  if (tz == null) return;
+  if (user.timezone === tz) return;
+  db.prepare("UPDATE users SET timezone = ? WHERE id = ?").run(tz, user.id);
+  user.timezone = tz;
 }
 
 /**
