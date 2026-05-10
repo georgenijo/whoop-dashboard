@@ -103,4 +103,27 @@ describe("proxy auth gate — exempt prefixes", () => {
     const res = proxy(makeRequest("/sleep"));
     expect(res.headers.get("location")).toBeNull();
   });
+
+  it("returns 401 JSON for unauthenticated /api/* (no cookie, no Bearer)", async () => {
+    // Regression: HTTP clients (iOS without Bearer, curl, fetch, future
+    // webhooks) used to receive a 307 redirect to /signin and tried to
+    // parse HTML. They should get a clean 401 JSON envelope instead.
+    const { proxy } = await import("./proxy");
+    const res = proxy(makeRequest("/api/dashboard/today"));
+    expect(res.status).toBe(401);
+    expect(res.headers.get("location")).toBeNull();
+    const body = await res.json();
+    expect(body).toEqual({ error: "unauthorized" });
+  });
+
+  it("still 307s unauthenticated page routes to /signin (browser flow preserved)", async () => {
+    // Counter-regression: only /api/* should switch to JSON 401. Browser
+    // page routes must keep the redirect so users land on the sign-in page.
+    const { proxy } = await import("./proxy");
+    const res = proxy(makeRequest("/coach"));
+    expect(res.status).toBe(307);
+    const loc = res.headers.get("location") ?? "";
+    expect(loc).toContain("/signin");
+    expect(loc).toContain("from=%2Fcoach");
+  });
 });
