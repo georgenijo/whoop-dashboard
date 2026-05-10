@@ -64,6 +64,13 @@ function authGate(req: NextRequest): NextResponse | null {
   // every iOS API call gets a 307 to /signin (HTML) and the app fails.
   const authz = req.headers.get("authorization");
   if (authz && /^Bearer\s+\S/i.test(authz)) return null;
+  // /api/* callers (curl, fetch, future webhooks, server-to-server) can't
+  // parse a /signin HTML redirect. Refuse with JSON 401 so they get a clear
+  // error instead of opaque HTML. Page routes still 307 — browsers follow
+  // it to the sign-in page.
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
   const url = new URL("/signin", req.nextUrl.origin);
   if (pathname && pathname !== "/") {
     url.searchParams.set("from", pathname);
