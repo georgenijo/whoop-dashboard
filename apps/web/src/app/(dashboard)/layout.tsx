@@ -7,7 +7,7 @@ import Sidebar from "@/components/chrome/Sidebar";
 import TopBar from "@/components/chrome/TopBar";
 import BottomNav from "@/components/chrome/BottomNav";
 import { addRouteLog } from "@/lib/db";
-import "./globals.css";
+import "../globals.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
