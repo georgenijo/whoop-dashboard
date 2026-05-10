@@ -202,6 +202,21 @@ export function openWrite(): DB | null {
         updated_at TEXT NOT NULL,
         PRIMARY KEY (user_id, provider)
       );
+      -- APNs device tokens for push notifications. Composite PK on
+      -- (user_id, token); UNIQUE INDEX on token alone so a token reappearing
+      -- under a different user_id (device handed off) is detectable as a
+      -- conflict and resolved via INSERT … ON CONFLICT(token) DO UPDATE.
+      CREATE TABLE IF NOT EXISTS device_tokens (
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        token TEXT NOT NULL,
+        platform TEXT NOT NULL,
+        env TEXT NOT NULL,
+        app_version TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY (user_id, token)
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_device_tokens_token ON device_tokens(token);
       -- Dead-letter queue for Whoop webhook deliveries. Every signature-valid
       -- event lands here pending; handler outcome moves it to succeeded /
       -- failed / discarded. Failed rows can be replayed via

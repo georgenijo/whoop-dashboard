@@ -2,6 +2,8 @@ import SwiftUI
 
 @main
 struct CoachApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+
     @State private var isSignedIn: Bool = {
         guard
             KeychainStore.loadSessionToken() != nil,
@@ -23,6 +25,11 @@ struct CoachApp: App {
                 .onReceive(NotificationCenter.default.publisher(for: .apiUnauthorized)) { _ in
                     isSignedIn = false
                 }
+                .onAppear {
+                    if isSignedIn {
+                        PushService.shared.requestAuthorizationIfNeeded()
+                    }
+                }
         }
     }
 
@@ -35,6 +42,7 @@ struct CoachApp: App {
         } else {
             AuthView(onSignedIn: {
                 isSignedIn = true
+                PushService.shared.requestAuthorizationIfNeeded()
             })
         }
     }

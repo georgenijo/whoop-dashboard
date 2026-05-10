@@ -38,6 +38,7 @@ targets:
     entitlements:
       path: Coach.entitlements
       properties:
+        aps-environment: development
         com.apple.developer.applesignin:
           - Default
     dependencies:
