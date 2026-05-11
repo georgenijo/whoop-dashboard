@@ -112,6 +112,14 @@ export {
   releaseSettingLock,
 } from "./settings";
 
+export type { UserSettings, UserSettingsInput } from "./user_settings";
+export {
+  UserSettingsUserMissingError,
+  getUserSettings,
+  upsertUserSettings,
+  deleteUserSettings,
+} from "./user_settings";
+
 export type { WebhookEventRow, WebhookEventStatus, InsertWebhookEventInput } from "./webhook";
 export {
   insertWebhookEvent,

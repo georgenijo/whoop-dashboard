@@ -96,3 +96,16 @@ export function assertKeyVersionSupported(version: number): void {
     );
   }
 }
+
+/**
+ * Startup-time check: VAULT_KEY is present, valid base64, and the right
+ * length. Throws VaultMissingKeyError with a clear message if not. Callers
+ * that want to fail fast (rather than at first encrypt/decrypt) can invoke
+ * this from a route boot path or admin healthcheck.
+ *
+ * Synchronous because key loading is synchronous (no init step); kept as a
+ * thin alias to make intent obvious at call sites.
+ */
+export function assertVaultKeyConfigured(): void {
+  loadKey();
+}
