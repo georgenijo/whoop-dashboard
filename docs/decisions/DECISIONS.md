@@ -6,13 +6,27 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-05-11: Phase C un-bundled — minimum scope = 3 items, Phase D moves out
+
+**Decision:** Phase C ships in two cuts. **Phase C-minimum** (~2 days) is the OAuth-only slice: `/api/whoop/auth/start`, `/api/whoop/auth/callback`, refactor `runWhoopSync(userId)` to read tokens from the `integrations` table, one-shot migration of `tokens.json` → `integrations` row, Settings UI Connect/Disconnect. **Phase D** (~2–3 days, separate issue) adds `user_id` columns to `recovery` / `cycles` / `sleep` / `workouts` / `daily_summary`, the `forUser()` wrapper, and backfill to `user_id=1`.
+
+**Rationale:** The earlier scope bundled the per-user-OAuth work (genuinely required) with the per-user-data work (separately useful but not required for OAuth to function). Un-bundling lets us ship the Whoop Connect/Disconnect UX, retire `tokens.json`, and land the encrypted token storage as one coherent feature without dragging schema migration of five domain tables behind it. Caveat: after Phase C-minimum but before Phase D, two users syncing simultaneously would still collide at the row level (no `user_id` on domain tables). Acceptable because the only active syncing user today is the maintainer; Phase D follows immediately.
+
+**Status:** active
+
+**Supersedes:** the earlier 2026-05-11 entry below
+
+**References:** `docs/architecture-scalable.html` Phase C, Phase D
+
+---
+
 ## 2026-05-11: Phase C scope locked — shared Whoop app, web-only OAuth, one-shot migration
 
 **Decision:** Phase C (per-user Whoop OAuth) will use one shared Whoop developer app for all users, route OAuth through the web app only (not native iOS), migrate `tokens.json` to an `integrations` row via a one-shot script, and backfill all existing recovery/cycles/sleep/workouts/daily_summary rows to `user_id=1` (legacy single-user). `user_id=2` (SIWA path) starts fresh.
 
 **Rationale:** Shared dev app matches the scalable architecture doc's "shared client_id rate budget (hosted)" path and sidesteps per-user Whoop app registration friction. Web-only OAuth keeps the flow simple — iOS users do the one-time Whoop connect via the web app, then iOS reads synced data. Native iOS OAuth via `ASWebAuthenticationSession` is a future option, not worth the cost for a one-time flow. Backfilling to `user_id=1` honors the existing memory note that pre-cutover data stays with the legacy user.
 
-**Status:** active
+**Status:** superseded by 2026-05-11 (un-bundled into Phase C-minimum + Phase D)
 
 **References:** `docs/architecture-scalable.html` (Phase C section), memory `cross_device_user_split.md`
 
