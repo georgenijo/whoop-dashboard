@@ -89,7 +89,7 @@ describe("trigger_whoop_sync tool", () => {
     getLastSuccessfulSyncAtMock.mockReturnValue(lastOk);
     const turnState = newToolTurnState();
 
-    const result = (await executeTool("trigger_whoop_sync", null, { turnState })) as {
+    const result = (await executeTool("trigger_whoop_sync", null, { userId: 1, turnState })) as {
       success: boolean;
       skipped: boolean;
       reason: string;
@@ -112,7 +112,7 @@ describe("trigger_whoop_sync tool", () => {
     runWhoopSyncMock.mockResolvedValue(syncResult);
     const turnState = newToolTurnState();
 
-    const result = await executeTool("trigger_whoop_sync", null, { turnState });
+    const result = await executeTool("trigger_whoop_sync", null, { userId: 1, turnState });
 
     expect(result).toBe(syncResult);
     expect(runWhoopSyncMock).toHaveBeenCalledTimes(1);
@@ -133,7 +133,7 @@ describe("trigger_whoop_sync tool", () => {
     runWhoopSyncMock.mockResolvedValue(syncResult);
     const turnState = newToolTurnState();
 
-    const result = await executeTool("trigger_whoop_sync", null, { turnState });
+    const result = await executeTool("trigger_whoop_sync", null, { userId: 1, turnState });
 
     expect(result).toBe(syncResult);
     expect(addSyncLogMock).toHaveBeenCalledTimes(1);
@@ -150,11 +150,11 @@ describe("trigger_whoop_sync tool", () => {
     runWhoopSyncMock.mockResolvedValue(makeSuccessSyncResult());
     const turnState = newToolTurnState();
 
-    const first = await executeTool("trigger_whoop_sync", null, { turnState });
+    const first = await executeTool("trigger_whoop_sync", null, { userId: 1, turnState });
     expect((first as { success: boolean }).success).toBe(true);
     expect(runWhoopSyncMock).toHaveBeenCalledTimes(1);
 
-    const second = (await executeTool("trigger_whoop_sync", null, { turnState })) as {
+    const second = (await executeTool("trigger_whoop_sync", null, { userId: 1, turnState })) as {
       success: boolean;
       already_synced: boolean;
       error: string;
@@ -176,7 +176,7 @@ describe("trigger_whoop_sync tool", () => {
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const turnState = newToolTurnState();
 
-    const result = await executeTool("trigger_whoop_sync", null, { turnState });
+    const result = await executeTool("trigger_whoop_sync", null, { userId: 1, turnState });
 
     expect(result).toBe(syncResult);
     expect(consoleErrorSpy).toHaveBeenCalledWith(

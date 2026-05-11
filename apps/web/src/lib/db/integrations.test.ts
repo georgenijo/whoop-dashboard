@@ -254,7 +254,7 @@ describe("integrations + vault", () => {
     process.env.WHOOP_TOKENS_PATH = tokensTmp;
     try {
       const auth = await import("@/lib/auth");
-      await auth.saveTokens({
+      await auth.saveTokens(1, {
         access_token: "PLAINTEXT-ACCESS-SHOULD-NEVER-LAND-IN-RAW",
         refresh_token: "PLAINTEXT-REFRESH-SHOULD-NEVER-LAND-IN-RAW",
         expires_at: "2026-05-09T18:42:11+00:00",

@@ -33,8 +33,13 @@ vi.mock("@/lib/whoop/client", async () => {
 
 // Default token mock: pre-warm returns a token without firing onRefresh.
 // Specific tests override the implementation to simulate a refresh.
+//
+// `userId` is the new positional arg added in Phase C; the mock ignores it
+// because the stub doesn't model per-user lookup — the test only cares that
+// the sync correctly threads SOMETHING through.
 const getValidAccessTokenMock = vi.fn<
   (
+    userId: number,
     force?: boolean,
     hooks?: { onRefresh?: () => void },
   ) => Promise<string | null>
@@ -42,9 +47,10 @@ const getValidAccessTokenMock = vi.fn<
 
 vi.mock("@/lib/whoop/token", () => ({
   getValidAccessToken: (
+    userId: number,
     force?: boolean,
     hooks?: { onRefresh?: () => void },
-  ) => getValidAccessTokenMock(force, hooks),
+  ) => getValidAccessTokenMock(userId, force, hooks),
 }));
 
 // Stub upsertBodyMeasurement so the partial-path test can hook abort into
@@ -237,7 +243,7 @@ describe("runWhoopSync abort handling", () => {
   it("happy path: writes rows and returns success without partial flag", async () => {
     wireHappyPath();
 
-    const result = await syncMod.runWhoopSync({});
+    const result = await syncMod.runWhoopSync({ userId: 1 });
 
     expect(result.success).toBe(true);
     expect(result.error).toBeUndefined();
@@ -257,7 +263,7 @@ describe("runWhoopSync abort handling", () => {
     const ctrl = new AbortController();
     ctrl.abort();
 
-    const result = await syncMod.runWhoopSync({ signal: ctrl.signal });
+    const result = await syncMod.runWhoopSync({ userId: 1, signal: ctrl.signal });
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("aborted");
@@ -282,7 +288,7 @@ describe("runWhoopSync abort handling", () => {
       throw new DOMException("Aborted", "AbortError");
     });
 
-    const result = await syncMod.runWhoopSync({ signal: ctrl.signal });
+    const result = await syncMod.runWhoopSync({ userId: 1, signal: ctrl.signal });
 
     expect(result.success).toBe(false);
     expect(result.error).toBe("aborted");
@@ -317,7 +323,7 @@ describe("runWhoopSync abort handling", () => {
       throwIfAborted: () => {},
     } as unknown as AbortSignal;
 
-    const result = await syncMod.runWhoopSync({ signal: fakeSignal });
+    const result = await syncMod.runWhoopSync({ userId: 1, signal: fakeSignal });
 
     expect(result.success).toBe(true);
     expect(result.partial).toBe(true);
@@ -346,6 +352,7 @@ describe("runWhoopSync abort handling", () => {
     const events: import("./sync").SyncProgressEvent[] = [];
 
     const result = await syncMod.runWhoopSync({
+      userId: 1,
       onProgress: (e) => events.push(e),
     });
 
@@ -387,13 +394,13 @@ describe("runWhoopSync abort handling", () => {
 
   it("onProgress: refreshing_token fires before any fetching_* when pre-warm triggers a refresh", async () => {
     wireHappyPath();
-    getValidAccessTokenMock.mockImplementation(async (_force, hooks) => {
+    getValidAccessTokenMock.mockImplementation(async (_userId, _force, hooks) => {
       hooks?.onRefresh?.();
       return "stub-token";
     });
 
     const events: import("./sync").SyncProgressEvent[] = [];
-    await syncMod.runWhoopSync({ onProgress: (e) => events.push(e) });
+    await syncMod.runWhoopSync({ userId: 1, onProgress: (e) => events.push(e) });
 
     const stages = events.map((e) => e.stage);
     const idxRefresh = stages.indexOf("refreshing_token");
@@ -422,6 +429,7 @@ describe("runWhoopSync abort handling", () => {
 
     const events: import("./sync").SyncProgressEvent[] = [];
     const result = await syncMod.runWhoopSync({
+      userId: 1,
       signal: ctrl.signal,
       onProgress: (e) => events.push(e),
     });
@@ -471,7 +479,7 @@ describe("runWhoopSync abort handling", () => {
 
     let result;
     try {
-      result = await syncMod.runWhoopSync({ signal: fakeSignal });
+      result = await syncMod.runWhoopSync({ userId: 1, signal: fakeSignal });
     } finally {
       // Restore schema for any later tests / afterAll cleanup.
       const db = new Database(dbFile);
