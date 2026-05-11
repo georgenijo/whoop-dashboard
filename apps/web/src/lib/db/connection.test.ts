@@ -121,6 +121,63 @@ describe("Phase D — domain tables carry user_id", () => {
     }
   });
 
+  it("workouts ALTER survives a pre-existing table when foreign_keys=ON", () => {
+    // Prod scenario: a DB created by the pre-Phase-D schema already has
+    // a `workouts` table with rows; opening it under FK=ON used to throw
+    // `SQLITE_ERROR: Cannot add a REFERENCES column with non-NULL default
+    // value` at the ALTER. Regression for fix/phase-d-workouts-fk-alter.
+    const file = newDbFile();
+    const raw = new Database(file);
+    raw.pragma("foreign_keys = ON");
+    raw.exec(`
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        apple_sub TEXT UNIQUE,
+        email TEXT,
+        name TEXT,
+        timezone TEXT
+      );
+      INSERT INTO users (id) VALUES (1);
+      CREATE TABLE workouts (
+        id TEXT PRIMARY KEY,
+        date TEXT,
+        sport TEXT,
+        duration_sec REAL,
+        avg_hr INTEGER,
+        max_hr INTEGER,
+        strain REAL,
+        kilojoule REAL,
+        distance_m REAL,
+        zone_0_ms INTEGER,
+        zone_1_ms INTEGER,
+        zone_2_ms INTEGER,
+        zone_3_ms INTEGER,
+        zone_4_ms INTEGER,
+        zone_5_ms INTEGER,
+        raw JSON
+      );
+      INSERT INTO workouts (id, date, sport) VALUES ('w1', '2025-04-12', 'run');
+    `);
+    raw.close();
+
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    expect(db).not.toBeNull();
+    try {
+      expect(columns(db!, "workouts")).toContain("user_id");
+      const row = db!
+        .prepare("SELECT user_id, sport FROM workouts WHERE id = ?")
+        .get("w1") as { user_id: number; sport: string } | undefined;
+      expect(row).toBeDefined();
+      expect(row!.user_id).toBe(1);
+      expect(row!.sport).toBe("run");
+      // FK enforcement is restored.
+      expect((db! as Database.Database).pragma("foreign_keys", { simple: true })).toBe(1);
+    } finally {
+      db?.close();
+    }
+  });
+
   it("backfills existing pre-migration rows to user_id=1", () => {
     const file = newDbFile();
     // Build a pre-migration recovery table (no user_id column) and seed a row.
