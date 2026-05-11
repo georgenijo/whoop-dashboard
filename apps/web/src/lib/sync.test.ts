@@ -511,3 +511,28 @@ describe("runWhoopSync abort handling", () => {
     expect(result.latest_strain_date).toBeNull();
   });
 });
+
+describe("runWhoopSync userId plumbing", () => {
+  it("forwards userId to the pre-warm and to each whoopGetAll/whoopGet call", async () => {
+    wireHappyPath();
+    const userId = 7;
+
+    const result = await syncMod.runWhoopSync({ userId });
+    expect(result.success).toBe(true);
+
+    // Pre-warm received the userId as its first arg.
+    expect(getValidAccessTokenMock).toHaveBeenCalled();
+    const preWarmArgs = getValidAccessTokenMock.mock.calls[0];
+    expect(preWarmArgs[0]).toBe(userId);
+
+    // Every whoopGetAll call carries opts.userId. Body uses whoopGet.
+    for (const call of whoopGetAllMock.mock.calls) {
+      const opts = call[2] as { userId: number };
+      expect(opts.userId).toBe(userId);
+    }
+    for (const call of whoopGetMock.mock.calls) {
+      const opts = call[1] as { userId: number };
+      expect(opts.userId).toBe(userId);
+    }
+  });
+});

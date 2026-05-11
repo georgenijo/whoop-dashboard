@@ -33,6 +33,7 @@ type RunOpts = {
 };
 
 let runAndPersistImpl: (
+  userId: unknown,
   thread: unknown,
   lastUser: unknown,
   conversation: unknown,
@@ -44,13 +45,15 @@ let runAndPersistImpl: (
 vi.mock("@/lib/coach/persistence", () => ({
   runAndPersistCoachTurn: vi.fn(
     (
+      userId: unknown,
       thread: unknown,
       lastUser: unknown,
       conversation: unknown,
       days: unknown,
       source: unknown,
       options: RunOpts,
-    ) => runAndPersistImpl(thread, lastUser, conversation, days, source, options),
+    ) =>
+      runAndPersistImpl(userId, thread, lastUser, conversation, days, source, options),
   ),
   titleChatThread: vi.fn(async () => undefined),
 }));
@@ -85,7 +88,7 @@ afterEach(() => {
 
 describe("POST /api/chat — SSE wiring", () => {
   it("relays tool_progress events from the coach loop to the SSE stream", async () => {
-    runAndPersistImpl = async (_t, _u, _c, _d, _s, options) => {
+    runAndPersistImpl = async (_uid, _t, _u, _c, _d, _s, options) => {
       options.onToolProgress?.({ tool: "trigger_whoop_sync", stage: "fetching_sleep" });
       options.onToolProgress?.({
         tool: "trigger_whoop_sync",
