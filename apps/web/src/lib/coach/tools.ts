@@ -234,6 +234,7 @@ type SyncToolAlreadyAttempted = {
 type SyncToolResult = SyncResult | SyncToolSkipped | SyncToolAlreadyAttempted;
 
 async function handleTriggerWhoopSync(
+  userId: number,
   turnState: ToolTurnState,
   signal?: AbortSignal,
   onProgress?: (e: SyncProgressEvent) => void,
@@ -266,7 +267,7 @@ async function handleTriggerWhoopSync(
 
   const startedAt = new Date().toISOString();
   const t0 = Date.now();
-  const result = await runWhoopSync({ signal, onProgress });
+  const result = await runWhoopSync({ userId, signal, onProgress });
   const durationMs = Date.now() - t0;
 
   // Persist a sync_logs row so Coach-driven syncs are visible in /logs and
@@ -331,6 +332,12 @@ export async function executeTool(
   name: string,
   input: unknown,
   options: {
+    /**
+     * Owner of the Whoop integration to act against. Threaded explicitly
+     * so the sync tool lands tokens / refresh state on the right user
+     * instead of falling back to a hardcoded id.
+     */
+    userId: number;
     turnState: ToolTurnState;
     signal?: AbortSignal;
     onSyncProgress?: (e: SyncProgressEvent) => void;
@@ -338,6 +345,7 @@ export async function executeTool(
 ): Promise<unknown> {
   if (name === "trigger_whoop_sync") {
     return handleTriggerWhoopSync(
+      options.userId,
       options.turnState,
       options.signal,
       options.onSyncProgress,
@@ -426,6 +434,12 @@ function toolErrorPayload(err: unknown): string {
 }
 
 export type ExecuteToolResultOptions = {
+  /**
+   * Owner of the Whoop integration. Threaded down to `executeTool` →
+   * `handleTriggerWhoopSync` → `runWhoopSync` so the coach acts on behalf
+   * of the signed-in user, not the legacy bootstrap id.
+   */
+  userId: number;
   turnState: ToolTurnState;
   progress?: ToolProgressHandlers;
   signal?: AbortSignal;
@@ -437,7 +451,7 @@ export async function executeToolResult(
   toolDetails: ToolDetail[],
   opts: ExecuteToolResultOptions
 ): Promise<ToolResultBlockParam> {
-  const { progress, signal, turnState } = opts;
+  const { progress, signal, turnState, userId } = opts;
   const startMs = Date.now();
   progress?.onToolUseStart?.({ name: toolUse.name, input: toolUse.input });
   console.info("[coach] tool_call", {
@@ -460,6 +474,7 @@ export async function executeToolResult(
   let result: unknown;
   try {
     result = await executeTool(toolUse.name, toolUse.input, {
+      userId,
       turnState,
       signal,
       onSyncProgress,

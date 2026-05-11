@@ -1,3 +1,4 @@
+import { requireAuth } from "@/lib/auth";
 import { addSyncLog, getLastSuccessfulSyncAt } from "@/lib/db";
 import { runWhoopSync, SYNC_COOLDOWN_MS } from "@/lib/sync";
 import { PARTIAL_ERROR_FALLBACK } from "@/lib/sync-meta";
@@ -7,6 +8,7 @@ export const dynamic = "force-dynamic";
 const SYNC_TIMEOUT_MS = 120_000;
 
 export async function POST(req: Request) {
+  const { user } = await requireAuth(req);
   const startedAt = new Date().toISOString();
   const t0 = Date.now();
 
@@ -37,7 +39,7 @@ export async function POST(req: Request) {
 
   let result;
   try {
-    result = await runWhoopSync({ signal: composite.signal });
+    result = await runWhoopSync({ userId: user.id, signal: composite.signal });
   } finally {
     clearTimeout(timer);
   }

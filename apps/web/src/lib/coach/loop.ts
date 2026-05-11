@@ -159,6 +159,7 @@ async function streamMessage(
 }
 
 export async function runAnthropicSdk(
+  userId: number,
   threadId: number,
   newUserText: string,
   conversation: MessageParam[],
@@ -242,6 +243,7 @@ export async function runAnthropicSdk(
 
     for (const { toolUse, i } of serial) {
       toolResults[i] = await executeToolResult(threadId, toolUse, toolDetails, {
+        userId,
         progress: options,
         signal: options.signal,
         turnState,
@@ -250,6 +252,7 @@ export async function runAnthropicSdk(
     const parallelResults = await Promise.all(
       parallel.map(({ toolUse }) =>
         executeToolResult(threadId, toolUse, toolDetails, {
+          userId,
           progress: options,
           signal: options.signal,
           turnState,
