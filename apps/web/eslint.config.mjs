@@ -21,7 +21,7 @@ const eslintConfig = defineConfig([
   // redirect target), add `// eslint-disable-next-line no-restricted-syntax`
   // with a one-line reason.
   {
-    files: ["src/app/api/**/route.ts", "src/proxy.ts"],
+    files: ["src/app/api/**/route.ts", "src/proxy.ts", "src/middleware.ts"],
     rules: {
       "no-restricted-syntax": [
         "error",

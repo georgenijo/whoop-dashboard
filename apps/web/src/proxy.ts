@@ -130,12 +130,10 @@ function referrerDetails(req: NextRequest): {
 
   try {
     const url = new URL(value);
-    // Compare against the upstream's view of itself, not the public origin —
-    // the referrer is whatever the client sent, which may be the public URL
-    // or the upstream URL depending on the path. Using publicOrigin() here
-    // would mis-classify legitimate same-origin referrers as external.
-    // eslint-disable-next-line no-restricted-syntax -- referrer classification, not a redirect target
-    const internal = url.origin === req.nextUrl.origin;
+    // Browsers send `Referer: https://coach.georgenijo.com/...` (public
+    // origin), not the upstream listener. Compare against publicOrigin()
+    // so same-origin referrers behind a proxy classify correctly.
+    const internal = url.origin === publicOrigin(req);
     return {
       referrer: internal
         ? truncate(`${url.pathname}${sanitizedSearch(url.searchParams)}`, 500)

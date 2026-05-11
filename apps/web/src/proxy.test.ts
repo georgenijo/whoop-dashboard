@@ -127,3 +127,34 @@ describe("proxy auth gate — exempt prefixes", () => {
     expect(loc).toContain("from=%2Fcoach");
   });
 });
+
+describe("proxy auth gate — publicOrigin (issue #290)", () => {
+  const ORIGINAL_PUBLIC_ORIGIN = process.env.PUBLIC_ORIGIN;
+
+  afterEach(() => {
+    if (ORIGINAL_PUBLIC_ORIGIN === undefined) delete process.env.PUBLIC_ORIGIN;
+    else process.env.PUBLIC_ORIGIN = ORIGINAL_PUBLIC_ORIGIN;
+  });
+
+  it("uses PUBLIC_ORIGIN for the /signin redirect target", async () => {
+    // Simulate the live bug: req comes in on the upstream listener but
+    // PUBLIC_ORIGIN points to the public hostname.
+    process.env.PUBLIC_ORIGIN = "https://coach.georgenijo.com";
+    const { proxy } = await import("./proxy");
+    const req = new NextRequest("https://localhost:8501/sleep");
+    const res = proxy(req);
+    expect(res.status).toBe(307);
+    const loc = res.headers.get("location") ?? "";
+    expect(loc.startsWith("https://coach.georgenijo.com/signin")).toBe(true);
+  });
+
+  it("falls back to request origin when PUBLIC_ORIGIN is unset (dev)", async () => {
+    delete process.env.PUBLIC_ORIGIN;
+    const { proxy } = await import("./proxy");
+    const req = new NextRequest("http://localhost:3000/sleep");
+    const res = proxy(req);
+    expect(res.status).toBe(307);
+    const loc = res.headers.get("location") ?? "";
+    expect(loc.startsWith("http://localhost:3000/signin")).toBe(true);
+  });
+});
