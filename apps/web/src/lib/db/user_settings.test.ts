@@ -188,6 +188,24 @@ describe("user_settings + vault", () => {
     }
   });
 
+  it("getUserSettings drops anthropic_key when stored version is unsupported", async () => {
+    const { settings, conn } = await loadModules();
+    settings.upsertUserSettings({
+      user_id: 1,
+      anthropic_key: "real-key",
+      model_pref: "claude-sonnet-4-6",
+    });
+    const db = conn.openWrite();
+    db!
+      .prepare("UPDATE user_settings SET anthropic_key_version = 999 WHERE user_id = 1")
+      .run();
+    db!.close();
+    const got = settings.getUserSettings(1);
+    expect(got).not.toBeNull();
+    expect(got!.anthropic_key).toBeNull();
+    expect(got!.model_pref).toBe("claude-sonnet-4-6");
+  });
+
   it("deleteUserSettings removes the row idempotently", async () => {
     const { settings } = await loadModules();
     settings.upsertUserSettings({ user_id: 1, model_pref: "m1" });

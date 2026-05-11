@@ -30,7 +30,8 @@ requireFromHere.cache[serverOnlyPath] = {
   require: requireFromHere,
 } as unknown as NodeJS.Module;
 
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
+import { resolve as resolvePath } from "node:path";
 
 const TEST_PROVIDER = `phase-a-smoke-${Date.now()}`;
 const USER_ID = 1;
@@ -63,6 +64,19 @@ async function main(): Promise<number> {
   }
   if (!existsSync(dbPath)) {
     console.error(`WHOOP_DB_PATH does not exist: ${dbPath}`);
+    return 2;
+  }
+  // Refuse to run against a non-snapshot DB unless the caller explicitly opts in.
+  // The cleanup path re-encrypts the existing anthropic_key with the smoke run's
+  // random VAULT_KEY, so pointing at shared/whoop_data.db would corrupt the row.
+  // /tmp/ matches the whoop-dev snapshot path; --allow-non-snapshot escapes the gate.
+  const allowNonSnapshot = process.argv.includes("--allow-non-snapshot");
+  const resolvedDbPath = realpathSync(resolvePath(dbPath));
+  if (!allowNonSnapshot && !resolvedDbPath.startsWith("/tmp/") && !resolvedDbPath.startsWith("/private/tmp/")) {
+    console.error(
+      `Refusing to run against non-snapshot DB: ${resolvedDbPath}\n` +
+        "Use the whoop-dev skill to spin up a /tmp snapshot, or pass --allow-non-snapshot to override."
+    );
     return 2;
   }
   console.log(`smoke-phase-a: db=${dbPath}`);
