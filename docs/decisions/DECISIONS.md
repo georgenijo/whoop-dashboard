@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-05-11: Phase C-minimum further reduced — existing dual-write infrastructure means smaller delta than scoped
+
+**Decision:** Pre-implementation review of issue #320 found four pieces already shipped beyond the Phase A snapshot: `getValidAccessToken()` reads from `integrations` first, `saveTokens()` dual-writes to `integrations` + `tokens.json`, `/api/connectors/whoop` returns status, `/api/auth/whoop/disconnect` deletes the row. The remaining Phase C-minimum work is: (1) parameterize `DEFAULT_USER_ID` through the token/sync stack, (2) add HMAC state to the existing `/api/auth/callback` so user_id survives the redirect, (3) add `WHOOP_STATE_SECRET` env with fail-closed loader. **No new `/api/whoop/*` routes** — extend existing surface.
+
+**Rationale:** Architecture review found the original issue text would have introduced parallel `/api/whoop/auth/*` routes alongside the working `/api/auth/callback` route — a "loaded gun" leaving a stale unsigned-state route in production. Pattern-matches the Phase A surprise where `integrations` table + core vault had already shipped in PR #65. Better to extend than parallel-implement.
+
+**Status:** active
+
+**References:** issue #320 (rescoped), architect review (a86487a00b7424563), `apps/web/src/lib/whoop/token.ts`, `apps/web/src/lib/auth.ts`, PR #318
+
+---
+
 ## 2026-05-11: Phase C un-bundled — minimum scope = 3 items, Phase D moves out
 
 **Decision:** Phase C ships in two cuts. **Phase C-minimum** (~2 days) is the OAuth-only slice: `/api/whoop/auth/start`, `/api/whoop/auth/callback`, refactor `runWhoopSync(userId)` to read tokens from the `integrations` table, one-shot migration of `tokens.json` → `integrations` row, Settings UI Connect/Disconnect. **Phase D** (~2–3 days, separate issue) adds `user_id` columns to `recovery` / `cycles` / `sleep` / `workouts` / `daily_summary`, the `forUser()` wrapper, and backfill to `user_id=1`.
