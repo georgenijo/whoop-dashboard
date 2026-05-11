@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { COACH_SESSION_COOKIE } from "@/lib/auth/cookies";
+import { publicOrigin } from "@/lib/auth/origin";
 
 const PUBLIC_FILE = /\.[^/]+$/;
 const SENSITIVE_QUERY_KEY = /token|secret|code|state|key|password|auth/i;
@@ -71,7 +72,7 @@ function authGate(req: NextRequest): NextResponse | null {
   if (pathname.startsWith("/api/")) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  const url = new URL("/signin", req.nextUrl.origin);
+  const url = new URL("/signin", publicOrigin(req));
   if (pathname && pathname !== "/") {
     url.searchParams.set("from", pathname);
   }
@@ -129,6 +130,11 @@ function referrerDetails(req: NextRequest): {
 
   try {
     const url = new URL(value);
+    // Compare against the upstream's view of itself, not the public origin —
+    // the referrer is whatever the client sent, which may be the public URL
+    // or the upstream URL depending on the path. Using publicOrigin() here
+    // would mis-classify legitimate same-origin referrers as external.
+    // eslint-disable-next-line no-restricted-syntax -- referrer classification, not a redirect target
     const internal = url.origin === req.nextUrl.origin;
     return {
       referrer: internal
