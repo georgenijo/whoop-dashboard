@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { COACH_SESSION_COOKIE } from "@/lib/auth/cookies";
+import { publicOrigin } from "@/lib/auth/origin";
 
 const PUBLIC_FILE = /\.[^/]+$/;
 const SENSITIVE_QUERY_KEY = /token|secret|code|state|key|password|auth/i;
@@ -71,7 +72,7 @@ function authGate(req: NextRequest): NextResponse | null {
   if (pathname.startsWith("/api/")) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  const url = new URL("/signin", req.nextUrl.origin);
+  const url = new URL("/signin", publicOrigin(req));
   if (pathname && pathname !== "/") {
     url.searchParams.set("from", pathname);
   }
@@ -129,7 +130,10 @@ function referrerDetails(req: NextRequest): {
 
   try {
     const url = new URL(value);
-    const internal = url.origin === req.nextUrl.origin;
+    // Browsers send `Referer: https://coach.georgenijo.com/...` (public
+    // origin), not the upstream listener. Compare against publicOrigin()
+    // so same-origin referrers behind a proxy classify correctly.
+    const internal = url.origin === publicOrigin(req);
     return {
       referrer: internal
         ? truncate(`${url.pathname}${sanitizedSearch(url.searchParams)}`, 500)

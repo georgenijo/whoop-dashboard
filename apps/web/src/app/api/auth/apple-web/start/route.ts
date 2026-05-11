@@ -12,8 +12,12 @@ export const dynamic = "force-dynamic";
 function callbackUrl(req: NextRequest): string {
   // Allow overriding via env so the same code path works behind a CDN /
   // tunnel where origin doesn't match the public URL Apple is calling back to.
+  // This is the `redirect_uri` Apple compares against the registered Services
+  // ID URL — not a browser-facing redirect target, so it doesn't use
+  // `publicOrigin()`. Must match `apple-web/callback/route.ts` callbackUrl.
   const override = process.env.APPLE_REDIRECT_URI;
   if (override && override.trim()) return override.trim();
+  // eslint-disable-next-line no-restricted-syntax -- third-party OAuth callback URI, not a redirect target
   return new URL("/api/auth/apple-web/callback", req.nextUrl.origin).toString();
 }
 

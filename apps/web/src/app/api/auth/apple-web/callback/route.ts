@@ -20,30 +20,20 @@ import {
   decodeAppleOAuthState,
   isSafeReturnPath,
 } from "@/lib/auth/apple-state";
+import { publicOrigin } from "@/lib/auth/origin";
 
 export const dynamic = "force-dynamic";
 
+// `callbackUrl` is the value sent to Apple as `redirect_uri` in the token
+// exchange. It must EXACTLY match what `apple-web/start/route.ts` sent in
+// the authorize step, so both routes derive it the same way:
+// APPLE_REDIRECT_URI env → nextUrl-based fallback. This is distinct from
+// the user-facing `publicOrigin(req)` used for browser-facing redirects.
 function callbackUrl(req: NextRequest): string {
   const override = process.env.APPLE_REDIRECT_URI;
   if (override && override.trim()) return override.trim();
+  // eslint-disable-next-line no-restricted-syntax -- third-party OAuth callback URI, not a redirect target
   return new URL("/api/auth/apple-web/callback", req.nextUrl.origin).toString();
-}
-
-// Behind nginx + CF Access, `req.nextUrl.origin` resolves to the upstream
-// (e.g. `https://localhost:8501`) because Next doesn't trust forwarded
-// headers by default. Derive the public origin from APPLE_REDIRECT_URI when
-// set — Apple won't accept a localhost URL in prod, so this env is always
-// the canonical public origin in production.
-function publicOrigin(req: NextRequest): string {
-  const override = process.env.APPLE_REDIRECT_URI;
-  if (override && override.trim()) {
-    try {
-      return new URL(override.trim()).origin;
-    } catch {
-      // fall through
-    }
-  }
-  return req.nextUrl.origin;
 }
 
 function bail(req: NextRequest, reason: string, status = 400): NextResponse {

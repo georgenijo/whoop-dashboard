@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { COACH_SESSION_COOKIE } from "@/lib/auth/cookies";
+import { publicOrigin } from "@/lib/auth/origin";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
  */
 
 export function POST(req: NextRequest) {
-  const res = NextResponse.redirect(new URL("/signin", req.nextUrl.origin), {
+  const res = NextResponse.redirect(new URL("/signin", publicOrigin(req)), {
     status: 303,
   });
   res.cookies.set({

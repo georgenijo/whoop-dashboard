@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { exchangeCode } from "@/lib/auth";
+import { publicOrigin } from "@/lib/auth/origin";
 
 export const dynamic = "force-dynamic";
 
@@ -21,5 +22,5 @@ export async function GET(req: NextRequest) {
     return new NextResponse(message, { status: 500 });
   }
 
-  return NextResponse.redirect(new URL("/", req.nextUrl.origin));
+  return NextResponse.redirect(new URL("/", publicOrigin(req)));
 }
