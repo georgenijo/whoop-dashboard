@@ -96,6 +96,23 @@ export async function whoopGet<T>(path: string, opts: GetOpts): Promise<T> {
   return (await resp.json()) as T;
 }
 
+/**
+ * Whoop user profile (subset). The `user_id` field is the remote identifier
+ * Whoop uses in webhook events — we persist it in `integrations.provider_user_id`
+ * so future events can be routed to the right local user. Mirrors
+ * `streamlit/whoop/client.py:get_profile()` which calls `/v2/user/profile/basic`.
+ */
+export type WhoopProfile = {
+  user_id: number;
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+};
+
+export async function getWhoopProfile(opts: GetOpts): Promise<WhoopProfile> {
+  return whoopGet<WhoopProfile>("/v2/user/profile/basic", opts);
+}
+
 type PaginatedResponse<T> = { records?: T[]; next_token?: string | null };
 
 /** Page through a Whoop list endpoint, mirrors WhoopClient._get_all in Python. */

@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import crypto from "node:crypto";
 import { exchangeCode } from "@/lib/auth";
 import { publicOrigin } from "@/lib/auth/origin";
+import { setProviderUserId } from "@/lib/db/integrations";
+import { getWhoopProfile } from "@/lib/whoop/client";
 import { decodeWhoopOAuthState } from "@/lib/whoop/oauth-state";
 
 export const dynamic = "force-dynamic";
@@ -101,6 +103,23 @@ export async function GET(req: NextRequest) {
       error: err instanceof Error ? err.message : String(err),
     });
     return redirectWithError(req, "exchange_failed");
+  }
+
+  // Phase D — capture the remote Whoop user_id so webhook events for this
+  // user route to the right local tenant. We wrap in try/catch because a
+  // profile-fetch failure (Whoop 5xx, network blip) MUST NOT fail the OAuth
+  // flow: the lazy backfill in runWhoopSync will retry on the user's next
+  // sync. The mapping is recoverable; a failed OAuth is not.
+  try {
+    const profile = await getWhoopProfile({ userId: decoded.user_id });
+    if (profile?.user_id != null) {
+      setProviderUserId(decoded.user_id, "whoop", String(profile.user_id));
+    }
+  } catch (err) {
+    console.warn("[auth/callback] provider_user_id capture failed", {
+      user_id: decoded.user_id,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 
   const response = NextResponse.redirect(new URL("/", publicOrigin(req)));

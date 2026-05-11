@@ -26,9 +26,9 @@ function db(): Database.Database {
 function reset(): void {
   const d = db();
   try {
-    d.prepare("DELETE FROM recovery").run();
-    d.prepare("DELETE FROM sleep").run();
-    d.prepare("DELETE FROM cycles").run();
+    d.prepare("DELETE FROM recovery WHERE user_id = 1").run();
+    d.prepare("DELETE FROM sleep WHERE user_id = 1").run();
+    d.prepare("DELETE FROM cycles WHERE user_id = 1").run();
   } finally {
     d.close();
   }
@@ -47,8 +47,9 @@ function insertRecovery(
   const d = db();
   try {
     d.prepare(
-      "INSERT OR REPLACE INTO recovery (date, recovery_score, hrv, rhr, spo2, skin_temp) VALUES (?, ?, ?, ?, ?, ?)",
+      "INSERT OR REPLACE INTO recovery (user_id, date, recovery_score, hrv, rhr, spo2, skin_temp) VALUES (?, ?, ?, ?, ?, ?, ?)",
     ).run(
+      1,
       date,
       opts.score ?? null,
       opts.hrv ?? null,
@@ -78,9 +79,10 @@ function insertSleep(
   try {
     d.prepare(
       `INSERT OR REPLACE INTO sleep
-        (date, in_bed_ms, light_ms, deep_ms, rem_ms, sleep_need_ms, performance, efficiency, nap)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (user_id, date, in_bed_ms, light_ms, deep_ms, rem_ms, sleep_need_ms, performance, efficiency, nap)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
+      1,
       date,
       opts.in_bed_ms ?? null,
       opts.light_ms ?? null,
@@ -108,8 +110,9 @@ function insertCycle(
   const d = db();
   try {
     d.prepare(
-      "INSERT OR REPLACE INTO cycles (date, strain, kilojoule, avg_hr, max_hr) VALUES (?, ?, ?, ?, ?)",
+      "INSERT OR REPLACE INTO cycles (user_id, date, strain, kilojoule, avg_hr, max_hr) VALUES (?, ?, ?, ?, ?, ?)",
     ).run(
+      1,
       date,
       opts.strain ?? null,
       opts.kilojoule ?? null,

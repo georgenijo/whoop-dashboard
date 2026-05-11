@@ -6,6 +6,7 @@ import {
   openWrite,
   safeQuery,
 } from "./connection";
+import { forUser } from "./scoped";
 import {
   type RecoveryRow,
   getLatestRecovery,
@@ -93,26 +94,36 @@ function rawTimestampMs(row: { date: string | null; raw: string | null }): numbe
 
 function latestTableTimestampMs(
   db: DB,
+  userId: number,
   table: "recovery" | "cycles" | "sleep",
-  where = ""
+  extraWhere = "",
 ): number | null {
   if (!hasTable(db, table)) return null;
   const rawSelect = hasColumn(db, table, "raw") ? "raw" : "NULL AS raw";
+  const where = extraWhere
+    ? `WHERE ${extraWhere} AND user_id = ?`
+    : `WHERE user_id = ?`;
   const row = db
-    .prepare(`SELECT date, ${rawSelect} FROM ${table} ${where} ORDER BY date DESC LIMIT 1`)
-    .get() as { date: string | null; raw: string | null } | undefined;
+    .prepare(
+      `SELECT date, ${rawSelect} FROM ${table} ${where} ORDER BY date DESC LIMIT 1`,
+    )
+    .get(userId) as { date: string | null; raw: string | null } | undefined;
   return row ? rawTimestampMs(row) : null;
 }
 
-export function getLatestWhoopDataTimestamp(): string | null {
-  return safeQuery((db) => {
-    const sleepWhere = hasTable(db, "sleep") && hasColumn(db, "sleep", "nap")
-      ? "WHERE COALESCE(nap, 0) = 0"
-      : "";
+export function getLatestWhoopDataTimestamp(userId: number): string | null {
+  // Uses forUser().read for the multi-table walk — we need three reads
+  // sharing one DB handle, and the extra-WHERE patterns vary per table.
+  // Each underlying SELECT still scopes via `WHERE user_id = ?`.
+  return forUser(userId).read((db, uid) => {
+    const sleepWhere =
+      hasTable(db, "sleep") && hasColumn(db, "sleep", "nap")
+        ? "COALESCE(nap, 0) = 0"
+        : "";
     const timestamps = [
-      latestTableTimestampMs(db, "recovery"),
-      latestTableTimestampMs(db, "cycles"),
-      latestTableTimestampMs(db, "sleep", sleepWhere),
+      latestTableTimestampMs(db, uid, "recovery"),
+      latestTableTimestampMs(db, uid, "cycles"),
+      latestTableTimestampMs(db, uid, "sleep", sleepWhere),
     ].filter((ms): ms is number => ms !== null);
     if (timestamps.length === 0) return null;
     return new Date(Math.max(...timestamps)).toISOString();
@@ -120,6 +131,8 @@ export function getLatestWhoopDataTimestamp(): string | null {
 }
 
 export function getLatestInsight(): InsightRow | null {
+  // Insights are a global table (no user_id today). Phase E follow-up if
+  // per-user insights are needed.
   return safeQuery((db) => {
     if (!hasTable(db, "insights")) return null;
     const createdAt = hasColumn(db, "insights", "created_at")
@@ -144,33 +157,32 @@ export function saveInsight(date: string, insight: string): void {
   }
 }
 
-export function getDailySummary(start: string, end: string): DailySummaryRow[] {
-  return (
-    safeQuery((db) => {
-      if (!hasTable(db, "daily_summary")) return [];
-      return db
-        .prepare(
-          "SELECT date, recovery_score, hrv_ms, resting_hr, sleep_hours, sleep_efficiency, sleep_performance, day_strain, max_hr, avg_hr, kilojoules, workouts_count, computed_at FROM daily_summary WHERE date BETWEEN ? AND ? ORDER BY date ASC"
-        )
-        .all(start, end) as DailySummaryRow[];
-    }) ?? []
+export function getDailySummary(
+  userId: number,
+  start: string,
+  end: string,
+): DailySummaryRow[] {
+  return forUser(userId).all<DailySummaryRow>(
+    "SELECT date, recovery_score, hrv_ms, resting_hr, sleep_hours, sleep_efficiency, sleep_performance, day_strain, max_hr, avg_hr, kilojoules, workouts_count, computed_at FROM daily_summary WHERE date BETWEEN ? AND ? AND user_id = ? ORDER BY date ASC",
+    start,
+    end,
   );
 }
 
-export function getOverview(days = 30): Overview {
-  const recoveryTrend = getRecoveryTrend(days);
-  const strainTrend = getStrainTrend(days);
-  const sleepTrend = getSleepTrend(days);
-  const latestRecovery = getLatestRecovery();
-  const latestCycle = getLatestCycle();
-  const latestSleep = getLatestSleep();
+export function getOverview(userId: number, days = 30): Overview {
+  const recoveryTrend = getRecoveryTrend(userId, days);
+  const strainTrend = getStrainTrend(userId, days);
+  const sleepTrend = getSleepTrend(userId, days);
+  const latestRecovery = getLatestRecovery(userId);
+  const latestCycle = getLatestCycle(userId);
+  const latestSleep = getLatestSleep(userId);
   return {
     latestRecovery,
-    previousRecovery: getPreviousRecovery(),
+    previousRecovery: getPreviousRecovery(userId),
     latestCycle,
-    previousCycle: getPreviousCycle(),
+    previousCycle: getPreviousCycle(userId),
     latestSleep,
-    previousSleep: getPreviousSleep(),
+    previousSleep: getPreviousSleep(userId),
     recoveryTrend,
     strainTrend,
     sleepTrend,
@@ -178,15 +190,20 @@ export function getOverview(days = 30): Overview {
   };
 }
 
-export function getHealthContext(days = 30): string {
-  const lines: string[] = [`=== WHOOP DATA (last ${days} days) ===\n`];
+function safeDays(days: number): number {
+  if (!Number.isFinite(days)) return 30;
+  const n = Math.floor(days);
+  if (n <= 0) return 30;
+  return Math.min(n, 3650);
+}
 
-  const recovery = safeQuery((db) => {
-    if (!hasTable(db, "recovery")) return [] as RecoveryRow[];
-    return db.prepare(
-      "SELECT date, recovery_score, hrv, rhr, spo2, skin_temp FROM recovery ORDER BY date DESC LIMIT ?"
-    ).all(days) as RecoveryRow[];
-  }) ?? [];
+export function getHealthContext(userId: number, days = 30): string {
+  const lines: string[] = [`=== WHOOP DATA (last ${days} days) ===\n`];
+  const limit = safeDays(days);
+
+  const recovery = forUser(userId).all<RecoveryRow>(
+    `SELECT date, recovery_score, hrv, rhr, spo2, skin_temp FROM recovery WHERE user_id = ? ORDER BY date DESC LIMIT ${limit}`,
+  );
 
   if (recovery.length) {
     lines.push("RECOVERY (newest first):");
@@ -223,12 +240,9 @@ export function getHealthContext(days = 30): string {
     }
   }
 
-  const cycles = safeQuery((db) => {
-    if (!hasTable(db, "cycles")) return [] as CycleRow[];
-    return db.prepare(
-      "SELECT date, strain, kilojoule, avg_hr, max_hr FROM cycles ORDER BY date DESC LIMIT ?"
-    ).all(days) as CycleRow[];
-  }) ?? [];
+  const cycles = forUser(userId).all<CycleRow>(
+    `SELECT date, strain, kilojoule, avg_hr, max_hr FROM cycles WHERE user_id = ? ORDER BY date DESC LIMIT ${limit}`,
+  );
 
   if (cycles.length) {
     lines.push("\nDAILY STRAIN (newest first):");
@@ -240,12 +254,9 @@ export function getHealthContext(days = 30): string {
   }
 
   type FullSleepRow = SleepRow & { disturbances: number | null; respiratory_rate: number | null };
-  const sleep = safeQuery((db) => {
-    if (!hasTable(db, "sleep")) return [] as FullSleepRow[];
-    return db.prepare(
-      "SELECT date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms, sleep_need_ms, performance, efficiency, disturbances, respiratory_rate FROM sleep WHERE COALESCE(nap, 0) = 0 ORDER BY date DESC LIMIT ?"
-    ).all(days) as FullSleepRow[];
-  }) ?? [];
+  const sleep = forUser(userId).all<FullSleepRow>(
+    `SELECT date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms, sleep_need_ms, performance, efficiency, disturbances, respiratory_rate FROM sleep WHERE COALESCE(nap, 0) = 0 AND user_id = ? ORDER BY date DESC LIMIT ${limit}`,
+  );
 
   if (sleep.length) {
     lines.push("\nSLEEP (newest first):");
@@ -270,12 +281,9 @@ export function getHealthContext(days = 30): string {
     }
   }
 
-  const workouts = safeQuery((db) => {
-    if (!hasTable(db, "workouts")) return [] as WorkoutRow[];
-    return db.prepare(
-      "SELECT id, date, sport, duration_sec, avg_hr, max_hr, strain, kilojoule FROM workouts ORDER BY date DESC LIMIT ?"
-    ).all(days) as WorkoutRow[];
-  }) ?? [];
+  const workouts = forUser(userId).all<WorkoutRow>(
+    `SELECT id, date, sport, duration_sec, avg_hr, max_hr, strain, kilojoule FROM workouts WHERE user_id = ? ORDER BY date DESC LIMIT ${limit}`,
+  );
 
   if (workouts.length) {
     lines.push("\nWORKOUTS (newest first):");

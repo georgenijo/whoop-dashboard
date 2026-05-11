@@ -1,5 +1,6 @@
 import "server-only";
-import { dateRangeClause, hasTable, safeQuery } from "./connection";
+import { dateRangeClause } from "./connection";
+import { forUser } from "./scoped";
 
 export type WorkoutRow = {
   id: string;
@@ -35,17 +36,10 @@ export function sanitizeLimit(limit: unknown): number {
   return Math.min(floored, MAX_WORKOUTS_LIMIT);
 }
 
-export function getWorkouts(limit?: number): WorkoutRow[] {
+export function getWorkouts(userId: number, limit?: number): WorkoutRow[] {
   const safeLimit = sanitizeLimit(limit);
-  return (
-    safeQuery((db) => {
-      if (!hasTable(db, "workouts")) return [];
-      return db
-        .prepare(
-          `SELECT ${WORKOUT_COLUMNS} FROM workouts ORDER BY date DESC LIMIT ?`
-        )
-        .all(safeLimit) as WorkoutRow[];
-    }) ?? []
+  return forUser(userId).all<WorkoutRow>(
+    `SELECT ${WORKOUT_COLUMNS} FROM workouts WHERE user_id = ? ORDER BY date DESC LIMIT ${safeLimit}`,
   );
 }
 
@@ -60,40 +54,32 @@ export type WorkoutsRangeResult = {
 // Fetches LIMIT+1 so a count > LIMIT trips truncated without a separate
 // COUNT(*) round-trip; total_count then resolves via COUNT only when needed.
 export function getWorkoutsRange(
+  userId: number,
   startDate: string,
-  endDate: string
+  endDate: string,
 ): WorkoutsRangeResult {
-  return (
-    safeQuery((db) => {
-      if (!hasTable(db, "workouts")) {
-        return { rows: [], truncated: false, total_count: 0 };
-      }
-      const range = dateRangeClause(startDate, endDate);
-      const fetched = db
-        .prepare(
-          `SELECT ${WORKOUT_COLUMNS} FROM workouts WHERE ${range.clause} ORDER BY date DESC LIMIT ?`
-        )
-        .all(...range.params, MAX_WORKOUTS_LIMIT + 1) as WorkoutRow[];
-
-      if (fetched.length <= MAX_WORKOUTS_LIMIT) {
-        return {
-          rows: fetched,
-          truncated: false,
-          total_count: fetched.length,
-        };
-      }
-
-      const rows = fetched.slice(0, MAX_WORKOUTS_LIMIT);
-      const countRow = db
-        .prepare(
-          `SELECT COUNT(*) as c FROM workouts WHERE ${range.clause}`
-        )
-        .get(...range.params) as { c: number } | undefined;
-      return {
-        rows,
-        truncated: true,
-        total_count: countRow?.c ?? rows.length,
-      };
-    }) ?? { rows: [], truncated: false, total_count: 0 }
+  const range = dateRangeClause(startDate, endDate);
+  const fetched = forUser(userId).all<WorkoutRow>(
+    `SELECT ${WORKOUT_COLUMNS} FROM workouts WHERE ${range.clause} AND user_id = ? ORDER BY date DESC LIMIT ${MAX_WORKOUTS_LIMIT + 1}`,
+    ...range.params,
   );
+
+  if (fetched.length <= MAX_WORKOUTS_LIMIT) {
+    return {
+      rows: fetched,
+      truncated: false,
+      total_count: fetched.length,
+    };
+  }
+
+  const rows = fetched.slice(0, MAX_WORKOUTS_LIMIT);
+  const countRow = forUser(userId).get<{ c: number }>(
+    `SELECT COUNT(*) AS c FROM workouts WHERE ${range.clause} AND user_id = ?`,
+    ...range.params,
+  );
+  return {
+    rows,
+    truncated: true,
+    total_count: countRow?.c ?? rows.length,
+  };
 }

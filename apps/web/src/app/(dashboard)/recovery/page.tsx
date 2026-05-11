@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import KPIStrip from "@/components/overview/KPIStrip";
 import TrendChart from "@/components/charts/TrendChart";
 import HRVTrend from "@/components/charts/HRVTrend";
@@ -17,6 +18,7 @@ import {
   getSleepTrend,
   getStrainTrend,
 } from "@/lib/db";
+import { requireAuth } from "@/lib/auth";
 import { computeIllnessSignal } from "@/lib/analytics/illness";
 import { computeRebound } from "@/lib/analytics/rebound";
 import { parseDays, formatRangeLabel } from "@/lib/range";
@@ -35,14 +37,18 @@ export default async function RecoveryPage({
 }: {
   searchParams: Promise<{ range?: string }>;
 }) {
+  const headerList = await headers();
+  const { user } = await requireAuth(
+    new Request("http://localhost", { headers: headerList }),
+  );
   const { range } = await searchParams;
   const days = parseDays(range);
   const rangeLabel = formatRangeLabel(range);
-  const data = getOverview(days);
-  const trend = getRecoveryTrend(days);
-  const trend30 = getRecoveryTrend(30);
-  const otsRecovery = getRecoveryTrend(OTS_LOOKBACK_DAYS);
-  const otsCycles = getStrainTrend(OTS_LOOKBACK_DAYS);
+  const data = getOverview(user.id, days);
+  const trend = getRecoveryTrend(user.id, days);
+  const trend30 = getRecoveryTrend(user.id, 30);
+  const otsRecovery = getRecoveryTrend(user.id, OTS_LOOKBACK_DAYS);
+  const otsCycles = getStrainTrend(user.id, OTS_LOOKBACK_DAYS);
 
   const recoveryData = trend.map((r) => ({ date: r.date, value: r.recovery_score }));
   const hrvSeries = trend.map((r) => ({ date: r.date, hrv: r.hrv }));
@@ -62,13 +68,13 @@ export default async function RecoveryPage({
   const start = new Date(today.getTime() - illnessDays * 24 * 60 * 60 * 1000)
     .toISOString()
     .slice(0, 10);
-  const illnessRecovery = getRecoveryRange(start, end);
-  const illnessSleep = getSleepRange(start, end);
+  const illnessRecovery = getRecoveryRange(user.id, start, end);
+  const illnessSleep = getSleepRange(user.id, start, end);
   const illnessRows = computeIllnessSignal(illnessRecovery, illnessSleep);
-  const dowRecovery = getRecoveryByDayOfWeek();
+  const dowRecovery = getRecoveryByDayOfWeek(user.id);
 
-  const strain30 = getStrainTrend(30);
-  const sleep30 = getSleepTrend(30);
+  const strain30 = getStrainTrend(user.id, 30);
+  const sleep30 = getSleepTrend(user.id, 30);
   const strainByDate = new Map(strain30.map((c) => [c.date, c.strain]));
   const sleepByDate = new Map(
     sleep30.map((s) => {
@@ -87,7 +93,7 @@ export default async function RecoveryPage({
     sleep_hours: sleepByDate.get(r.date) ?? null,
   }));
 
-  const reboundRecovery = getRecoveryTrend(Math.max(days, 90));
+  const reboundRecovery = getRecoveryTrend(user.id, Math.max(days, 90));
   const reboundEvents = computeRebound(reboundRecovery);
 
   return (

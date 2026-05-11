@@ -1,5 +1,6 @@
 import "server-only";
-import { dateRangeClause, hasTable, safeQuery } from "./connection";
+import { dateRangeClause } from "./connection";
+import { forUser } from "./scoped";
 
 export type SleepRow = {
   date: string;
@@ -42,95 +43,74 @@ const SLEEP_COLUMNS =
 const NAP_COLUMNS =
   "date, in_bed_ms AS duration_ms, performance, efficiency, light_ms, deep_ms, rem_ms, awake_ms, start_local, end_local";
 
-export function getLatestSleep(): SleepRow | null {
-  return safeQuery((db) => {
-    if (!hasTable(db, "sleep")) return null;
-    const row = db
-      .prepare(
-        `SELECT ${SLEEP_COLUMNS} FROM sleep WHERE COALESCE(nap, 0) = 0 ORDER BY date DESC LIMIT 1`
-      )
-      .get() as SleepRow | undefined;
-    return row ?? null;
-  });
+// See recovery.ts for the rationale — inlined LIMIT keeps `user_id = ?` as
+// the trailing placeholder the wrapper binds.
+function safeDays(days: number): number {
+  if (!Number.isFinite(days)) return 30;
+  const n = Math.floor(days);
+  if (n <= 0) return 30;
+  return Math.min(n, 3650);
 }
 
-export function getPreviousSleep(): SleepRow | null {
-  return safeQuery((db) => {
-    if (!hasTable(db, "sleep")) return null;
-    const row = db
-      .prepare(
-        `SELECT ${SLEEP_COLUMNS} FROM sleep WHERE COALESCE(nap, 0) = 0 ORDER BY date DESC LIMIT 1 OFFSET 1`
-      )
-      .get() as SleepRow | undefined;
-    return row ?? null;
-  });
+export function getLatestSleep(userId: number): SleepRow | null {
+  const row = forUser(userId).get<SleepRow>(
+    `SELECT ${SLEEP_COLUMNS} FROM sleep WHERE COALESCE(nap, 0) = 0 AND user_id = ? ORDER BY date DESC LIMIT 1`,
+  );
+  return row ?? null;
 }
 
-export function getSleepTrend(days: number): SleepRow[] {
-  return (
-    safeQuery((db) => {
-      if (!hasTable(db, "sleep")) return [];
-      const rows = db
-        .prepare(
-          `SELECT ${SLEEP_COLUMNS} FROM sleep WHERE COALESCE(nap, 0) = 0 ORDER BY date DESC LIMIT ?`
-        )
-        .all(days) as SleepRow[];
-      return rows.reverse();
-    }) ?? []
+export function getPreviousSleep(userId: number): SleepRow | null {
+  const row = forUser(userId).get<SleepRow>(
+    `SELECT ${SLEEP_COLUMNS} FROM sleep WHERE COALESCE(nap, 0) = 0 AND user_id = ? ORDER BY date DESC LIMIT 1 OFFSET 1`,
+  );
+  return row ?? null;
+}
+
+export function getSleepTrend(userId: number, days: number): SleepRow[] {
+  const limit = safeDays(days);
+  const rows = forUser(userId).all<SleepRow>(
+    `SELECT ${SLEEP_COLUMNS} FROM sleep WHERE COALESCE(nap, 0) = 0 AND user_id = ? ORDER BY date DESC LIMIT ${limit}`,
+  );
+  return rows.reverse();
+}
+
+export function getSleepRange(
+  userId: number,
+  startDate: string,
+  endDate: string,
+): SleepRow[] {
+  const range = dateRangeClause(startDate, endDate);
+  return forUser(userId).all<SleepRow>(
+    `SELECT ${SLEEP_COLUMNS} FROM sleep WHERE COALESCE(nap, 0) = 0 AND ${range.clause} AND user_id = ? ORDER BY date ASC`,
+    ...range.params,
   );
 }
 
-export function getSleepRange(startDate: string, endDate: string): SleepRow[] {
-  return (
-    safeQuery((db) => {
-      if (!hasTable(db, "sleep")) return [];
-      const range = dateRangeClause(startDate, endDate);
-      return db
-        .prepare(
-          `SELECT ${SLEEP_COLUMNS} FROM sleep WHERE COALESCE(nap, 0) = 0 AND ${range.clause} ORDER BY date ASC`
-        )
-        .all(...range.params) as SleepRow[];
-    }) ?? []
+export function getFullSleepTrend(userId: number, days: number): SleepRow[] {
+  const limit = safeDays(days);
+  return forUser(userId)
+    .all<SleepRow>(
+      `SELECT ${SLEEP_COLUMNS} FROM sleep WHERE COALESCE(nap, 0) = 0 AND user_id = ? ORDER BY date DESC LIMIT ${limit}`,
+    )
+    .reverse();
+}
+
+export function getNaps(
+  userId: number,
+  startDate: string,
+  endDate: string,
+): NapRow[] {
+  const range = dateRangeClause(startDate, endDate);
+  return forUser(userId).all<NapRow>(
+    `SELECT ${NAP_COLUMNS} FROM sleep WHERE COALESCE(nap, 0) = 1 AND ${range.clause} AND user_id = ? ORDER BY date ASC`,
+    ...range.params,
   );
 }
 
-export function getFullSleepTrend(days: number): SleepRow[] {
-  return (
-    safeQuery((db) => {
-      if (!hasTable(db, "sleep")) return [];
-      return db
-        .prepare(
-          `SELECT ${SLEEP_COLUMNS} FROM sleep WHERE COALESCE(nap, 0) = 0 ORDER BY date DESC LIMIT ?`
-        )
-        .all(days) as SleepRow[];
-    }) ?? []
-  ).reverse();
-}
-
-export function getNaps(startDate: string, endDate: string): NapRow[] {
-  return (
-    safeQuery((db) => {
-      if (!hasTable(db, "sleep")) return [];
-      const range = dateRangeClause(startDate, endDate);
-      return db
-        .prepare(
-          `SELECT ${NAP_COLUMNS} FROM sleep WHERE COALESCE(nap, 0) = 1 AND ${range.clause} ORDER BY date ASC`
-        )
-        .all(...range.params) as NapRow[];
-    }) ?? []
+export function getRecentNaps(userId: number, days: number): NapRow[] {
+  const limit = safeDays(days);
+  const rows = forUser(userId).all<NapRow>(
+    `SELECT ${NAP_COLUMNS} FROM sleep WHERE COALESCE(nap, 0) = 1 AND user_id = ? ORDER BY date DESC LIMIT ${limit}`,
   );
-}
-
-export function getRecentNaps(days: number): NapRow[] {
-  return (
-    safeQuery((db) => {
-      if (!hasTable(db, "sleep")) return [];
-      const rows = db
-        .prepare(
-          `SELECT ${NAP_COLUMNS} FROM sleep WHERE COALESCE(nap, 0) = 1 ORDER BY date DESC LIMIT ?`
-        )
-        .all(days) as NapRow[];
-      return rows.reverse();
-    }) ?? []
-  );
+  return rows.reverse();
 }

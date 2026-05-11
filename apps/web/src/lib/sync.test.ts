@@ -158,6 +158,9 @@ function workoutRecord(id: string, date: string) {
 function clearTables(): void {
   const db = new Database(dbFile);
   try {
+    // Clear all tenants — one test below seeds user_id=7 to exercise the
+    // userId-plumbing path, and forward isolation between tests matters more
+    // than fixture-shape parity with prod data.
     db.prepare("DELETE FROM recovery").run();
     db.prepare("DELETE FROM cycles").run();
     db.prepare("DELETE FROM sleep").run();
@@ -516,6 +519,13 @@ describe("runWhoopSync userId plumbing", () => {
   it("forwards userId to the pre-warm and to each whoopGetAll/whoopGet call", async () => {
     wireHappyPath();
     const userId = 7;
+    // The domain tables FK-reference users(id) post-Phase D. Seed the user.
+    const seed = new Database(dbFile);
+    try {
+      seed.prepare("INSERT OR IGNORE INTO users (id) VALUES (?)").run(userId);
+    } finally {
+      seed.close();
+    }
 
     const result = await syncMod.runWhoopSync({ userId });
     expect(result.success).toBe(true);

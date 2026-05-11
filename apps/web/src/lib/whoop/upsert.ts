@@ -141,7 +141,7 @@ export function toLocalIso(
   }
 }
 
-export function upsertSleep(record: WhoopSleepRecord): boolean {
+export function upsertSleep(record: WhoopSleepRecord, userId: number): boolean {
   if (record.score_state !== "SCORED" || !record.score) return false;
   const db = openWrite();
   if (!db) return false;
@@ -151,20 +151,21 @@ export function upsertSleep(record: WhoopSleepRecord): boolean {
     // KEEP IN SYNC WITH streamlit/whoop/db.py:223-275 (sync_sleep column order)
     db.prepare(`
       INSERT OR REPLACE INTO sleep
-        (date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms, sleep_need_ms,
+        (user_id, date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms, sleep_need_ms,
          performance, efficiency, consistency, respiratory_rate,
          disturbances, cycles, nap,
          need_from_baseline_ms, need_from_debt_ms, need_from_strain_ms, need_from_nap_ms,
          start_local, end_local,
          raw)
       VALUES
-        (@date, @in_bed_ms, @light_ms, @deep_ms, @rem_ms, @awake_ms, @sleep_need_ms,
+        (@user_id, @date, @in_bed_ms, @light_ms, @deep_ms, @rem_ms, @awake_ms, @sleep_need_ms,
          @performance, @efficiency, @consistency, @respiratory_rate,
          @disturbances, @cycles, @nap,
          @need_from_baseline_ms, @need_from_debt_ms, @need_from_strain_ms, @need_from_nap_ms,
          @start_local, @end_local,
          @raw)
     `).run({
+      user_id: userId,
       date: parseDate(record.start),
       in_bed_ms: ss.total_in_bed_time_milli,
       light_ms: ss.total_light_sleep_time_milli,
@@ -197,7 +198,7 @@ export function upsertSleep(record: WhoopSleepRecord): boolean {
   }
 }
 
-export function upsertCycle(record: WhoopCycleRecord): boolean {
+export function upsertCycle(record: WhoopCycleRecord, userId: number): boolean {
   if (record.score_state !== "SCORED" || !record.score) return false;
   const db = openWrite();
   if (!db) return false;
@@ -205,10 +206,11 @@ export function upsertCycle(record: WhoopCycleRecord): boolean {
     // KEEP IN SYNC WITH streamlit/whoop/db.py:187-206 (sync_cycles column order)
     db.prepare(`
       INSERT OR REPLACE INTO cycles
-        (date, strain, kilojoule, avg_hr, max_hr, raw)
+        (user_id, date, strain, kilojoule, avg_hr, max_hr, raw)
       VALUES
-        (@date, @strain, @kilojoule, @avg_hr, @max_hr, @raw)
+        (@user_id, @date, @strain, @kilojoule, @avg_hr, @max_hr, @raw)
     `).run({
+      user_id: userId,
       date: parseDate(record.start),
       strain: record.score.strain,
       kilojoule: record.score.kilojoule,
@@ -227,7 +229,7 @@ export function upsertCycle(record: WhoopCycleRecord): boolean {
 // against the latest stored row, so we don't pile up identical rows per sync.
 export function upsertBodyMeasurement(
   body: WhoopBodyMeasurement | null | undefined,
-  userId: number = 1,
+  userId: number,
 ): boolean {
   if (!body) return false;
   const height = body.height_meter ?? null;
@@ -276,7 +278,7 @@ export function upsertBodyMeasurement(
   }
 }
 
-export function upsertRecovery(record: WhoopRecoveryRecord): boolean {
+export function upsertRecovery(record: WhoopRecoveryRecord, userId: number): boolean {
   if (record.score_state !== "SCORED" || !record.score) return false;
   const db = openWrite();
   if (!db) return false;
@@ -284,10 +286,11 @@ export function upsertRecovery(record: WhoopRecoveryRecord): boolean {
     // KEEP IN SYNC WITH streamlit/whoop/db.py:147-166 (sync_recovery column order)
     db.prepare(`
       INSERT OR REPLACE INTO recovery
-        (date, recovery_score, hrv, rhr, spo2, skin_temp, raw)
+        (user_id, date, recovery_score, hrv, rhr, spo2, skin_temp, raw)
       VALUES
-        (@date, @recovery_score, @hrv, @rhr, @spo2, @skin_temp, @raw)
+        (@user_id, @date, @recovery_score, @hrv, @rhr, @spo2, @skin_temp, @raw)
     `).run({
+      user_id: userId,
       date: parseDate(record.created_at),
       recovery_score: record.score.recovery_score,
       hrv: record.score.hrv_rmssd_milli,
@@ -302,7 +305,7 @@ export function upsertRecovery(record: WhoopRecoveryRecord): boolean {
   }
 }
 
-export function upsertWorkout(record: WhoopWorkoutRecord): boolean {
+export function upsertWorkout(record: WhoopWorkoutRecord, userId: number): boolean {
   if (record.score_state !== "SCORED" || !record.score) return false;
   const db = openWrite();
   if (!db) return false;
@@ -313,12 +316,13 @@ export function upsertWorkout(record: WhoopWorkoutRecord): boolean {
     // KEEP IN SYNC WITH streamlit/whoop/db.py:229-261 (sync_workouts column order)
     db.prepare(`
       INSERT OR REPLACE INTO workouts
-        (id, date, sport, duration_sec, avg_hr, max_hr, strain, kilojoule,
+        (user_id, id, date, sport, duration_sec, avg_hr, max_hr, strain, kilojoule,
          distance_m, zone_0_ms, zone_1_ms, zone_2_ms, zone_3_ms, zone_4_ms, zone_5_ms, raw)
       VALUES
-        (@id, @date, @sport, @duration_sec, @avg_hr, @max_hr, @strain, @kilojoule,
+        (@user_id, @id, @date, @sport, @duration_sec, @avg_hr, @max_hr, @strain, @kilojoule,
          @distance_m, @zone_0_ms, @zone_1_ms, @zone_2_ms, @zone_3_ms, @zone_4_ms, @zone_5_ms, @raw)
     `).run({
+      user_id: userId,
       id: record.id,
       date: parseDate(record.start),
       sport: record.sport_name ?? "Unknown",
@@ -343,6 +347,13 @@ export function upsertWorkout(record: WhoopWorkoutRecord): boolean {
 }
 
 // Shared SQL constants — KEEP IN SYNC WITH sync/daily_summary.py:26-91
+//
+// Phase D: every CTE join scopes to user_id so user A's recovery doesn't
+// poison user B's daily_summary row. Param order is consistent across the
+// whole SELECT — `?` (date), `?` (date), `?` (user_id for workout_summary),
+// `?` (user_id for recovery join), `?` (user_id for sleep join), `?` (user_id
+// for cycles join). The Python rollup at sync/daily_summary.py is single-
+// tenant today and stays unchanged — see the "KEEP IN SYNC" note above.
 
 const SELECT_DAILY_SUMMARY = `
 WITH day(date) AS (
@@ -351,7 +362,7 @@ WITH day(date) AS (
 workout_summary AS (
     SELECT date, COUNT(*) AS workouts_count
     FROM workouts
-    WHERE date = ?
+    WHERE date = ? AND user_id = ?
     GROUP BY date
 )
 SELECT
@@ -375,33 +386,35 @@ SELECT
     cycles.kilojoule AS kilojoules,
     COALESCE(workout_summary.workouts_count, 0) AS workouts_count
 FROM day
-LEFT JOIN recovery ON recovery.date = day.date
-LEFT JOIN sleep ON sleep.date = day.date AND COALESCE(sleep.nap, 0) = 0
-LEFT JOIN cycles ON cycles.date = day.date
+LEFT JOIN recovery ON recovery.date = day.date AND recovery.user_id = ?
+LEFT JOIN sleep ON sleep.date = day.date AND COALESCE(sleep.nap, 0) = 0 AND sleep.user_id = ?
+LEFT JOIN cycles ON cycles.date = day.date AND cycles.user_id = ?
 LEFT JOIN workout_summary ON workout_summary.date = day.date
 `;
 
 const INSERT_DAILY_SUMMARY = `
 INSERT OR REPLACE INTO daily_summary (
-    date, recovery_score, hrv_ms, resting_hr, sleep_hours, sleep_efficiency,
+    user_id, date, recovery_score, hrv_ms, resting_hr, sleep_hours, sleep_efficiency,
     sleep_performance, day_strain, max_hr, avg_hr, kilojoules, workouts_count
 ) VALUES (
-    @date, @recovery_score, @hrv_ms, @resting_hr, @sleep_hours, @sleep_efficiency,
+    @user_id, @date, @recovery_score, @hrv_ms, @resting_hr, @sleep_hours, @sleep_efficiency,
     @sleep_performance, @day_strain, @max_hr, @avg_hr, @kilojoules, @workouts_count
 )
 `;
 
-function _recomputeInDb(db: DB, date: string): void {
+function _recomputeInDb(db: DB, date: string, userId: number): void {
   // WITH day(...) always returns exactly one row, so no null guard needed.
-  const row = db.prepare(SELECT_DAILY_SUMMARY).get(date, date) as Record<string, unknown>;
-  db.prepare(INSERT_DAILY_SUMMARY).run(row);
+  const row = db
+    .prepare(SELECT_DAILY_SUMMARY)
+    .get(date, date, userId, userId, userId, userId) as Record<string, unknown>;
+  db.prepare(INSERT_DAILY_SUMMARY).run({ ...row, user_id: userId });
 }
 
-export function recomputeDailySummary(date: string): boolean {
+export function recomputeDailySummary(date: string, userId: number): boolean {
   const db = openWrite();
   if (!db) return false;
   try {
-    _recomputeInDb(db, date);
+    _recomputeInDb(db, date, userId);
     return true;
   } finally {
     db.close();
@@ -412,57 +425,75 @@ export function recomputeDailySummary(date: string): boolean {
 // Returns the affected date (for logging), or null if the row didn't exist
 // (idempotent re-delivery — caller should return 200 without retrying).
 
-export function deleteSleepAndRecompute(sleepId: string): string | null {
-  const db = openWrite();
-  if (!db) return null;
-  try {
-    return db.transaction(() => {
-      const row = db
-        .prepare("SELECT date FROM sleep WHERE json_extract(raw, '$.id') = ? LIMIT 1")
-        .get(sleepId) as { date: string } | undefined;
-      if (!row) return null;
-      db.prepare("DELETE FROM sleep WHERE json_extract(raw, '$.id') = ?").run(sleepId);
-      _recomputeInDb(db, row.date);
-      return row.date;
-    })();
-  } finally {
-    db.close();
-  }
-}
-
-export function deleteWorkoutAndRecompute(workoutId: string): string | null {
-  const db = openWrite();
-  if (!db) return null;
-  try {
-    return db.transaction(() => {
-      const row = db
-        .prepare("SELECT date FROM workouts WHERE id = ? LIMIT 1")
-        .get(workoutId) as { date: string } | undefined;
-      if (!row) return null;
-      db.prepare("DELETE FROM workouts WHERE id = ?").run(workoutId);
-      _recomputeInDb(db, row.date);
-      return row.date;
-    })();
-  } finally {
-    db.close();
-  }
-}
-
-export function deleteRecoveryAndRecompute(sleepId: string): string | null {
+export function deleteSleepAndRecompute(
+  sleepId: string,
+  userId: number,
+): string | null {
   const db = openWrite();
   if (!db) return null;
   try {
     return db.transaction(() => {
       const row = db
         .prepare(
-          "SELECT date FROM recovery WHERE json_extract(raw, '$.sleep_id') = ? LIMIT 1",
+          "SELECT date FROM sleep WHERE json_extract(raw, '$.id') = ? AND user_id = ? LIMIT 1",
         )
-        .get(sleepId) as { date: string } | undefined;
+        .get(sleepId, userId) as { date: string } | undefined;
       if (!row) return null;
       db.prepare(
-        "DELETE FROM recovery WHERE json_extract(raw, '$.sleep_id') = ?",
-      ).run(sleepId);
-      _recomputeInDb(db, row.date);
+        "DELETE FROM sleep WHERE json_extract(raw, '$.id') = ? AND user_id = ?",
+      ).run(sleepId, userId);
+      _recomputeInDb(db, row.date, userId);
+      return row.date;
+    })();
+  } finally {
+    db.close();
+  }
+}
+
+export function deleteWorkoutAndRecompute(
+  workoutId: string,
+  userId: number,
+): string | null {
+  const db = openWrite();
+  if (!db) return null;
+  try {
+    return db.transaction(() => {
+      const row = db
+        .prepare(
+          "SELECT date FROM workouts WHERE id = ? AND user_id = ? LIMIT 1",
+        )
+        .get(workoutId, userId) as { date: string } | undefined;
+      if (!row) return null;
+      db.prepare("DELETE FROM workouts WHERE id = ? AND user_id = ?").run(
+        workoutId,
+        userId,
+      );
+      _recomputeInDb(db, row.date, userId);
+      return row.date;
+    })();
+  } finally {
+    db.close();
+  }
+}
+
+export function deleteRecoveryAndRecompute(
+  sleepId: string,
+  userId: number,
+): string | null {
+  const db = openWrite();
+  if (!db) return null;
+  try {
+    return db.transaction(() => {
+      const row = db
+        .prepare(
+          "SELECT date FROM recovery WHERE json_extract(raw, '$.sleep_id') = ? AND user_id = ? LIMIT 1",
+        )
+        .get(sleepId, userId) as { date: string } | undefined;
+      if (!row) return null;
+      db.prepare(
+        "DELETE FROM recovery WHERE json_extract(raw, '$.sleep_id') = ? AND user_id = ?",
+      ).run(sleepId, userId);
+      _recomputeInDb(db, row.date, userId);
       return row.date;
     })();
   } finally {

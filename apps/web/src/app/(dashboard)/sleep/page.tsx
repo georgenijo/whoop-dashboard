@@ -16,6 +16,7 @@ import BedtimePatternsCard from "@/components/charts/BedtimePatternsCard";
 import NapTrackerCard from "@/components/charts/NapTrackerCard";
 import NapRecoveryScatter from "@/components/charts/NapRecoveryScatter";
 import DeepSleepEfficiencyCard from "@/components/charts/DeepSleepEfficiencyCard";
+import { headers } from "next/headers";
 import {
   getOverview,
   getFullSleepTrend,
@@ -25,6 +26,7 @@ import {
   getRecentNaps,
   getStrainTrend,
 } from "@/lib/db";
+import { requireAuth } from "@/lib/auth";
 import { computeApneaSignal } from "@/lib/analytics/apnea";
 import { computeBedtimeRecoveryCorr, computeBedtimePatterns } from "@/lib/analytics/bedtime";
 import { computeNapImpact, withStartHour } from "@/lib/analytics/naps";
@@ -39,23 +41,27 @@ export default async function SleepPage({
 }: {
   searchParams: Promise<{ range?: string }>;
 }) {
+  const headerList = await headers();
+  const { user } = await requireAuth(
+    new Request("http://localhost", { headers: headerList }),
+  );
   const { range } = await searchParams;
   const days = parseDays(range);
   const rangeLabel = formatRangeLabel(range);
-  const data = getOverview(days);
-  const trend = getFullSleepTrend(days);
-  const recoveryTrend = getRecoveryTrend(days);
+  const data = getOverview(user.id, days);
+  const trend = getFullSleepTrend(user.id, days);
+  const recoveryTrend = getRecoveryTrend(user.id, days);
   const apneaRows = computeApneaSignal(trend, recoveryTrend);
-  const debtTrend = days >= 30 ? trend : getFullSleepTrend(30);
+  const debtTrend = days >= 30 ? trend : getFullSleepTrend(user.id, 30);
 
-  const latestSleep = getLatestSleep();
-  const trend14 = getFullSleepTrend(14);
-  const trend30 = getSleepTrend(30);
-  const naps = getRecentNaps(60);
+  const latestSleep = getLatestSleep(user.id);
+  const trend14 = getFullSleepTrend(user.id, 14);
+  const trend30 = getSleepTrend(user.id, 30);
+  const naps = getRecentNaps(user.id, 60);
 
-  const trend90 = getFullSleepTrend(90);
-  const recoveryTrend90 = getRecoveryTrend(90);
-  const strainTrend90 = getStrainTrend(90);
+  const trend90 = getFullSleepTrend(user.id, 90);
+  const recoveryTrend90 = getRecoveryTrend(user.id, 90);
+  const strainTrend90 = getStrainTrend(user.id, 90);
   const napsWithHour = withStartHour(naps);
   const bedtimeRecoveryResult = computeBedtimeRecoveryCorr(trend90, recoveryTrend90);
   const bedtimePatternsResult = computeBedtimePatterns(trend90);

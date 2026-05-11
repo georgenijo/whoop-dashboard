@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { after } from "next/server";
 import RecoveryHero from "@/components/overview/RecoveryHero";
 import KPIStrip from "@/components/overview/KPIStrip";
@@ -13,6 +14,7 @@ import {
   type DailySummaryRow,
   type RecoveryRow,
 } from "@/lib/db";
+import { requireAuth } from "@/lib/auth";
 import {
   acquireInsightRegenerationLock,
   getInsightStatus,
@@ -27,13 +29,17 @@ export default async function OverviewPage({
 }: {
   searchParams: Promise<{ range?: string }>;
 }) {
+  const headerList = await headers();
+  const { user } = await requireAuth(
+    new Request("http://localhost", { headers: headerList }),
+  );
   const { range } = await searchParams;
   const days = parseDays(range);
-  const data = getOverview(days);
-  const trend = getRecoveryTrend(days);
-  const prStats = getPRStats();
+  const data = getOverview(user.id, days);
+  const trend = getRecoveryTrend(user.id, days);
+  const prStats = getPRStats(user.id);
   const summaryByDate = new Map(
-    getDailySummary("0000-01-01", "9999-12-31")
+    getDailySummary(user.id, "0000-01-01", "9999-12-31")
       .filter((r) => r.recovery_score != null)
       .map((r) => [r.date, r] as const)
   );
@@ -47,12 +53,12 @@ export default async function OverviewPage({
   );
   const hasInsightData =
     data.latestRecovery !== null || data.latestCycle !== null || data.latestSleep !== null;
-  const insightStatus = getInsightStatus(hasInsightData);
+  const insightStatus = getInsightStatus(user.id, hasInsightData);
   const insightLock = acquireInsightRegenerationLock(insightStatus);
   const insightRefreshing = insightStatus.isRegenerating || insightLock !== null;
 
   if (insightLock !== null) {
-    after(() => regenerateInsight(insightLock));
+    after(() => regenerateInsight(user.id, insightLock));
   }
 
   return (

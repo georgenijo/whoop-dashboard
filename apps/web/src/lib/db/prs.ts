@@ -1,5 +1,5 @@
 import "server-only";
-import { hasTable, safeQuery } from "./connection";
+import { forUser } from "./scoped";
 
 export type PRValue = { value: number; date: string } | null;
 export type PRStreak = {
@@ -45,93 +45,67 @@ function longestStreak(dates: string[]): NonNullable<PRStreak> | null {
   return best;
 }
 
-export function getBestHRV(): PRValue {
-  return safeQuery((db) => {
-    if (!hasTable(db, "recovery")) return null;
-    const row = db
-      .prepare(
-        "SELECT date, hrv AS value FROM recovery WHERE hrv IS NOT NULL AND hrv > 0 ORDER BY hrv DESC, date DESC LIMIT 1"
-      )
-      .get() as { date: string; value: number } | undefined;
-    return row ?? null;
-  });
+export function getBestHRV(userId: number): PRValue {
+  const row = forUser(userId).get<{ date: string; value: number }>(
+    "SELECT date, hrv AS value FROM recovery WHERE hrv IS NOT NULL AND hrv > 0 AND user_id = ? ORDER BY hrv DESC, date DESC LIMIT 1",
+  );
+  return row ?? null;
 }
 
-export function getLowestRHR(): PRValue {
-  return safeQuery((db) => {
-    if (!hasTable(db, "recovery")) return null;
-    const row = db
-      .prepare(
-        "SELECT date, rhr AS value FROM recovery WHERE rhr IS NOT NULL AND rhr > 0 ORDER BY rhr ASC, date DESC LIMIT 1"
-      )
-      .get() as { date: string; value: number } | undefined;
-    return row ?? null;
-  });
+export function getLowestRHR(userId: number): PRValue {
+  const row = forUser(userId).get<{ date: string; value: number }>(
+    "SELECT date, rhr AS value FROM recovery WHERE rhr IS NOT NULL AND rhr > 0 AND user_id = ? ORDER BY rhr ASC, date DESC LIMIT 1",
+  );
+  return row ?? null;
 }
 
-export function getStreaks(): {
+export function getStreaks(userId: number): {
   recoveryStreak: PRStreak;
   sleepPerfStreak: PRStreak;
   loggingStreak: PRStreak;
 } {
-  const result = safeQuery((db) => {
-    const hasRecovery = hasTable(db, "recovery");
-    const hasSleep = hasTable(db, "sleep");
+  const recoveryDates = forUser(userId)
+    .all<{ date: string }>(
+      "SELECT date FROM recovery WHERE recovery_score >= 80 AND user_id = ? ORDER BY date ASC",
+    )
+    .map((r) => r.date);
 
-    const recoveryDates = hasRecovery
-      ? (db
-          .prepare(
-            "SELECT date FROM recovery WHERE recovery_score >= 80 ORDER BY date ASC"
-          )
-          .all() as { date: string }[]).map((r) => r.date)
-      : [];
+  const sleepPerfDates = forUser(userId)
+    .all<{ date: string }>(
+      "SELECT date FROM sleep WHERE COALESCE(nap, 0) = 0 AND performance >= 85 AND user_id = ? ORDER BY date ASC",
+    )
+    .map((r) => r.date);
 
-    const sleepPerfDates = hasSleep
-      ? (db
-          .prepare(
-            "SELECT date FROM sleep WHERE COALESCE(nap, 0) = 0 AND performance >= 85 ORDER BY date ASC"
-          )
-          .all() as { date: string }[]).map((r) => r.date)
-      : [];
+  // The legacy SQL did a `UNION` across recovery + sleep dates with a single
+  // ORDER BY — the wrapper's trailing-bind convention doesn't compose with
+  // UNION (each branch needs its own user_id placeholder), so we run two
+  // separate scoped queries and merge distinct dates in JS.
+  const recoveryDatesAll = forUser(userId)
+    .all<{ date: string }>(
+      "SELECT date FROM recovery WHERE user_id = ? ORDER BY date ASC",
+    )
+    .map((r) => r.date);
+  const sleepDatesAll = forUser(userId)
+    .all<{ date: string }>(
+      "SELECT date FROM sleep WHERE COALESCE(nap, 0) = 0 AND user_id = ? ORDER BY date ASC",
+    )
+    .map((r) => r.date);
+  const loggingDates = Array.from(
+    new Set([...recoveryDatesAll, ...sleepDatesAll]),
+  ).sort();
 
-    let loggingDates: string[] = [];
-    if (hasRecovery && hasSleep) {
-      loggingDates = (db
-        .prepare(
-          "SELECT date FROM recovery UNION SELECT date FROM sleep WHERE COALESCE(nap, 0) = 0 ORDER BY 1 ASC"
-        )
-        .all() as { date: string }[]).map((r) => r.date);
-    } else if (hasRecovery) {
-      loggingDates = (db
-        .prepare("SELECT date FROM recovery ORDER BY date ASC")
-        .all() as { date: string }[]).map((r) => r.date);
-    } else if (hasSleep) {
-      loggingDates = (db
-        .prepare("SELECT date FROM sleep WHERE COALESCE(nap, 0) = 0 ORDER BY date ASC")
-        .all() as { date: string }[]).map((r) => r.date);
-    }
-
-    return {
-      recoveryStreak: longestStreak(recoveryDates),
-      sleepPerfStreak: longestStreak(sleepPerfDates),
-      loggingStreak: longestStreak(loggingDates),
-    };
-  });
-
-  return (
-    result ?? {
-      recoveryStreak: null,
-      sleepPerfStreak: null,
-      loggingStreak: null,
-    }
-  );
+  return {
+    recoveryStreak: longestStreak(recoveryDates),
+    sleepPerfStreak: longestStreak(sleepPerfDates),
+    loggingStreak: longestStreak(loggingDates),
+  };
 }
 
-export function getPRStats(): PRStats {
-  const streaks = getStreaks();
+export function getPRStats(userId: number): PRStats {
+  const streaks = getStreaks(userId);
   return {
-    bestHRV: getBestHRV(),
-    lowestRHR: getLowestRHR(),
+    bestHRV: getBestHRV(userId),
+    lowestRHR: getLowestRHR(userId),
     recoveryStreak: streaks.recoveryStreak,
     sleepPerfStreak: streaks.sleepPerfStreak,
     loggingStreak: streaks.loggingStreak,
