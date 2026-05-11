@@ -4,6 +4,7 @@ import {
   hasColumn,
   hasTable,
   openWrite,
+  safeDays,
   safeQuery,
 } from "./connection";
 import { forUser } from "./scoped";
@@ -190,12 +191,6 @@ export function getOverview(userId: number, days = 30): Overview {
   };
 }
 
-function safeDays(days: number): number {
-  if (!Number.isFinite(days)) return 30;
-  const n = Math.floor(days);
-  if (n <= 0) return 30;
-  return Math.min(n, 3650);
-}
 
 export function getHealthContext(userId: number, days = 30): string {
   const lines: string[] = [`=== WHOOP DATA (last ${days} days) ===\n`];

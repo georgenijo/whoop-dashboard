@@ -16,20 +16,26 @@ import { open, type DB } from "./connection";
 //   );
 //
 // The wrapper appends `uid` after every positional parameter the caller
-// passes — the SQL string must end with `... AND user_id = ?` as the LAST
-// placeholder. We DO NOT parse the SQL; the dev-mode invariant below catches
-// the common error (missing trailing user_id placeholder) at first call.
+// passes — the LAST `?` placeholder in the SQL (by position, NOT by
+// string-end) must be the `user_id` one. Trailing `ORDER BY`, `LIMIT N`
+// (LIMIT inlined as a SQL literal — see `safeDays`), or any other clause
+// after `user_id = ?` is fine as long as it contains no further `?`.
+// We DO NOT parse the SQL; the dev-mode invariant below catches the common
+// errors (missing user_id placeholder, OR a user_id placeholder that isn't
+// the last positional `?`) at first call.
 // ---------------------------------------------------------------------------
 
-const USER_ID_PLACEHOLDER_RE = /\buser_id\s*=\s*\?/i;
+const USER_ID_BEFORE_LAST_PLACEHOLDER_RE = /\buser_id\s*=\s*$/i;
 
 function assertUserIdPlaceholder(sql: string): void {
   if (process.env.NODE_ENV === "production") return;
-  if (!USER_ID_PLACEHOLDER_RE.test(sql)) {
+  const lastQ = sql.lastIndexOf("?");
+  if (lastQ === -1 || !USER_ID_BEFORE_LAST_PLACEHOLDER_RE.test(sql.slice(0, lastQ))) {
     throw new Error(
-      `[scoped] SQL is missing the trailing 'user_id = ?' placeholder. ` +
-        `Every forUser() query must include it so the wrapper can bind the ` +
-        `tenant. Got: ${sql}`,
+      `[scoped] the trailing positional '?' in the SQL must be the 'user_id' ` +
+        `placeholder so the wrapper binds the tenant correctly. ` +
+        `Missing 'user_id = ?' or any further '?' after it will cause silent ` +
+        `param drift. Got: ${sql}`,
     );
   }
 }

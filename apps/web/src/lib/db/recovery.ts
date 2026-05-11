@@ -1,5 +1,5 @@
 import "server-only";
-import { dateRangeClause } from "./connection";
+import { dateRangeClause, safeDays } from "./connection";
 import { forUser } from "./scoped";
 
 export type RecoveryRow = {
@@ -12,21 +12,6 @@ export type RecoveryRow = {
 };
 
 const RECOVERY_COLUMNS = "date, recovery_score, hrv, rhr, spo2, skin_temp";
-
-/**
- * Sanitize a `days` LIMIT value so we can safely inline it as a literal in
- * SQL. Inlining lets `user_id = ?` remain the trailing placeholder — the
- * wrapper's binding convention. The alternative (placing LIMIT before
- * user_id) creates a positional collision with the wrapper-appended param.
- */
-function safeDays(days: number): number {
-  if (!Number.isFinite(days)) return 30;
-  const n = Math.floor(days);
-  if (n <= 0) return 30;
-  // Hard cap to keep degenerate inputs from melting the DB; the highest
-  // page-level use today is 365 (year view).
-  return Math.min(n, 3650);
-}
 
 export function getLatestRecovery(userId: number): RecoveryRow | null {
   const row = forUser(userId).get<RecoveryRow>(

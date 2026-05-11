@@ -416,6 +416,19 @@ export function dateRangeClause(startDate: string, endDate: string): {
   };
 }
 
+/**
+ * Sanitize a `days` LIMIT value so it can be safely inlined as a SQL literal.
+ * Inlining lets `user_id = ?` remain the trailing placeholder — the wrapper's
+ * binding convention. Defaults to 30 on invalid input; capped at 3650 (~10y)
+ * to keep degenerate inputs from melting the DB.
+ */
+export function safeDays(days: number): number {
+  if (!Number.isFinite(days)) return 30;
+  const n = Math.floor(days);
+  if (n <= 0) return 30;
+  return Math.min(n, 3650);
+}
+
 export function safeQuery<T>(fn: (db: DB) => T): T | null {
   const db = open();
   if (!db) return null;
@@ -453,9 +466,6 @@ type RebuildPlan = {
    *  injected as the literal `1` in the SELECT. Old PK was `date`, so the
    *  row count is preserved 1:1. */
   copyColumns: string;
-  /** Extra indexes the old table had that we want to preserve (date-only,
-   *  used by some legacy queries). */
-  preserveIndexes: string[];
 };
 
 const REBUILD_PLANS: RebuildPlan[] = [
@@ -475,7 +485,6 @@ const REBUILD_PLANS: RebuildPlan[] = [
       )
     `,
     copyColumns: "date, recovery_score, hrv, rhr, spo2, skin_temp, raw",
-    preserveIndexes: [],
   },
   {
     table: "cycles",
@@ -492,7 +501,6 @@ const REBUILD_PLANS: RebuildPlan[] = [
       )
     `,
     copyColumns: "date, strain, kilojoule, avg_hr, max_hr, raw",
-    preserveIndexes: [],
   },
   {
     table: "sleep",
@@ -528,7 +536,6 @@ const REBUILD_PLANS: RebuildPlan[] = [
       "performance, efficiency, consistency, respiratory_rate, disturbances, " +
       "cycles, nap, need_from_baseline_ms, need_from_debt_ms, " +
       "need_from_strain_ms, need_from_nap_ms, start_local, end_local, raw",
-    preserveIndexes: [],
   },
   {
     table: "daily_summary",
@@ -555,16 +562,8 @@ const REBUILD_PLANS: RebuildPlan[] = [
       "date, recovery_score, hrv_ms, resting_hr, sleep_hours, " +
       "sleep_efficiency, sleep_performance, day_strain, max_hr, avg_hr, " +
       "kilojoules, workouts_count, computed_at",
-    preserveIndexes: [],
   },
 ];
-
-function tableHasUserIdColumn(db: DB, table: string): boolean {
-  const rows = db.prepare(`PRAGMA table_info(${table})`).all() as {
-    name: string;
-  }[];
-  return rows.some((r) => r.name === "user_id");
-}
 
 function rebuildDomainTablesForUserId(db: DB): void {
   // PK-rebuilds for recovery / cycles / sleep / daily_summary. Each runs
@@ -572,13 +571,30 @@ function rebuildDomainTablesForUserId(db: DB): void {
   // DROP+RENAME isn't rejected by transient self-references). After the
   // rebuild we re-enable FK and re-create the per-user composite index.
   for (const plan of REBUILD_PLANS) {
-    if (tableHasUserIdColumn(db, plan.table)) {
+    if (hasColumn(db, plan.table, "user_id")) {
       // Already migrated — just ensure the composite index exists.
       db.exec(
         `CREATE INDEX IF NOT EXISTS idx_${plan.table}_user_date ON ${plan.table}(user_id, date DESC)`
       );
       continue;
     }
+    // Capture every user-defined index on the old table so we can replay it
+    // after the rename. Skips auto-indexes and the composite (which we always
+    // (re)create explicitly below). Belt-and-suspenders against future
+    // contributors adding a custom index in the schema bootstrap without
+    // remembering this rebuild path.
+    const preserved = db
+      .prepare(
+        "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name = ? " +
+          "AND name NOT LIKE 'sqlite_autoindex_%' AND name <> ?"
+      )
+      .all(plan.table, `idx_${plan.table}_user_date`) as {
+      sql: string | null;
+    }[];
+    const preservedSql = preserved
+      .map((r) => r.sql)
+      .filter((s): s is string => !!s);
+
     db.pragma("foreign_keys = OFF");
     try {
       const tx = db.transaction(() => {
@@ -592,7 +608,7 @@ function rebuildDomainTablesForUserId(db: DB): void {
         db.exec(
           `CREATE INDEX IF NOT EXISTS idx_${plan.table}_user_date ON ${plan.table}(user_id, date DESC)`
         );
-        for (const indexSql of plan.preserveIndexes) {
+        for (const indexSql of preservedSql) {
           db.exec(indexSql);
         }
       });
@@ -603,7 +619,7 @@ function rebuildDomainTablesForUserId(db: DB): void {
   }
 
   // workouts: PK is `id`, so a simple ALTER ADD COLUMN suffices.
-  if (!tableHasUserIdColumn(db, "workouts")) {
+  if (!hasColumn(db, "workouts", "user_id")) {
     db.exec(
       "ALTER TABLE workouts ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id)"
     );
@@ -623,7 +639,7 @@ function rebuildDomainTablesForUserId(db: DB): void {
   // migration without a `user_id` column, refuse to proceed — silently
   // syncing into an un-scoped table would mix tenants' data.
   for (const table of ["recovery", "cycles", "sleep", "daily_summary", "workouts"]) {
-    if (!tableHasUserIdColumn(db, table)) {
+    if (!hasColumn(db, table, "user_id")) {
       throw new Error(
         `[connection] migration failed: ${table} is missing user_id column`
       );

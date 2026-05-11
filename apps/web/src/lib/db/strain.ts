@@ -1,5 +1,5 @@
 import "server-only";
-import { dateRangeClause } from "./connection";
+import { dateRangeClause, safeDays } from "./connection";
 import { forUser } from "./scoped";
 
 export type CycleRow = {
@@ -11,13 +11,6 @@ export type CycleRow = {
 };
 
 const CYCLE_COLUMNS = "date, strain, kilojoule, avg_hr, max_hr";
-
-function safeDays(days: number): number {
-  if (!Number.isFinite(days)) return 30;
-  const n = Math.floor(days);
-  if (n <= 0) return 30;
-  return Math.min(n, 3650);
-}
 
 export function getLatestCycle(userId: number): CycleRow | null {
   const row = forUser(userId).get<CycleRow>(

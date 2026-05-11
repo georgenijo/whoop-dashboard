@@ -1,5 +1,5 @@
 import "server-only";
-import { dateRangeClause } from "./connection";
+import { dateRangeClause, safeDays } from "./connection";
 import { forUser } from "./scoped";
 
 export type SleepRow = {
@@ -42,15 +42,6 @@ const SLEEP_COLUMNS =
 
 const NAP_COLUMNS =
   "date, in_bed_ms AS duration_ms, performance, efficiency, light_ms, deep_ms, rem_ms, awake_ms, start_local, end_local";
-
-// See recovery.ts for the rationale — inlined LIMIT keeps `user_id = ?` as
-// the trailing placeholder the wrapper binds.
-function safeDays(days: number): number {
-  if (!Number.isFinite(days)) return 30;
-  const n = Math.floor(days);
-  if (n <= 0) return 30;
-  return Math.min(n, 3650);
-}
 
 export function getLatestSleep(userId: number): SleepRow | null {
   const row = forUser(userId).get<SleepRow>(

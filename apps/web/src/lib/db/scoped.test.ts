@@ -95,7 +95,7 @@ describe("forUser wrapper", () => {
     expect(u2.map((r) => r.user_id)).toEqual([2]);
   });
 
-  it("dev-mode invariant: missing 'user_id = ?' placeholder throws", () => {
+  it("dev-mode invariant: missing trailing user_id placeholder throws", () => {
     // NODE_ENV is typed as readonly by the recent @types/node, but the test
     // runner accepts the runtime assignment. Pre-existing tests in the
     // codebase use this same pattern. Cast through to suppress.
@@ -103,9 +103,17 @@ describe("forUser wrapper", () => {
     const prev = env.NODE_ENV;
     env.NODE_ENV = "development";
     try {
+      // Missing entirely.
       expect(() =>
         scoped.forUser(1).all<unknown>("SELECT date FROM recovery"),
-      ).toThrow(/missing the trailing 'user_id = \?' placeholder/i);
+      ).toThrow(/trailing positional '\?'/i);
+      // Mispositioned — user_id placeholder isn't the last `?`.
+      expect(() =>
+        scoped.forUser(1).all<unknown>(
+          "SELECT date FROM recovery WHERE user_id = ? AND date = ?",
+          "2025-01-01",
+        ),
+      ).toThrow(/trailing positional '\?'/i);
     } finally {
       env.NODE_ENV = prev;
     }
@@ -133,7 +141,7 @@ const DOMAIN_TABLES = [
 ];
 
 const STATEMENT_RE = new RegExp(
-  String.raw`\b(?:FROM|JOIN|INTO|UPDATE|DELETE\s+FROM)\s+(` +
+  String.raw`\b(?:FROM|JOIN|INTO|UPDATE|DELETE\s+FROM|REPLACE\s+INTO)\s+(` +
     DOMAIN_TABLES.join("|") +
     String.raw`)\b`,
   "gi",
