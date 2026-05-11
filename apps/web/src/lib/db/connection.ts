@@ -374,7 +374,12 @@ export function openWrite(): DB | null {
     // a "no user_id column" check.
     rebuildDomainTablesForUserId(db);
     return db;
-  } catch {
+  } catch (err) {
+    // Surfacing the error is critical: silent null returns hide schema
+    // migration bugs (e.g. ALTER ADD COLUMN with FK + non-NULL DEFAULT
+    // under foreign_keys=ON). Log to stderr; callers still get null and
+    // can decide what to do.
+    console.error("[openWrite] migration failed:", err);
     db?.close();
     return null;
   }
@@ -618,11 +623,21 @@ function rebuildDomainTablesForUserId(db: DB): void {
     }
   }
 
-  // workouts: PK is `id`, so a simple ALTER ADD COLUMN suffices.
+  // workouts: PK is `id`, so a simple ALTER ADD COLUMN suffices. SQLite
+  // refuses an ADD COLUMN with REFERENCES + non-NULL DEFAULT while
+  // `foreign_keys = ON` (https://sqlite.org/lang_altertable.html). Disable
+  // FK enforcement around the ALTER, matching the PK-rebuild loop above.
+  // Without this guard, the ALTER throws SQLITE_ERROR on any prod DB where
+  // FK is enabled (which is every Whoop dashboard DB).
   if (!hasColumn(db, "workouts", "user_id")) {
-    db.exec(
-      "ALTER TABLE workouts ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id)"
-    );
+    db.pragma("foreign_keys = OFF");
+    try {
+      db.exec(
+        "ALTER TABLE workouts ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id)"
+      );
+    } finally {
+      db.pragma("foreign_keys = ON");
+    }
   }
   db.exec(
     "CREATE INDEX IF NOT EXISTS idx_workouts_user_date ON workouts(user_id, date DESC)"
