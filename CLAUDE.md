@@ -4,40 +4,40 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Personal health analytics dashboard. Pulls Whoop wearable data into SQLite, renders it in a Next.js app, and exposes an LLM coach that runs tool-use queries against the data. A legacy Streamlit app is bundled but no longer the primary surface.
+Personal health analytics dashboard. Pulls Whoop wearable data into SQLite, renders it in a Next.js app, and exposes an LLM coach that runs tool-use queries against the data. Whoop ingestion runs server-side via `/api/sync` (Next.js `runWhoopSync`) and webhook handlers — there is no Python sync surface anymore (retired in Phase D).
 
 ## Commands
 
 ```bash
 # Setup
-cp .env.example .env          # WHOOP_CLIENT_ID, WHOOP_CLIENT_SECRET, ANTHROPIC_API_KEY
+cp .env.example .env          # WHOOP_CLIENT_ID, WHOOP_CLIENT_SECRET, ANTHROPIC_API_KEY, VAULT_KEY, WHOOP_STATE_SECRET, JWT_SIGNING_KEY
 python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt   # only for scripts/* + tests/* (vault, integrations, migrations)
 cd apps/web && npm install
 
 # Run
-cd apps/web && npm run dev    # http://localhost:3000  (active)
-streamlit run streamlit/app.py # http://localhost:8501  (legacy)
+cd apps/web && npm run dev    # http://localhost:3000
 
 # Build
 cd apps/web && npm run build  # production build (Turbopack)
 
-# Manual sync
-python sync/daily_sync.py     # last 7 days, parallel fetch, upsert into SQLite
+# Manual sync — hit /api/sync from the Settings page or curl localhost:3000/api/sync.
+# Webhook-driven syncs run automatically when Whoop POSTs to /api/whoop/webhook.
 ```
 
-No Python test suite. ESLint is wired via `eslint-config-next`.
+Python tests live in `tests/` and run via `pytest` (covers the vault + integrations helpers used by `scripts/migrate-whoop-tokens.py`). ESLint is wired via `eslint-config-next`.
 
 ## Architecture
 
 ### Repo layout
 
 ```
-apps/web/         Next.js 16.2.4 (Turbopack, App Router) — active dashboard + API
-streamlit/        legacy Streamlit + Plotly + pandas
-sync/             daily_sync.py (Whoop pull) + daily_summary.py (per-day rollup)
+apps/web/         Next.js 16.2.4 (Turbopack, App Router) — active dashboard + API + Whoop sync
+streamlit/whoop/  Python library modules (auth, integrations, vault, db helpers) used by scripts/ + tests/ ONLY — no UI app
 shared/           shared SQLite (whoop_data.db, WAL mode)
-tokens.json       Whoop OAuth tokens (gitignored, repo root)
+scripts/          one-shot Python utilities (token migration, WAL smoke test)
+tests/            pytest suite for the Python helper modules
+tokens.json       Whoop OAuth tokens — legacy single-user file; integrations table is source of truth
 ```
 
 ### Stack
@@ -78,17 +78,19 @@ Conversations are persisted in `chat_messages` keyed by `thread_id`. The model's
 
 Threads have auto-titles via Haiku 4.5 fired in `after()` (Next.js post-response hook), only on first turn of a blank-title thread. Persistence is buffered in memory and committed atomically via `addChatMessages` (uses `db.transaction(fn)`) — failed API calls leave the DB untouched.
 
-### DB layer (`apps/web/src/lib/db.ts`)
+### DB layer (`apps/web/src/lib/db/`)
 
 - Default path: `../../shared/whoop_data.db` from `apps/web`. Override with `WHOOP_DB_PATH` env var (used in tests).
-- Schema migrations are **lazy ALTERs in `openWrite()`** — every write call ensures schema is current. No manual migration step. Pattern:
+- Schema migrations are **lazy ALTERs in `openWrite()`** at `apps/web/src/lib/db/connection.ts` — every write call ensures schema is current. No manual migration step. Pattern:
   ```ts
   if (!cols.some(c => c.name === "details")) {
     db.exec("ALTER TABLE chat_logs ADD COLUMN details TEXT");
   }
   ```
-- Read paths use `safeQuery` (read-only open). Write paths use `safeWriteQuery` or direct `openWrite()`.
-- Lazy-bootstrapped tables: `users`, `sessions`, `chat_threads`, `chat_messages`, `chat_logs`, `sync_logs`, `daily_summary`, `app_settings`, `integrations` (planned).
+- The 5 Whoop domain tables (`recovery`, `cycles`, `sleep`, `workouts`, `daily_summary`) use composite PK `(user_id, date)` (Phase D). The rebuild runs once at first `openWrite()` against a pre-Phase-D DB — idempotent via `PRAGMA table_info` gate. **NEVER write domain tables from Python**; the Next.js side is the sole owner.
+- Read paths against domain tables MUST go through `forUser(userId).all/get/read(...)` in `apps/web/src/lib/db/scoped.ts`. The wrapper appends `userId` as the trailing positional `?`; call sites write `... AND user_id = ?` as the LAST placeholder. A CI vitest (`scoped.test.ts`) blocks any stray `FROM recovery|cycles|sleep|workouts|daily_summary|body_measurements` outside the wrapper + allowlist.
+- Other read paths use `safeQuery` (read-only open). Other write paths use `safeWriteQuery` or direct `openWrite()`.
+- Lazy-bootstrapped tables: `users`, `sessions`, `chat_threads`, `chat_messages`, `chat_logs`, `sync_logs`, `app_settings`, `integrations`, `user_settings`, `device_tokens`, `webhook_events`.
 
 ### Auth
 
@@ -96,11 +98,11 @@ Threads have auto-titles via Haiku 4.5 fired in `after()` (Next.js post-response
 
 ### Data flow
 
-1. OAuth callback writes tokens to `tokens.json` (atomic tmp+rename, thread-safe refresh in `streamlit/whoop/auth.py`)
-2. `sync/daily_sync.py` runs — pulls last 7 days from Whoop in parallel via `ThreadPoolExecutor(max_workers=5)`, upserts to `recovery`, `cycles`, `sleep`, `workouts`
-3. `compute_daily_summary` builds denormalized per-day rows in `daily_summary`
-4. Web app reads from same SQLite via `db.ts`
-5. Coach tools query the same DB by date range
+1. OAuth callback (`/api/auth/callback`) verifies HMAC `state`, exchanges code → writes encrypted tokens to `integrations` row (user_id, provider='whoop'), fetches `/v2/user/profile/basic` and captures `provider_user_id` for webhook routing
+2. `runWhoopSync({ userId })` (`apps/web/src/lib/sync.ts`) — pulls last 7 days from Whoop in parallel via `Promise.all`, upserts to `recovery`/`cycles`/`sleep`/`workouts` with `user_id` stamped, then calls `recomputeDailySummary(date, userId)`
+3. Webhook handler (`apps/web/src/lib/whoop/webhook-handler.ts`) — Whoop POSTs an event with its own `user_id`; handler resolves to local `users.id` via `lookupUserIdByProvider("whoop", evt.user_id)`, fetches the resource, upserts with `user_id`. Unknown Whoop user → 200 noop (Whoop won't retry).
+4. Web app reads through `forUser(userId).all/get(...)` (`apps/web/src/lib/db/scoped.ts`) — tenant binding enforced; `journal` is the only domain read still unscoped, deferred to Phase E.
+5. Coach tools at `apps/web/src/lib/coach/tools.ts` receive `userId` from `executeTool({ userId })` and thread it into every `query_*` read fn.
 
 ### Key conventions
 
@@ -117,17 +119,38 @@ Threads have auto-titles via Haiku 4.5 fired in `after()` (Next.js post-response
 VM (Ubuntu) runs `whoop-web.service` (systemd) on port 8501. Deploy flow:
 
 ```bash
+# 1. Snapshot the DB BEFORE any schema-touching change (Phase D et al). Stash
+#    a timestamped copy locally so a failed migration is a 30-second rollback.
+TS=$(date +%Y%m%d-%H%M%S)
+scp ubuntu@<vm-ip>:/home/george/Documents/whoop-dashboard/shared/whoop_data.db \
+    "$HOME/whoop_data.db.backup.$TS"
+#    Rollback recipe (only if migration fails):
+#      ssh ubuntu@<vm-ip> 'sudo systemctl stop whoop-web'
+#      scp "$HOME/whoop_data.db.backup.$TS" \
+#          ubuntu@<vm-ip>:/home/george/Documents/whoop-dashboard/shared/whoop_data.db
+#      ssh ubuntu@<vm-ip> 'sudo -u george git -C /home/george/Documents/whoop-dashboard checkout <prev-sha>'
+#      ssh ubuntu@<vm-ip> 'cd /home/george/Documents/whoop-dashboard/apps/web && sudo -u george npm ci && sudo -u george npm run build && sudo systemctl start whoop-web'
+
+# 2. Standard deploy
 ssh ubuntu@<vm-ip>
 sudo -u george bash -c 'cd /home/george/Documents/whoop-dashboard && git pull origin main'
 sudo -u george bash -c 'cd /home/george/Documents/whoop-dashboard/apps/web && npm ci && npm run build'
 sudo systemctl restart whoop-web
+
+# 3. Post-deploy verification (hit localhost to bypass CF Access)
+curl -sS http://localhost:8501/api/dashboard/today | jq .
+sudo -u george python3 -c "import sqlite3; \
+  conn = sqlite3.connect('/home/george/Documents/whoop-dashboard/shared/whoop_data.db'); \
+  for t in ['recovery','cycles','sleep','workouts','daily_summary']: \
+      n = conn.execute(f'SELECT COUNT(*) FROM {t} WHERE user_id IS NOT NULL').fetchone()[0]; \
+      print(t, n)"
 ```
 
 Public domain has an auth gate (302 to login). For VM-side smoke tests, hit `localhost:8501` directly to bypass.
 
 The VM has no `sqlite3` binary — query via `sudo -u george python3 -c "import sqlite3; ..."`.
 
-No cron / systemd timer for `daily_sync.py` yet. All syncs are manual today (via `/api/sync` from Settings or the script directly).
+Whoop sync runs server-side: cron-triggered via `/api/sync`, real-time via webhooks at `/api/whoop/webhook`. There is no Python sync script anymore — `python sync/daily_sync.py` was retired in Phase D.
 
 ## Local verification (live testing)
 
