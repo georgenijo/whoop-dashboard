@@ -5,7 +5,14 @@
  *
  * Server component so we can read query params (?error, ?from) at render
  * time and surface friendly messages without hydration cost.
+ *
+ * If the visitor already has a valid `__Host-coach_session` cookie, skip the
+ * render and 307 to `/` (or a safe `?from=`). Pure SSR — no flicker.
  */
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { COACH_SESSION_COOKIE } from "@/lib/auth/cookies";
+import { getSessionUser } from "@/lib/auth";
 
 type SignInPageProps = {
   searchParams?: Promise<{ error?: string; from?: string }>;
@@ -47,6 +54,15 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   const params = (await searchParams) ?? {};
   const errorText = errorMessage(params.error);
   const safeFrom = safeFromParam(params.from);
+
+  const sessionToken = (await cookies()).get(COACH_SESSION_COOKIE)?.value;
+  if (sessionToken) {
+    const user = await getSessionUser(sessionToken);
+    if (user) {
+      redirect(safeFrom ?? "/");
+    }
+  }
+
   const startHref = safeFrom
     ? `/api/auth/apple-web/start?from=${encodeURIComponent(safeFrom)}`
     : "/api/auth/apple-web/start";

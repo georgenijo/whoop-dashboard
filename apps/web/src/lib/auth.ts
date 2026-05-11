@@ -192,6 +192,24 @@ export async function saveTokens(tokens: StoredTokens): Promise<void> {
   }
 }
 
+/**
+ * Non-throwing variant of `requireAuth`'s cookie branch. Given a session JWT
+ * (e.g. read directly from the `__Host-coach_session` cookie in a server
+ * component), returns the resolved user or `null`. Never throws.
+ *
+ * Pure composition of `verifySessionToken` + `getUserById` — same primitives
+ * used by `requireAuth`, so a session that authenticates here will also
+ * authenticate there.
+ */
+export async function getSessionUser(
+  token: string | null | undefined
+): Promise<User | null> {
+  if (!token) return null;
+  const claims = await verifySessionToken(token);
+  if (!claims) return null;
+  return getUserById(claims.userId) ?? null;
+}
+
 export type AuthSource = "web" | "ios" | "dev";
 
 export type AuthResult = {
