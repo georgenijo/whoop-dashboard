@@ -8,7 +8,9 @@ vi.mock("server-only", () => ({}));
 // observe whether the route reached the exchange (and with what userId)
 // without persisting to a real DB. Failure tests assert the mock was NEVER
 // invoked — the integrity gate must fail BEFORE token exchange.
-const exchangeCodeMock = vi.fn(async (_userId: number, _code: string) => undefined);
+const exchangeCodeMock = vi.fn<(userId: number, code: string) => Promise<void>>(
+  async () => undefined,
+);
 
 vi.mock("@/lib/auth", () => ({
   exchangeCode: (userId: number, code: string) => exchangeCodeMock(userId, code),

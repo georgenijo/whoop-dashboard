@@ -1,4 +1,5 @@
 // @vitest-environment node
+import nodeCrypto from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -76,11 +77,10 @@ describe("encodeWhoopOAuthState / decodeWhoopOAuthState", () => {
   it("rejects a state with non-integer user_id", () => {
     // Hand-craft a signed payload with u as a float — should be rejected.
     const malformed = (() => {
-      const crypto = require("node:crypto");
       const body = { u: 3.14, n: "abc", e: Date.now() + 60_000 };
       const payloadBuf = Buffer.from(JSON.stringify(body), "utf8");
-      const mac = crypto
-        .createHmac("sha256", process.env.WHOOP_STATE_SECRET)
+      const mac = nodeCrypto
+        .createHmac("sha256", process.env.WHOOP_STATE_SECRET as string)
         .update(payloadBuf)
         .digest();
       return `${payloadBuf.toString("base64url")}.${mac.toString("base64url")}`;
