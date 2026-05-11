@@ -1,5 +1,6 @@
 import "server-only";
-import { dateRangeClause, hasTable, safeQuery } from "./connection";
+import { dateRangeClause, safeDays } from "./connection";
+import { forUser } from "./scoped";
 
 export type CycleRow = {
   date: string;
@@ -9,54 +10,38 @@ export type CycleRow = {
   max_hr: number | null;
 };
 
-export function getLatestCycle(): CycleRow | null {
-  return safeQuery((db) => {
-    if (!hasTable(db, "cycles")) return null;
-    const row = db
-      .prepare(
-        "SELECT date, strain, kilojoule, avg_hr, max_hr FROM cycles ORDER BY date DESC LIMIT 1"
-      )
-      .get() as CycleRow | undefined;
-    return row ?? null;
-  });
-}
+const CYCLE_COLUMNS = "date, strain, kilojoule, avg_hr, max_hr";
 
-export function getPreviousCycle(): CycleRow | null {
-  return safeQuery((db) => {
-    if (!hasTable(db, "cycles")) return null;
-    const row = db
-      .prepare(
-        "SELECT date, strain, kilojoule, avg_hr, max_hr FROM cycles ORDER BY date DESC LIMIT 1 OFFSET 1"
-      )
-      .get() as CycleRow | undefined;
-    return row ?? null;
-  });
-}
-
-export function getStrainTrend(days: number): CycleRow[] {
-  return (
-    safeQuery((db) => {
-      if (!hasTable(db, "cycles")) return [];
-      const rows = db
-        .prepare(
-          "SELECT date, strain, kilojoule, avg_hr, max_hr FROM cycles ORDER BY date DESC LIMIT ?"
-        )
-        .all(days) as CycleRow[];
-      return rows.reverse();
-    }) ?? []
+export function getLatestCycle(userId: number): CycleRow | null {
+  const row = forUser(userId).get<CycleRow>(
+    `SELECT ${CYCLE_COLUMNS} FROM cycles WHERE user_id = ? ORDER BY date DESC LIMIT 1`,
   );
+  return row ?? null;
 }
 
-export function getStrainRange(startDate: string, endDate: string): CycleRow[] {
-  return (
-    safeQuery((db) => {
-      if (!hasTable(db, "cycles")) return [];
-      const range = dateRangeClause(startDate, endDate);
-      return db
-        .prepare(
-          `SELECT date, strain, kilojoule, avg_hr, max_hr FROM cycles WHERE ${range.clause} ORDER BY date ASC`
-        )
-        .all(...range.params) as CycleRow[];
-    }) ?? []
+export function getPreviousCycle(userId: number): CycleRow | null {
+  const row = forUser(userId).get<CycleRow>(
+    `SELECT ${CYCLE_COLUMNS} FROM cycles WHERE user_id = ? ORDER BY date DESC LIMIT 1 OFFSET 1`,
+  );
+  return row ?? null;
+}
+
+export function getStrainTrend(userId: number, days: number): CycleRow[] {
+  const limit = safeDays(days);
+  const rows = forUser(userId).all<CycleRow>(
+    `SELECT ${CYCLE_COLUMNS} FROM cycles WHERE user_id = ? ORDER BY date DESC LIMIT ${limit}`,
+  );
+  return rows.reverse();
+}
+
+export function getStrainRange(
+  userId: number,
+  startDate: string,
+  endDate: string,
+): CycleRow[] {
+  const range = dateRangeClause(startDate, endDate);
+  return forUser(userId).all<CycleRow>(
+    `SELECT ${CYCLE_COLUMNS} FROM cycles WHERE ${range.clause} AND user_id = ? ORDER BY date ASC`,
+    ...range.params,
   );
 }

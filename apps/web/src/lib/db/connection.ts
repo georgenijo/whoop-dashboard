@@ -352,6 +352,27 @@ export function openWrite(): DB | null {
         "ALTER TABLE integrations ADD COLUMN needs_reauth INTEGER NOT NULL DEFAULT 0"
       );
     }
+    // Phase D — provider_user_id maps a remote provider's user id (e.g.
+    // Whoop's `evt.user_id` in webhook payloads) → our local user_id, so
+    // webhook events arrive at the right tenant. Populated in the OAuth
+    // callback and lazy-backfilled from `runWhoopSync`. NULL until the first
+    // profile fetch succeeds.
+    if (
+      integrationCols.length > 0 &&
+      !integrationCols.some((c) => c.name === "provider_user_id")
+    ) {
+      db.exec("ALTER TABLE integrations ADD COLUMN provider_user_id TEXT");
+    }
+    db.exec(
+      "CREATE INDEX IF NOT EXISTS idx_integrations_provider_user ON integrations(provider, provider_user_id)"
+    );
+
+    // Phase D — data isolation. Add `user_id` to the five domain tables so
+    // every read / write is tenant-scoped. For recovery / cycles / sleep /
+    // daily_summary the PK changes from `date` to composite `(user_id,
+    // date)` — SQLite can't ALTER a PK, so each is a table rebuild gated by
+    // a "no user_id column" check.
+    rebuildDomainTablesForUserId(db);
     return db;
   } catch {
     db?.close();
@@ -395,6 +416,19 @@ export function dateRangeClause(startDate: string, endDate: string): {
   };
 }
 
+/**
+ * Sanitize a `days` LIMIT value so it can be safely inlined as a SQL literal.
+ * Inlining lets `user_id = ?` remain the trailing placeholder — the wrapper's
+ * binding convention. Defaults to 30 on invalid input; capped at 3650 (~10y)
+ * to keep degenerate inputs from melting the DB.
+ */
+export function safeDays(days: number): number {
+  if (!Number.isFinite(days)) return 30;
+  const n = Math.floor(days);
+  if (n <= 0) return 30;
+  return Math.min(n, 3650);
+}
+
 export function safeQuery<T>(fn: (db: DB) => T): T | null {
   const db = open();
   if (!db) return null;
@@ -416,5 +450,199 @@ export function safeWriteQuery<T>(fn: (db: DB) => T): T | null {
     return null;
   } finally {
     db.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phase D — domain-table user_id migration
+// ---------------------------------------------------------------------------
+
+type RebuildPlan = {
+  table: "recovery" | "cycles" | "sleep" | "daily_summary";
+  /** Full CREATE TABLE statement for the new shape, named <table>_new.
+   *  PRIMARY KEY is composite (user_id, date). */
+  createNewSql: string;
+  /** Column list to copy from the old table — must omit user_id, which is
+   *  injected as the literal `1` in the SELECT. Old PK was `date`, so the
+   *  row count is preserved 1:1. */
+  copyColumns: string;
+};
+
+const REBUILD_PLANS: RebuildPlan[] = [
+  {
+    table: "recovery",
+    createNewSql: `
+      CREATE TABLE recovery_new (
+        user_id INTEGER NOT NULL REFERENCES users(id) DEFAULT 1,
+        date TEXT NOT NULL,
+        recovery_score REAL,
+        hrv REAL,
+        rhr REAL,
+        spo2 REAL,
+        skin_temp REAL,
+        raw JSON,
+        PRIMARY KEY (user_id, date)
+      )
+    `,
+    copyColumns: "date, recovery_score, hrv, rhr, spo2, skin_temp, raw",
+  },
+  {
+    table: "cycles",
+    createNewSql: `
+      CREATE TABLE cycles_new (
+        user_id INTEGER NOT NULL REFERENCES users(id) DEFAULT 1,
+        date TEXT NOT NULL,
+        strain REAL,
+        kilojoule REAL,
+        avg_hr INTEGER,
+        max_hr INTEGER,
+        raw JSON,
+        PRIMARY KEY (user_id, date)
+      )
+    `,
+    copyColumns: "date, strain, kilojoule, avg_hr, max_hr, raw",
+  },
+  {
+    table: "sleep",
+    createNewSql: `
+      CREATE TABLE sleep_new (
+        user_id INTEGER NOT NULL REFERENCES users(id) DEFAULT 1,
+        date TEXT NOT NULL,
+        in_bed_ms INTEGER,
+        light_ms INTEGER,
+        deep_ms INTEGER,
+        rem_ms INTEGER,
+        awake_ms INTEGER,
+        sleep_need_ms INTEGER,
+        performance REAL,
+        efficiency REAL,
+        consistency REAL,
+        respiratory_rate REAL,
+        disturbances INTEGER,
+        cycles INTEGER,
+        nap BOOLEAN,
+        need_from_baseline_ms INTEGER,
+        need_from_debt_ms INTEGER,
+        need_from_strain_ms INTEGER,
+        need_from_nap_ms INTEGER,
+        start_local TEXT,
+        end_local TEXT,
+        raw JSON,
+        PRIMARY KEY (user_id, date)
+      )
+    `,
+    copyColumns:
+      "date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms, sleep_need_ms, " +
+      "performance, efficiency, consistency, respiratory_rate, disturbances, " +
+      "cycles, nap, need_from_baseline_ms, need_from_debt_ms, " +
+      "need_from_strain_ms, need_from_nap_ms, start_local, end_local, raw",
+  },
+  {
+    table: "daily_summary",
+    createNewSql: `
+      CREATE TABLE daily_summary_new (
+        user_id INTEGER NOT NULL REFERENCES users(id) DEFAULT 1,
+        date TEXT NOT NULL,
+        recovery_score INTEGER,
+        hrv_ms REAL,
+        resting_hr INTEGER,
+        sleep_hours REAL,
+        sleep_efficiency REAL,
+        sleep_performance INTEGER,
+        day_strain REAL,
+        max_hr INTEGER,
+        avg_hr INTEGER,
+        kilojoules REAL,
+        workouts_count INTEGER,
+        computed_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (user_id, date)
+      )
+    `,
+    copyColumns:
+      "date, recovery_score, hrv_ms, resting_hr, sleep_hours, " +
+      "sleep_efficiency, sleep_performance, day_strain, max_hr, avg_hr, " +
+      "kilojoules, workouts_count, computed_at",
+  },
+];
+
+function rebuildDomainTablesForUserId(db: DB): void {
+  // PK-rebuilds for recovery / cycles / sleep / daily_summary. Each runs
+  // inside its own transaction with FK enforcement temporarily off (so the
+  // DROP+RENAME isn't rejected by transient self-references). After the
+  // rebuild we re-enable FK and re-create the per-user composite index.
+  for (const plan of REBUILD_PLANS) {
+    if (hasColumn(db, plan.table, "user_id")) {
+      // Already migrated — just ensure the composite index exists.
+      db.exec(
+        `CREATE INDEX IF NOT EXISTS idx_${plan.table}_user_date ON ${plan.table}(user_id, date DESC)`
+      );
+      continue;
+    }
+    // Capture every user-defined index on the old table so we can replay it
+    // after the rename. Skips auto-indexes and the composite (which we always
+    // (re)create explicitly below). Belt-and-suspenders against future
+    // contributors adding a custom index in the schema bootstrap without
+    // remembering this rebuild path.
+    const preserved = db
+      .prepare(
+        "SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name = ? " +
+          "AND name NOT LIKE 'sqlite_autoindex_%' AND name <> ?"
+      )
+      .all(plan.table, `idx_${plan.table}_user_date`) as {
+      sql: string | null;
+    }[];
+    const preservedSql = preserved
+      .map((r) => r.sql)
+      .filter((s): s is string => !!s);
+
+    db.pragma("foreign_keys = OFF");
+    try {
+      const tx = db.transaction(() => {
+        db.exec(plan.createNewSql);
+        db.exec(
+          `INSERT INTO ${plan.table}_new (user_id, ${plan.copyColumns}) ` +
+            `SELECT 1, ${plan.copyColumns} FROM ${plan.table}`
+        );
+        db.exec(`DROP TABLE ${plan.table}`);
+        db.exec(`ALTER TABLE ${plan.table}_new RENAME TO ${plan.table}`);
+        db.exec(
+          `CREATE INDEX IF NOT EXISTS idx_${plan.table}_user_date ON ${plan.table}(user_id, date DESC)`
+        );
+        for (const indexSql of preservedSql) {
+          db.exec(indexSql);
+        }
+      });
+      tx();
+    } finally {
+      db.pragma("foreign_keys = ON");
+    }
+  }
+
+  // workouts: PK is `id`, so a simple ALTER ADD COLUMN suffices.
+  if (!hasColumn(db, "workouts", "user_id")) {
+    db.exec(
+      "ALTER TABLE workouts ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1 REFERENCES users(id)"
+    );
+  }
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_workouts_user_date ON workouts(user_id, date DESC)"
+  );
+
+  // Belt-and-suspenders backfill: DEFAULT 1 already covers new rows, but a
+  // table that was created without DEFAULT (e.g. via a non-openWrite path)
+  // could still hold NULLs. Cheap to enforce.
+  for (const table of ["recovery", "cycles", "sleep", "daily_summary", "workouts"]) {
+    db.exec(`UPDATE ${table} SET user_id = 1 WHERE user_id IS NULL`);
+  }
+
+  // Fail-fast assertion. If any of the five tables somehow finished the
+  // migration without a `user_id` column, refuse to proceed — silently
+  // syncing into an un-scoped table would mix tenants' data.
+  for (const table of ["recovery", "cycles", "sleep", "daily_summary", "workouts"]) {
+    if (!hasColumn(db, table, "user_id")) {
+      throw new Error(
+        `[connection] migration failed: ${table} is missing user_id column`
+      );
+    }
   }
 }

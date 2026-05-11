@@ -69,9 +69,9 @@ function needsRegeneration(insight: InsightRow | null, latestDataAt: string | nu
   return latestDataMs > insightCreatedMs;
 }
 
-export function getInsightStatus(hasData: boolean): InsightStatus {
+export function getInsightStatus(userId: number, hasData: boolean): InsightStatus {
   const insight = getLatestInsight();
-  const latestDataAt = hasData ? getLatestWhoopDataTimestamp() : null;
+  const latestDataAt = hasData ? getLatestWhoopDataTimestamp(userId) : null;
   return {
     insight,
     isStale: hasData && needsRegeneration(insight, latestDataAt),
@@ -85,13 +85,16 @@ export function acquireInsightRegenerationLock(status: InsightStatus): SettingLo
   return acquireSettingLock(INSIGHT_LOCK_KEY, INSIGHT_LOCK_TTL_MS);
 }
 
-export async function regenerateInsight(lock: SettingLock): Promise<void> {
+export async function regenerateInsight(
+  userId: number,
+  lock: SettingLock,
+): Promise<void> {
   try {
     if (!process.env.ANTHROPIC_API_KEY) {
       throw new Error("ANTHROPIC_API_KEY is not configured");
     }
 
-    const context = getHealthContext(INSIGHT_DAYS);
+    const context = getHealthContext(userId, INSIGHT_DAYS);
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const response = await client.messages.create({
       model: INSIGHT_MODEL,

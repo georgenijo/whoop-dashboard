@@ -1,9 +1,11 @@
+import { headers } from "next/headers";
 import SportFrequencyChart from "@/components/charts/SportFrequencyChart";
 import WorkoutZoneChart from "@/components/charts/WorkoutZoneChart";
 import WorkoutDistanceChart from "@/components/charts/WorkoutDistanceChart";
 import Zone2Tracker from "@/components/charts/Zone2Tracker";
 import CardiacDriftCard from "@/components/charts/CardiacDriftCard";
 import { getWorkouts, getWorkoutsRange, getBodyMeasurements } from "@/lib/db";
+import { requireAuth } from "@/lib/auth";
 import { computeCardiacDrift } from "@/lib/analytics/cardiacDrift";
 
 export const dynamic = "force-dynamic";
@@ -29,12 +31,16 @@ function isoNDaysAgo(n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-export default function WorkoutsPage() {
-  const workouts = getWorkouts(50);
+export default async function WorkoutsPage() {
+  const headerList = await headers();
+  const { user } = await requireAuth(
+    new Request("http://localhost", { headers: headerList }),
+  );
+  const workouts = getWorkouts(user.id, 50);
   const today = new Date().toISOString().slice(0, 10);
-  const last90 = getWorkoutsRange(isoNDaysAgo(90), today).rows;
-  const last180 = getWorkoutsRange(isoNDaysAgo(180), today).rows;
-  const body = getBodyMeasurements();
+  const last90 = getWorkoutsRange(user.id, isoNDaysAgo(90), today).rows;
+  const last180 = getWorkoutsRange(user.id, isoNDaysAgo(180), today).rows;
+  const body = getBodyMeasurements(user.id);
   const maxHR = body?.max_heart_rate ?? null;
   const driftReport = computeCardiacDrift(last180);
 

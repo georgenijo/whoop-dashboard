@@ -6,6 +6,30 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-05-11: Phase D kickoff — PK rebuild for 4 domain tables, no operational fence, 6-step execution
+
+**Decision:** Phase D (issue #323) scopes to: (1) add `user_id` to `recovery`, `cycles`, `sleep`, `workouts`, `daily_summary` — for `recovery`/`cycles`/`sleep`/`daily_summary` the new PK is composite `(user_id, date)`, requiring a `CREATE TABLE _new` + `INSERT SELECT 1, ...` + `DROP` + `RENAME` rebuild gated by a `PRAGMA table_info` "no user_id col" check; `workouts` stays simple ALTER (PK = `id`). (2) Build `apps/web/src/lib/db/scoped.ts` `forUser(userId)` wrapper — params-only binding, no SQL parsing, call-site writes `... AND user_id = ?` as the **last** placeholder. (3) Thread `userId` through all `upsert*`, `delete*AndRecompute`, `recomputeDailySummary` and call sites. (4) Migrate every domain `safeQuery` in `lib/db/{recovery,sleep,strain,workouts,summary,prs,body}.ts` + coach `query_*` branches + dashboard page handlers. (5) CI assertion = vitest test that greps for `FROM|JOIN|INTO|UPDATE|DELETE FROM (recovery|cycles|sleep|workouts|daily_summary|body_measurements)` outside an allowlist (`scoped.ts`, `connection.ts`, `upsert.ts`, `sync.ts`). (6) Webhook user mapping via new `integrations.provider_user_id` column (see separate decision below). Scope item #8 (lift operational fence) **dropped** — pre-impl review found no fence exists; webhook hardcoded `userId = 1` at `webhook-handler.ts:40` is the only approximation and item #7 already replaces it.
+
+**Rationale:** Architect + Plan agents converged on this shape. PK rebuild is unavoidable for multi-tenant correctness: keeping `date PRIMARY KEY` would let user 2's `2026-05-11` row collide with user 1's via `INSERT … ON CONFLICT(date) UPDATE`, overwriting silently. Few-thousand-row tables make the rebuild sub-second. Params-only wrapper avoids SQL-parser fragility (CTEs, UNIONs, JOINs) — call-site discipline plus the CI assertion is the safety net. `body_measurements` already shipped this shape (PR #283) and stays unchanged structurally, but folds into the wrapper for read consistency. Coach tools already plumb `userId` into `executeTool({ userId })` (PR #322) — only the five `query_*` branches at `tools.ts:358-384` need to pass it into the read fns.
+
+**Status:** active
+
+**References:** issue #323, Plan agent + whoop-architect outputs (Phase D pre-impl), PRs #318/#322, `docs/architecture-scalable.html` (Phase D section)
+
+---
+
+## 2026-05-11: Phase D — `provider_user_id` captured in OAuth callback + lazy backfilled on sync
+
+**Decision:** Add `provider_user_id TEXT` column + `idx_integrations_provider_user(provider, provider_user_id)` to `integrations`. Capture path: (a) primary — in `/api/auth/callback/route.ts` right after `exchangeCode()` succeeds, call `getWhoopProfile({ userId })` against `/v2/user/profile/basic` (not `/v1` — issue text was wrong; Python client at `streamlit/whoop/client.py:57` confirms `/v2`) and `setProviderUserId(userId, "whoop", String(profile.user_id))`. Wrap in try/catch — log + continue on failure, **do not fail the OAuth flow**. (b) lazy backfill — every `runWhoopSync({ userId })` checks if the integration row's `provider_user_id IS NULL` and, if so, fetches the profile and populates. (c) one-shot — `scripts/backfill-whoop-provider-user-id.ts` for the maintainer's existing row pre-deploy. Webhook handler at `webhook-handler.ts:36-40` replaces the hardcoded `userId = 1` with `lookupUserIdByProvider("whoop", String(evt.user_id))`; on miss returns `{ kind: "noop", reason: "unknown_whoop_user" }` (200 status — Whoop won't retry).
+
+**Rationale:** Belt-and-suspenders. Callback fetch makes the mapping live the instant a user connects — webhook events for that user route correctly from t=0. Lazy backfill is the resilience layer: a callback that succeeded the OAuth exchange but tripped on the profile call (network blip, Whoop 5xx) gets repaired automatically on the user's next sync without manual intervention. Either alone would leave a gap (callback-only: stuck until manual fix; lazy-only: every webhook between connect-and-first-sync is a `noop`, which is recoverable via Whoop's 5× retry but ugly). Token-exchange response does NOT include the Whoop user_id (confirmed against `apps/web/src/lib/auth.ts:89-95` and the Python client) so a separate API call is required either way.
+
+**Status:** active
+
+**References:** issue #323, `apps/web/src/lib/whoop/client.ts`, `apps/web/src/app/api/auth/callback/route.ts`, `apps/web/src/lib/db/integrations.ts`, `streamlit/whoop/client.py`
+
+---
+
 ## 2026-05-11: Phase C-minimum further reduced — existing dual-write infrastructure means smaller delta than scoped
 
 **Decision:** Pre-implementation review of issue #320 found four pieces already shipped beyond the Phase A snapshot: `getValidAccessToken()` reads from `integrations` first, `saveTokens()` dual-writes to `integrations` + `tokens.json`, `/api/connectors/whoop` returns status, `/api/auth/whoop/disconnect` deletes the row. The remaining Phase C-minimum work is: (1) parameterize `DEFAULT_USER_ID` through the token/sync stack, (2) add HMAC state to the existing `/api/auth/callback` so user_id survives the redirect, (3) add `WHOOP_STATE_SECRET` env with fail-closed loader. **No new `/api/whoop/*` routes** — extend existing surface.

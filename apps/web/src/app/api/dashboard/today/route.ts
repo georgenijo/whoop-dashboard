@@ -52,19 +52,22 @@ type DashboardTodayResponse = {
 
 export async function GET(req: Request) {
   try {
-    await requireAuth(req);
+    const { user } = await requireAuth(req);
     const date = parseDateParam(req);
     if (!date) {
       return Response.json({ error: "Invalid date. Expected YYYY-MM-DD." }, { status: 400 });
     }
-    return Response.json(buildDashboardToday(date));
+    return Response.json(buildDashboardToday(user.id, date));
   } catch (err) {
     if (err instanceof Response) return err;
     throw err;
   }
 }
 
-function buildDashboardToday(requestedDate: string): DashboardTodayResponse {
+function buildDashboardToday(
+  userId: number,
+  requestedDate: string,
+): DashboardTodayResponse {
   // One range query per table over the widest window we may need:
   //   [requested - (SIGNAL_LOOKBACK + FALLBACK_LOOKBACK), requested]
   // This single fetch covers (a) the requested-day lookup, (b) the 7-day fallback
@@ -74,9 +77,9 @@ function buildDashboardToday(requestedDate: string): DashboardTodayResponse {
     requestedDate,
     -(SIGNAL_LOOKBACK_DAYS + FALLBACK_LOOKBACK_DAYS),
   );
-  const recoveryWindow = getRecoveryRange(historyStart, requestedDate);
-  const sleepWindow = getSleepRange(historyStart, requestedDate);
-  const strainWindow = getStrainRange(historyStart, requestedDate);
+  const recoveryWindow = getRecoveryRange(userId, historyStart, requestedDate);
+  const sleepWindow = getSleepRange(userId, historyStart, requestedDate);
+  const strainWindow = getStrainRange(userId, historyStart, requestedDate);
 
   const requestedHasData =
     findOnDate(recoveryWindow, requestedDate) !== null ||

@@ -1,6 +1,11 @@
 import "server-only";
 import { openWrite } from "@/lib/db/connection";
 import {
+  getIntegration,
+  setProviderUserId,
+} from "@/lib/db/integrations";
+import {
+  getWhoopProfile,
   WhoopAuthError,
   whoopGet,
   whoopGetAll,
@@ -208,6 +213,8 @@ async function fetchAllParallel(
   };
 }
 
+// Phase D: per-user scoping on every CTE / join. Param order is shared with
+// the duplicated copy in `whoop/upsert.ts:_recomputeInDb` — keep both in sync.
 const SUMMARY_SELECT_SQL = `
 WITH day(date) AS (
     SELECT ?
@@ -215,7 +222,7 @@ WITH day(date) AS (
 workout_summary AS (
     SELECT date, COUNT(*) AS workouts_count
     FROM workouts
-    WHERE date = ?
+    WHERE date = ? AND user_id = ?
     GROUP BY date
 )
 SELECT
@@ -239,18 +246,18 @@ SELECT
     cycles.kilojoule AS kilojoules,
     COALESCE(workout_summary.workouts_count, 0) AS workouts_count
 FROM day
-LEFT JOIN recovery ON recovery.date = day.date
-LEFT JOIN sleep ON sleep.date = day.date AND COALESCE(sleep.nap, 0) = 0
-LEFT JOIN cycles ON cycles.date = day.date
+LEFT JOIN recovery ON recovery.date = day.date AND recovery.user_id = ?
+LEFT JOIN sleep ON sleep.date = day.date AND COALESCE(sleep.nap, 0) = 0 AND sleep.user_id = ?
+LEFT JOIN cycles ON cycles.date = day.date AND cycles.user_id = ?
 LEFT JOIN workout_summary ON workout_summary.date = day.date
 `;
 
 const SUMMARY_INSERT_SQL = `
 INSERT OR REPLACE INTO daily_summary (
-  date, recovery_score, hrv_ms, resting_hr, sleep_hours, sleep_efficiency,
+  user_id, date, recovery_score, hrv_ms, resting_hr, sleep_hours, sleep_efficiency,
   sleep_performance, day_strain, max_hr, avg_hr, kilojoules, workouts_count
 ) VALUES (
-  @date, @recovery_score, @hrv_ms, @resting_hr, @sleep_hours, @sleep_efficiency,
+  @user_id, @date, @recovery_score, @hrv_ms, @resting_hr, @sleep_hours, @sleep_efficiency,
   @sleep_performance, @day_strain, @max_hr, @avg_hr, @kilojoules, @workouts_count
 )
 `;
@@ -283,7 +290,11 @@ function syncedDates(data: FetchedData): string[] {
  * Body measurement and the latest_*_date reads run separately *after* this
  * function returns — see `runWhoopSync` for those.
  */
-function persistAll(data: FetchedData, signal?: AbortSignal): SyncCounts {
+function persistAll(
+  data: FetchedData,
+  userId: number,
+  signal?: AbortSignal,
+): SyncCounts {
   const counts: SyncCounts = {
     recovery: 0,
     sleep: 0,
@@ -295,26 +306,26 @@ function persistAll(data: FetchedData, signal?: AbortSignal): SyncCounts {
   try {
     const recoveryStmt = db.prepare(`
       INSERT OR REPLACE INTO recovery
-        (date, recovery_score, hrv, rhr, spo2, skin_temp, raw)
+        (user_id, date, recovery_score, hrv, rhr, spo2, skin_temp, raw)
       VALUES
-        (@date, @recovery_score, @hrv, @rhr, @spo2, @skin_temp, @raw)
+        (@user_id, @date, @recovery_score, @hrv, @rhr, @spo2, @skin_temp, @raw)
     `);
     const cyclesStmt = db.prepare(`
       INSERT OR REPLACE INTO cycles
-        (date, strain, kilojoule, avg_hr, max_hr, raw)
+        (user_id, date, strain, kilojoule, avg_hr, max_hr, raw)
       VALUES
-        (@date, @strain, @kilojoule, @avg_hr, @max_hr, @raw)
+        (@user_id, @date, @strain, @kilojoule, @avg_hr, @max_hr, @raw)
     `);
     const sleepStmt = db.prepare(`
       INSERT OR REPLACE INTO sleep
-        (date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms, sleep_need_ms,
+        (user_id, date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms, sleep_need_ms,
          performance, efficiency, consistency, respiratory_rate,
          disturbances, cycles, nap,
          need_from_baseline_ms, need_from_debt_ms, need_from_strain_ms, need_from_nap_ms,
          start_local, end_local,
          raw)
       VALUES
-        (@date, @in_bed_ms, @light_ms, @deep_ms, @rem_ms, @awake_ms, @sleep_need_ms,
+        (@user_id, @date, @in_bed_ms, @light_ms, @deep_ms, @rem_ms, @awake_ms, @sleep_need_ms,
          @performance, @efficiency, @consistency, @respiratory_rate,
          @disturbances, @cycles, @nap,
          @need_from_baseline_ms, @need_from_debt_ms, @need_from_strain_ms, @need_from_nap_ms,
@@ -323,10 +334,10 @@ function persistAll(data: FetchedData, signal?: AbortSignal): SyncCounts {
     `);
     const workoutsStmt = db.prepare(`
       INSERT OR REPLACE INTO workouts
-        (id, date, sport, duration_sec, avg_hr, max_hr, strain, kilojoule,
+        (user_id, id, date, sport, duration_sec, avg_hr, max_hr, strain, kilojoule,
          distance_m, zone_0_ms, zone_1_ms, zone_2_ms, zone_3_ms, zone_4_ms, zone_5_ms, raw)
       VALUES
-        (@id, @date, @sport, @duration_sec, @avg_hr, @max_hr, @strain, @kilojoule,
+        (@user_id, @id, @date, @sport, @duration_sec, @avg_hr, @max_hr, @strain, @kilojoule,
          @distance_m, @zone_0_ms, @zone_1_ms, @zone_2_ms, @zone_3_ms, @zone_4_ms, @zone_5_ms, @raw)
     `);
     const summarySelect = db.prepare(SUMMARY_SELECT_SQL);
@@ -337,6 +348,7 @@ function persistAll(data: FetchedData, signal?: AbortSignal): SyncCounts {
       for (const r of data.recovery) {
         if (r.score_state !== "SCORED" || !r.score) continue;
         recoveryStmt.run({
+          user_id: userId,
           date: parseDate(r.created_at),
           recovery_score: r.score.recovery_score,
           hrv: r.score.hrv_rmssd_milli,
@@ -351,6 +363,7 @@ function persistAll(data: FetchedData, signal?: AbortSignal): SyncCounts {
       for (const r of data.cycles) {
         if (r.score_state !== "SCORED" || !r.score) continue;
         cyclesStmt.run({
+          user_id: userId,
           date: parseDate(r.start),
           strain: r.score.strain,
           kilojoule: r.score.kilojoule,
@@ -366,6 +379,7 @@ function persistAll(data: FetchedData, signal?: AbortSignal): SyncCounts {
         const ss = r.score.stage_summary;
         const sn = r.score.sleep_needed;
         sleepStmt.run({
+          user_id: userId,
           date: parseDate(r.start),
           in_bed_ms: ss.total_in_bed_time_milli,
           light_ms: ss.total_light_sleep_time_milli,
@@ -401,6 +415,7 @@ function persistAll(data: FetchedData, signal?: AbortSignal): SyncCounts {
         const durationSec =
           (new Date(r.end).getTime() - new Date(r.start).getTime()) / 1000;
         workoutsStmt.run({
+          user_id: userId,
           id: r.id,
           date: parseDate(r.start),
           sport: r.sport_name ?? "Unknown",
@@ -423,10 +438,15 @@ function persistAll(data: FetchedData, signal?: AbortSignal): SyncCounts {
       checkAborted(signal);
       // Recompute daily_summary for all dates touched by this sync.
       for (const date of syncedDates(data)) {
-        const row = summarySelect.get(date, date) as
-          | Record<string, unknown>
-          | undefined;
-        if (row) summaryInsert.run(row);
+        const row = summarySelect.get(
+          date,
+          date,
+          userId,
+          userId,
+          userId,
+          userId,
+        ) as Record<string, unknown> | undefined;
+        if (row) summaryInsert.run({ ...row, user_id: userId });
       }
     });
     persist();
@@ -443,20 +463,24 @@ type LatestDates = {
 };
 
 /** Single read open + 3 queries; called once per sync (success or error). */
-function latestDates(): LatestDates {
+function latestDates(userId: number): LatestDates {
   const db = openWrite();
   if (!db) return { recovery: null, sleep: null, strain: null };
   try {
     const pick = (sql: string): string | null => {
-      const row = db.prepare(sql).get() as { date: string } | undefined;
+      const row = db.prepare(sql).get(userId) as { date: string } | undefined;
       return row?.date ?? null;
     };
     return {
-      recovery: pick("SELECT date FROM recovery ORDER BY date DESC LIMIT 1"),
-      sleep: pick(
-        "SELECT date FROM sleep WHERE COALESCE(nap, 0) = 0 ORDER BY date DESC LIMIT 1",
+      recovery: pick(
+        "SELECT date FROM recovery WHERE user_id = ? ORDER BY date DESC LIMIT 1",
       ),
-      strain: pick("SELECT date FROM cycles ORDER BY date DESC LIMIT 1"),
+      sleep: pick(
+        "SELECT date FROM sleep WHERE COALESCE(nap, 0) = 0 AND user_id = ? ORDER BY date DESC LIMIT 1",
+      ),
+      strain: pick(
+        "SELECT date FROM cycles WHERE user_id = ? ORDER BY date DESC LIMIT 1",
+      ),
     };
   } finally {
     db.close();
@@ -510,6 +534,27 @@ export async function runWhoopSync(
       onRefresh: () => opts.onProgress?.({ stage: "refreshing_token" }),
     });
 
+    // Phase D — lazy backfill of `integrations.provider_user_id` so
+    // webhook events for this user route to the right local tenant. The
+    // OAuth callback is the primary capture path; this is the resilience
+    // layer for rows that pre-date Phase D or whose callback fetch failed.
+    // Failure here is non-fatal — sync continues against the tokens we
+    // already have.
+    try {
+      const integration = getIntegration(opts.userId, "whoop");
+      if (integration && integration.provider_user_id == null) {
+        const profile = await getWhoopProfile({ userId: opts.userId });
+        if (profile?.user_id != null) {
+          setProviderUserId(opts.userId, "whoop", String(profile.user_id));
+        }
+      }
+    } catch (err) {
+      console.warn("[sync] provider_user_id backfill failed", {
+        user_id: opts.userId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     const fetchT0 = Date.now();
     const { data, fetchBreakdown, pageCounts } = await fetchAllParallel(
       opts.userId,
@@ -526,7 +571,7 @@ export async function runWhoopSync(
 
     opts.onProgress?.({ stage: "upserting" });
     const dbT0 = Date.now();
-    const counts = persistAll(data, opts.signal);
+    const counts = persistAll(data, opts.userId, opts.signal);
     details.sync_db_ms = Date.now() - dbT0;
     post = {
       counts,
@@ -548,7 +593,7 @@ export async function runWhoopSync(
     // workouts are already committed.
     const bodyT0 = Date.now();
     try {
-      upsertBodyMeasurement(data.body);
+      upsertBodyMeasurement(data.body, opts.userId);
     } catch (err) {
       details.body_error =
         err instanceof Error ? err.message : String(err);
@@ -558,7 +603,7 @@ export async function runWhoopSync(
 
     checkAborted(opts.signal);
 
-    const latest = latestDates();
+    const latest = latestDates(opts.userId);
     // Success-path only — placement after the final `checkAborted` is
     // load-bearing; the partial branch must not emit this.
     opts.onProgress?.({ stage: "computing_summary" });
@@ -586,7 +631,7 @@ export async function runWhoopSync(
     if (post) {
       let latestPost: LatestDates;
       try {
-        latestPost = latestDates();
+        latestPost = latestDates(opts.userId);
       } catch {
         latestPost = { recovery: null, sleep: null, strain: null };
       }
@@ -619,7 +664,7 @@ export async function runWhoopSync(
     } else {
       message = String(err);
     }
-    const latest = latestDates();
+    const latest = latestDates(opts.userId);
     return {
       ...baseResult,
       success: false,

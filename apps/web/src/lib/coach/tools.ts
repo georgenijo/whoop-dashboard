@@ -356,13 +356,13 @@ export async function executeTool(
 
   switch (name) {
     case "query_recovery":
-      return getRecoveryRange(startDate, endDate);
+      return getRecoveryRange(options.userId, startDate, endDate);
     case "query_sleep":
-      return getSleepRange(startDate, endDate);
+      return getSleepRange(options.userId, startDate, endDate);
     case "query_strain":
-      return getStrainRange(startDate, endDate);
+      return getStrainRange(options.userId, startDate, endDate);
     case "query_workouts": {
-      const result = getWorkoutsRange(startDate, endDate);
+      const result = getWorkoutsRange(options.userId, startDate, endDate);
       const _meta: {
         truncated: boolean;
         total_count: number;
@@ -379,8 +379,10 @@ export async function executeTool(
       return { rows: result.rows, _meta };
     }
     case "query_naps":
-      return getNaps(startDate, endDate);
+      return getNaps(options.userId, startDate, endDate);
     case "query_journal":
+      // journal has no user_id today — out of scope for Phase D, addressed
+      // in Phase E follow-up. Reads remain unscoped.
       return getJournalRange(startDate, endDate);
     default:
       throw new ToolInputError(`Unknown tool: ${name}`, {

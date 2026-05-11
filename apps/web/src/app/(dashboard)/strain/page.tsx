@@ -1,7 +1,9 @@
+import { headers } from "next/headers";
 import KPIStrip from "@/components/overview/KPIStrip";
 import TrendChart from "@/components/charts/TrendChart";
 import TSBCurve from "@/components/charts/TSBCurve";
 import { getOverview, getStrainTrend } from "@/lib/db";
+import { requireAuth } from "@/lib/auth";
 import { parseDays, formatRangeLabel } from "@/lib/range";
 
 export const dynamic = "force-dynamic";
@@ -11,12 +13,16 @@ export default async function StrainPage({
 }: {
   searchParams: Promise<{ range?: string }>;
 }) {
+  const headerList = await headers();
+  const { user } = await requireAuth(
+    new Request("http://localhost", { headers: headerList }),
+  );
   const { range } = await searchParams;
   const days = parseDays(range);
   const rangeLabel = formatRangeLabel(range);
-  const data = getOverview(days);
-  const trend = getStrainTrend(days);
-  const tsbTrend = days >= 180 ? trend : getStrainTrend(180);
+  const data = getOverview(user.id, days);
+  const trend = getStrainTrend(user.id, days);
+  const tsbTrend = days >= 180 ? trend : getStrainTrend(user.id, 180);
 
   const strainData = trend.map((r) => ({ date: r.date, value: r.strain }));
   const hrData = trend.map((r) => ({ date: r.date, value: r.avg_hr }));

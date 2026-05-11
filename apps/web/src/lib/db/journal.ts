@@ -1,6 +1,12 @@
 import "server-only";
 import { dateRangeClause, hasColumn, hasTable, safeQuery } from "./connection";
 
+// TODO(phase-e): the `journal` table has no `user_id` column. This read is
+// unscoped — every authenticated user sees the same maintainer journal. Add
+// `user_id` to the table + thread it through here when Phase E (onboarding +
+// per-user journaling UI) lands. See docs/decisions/DECISIONS.md 2026-05-11
+// "Phase D kickoff" — journal was explicitly deferred out of Phase D scope.
+
 export type JournalRow = {
   date: string;
   title: string | null;

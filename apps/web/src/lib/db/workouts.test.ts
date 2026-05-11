@@ -100,11 +100,11 @@ function insertWorkouts(
   const db = new Database(dbFile);
   try {
     const stmt = db.prepare(
-      "INSERT INTO workouts (id, date, sport) VALUES (?, ?, ?)"
+      "INSERT INTO workouts (user_id, id, date, sport) VALUES (?, ?, ?, ?)"
     );
     const tx = db.transaction(
       (items: Array<{ id: string; date: string; sport?: string | null }>) => {
-        for (const r of items) stmt.run(r.id, r.date, r.sport ?? null);
+        for (const r of items) stmt.run(1, r.id, r.date, r.sport ?? null);
       }
     );
     tx(rows);
@@ -116,7 +116,7 @@ function insertWorkouts(
 function clearWorkouts(): void {
   const db = new Database(dbFile);
   try {
-    db.prepare("DELETE FROM workouts").run();
+    db.prepare("DELETE FROM workouts WHERE user_id = 1").run();
   } finally {
     db.close();
   }
@@ -144,7 +144,7 @@ describe("getWorkoutsRange", () => {
   });
 
   it("returns empty result for a range with no workouts", () => {
-    const result = workouts.getWorkoutsRange("2026-01-01", "2026-01-31");
+    const result = workouts.getWorkoutsRange(1, "2026-01-01", "2026-01-31");
     expect(result).toEqual({ rows: [], truncated: false, total_count: 0 });
   });
 
@@ -157,7 +157,7 @@ describe("getWorkoutsRange", () => {
     }));
     insertWorkouts(rows);
 
-    const result = workouts.getWorkoutsRange("2026-01-01", "2026-02-28");
+    const result = workouts.getWorkoutsRange(1, "2026-01-01", "2026-02-28");
     expect(result.rows.length).toBe(50);
     expect(result.truncated).toBe(false);
     expect(result.total_count).toBe(50);
@@ -177,7 +177,7 @@ describe("getWorkoutsRange", () => {
     });
     insertWorkouts(rows);
 
-    const result = workouts.getWorkoutsRange("2024-01-01", "2026-12-31");
+    const result = workouts.getWorkoutsRange(1, "2024-01-01", "2026-12-31");
     expect(result.rows.length).toBe(500);
     expect(result.truncated).toBe(true);
     expect(result.total_count).toBe(510);
@@ -195,7 +195,7 @@ describe("getWorkoutsRange", () => {
       { id: "w-new", date: "2026-01-31" },
     ]);
 
-    const result = workouts.getWorkoutsRange("2026-01-01", "2026-01-31");
+    const result = workouts.getWorkoutsRange(1, "2026-01-01", "2026-01-31");
     expect(result.rows.map((r) => r.id)).toEqual(["w-new", "w-mid", "w-old"]);
   });
 });

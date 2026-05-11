@@ -32,6 +32,7 @@ export type Integration = {
   raw: Record<string, unknown> | null;
   key_version: number;
   needs_reauth: boolean;
+  provider_user_id: string | null;
   updated_at: string;
 };
 
@@ -91,6 +92,12 @@ function ensureIntegrationsTable(db: DB): void {
       "ALTER TABLE integrations ADD COLUMN needs_reauth INTEGER NOT NULL DEFAULT 0"
     );
   }
+  if (!cols.some((c) => c.name === "provider_user_id")) {
+    db.exec("ALTER TABLE integrations ADD COLUMN provider_user_id TEXT");
+  }
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_integrations_provider_user ON integrations(provider, provider_user_id)"
+  );
 }
 
 function userExists(db: DB, userId: number): boolean {
@@ -128,6 +135,12 @@ export function upsertIntegration(input: IntegrationInput): void {
     const rawJson = input.raw === undefined || input.raw === null
       ? null
       : JSON.stringify(input.raw);
+    // Note: `provider_user_id` is intentionally NOT touched by this upsert.
+    // Phase D: it's populated by setProviderUserId() in the OAuth callback
+    // and lazy-backfilled from runWhoopSync. Token refresh flows pass through
+    // here with no profile fetch, so writing NULL here would clobber a
+    // previously-captured mapping. We rely on ON CONFLICT not mentioning the
+    // column to preserve whatever's already there.
     db.prepare(
       `
       INSERT INTO integrations (
@@ -173,6 +186,7 @@ type IntegrationRowRaw = {
   raw: string | null;
   key_version: number;
   needs_reauth: number;
+  provider_user_id: string | null;
   updated_at: string;
 };
 
@@ -227,7 +241,8 @@ export function getIntegration(
       .prepare(
         `
         SELECT user_id, provider, access_token, refresh_token, expires_at,
-               scopes, token_type, raw, key_version, needs_reauth, updated_at
+               scopes, token_type, raw, key_version, needs_reauth,
+               provider_user_id, updated_at
         FROM integrations
         WHERE user_id = ? AND provider = ?
         `
@@ -257,6 +272,7 @@ export function getIntegration(
         raw,
         key_version: row.key_version,
         needs_reauth: row.needs_reauth === 1,
+        provider_user_id: row.provider_user_id,
         updated_at: row.updated_at,
       };
     } catch (err) {
@@ -299,6 +315,62 @@ export function setIntegrationNeedsReauth(
     db.prepare(
       "UPDATE integrations SET needs_reauth = ?, updated_at = ? WHERE user_id = ? AND provider = ?"
     ).run(value ? 1 : 0, new Date().toISOString(), user_id, provider);
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Set `provider_user_id` for a (user, provider) row.
+ *
+ * Phase D — the remote provider's user id (Whoop's `evt.user_id` in webhook
+ * payloads) is captured here so future webhooks for that remote id can be
+ * routed to the right local users.id. Called from the OAuth callback after
+ * a successful profile fetch, and lazy-backfilled from `runWhoopSync` if
+ * still NULL.
+ *
+ * No-op when the integrations row doesn't exist — callers must `upsertIntegration`
+ * first.
+ */
+export function setProviderUserId(
+  user_id: number,
+  provider: string,
+  providerUserId: string
+): void {
+  const db = openWrite();
+  if (!db) return;
+  try {
+    if (!hasTable(db, "integrations")) return;
+    db.prepare(
+      "UPDATE integrations SET provider_user_id = ?, updated_at = ? " +
+        "WHERE user_id = ? AND provider = ?"
+    ).run(providerUserId, new Date().toISOString(), user_id, provider);
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Reverse-lookup: given a remote provider user id (e.g. Whoop's `evt.user_id`),
+ * return our local users.id. Returns null when no integration row matches.
+ *
+ * Used by the webhook handler to route an inbound event to the right tenant
+ * without falling back to a hardcoded user_id.
+ */
+export function lookupUserIdByProvider(
+  provider: string,
+  providerUserId: string
+): number | null {
+  const db = open();
+  if (!db) return null;
+  try {
+    if (!hasTable(db, "integrations")) return null;
+    const row = db
+      .prepare(
+        "SELECT user_id FROM integrations WHERE provider = ? AND provider_user_id = ? LIMIT 1"
+      )
+      .get(provider, providerUserId) as { user_id: number } | undefined;
+    return row?.user_id ?? null;
   } finally {
     db.close();
   }
