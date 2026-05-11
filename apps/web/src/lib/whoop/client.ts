@@ -47,6 +47,12 @@ function combineSignals(
 }
 
 type GetOpts = {
+  /**
+   * Owner of the Whoop tokens for this call. Threaded explicitly so the
+   * client never falls back to a hardcoded user id — every callsite is
+   * forced to surface auth.
+   */
+  userId: number;
   signal?: AbortSignal;
   /**
    * Fired when this call originates a Whoop token refresh (proactive on
@@ -56,9 +62,9 @@ type GetOpts = {
   onTokenRefresh?: () => void;
 };
 
-export async function whoopGet<T>(path: string, opts: GetOpts = {}): Promise<T> {
+export async function whoopGet<T>(path: string, opts: GetOpts): Promise<T> {
   const url = `${BASE_URL}${path}`;
-  let token = await getValidAccessToken(false, { onRefresh: opts.onTokenRefresh });
+  let token = await getValidAccessToken(opts.userId, false, { onRefresh: opts.onTokenRefresh });
   if (!token) throw new WhoopAuthError("No valid Whoop token; re-auth required");
 
   let resp = await fetch(url, {
@@ -68,7 +74,7 @@ export async function whoopGet<T>(path: string, opts: GetOpts = {}): Promise<T> 
   });
 
   if (resp.status === 401) {
-    token = await getValidAccessToken(true, { onRefresh: opts.onTokenRefresh });
+    token = await getValidAccessToken(opts.userId, true, { onRefresh: opts.onTokenRefresh });
     if (!token) throw new WhoopAuthError("Refresh failed; re-auth required");
     resp = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
@@ -96,7 +102,7 @@ type PaginatedResponse<T> = { records?: T[]; next_token?: string | null };
 export async function whoopGetAll<T>(
   endpoint: string,
   params: Record<string, string>,
-  opts: GetOpts = {},
+  opts: GetOpts,
 ): Promise<{ records: T[]; pageCount: number }> {
   const records: T[] = [];
   let pageCount = 0;

@@ -118,6 +118,7 @@ type FetchedData = {
 };
 
 async function fetchAllParallel(
+  userId: number,
   start: string,
   end: string,
   signal?: AbortSignal,
@@ -141,7 +142,7 @@ async function fetchAllParallel(
   const onTokenRefresh = onProgress
     ? () => onProgress({ stage: "refreshing_token" })
     : undefined;
-  const fetchOpts = { signal, onTokenRefresh };
+  const fetchOpts = { userId, signal, onTokenRefresh };
 
   const [
     bodyRes,
@@ -464,10 +465,12 @@ function latestDates(): LatestDates {
 
 export async function runWhoopSync(
   opts: {
+    /** Owner of the Whoop integration to sync. Required — no fallback. */
+    userId: number;
     days?: number;
     signal?: AbortSignal;
     onProgress?: (e: SyncProgressEvent) => void;
-  } = {},
+  },
 ): Promise<SyncResult> {
   const days = opts.days ?? DEFAULT_DAYS;
   const { start, end } = isoUtcRange(days);
@@ -497,18 +500,19 @@ export async function runWhoopSync(
 
     // Pre-warm the access token so `refreshing_token` is the first stage
     // event deterministically — before the parallel fetch burst. Seeds
-    // `inflightRefresh` so the parallel `whoopGet` calls below either skip
-    // refresh or join the same in-flight promise (single emit). No-op if
-    // token is fresh; returns null on auth failure (downstream `whoopGet`
-    // will surface `WhoopAuthError`). May still throw on transport failure
-    // (DNS / TLS / `AbortSignal.timeout`) — caught by the outer try and
-    // routed to the pre-commit failure branch.
-    await getValidAccessToken(false, {
+    // `inflightRefreshByUser` so the parallel `whoopGet` calls below either
+    // skip refresh or join the same in-flight promise (single emit). No-op
+    // if token is fresh; returns null on auth failure (downstream
+    // `whoopGet` will surface `WhoopAuthError`). May still throw on
+    // transport failure (DNS / TLS / `AbortSignal.timeout`) — caught by
+    // the outer try and routed to the pre-commit failure branch.
+    await getValidAccessToken(opts.userId, false, {
       onRefresh: () => opts.onProgress?.({ stage: "refreshing_token" }),
     });
 
     const fetchT0 = Date.now();
     const { data, fetchBreakdown, pageCounts } = await fetchAllParallel(
+      opts.userId,
       start,
       end,
       opts.signal,
