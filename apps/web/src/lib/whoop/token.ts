@@ -20,10 +20,11 @@ import {
 //   1. integrations DB row (encrypted). If row exists but decrypts to null,
 //      we DO NOT fall back to tokens.json — masking corruption that way is
 //      worse than a hard upstream auth failure.
-//   2. tokens.json (only when no DB row exists at all).
+//   2. tokens.json (only when no DB row exists at all). LEGACY FALLBACK —
+//      tokens.json is single-user by definition, so this branch is gated to
+//      userId === 1 with a TODO marker for Phase D cutover.
 
 const REFRESH_BUFFER_S = 60;
-const DEFAULT_USER_ID = 1;
 const WHOOP_PROVIDER = "whoop";
 
 // Definitive "credentials are dead, user must reconnect" error codes from
@@ -34,7 +35,12 @@ const WHOOP_PROVIDER = "whoop";
 //   - invalid_request → our client bug (malformed body, missing param).
 const REAUTH_ERROR_CODES = new Set(["invalid_grant", "invalid_token"]);
 
-let inflightRefresh: Promise<StoredTokens | null> | null = null;
+/**
+ * Per-user in-flight refresh singletons. Keying on user_id (not a single
+ * global) lets concurrent refreshes for distinct users proceed in parallel
+ * while still serializing duplicates for the same user.
+ */
+const inflightRefreshByUser = new Map<number, Promise<StoredTokens | null>>();
 
 function isStoredTokensShape(v: unknown): v is StoredTokens {
   if (!v || typeof v !== "object") return false;
@@ -48,16 +54,16 @@ function isStoredTokensShape(v: unknown): v is StoredTokens {
 }
 
 /**
- * Read tokens, preferring the encrypted integrations row.
+ * Read tokens for `userId`, preferring the encrypted integrations row.
  *
  * Returns:
- *   - StoredTokens if the DB row decrypts cleanly, OR if no row exists and
- *     tokens.json contains a valid record.
+ *   - StoredTokens if the DB row decrypts cleanly, OR (legacy, userId === 1
+ *     only) if no row exists and tokens.json contains a valid record.
  *   - null when the DB row exists but cannot be decrypted, OR when neither
  *     source produces a valid record.
  */
-async function loadTokens(): Promise<StoredTokens | null> {
-  const integration = getIntegration(DEFAULT_USER_ID, WHOOP_PROVIDER);
+async function loadTokens(userId: number): Promise<StoredTokens | null> {
+  const integration = getIntegration(userId, WHOOP_PROVIDER);
   if (integration) {
     const raw = (integration.raw ?? {}) as Record<string, unknown>;
     const expiresIn =
@@ -72,16 +78,21 @@ async function loadTokens(): Promise<StoredTokens | null> {
     };
   }
 
-  if (integrationRowExists(DEFAULT_USER_ID, WHOOP_PROVIDER)) {
+  if (integrationRowExists(userId, WHOOP_PROVIDER)) {
     // Row exists but undecryptable. Do NOT fall back to tokens.json — that
     // would silently mask a corruption / wrong-key scenario.
     console.warn(
-      "[token] integrations row present but undecryptable; refusing file fallback"
+      `[token] integrations row present but undecryptable for user_id=${userId}; refusing file fallback`
     );
     return null;
   }
 
-  // No DB row — fall back to tokens.json (first-run / pre-migration).
+  // TODO(phase-d-cutover): remove file fallback. tokens.json is the legacy
+  // single-user store from pre-PR-#318 installs; only user_id=1 (the
+  // maintainer's bootstrap user) is allowed to read from it. Any other user
+  // who has no integrations row is genuinely disconnected.
+  if (userId !== 1) return null;
+
   try {
     const data = await fs.readFile(tokensPath(), "utf8");
     const parsed = JSON.parse(data) as Record<string, unknown>;
@@ -121,7 +132,10 @@ function isExpired(tokens: StoredTokens, nowMs: number = Date.now()): boolean {
   return nowMs > exp - REFRESH_BUFFER_S * 1000;
 }
 
-async function refreshTokens(current: StoredTokens): Promise<StoredTokens | null> {
+async function refreshTokens(
+  userId: number,
+  current: StoredTokens
+): Promise<StoredTokens | null> {
   const body = new URLSearchParams({
     grant_type: "refresh_token",
     refresh_token: current.refresh_token,
@@ -162,7 +176,7 @@ async function refreshTokens(current: StoredTokens): Promise<StoredTokens | null
       // body wasn't JSON; status alone is the signal.
     }
     console.error(
-      `[token] refresh failed status=${resp.status} body=${JSON.stringify(bodyExcerpt)}`
+      `[token] refresh failed user_id=${userId} status=${resp.status} body=${JSON.stringify(bodyExcerpt)}`
     );
     // Flip flag only on definitive credential-rejection signals so a code
     // bug or upstream config issue doesn't train the user to reconnect.
@@ -172,16 +186,17 @@ async function refreshTokens(current: StoredTokens): Promise<StoredTokens | null
     // and unknown error codes → log only.
     //
     // Non-atomic with the upsert. Single-process Next.js serializes via
-    // the `inflightRefresh` singleton, but a concurrent Python sync
-    // (sync/daily_sync.py) could in theory race a flag-set against a
-    // follow-up reset. Acceptable today; P2 keepalive will reshape this.
+    // the per-user `inflightRefreshByUser` singleton, but a concurrent
+    // Python sync (sync/daily_sync.py) could in theory race a flag-set
+    // against a follow-up reset. Acceptable today; P2 keepalive will
+    // reshape this.
     const errorCode =
       typeof bodyExcerpt.error === "string" ? bodyExcerpt.error : null;
     if (
       (errorCode && REAUTH_ERROR_CODES.has(errorCode)) ||
       resp.status === 401
     ) {
-      setIntegrationNeedsReauth(DEFAULT_USER_ID, WHOOP_PROVIDER, true);
+      setIntegrationNeedsReauth(userId, WHOOP_PROVIDER, true);
     }
     return null;
   }
@@ -192,20 +207,21 @@ async function refreshTokens(current: StoredTokens): Promise<StoredTokens | null
   };
   // saveTokens → upsertIntegration writes needs_reauth = 0 on every successful
   // write, so the flag self-resets here on a healthy refresh.
-  await saveTokens(stored);
+  await saveTokens(userId, stored);
   return stored;
 }
 
 export async function getValidAccessToken(
+  userId: number,
   forceRefresh = false,
   hooks: { onRefresh?: () => void } = {},
 ): Promise<string | null> {
-  const existing = inflightRefresh;
+  const existing = inflightRefreshByUser.get(userId);
   if (existing) {
     return (await existing)?.access_token ?? null;
   }
 
-  const tokens = await loadTokens();
+  const tokens = await loadTokens(userId);
   if (!tokens) return null;
   if (!forceRefresh && !isExpired(tokens)) {
     return tokens.access_token;
@@ -213,22 +229,23 @@ export async function getValidAccessToken(
 
   // Re-check after the async gap above: a concurrent webhook may have started
   // a refresh between our loadTokens() await and here. Join it if so.
-  const existingAfterLoad = inflightRefresh;
+  const existingAfterLoad = inflightRefreshByUser.get(userId);
   if (existingAfterLoad) {
     return (await existingAfterLoad)?.access_token ?? null;
   }
 
   // Fire onRefresh only on the originating call — joiners above skip it so
   // a single refresh emits exactly one progress event.
-  // INVARIANT: no awaits between this fire and the `inflightRefresh`
+  // INVARIANT: no awaits between this fire and the `inflightRefreshByUser`
   // assignment below. Single-thread JS guarantees no other caller can
-  // observe `inflightRefresh === null` between these two lines, which is
-  // what prevents double-emit. Do NOT insert telemetry / logging here.
+  // observe an empty map entry between these two lines, which is what
+  // prevents double-emit. Do NOT insert telemetry / logging here.
   hooks.onRefresh?.();
-  const refreshPromise = refreshTokens(tokens);
-  inflightRefresh = refreshPromise.finally(() => {
-    inflightRefresh = null;
+  const refreshPromise = refreshTokens(userId, tokens);
+  const tracked = refreshPromise.finally(() => {
+    inflightRefreshByUser.delete(userId);
   });
-  const refreshed = await refreshPromise;
+  inflightRefreshByUser.set(userId, tracked);
+  const refreshed = await tracked;
   return refreshed?.access_token ?? null;
 }

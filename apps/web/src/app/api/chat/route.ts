@@ -105,7 +105,7 @@ export async function POST(req: Request) {
 
     if (!wantsStream(req)) {
       try {
-        const reply = await runAndPersistCoachTurn(thread, lastUser, conversation, days, source, {
+        const reply = await runAndPersistCoachTurn(user.id, thread, lastUser, conversation, days, source, {
           signal: req.signal,
         });
         if (shouldAutoTitle) {
@@ -147,6 +147,7 @@ export async function POST(req: Request) {
 
         try {
           const reply = await runAndPersistCoachTurn(
+            user.id,
             thread,
             lastUser,
             conversation,

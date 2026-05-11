@@ -14,6 +14,7 @@ import { TITLE_MODEL, TITLE_SYSTEM_PROMPT } from "./prompts";
 import { type ToolDetail, chatLogToolSummaries } from "./tools";
 
 export async function runAndPersistCoachTurn(
+  userId: number,
   thread: { id: number },
   lastUser: string,
   conversation: MessageParam[],
@@ -46,6 +47,7 @@ export async function runAndPersistCoachTurn(
 
   try {
     const result = await runAnthropicSdk(
+      userId,
       thread.id,
       lastUser,
       conversation,

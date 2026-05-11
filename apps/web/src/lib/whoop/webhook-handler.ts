@@ -34,15 +34,19 @@ export type HandleEventOutcome =
 /** Surfaces `WhoopNotFoundError` raw because callers handle it differently
  * (webhook route discards; replay marks discarded). */
 export async function handleEvent(evt: WhoopWebhookEvent): Promise<HandleEventOutcome> {
+  // TODO(phase-d): map evt.user_id (Whoop user) → local users.id once a
+  // mapping table exists. For now webhook-driven fetches act as the
+  // maintainer (user_id=1) — same effective behavior as pre-#320 single-user.
+  const userId = 1;
   switch (evt.type) {
     case "sleep.updated": {
-      const r = await whoopGet<WhoopSleepRecord>(`/v2/activity/sleep/${evt.id}`);
+      const r = await whoopGet<WhoopSleepRecord>(`/v2/activity/sleep/${evt.id}`, { userId });
       upsertSleep(r);
       recomputeDailySummary(sleepSummaryDate(r));
       return { kind: "handled" };
     }
     case "workout.updated": {
-      const r = await whoopGet<WhoopWorkoutRecord>(`/v2/activity/workout/${evt.id}`);
+      const r = await whoopGet<WhoopWorkoutRecord>(`/v2/activity/workout/${evt.id}`, { userId });
       upsertWorkout(r);
       recomputeDailySummary(workoutSummaryDate(r));
       return { kind: "handled" };
@@ -50,6 +54,7 @@ export async function handleEvent(evt: WhoopWebhookEvent): Promise<HandleEventOu
     case "recovery.updated": {
       const list = await whoopGet<{ records: WhoopRecoveryRecord[] }>(
         "/v2/recovery?limit=10",
+        { userId },
       );
       const r = list.records.find((x) => x.sleep_id === evt.id);
       if (!r) {

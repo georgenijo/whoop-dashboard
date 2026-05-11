@@ -1,7 +1,6 @@
 import "server-only";
 import fs from "node:fs/promises";
 import path from "node:path";
-import crypto from "node:crypto";
 import {
   findOrCreateUserByEmail,
   getPrimaryUser,
@@ -35,6 +34,18 @@ export function clientSecret(): string {
   return v;
 }
 
+/**
+ * HMAC key for the Whoop OAuth `state` nonce. Fail-closed at first use, NOT
+ * at module load — Next builds without env, and pinning the throw to the
+ * call site means a deploy with a missing var fails at the moment a user
+ * presses Connect, not at startup.
+ */
+export function whoopStateSecret(): string {
+  const v = process.env.WHOOP_STATE_SECRET;
+  if (!v) throw new Error("WHOOP_STATE_SECRET not configured");
+  return v;
+}
+
 export function redirectUri(): string {
   return (
     process.env.WHOOP_REDIRECT_URI ?? "http://localhost:3000/api/auth/callback"
@@ -56,14 +67,21 @@ export function getBootstrapUser(): User {
   return user;
 }
 
-export function buildAuthUrl(): string {
-  const state = crypto.randomBytes(8).toString("hex");
+/**
+ * Build the Whoop OAuth authorize URL.
+ *
+ * `state` is the signed HMAC nonce from `@/lib/whoop/oauth-state` —
+ * passed explicitly so the caller (the start route) can also write the
+ * same value to the `whoop_oauth_state` cookie for the callback's
+ * byte-equality + HMAC verify pair.
+ */
+export function buildAuthUrl(signedState: string): string {
   const params = new URLSearchParams({
     client_id: clientId(),
     redirect_uri: redirectUri(),
     response_type: "code",
     scope: WHOOP_SCOPES,
-    state,
+    state: signedState,
   });
   return `${WHOOP_AUTH_URL}?${params.toString()}`;
 }
@@ -85,7 +103,6 @@ export type StoredTokens = Omit<WhoopTokenResponse, never> & {
   expires_at: string;
 };
 
-const DEFAULT_USER_ID = 1;
 const WHOOP_PROVIDER = "whoop";
 
 /** Compute ISO 8601 expires_at from Whoop's `expires_in` (seconds). */
@@ -93,7 +110,18 @@ export function computeExpiresAtIso(expiresIn: number): string {
   return new Date(Date.now() + expiresIn * 1000).toISOString();
 }
 
-export async function exchangeCode(code: string): Promise<StoredTokens> {
+/**
+ * Exchange a Whoop OAuth authorization code for tokens and persist them
+ * against `userId`. The caller is responsible for verifying `userId` from
+ * a signed state nonce — this function trusts what it's given.
+ */
+export async function exchangeCode(
+  userId: number,
+  code: string
+): Promise<StoredTokens> {
+  if (!Number.isInteger(userId) || userId <= 0) {
+    throw new Error(`exchangeCode: invalid userId=${userId}`);
+  }
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
@@ -115,7 +143,7 @@ export async function exchangeCode(code: string): Promise<StoredTokens> {
     ...data,
     expires_at: computeExpiresAtIso(data.expires_in),
   };
-  await saveTokens(stored);
+  await saveTokens(userId, stored);
   return stored;
 }
 
@@ -136,7 +164,10 @@ export async function exchangeCode(code: string): Promise<StoredTokens> {
  * still serve as a persistent copy. If BOTH writes fail, we throw so the
  * caller doesn't proceed assuming tokens were saved.
  */
-export async function saveTokens(tokens: StoredTokens): Promise<void> {
+export async function saveTokens(
+  userId: number,
+  tokens: StoredTokens
+): Promise<void> {
   let dbOk = false;
   let fileOk = false;
   let dbErr: unknown;
@@ -145,7 +176,7 @@ export async function saveTokens(tokens: StoredTokens): Promise<void> {
   // 1) Encrypted DB write. `raw=undefined` — see docstring above.
   try {
     upsertIntegration({
-      user_id: DEFAULT_USER_ID,
+      user_id: userId,
       provider: WHOOP_PROVIDER,
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
@@ -158,27 +189,37 @@ export async function saveTokens(tokens: StoredTokens): Promise<void> {
   } catch (err) {
     dbErr = err;
     console.error(
-      `[auth] integrations upsert failed: ${
+      `[auth] integrations upsert failed user_id=${userId}: ${
         err instanceof Error ? err.message : String(err)
       }`
     );
   }
 
-  // 2) Parallel write to tokens.json (atomic tmp+rename), matches
-  // streamlit/whoop/auth.py save_tokens.
-  try {
-    const p = tokensPath();
-    const tmp = `${p}.tmp`;
-    await fs.writeFile(tmp, JSON.stringify(tokens), "utf8");
-    await fs.rename(tmp, p);
+  // 2) Parallel write to tokens.json (atomic tmp+rename) — LEGACY,
+  // userId === 1 only. tokens.json is single-user by construction; writing
+  // it for any other user_id would silently overwrite the maintainer's
+  // file with a different account's tokens. Other users go DB-only.
+  // TODO(phase-d-cutover): drop this branch entirely once the file
+  // fallback in token.loadTokens is removed.
+  if (userId === 1) {
+    try {
+      const p = tokensPath();
+      const tmp = `${p}.tmp`;
+      await fs.writeFile(tmp, JSON.stringify(tokens), "utf8");
+      await fs.rename(tmp, p);
+      fileOk = true;
+    } catch (err) {
+      fileErr = err;
+      console.error(
+        `[auth] tokens.json write failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+    }
+  } else {
+    // For non-maintainer users, "skipped" is the desired end state — count
+    // it as ok so the "both writes failed" guard below doesn't fire.
     fileOk = true;
-  } catch (err) {
-    fileErr = err;
-    console.error(
-      `[auth] tokens.json write failed: ${
-        err instanceof Error ? err.message : String(err)
-      }`
-    );
   }
 
   if (!dbOk && !fileOk) {
