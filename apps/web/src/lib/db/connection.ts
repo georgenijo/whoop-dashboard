@@ -202,6 +202,22 @@ export function openWrite(): DB | null {
         updated_at TEXT NOT NULL,
         PRIMARY KEY (user_id, provider)
       );
+      -- Per-provider lookup for the Phase C sync orchestrator (iterate every
+      -- user with a Whoop integration, schedule a refresh).
+      CREATE INDEX IF NOT EXISTS idx_integrations_provider ON integrations(provider);
+      -- Per-user app preferences. Single typed row per user. anthropic_key
+      -- is encrypted via NaCl secretbox (same key/key_version scheme as
+      -- integrations); NULL means "use server fallback". Other columns are
+      -- plaintext and nullable until the user sets a preference.
+      CREATE TABLE IF NOT EXISTS user_settings (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id),
+        anthropic_key TEXT,
+        anthropic_key_version INTEGER,
+        model_pref TEXT,
+        timezone TEXT,
+        monthly_token_cap INTEGER,
+        updated_at TEXT NOT NULL
+      );
       -- APNs device tokens for push notifications. Composite PK on
       -- (user_id, token); UNIQUE INDEX on token alone so a token reappearing
       -- under a different user_id (device handed off) is detectable as a
