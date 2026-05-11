@@ -165,6 +165,12 @@ Labels (case-sensitive):
 
 Don't reintroduce `enhancement` or `rebuild` (deprecated).
 
+## Decisions log
+
+Architectural, scope, and process decisions live in `docs/decisions/DECISIONS.md` (running log, newest first). Read it before suggesting direction changes or revisiting locked tradeoffs. Maintained via the `/decisions` skill at `~/.claude/skills/decisions/`.
+
+For deep one-off rationale on big locked decisions, write an ADR alongside in `docs/decisions/YYYY-MM-DD-*.md` and reference it from the log.
+
 ## Working notes
 
 - Schema migration changes go in `openWrite()`. Add the ALTER right after the relevant `CREATE TABLE` block, gated by a `PRAGMA table_info` check.
