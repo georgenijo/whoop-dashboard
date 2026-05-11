@@ -244,9 +244,20 @@ async function main(): Promise<number> {
       skipped?: boolean;
       error?: string;
     };
-    const reachedSync = resp.status !== 401;
+    // Stronger than "not 401": confirm we actually reached the sync stack,
+    // not bounced at routing. A 200 (ok or skipped) or a body carrying an
+    // `error` string from runWhoopSync proves the route resolved → auth
+    // passed → runWhoopSync executed. A bare 200 with no recognizable shape
+    // (or a 401/404) would be the regression.
+    const reachedSync =
+      resp.status !== 401 &&
+      resp.status !== 404 &&
+      (resp.status === 200 ||
+        typeof body.error === "string" ||
+        typeof body.ok === "boolean" ||
+        typeof body.skipped === "boolean");
     record(
-      "POST /api/sync reaches runWhoopSync (does not 401 the dev-bootstrap user)",
+      "POST /api/sync reaches runWhoopSync (route resolved + auth threaded)",
       reachedSync,
       `status=${resp.status} body=${JSON.stringify(body).slice(0, 160)}`
     );

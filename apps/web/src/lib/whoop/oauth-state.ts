@@ -55,6 +55,11 @@ function fromBase64Url(s: string): Buffer | null {
  */
 export function encodeWhoopOAuthState(payload: WhoopOAuthStatePayload): string {
   const exp = payload.exp ?? Date.now() + TTL_MS;
+  // Object literal key order (u, n, e) is the canonical signing order.
+  // V8 preserves insertion order on string keys, so this round-trips
+  // deterministically. Do not refactor into a spread or a Map without
+  // re-checking that JSON.stringify produces the same byte sequence —
+  // a different order makes every existing signed state un-verifiable.
   const body: EncodedPayload = {
     u: payload.user_id,
     n: crypto.randomBytes(NONCE_BYTES).toString("hex"),

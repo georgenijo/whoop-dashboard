@@ -119,6 +119,9 @@ export async function exchangeCode(
   userId: number,
   code: string
 ): Promise<StoredTokens> {
+  if (!Number.isInteger(userId) || userId <= 0) {
+    throw new Error(`exchangeCode: invalid userId=${userId}`);
+  }
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,

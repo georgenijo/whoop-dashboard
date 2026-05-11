@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import crypto from "node:crypto";
 import { exchangeCode } from "@/lib/auth";
 import { publicOrigin } from "@/lib/auth/origin";
 import { decodeWhoopOAuthState } from "@/lib/whoop/oauth-state";
@@ -14,6 +15,7 @@ type SettingsErrorCode =
   | "state_missing"
   | "state_mismatch"
   | "state_invalid"
+  | "user_cancelled"
   | "exchange_failed";
 
 /**
@@ -49,15 +51,11 @@ function clearStateCookie(response: NextResponse) {
   });
 }
 
-/** Constant-time byte-equality on two strings. Avoids leaking the cookie
- * length through string comparison early-exit. */
+/** Constant-time byte-equality on two strings via `crypto.timingSafeEqual`.
+ * The function throws on unequal-length buffers, so length-check first. */
 function timingSafeStrEq(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return diff === 0;
+  return crypto.timingSafeEqual(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
 }
 
 export async function GET(req: NextRequest) {
@@ -66,7 +64,12 @@ export async function GET(req: NextRequest) {
   const stateFromUrl = req.nextUrl.searchParams.get("state");
 
   if (error) {
-    return redirectWithError(req, "exchange_failed");
+    // Whoop's OAuth2 spec returns `access_denied` when the user clicks Cancel
+    // on the authorize screen. Surface that as a distinct UX state — not an
+    // "exchange_failed" technical error.
+    const code: SettingsErrorCode =
+      error === "access_denied" ? "user_cancelled" : "exchange_failed";
+    return redirectWithError(req, code);
   }
   if (!code) {
     return new NextResponse("Missing authorization code", { status: 400 });

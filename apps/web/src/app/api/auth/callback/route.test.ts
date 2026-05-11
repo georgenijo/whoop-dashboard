@@ -145,6 +145,31 @@ describe("GET /api/auth/callback — Whoop OAuth state verification", () => {
     expect(exchangeCodeMock).not.toHaveBeenCalled();
   });
 
+  it("user_cancelled: Whoop ?error=access_denied → distinct UX code, no exchange", async () => {
+    const { GET } = await importRoute();
+    const url = new URL("http://localhost/api/auth/callback");
+    url.searchParams.set("error", "access_denied");
+    const req = new NextRequest(url.toString(), { method: "GET" });
+
+    const res = await GET(req);
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("whoop_error=user_cancelled");
+    expect(exchangeCodeMock).not.toHaveBeenCalled();
+  });
+
+  it("exchange_failed: Whoop ?error=<other> → generic exchange_failed code", async () => {
+    const { GET } = await importRoute();
+    const url = new URL("http://localhost/api/auth/callback");
+    url.searchParams.set("error", "server_error");
+    const req = new NextRequest(url.toString(), { method: "GET" });
+
+    const res = await GET(req);
+
+    expect(res.headers.get("location")).toContain("whoop_error=exchange_failed");
+    expect(exchangeCodeMock).not.toHaveBeenCalled();
+  });
+
   it("exchange_failed: state ok but exchangeCode throws → redirect with error code", async () => {
     const { encodeWhoopOAuthState } = await importState();
     const { GET } = await importRoute();
