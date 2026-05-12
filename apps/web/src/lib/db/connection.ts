@@ -216,6 +216,9 @@ export function openWrite(): DB | null {
         model_pref TEXT,
         timezone TEXT,
         monthly_token_cap INTEGER,
+        coach_goals TEXT,
+        onboarded_at TEXT,
+        tz TEXT,
         updated_at TEXT NOT NULL
       );
       -- APNs device tokens for push notifications. Composite PK on
@@ -371,23 +374,20 @@ export function openWrite(): DB | null {
     //   - coach_goals: JSON-encoded `string[]` of canonical goal IDs
     //   - onboarded_at: ISO 8601 set-once stamp; gates the /welcome redirect
     //   - tz: IANA timezone, captured write-once during the wizard
-    // Gated by PRAGMA table_info so duplicate ADD COLUMNs don't crash boot.
-    // `user_settings.length === 0` guard catches the "table was never created"
-    // edge case (early test DBs); the bootstrap CREATE above already handles
-    // the common path.
+    // Fresh DBs get these via the bootstrap CREATE above. The ALTERs below
+    // exist for existing prod DBs that pre-date Phase E.1; each is gated by a
+    // PRAGMA check so a re-run doesn't crash boot.
     const userSettingsCols = db
       .prepare("PRAGMA table_info(user_settings)")
       .all() as { name: string }[];
-    if (userSettingsCols.length > 0) {
-      if (!userSettingsCols.some((c) => c.name === "coach_goals")) {
-        db.exec("ALTER TABLE user_settings ADD COLUMN coach_goals TEXT");
-      }
-      if (!userSettingsCols.some((c) => c.name === "onboarded_at")) {
-        db.exec("ALTER TABLE user_settings ADD COLUMN onboarded_at TEXT");
-      }
-      if (!userSettingsCols.some((c) => c.name === "tz")) {
-        db.exec("ALTER TABLE user_settings ADD COLUMN tz TEXT");
-      }
+    if (!userSettingsCols.some((c) => c.name === "coach_goals")) {
+      db.exec("ALTER TABLE user_settings ADD COLUMN coach_goals TEXT");
+    }
+    if (!userSettingsCols.some((c) => c.name === "onboarded_at")) {
+      db.exec("ALTER TABLE user_settings ADD COLUMN onboarded_at TEXT");
+    }
+    if (!userSettingsCols.some((c) => c.name === "tz")) {
+      db.exec("ALTER TABLE user_settings ADD COLUMN tz TEXT");
     }
 
     // Phase D — data isolation. Add `user_id` to the five domain tables so
