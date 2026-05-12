@@ -43,9 +43,9 @@ The issues to work on are listed at the bottom of this prompt. For each issue nu
 You are implementing GitHub Issue #<number>: <title>
 
 ## Context
-Read these files silently before doing anything else:
-- /Users/george-mac-mini/Documents/code/whoop-dashboard/CLAUDE.md — project overview, architecture, conventions
-- /Users/george-mac-mini/Documents/code/whoop-dashboard/README.md — setup and run commands
+Read these files silently before doing anything else (paths are relative to your worktree root):
+- CLAUDE.md — project overview, architecture, conventions
+- README.md — setup and run commands
 
 Also read any file in `streamlit/whoop/` or the relevant `@st.fragment` section of `streamlit/app.py` for your work.
 
@@ -54,7 +54,7 @@ Also read any file in `streamlit/whoop/` or the relevant `@st.fragment` section 
 
 ## Instructions
 
-1. Your worktree is at: /Users/george-mac-mini/Documents/code/whoop-dashboard-issue-<number>
+1. Your worktree is at <worktree-path>
    Your branch is: issue/<number>-<slug>
    Work only in your worktree directory.
 
