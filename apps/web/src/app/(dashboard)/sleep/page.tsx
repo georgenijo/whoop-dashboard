@@ -26,7 +26,7 @@ import {
   getRecentNaps,
   getStrainTrend,
 } from "@/lib/db";
-import { requireAuth } from "@/lib/auth";
+import { requireAuthOrSignin } from "@/lib/auth";
 import { computeApneaSignal } from "@/lib/analytics/apnea";
 import { computeBedtimeRecoveryCorr, computeBedtimePatterns } from "@/lib/analytics/bedtime";
 import { computeNapImpact, withStartHour } from "@/lib/analytics/naps";
@@ -42,7 +42,7 @@ export default async function SleepPage({
   searchParams: Promise<{ range?: string }>;
 }) {
   const headerList = await headers();
-  const { user } = await requireAuth(
+  const { user } = await requireAuthOrSignin(
     new Request("http://localhost", { headers: headerList }),
   );
   const { range } = await searchParams;

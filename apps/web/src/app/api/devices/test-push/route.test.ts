@@ -6,6 +6,18 @@ import Database from "better-sqlite3";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/auth", () => ({
+  requireAuth: vi.fn(async () => ({
+    user: {
+      id: 1,
+      email: "test@example.com",
+      name: null,
+      apple_sub: "test-sub",
+      timezone: null,
+    },
+    source: "ios" as const,
+  })),
+}));
 
 // Stub the APNs sender — we're testing the route's gating + fan-out, not
 // the http2 client. apns.test.ts covers the sender itself.
@@ -20,7 +32,6 @@ const tmpRoot = mkdtempSync(path.join(tmpdir(), "test-push-route-"));
 const dbFile = path.join(tmpRoot, "test.db");
 writeFileSync(dbFile, "");
 process.env.WHOOP_DB_PATH = dbFile;
-process.env.NODE_ENV = "test";
 
 type RouteModule = typeof import("./route");
 type ConnectionModule = typeof import("@/lib/db/connection");
@@ -53,7 +64,6 @@ beforeAll(async () => {
 beforeEach(() => {
   clearTokens();
   delete process.env.ENABLE_PUSH_DEBUG;
-  process.env.NODE_ENV = "test";
 });
 
 afterAll(() => {
@@ -62,25 +72,31 @@ afterAll(() => {
 
 describe("POST /api/devices/test-push", () => {
   it("returns 404 in production without ENABLE_PUSH_DEBUG=1", async () => {
+    const orig = process.env.NODE_ENV;
     process.env.NODE_ENV = "production";
     try {
       const res = await route.POST(makeRequest());
       expect(res.status).toBe(404);
     } finally {
-      process.env.NODE_ENV = "test";
+      process.env.NODE_ENV = orig;
     }
   });
 
   it("ENABLE_PUSH_DEBUG=1 unblocks the gate in production (auth still enforced → 401)", async () => {
+    const orig = process.env.NODE_ENV;
     process.env.NODE_ENV = "production";
     process.env.ENABLE_PUSH_DEBUG = "1";
+    const { requireAuth } = await import("@/lib/auth");
+    vi.mocked(requireAuth).mockRejectedValueOnce(
+      new Response("Unauthorized", { status: 401 })
+    );
     try {
       const res = await route.POST(makeRequest());
       // The gate let us through (otherwise 404). Then requireAuth rejected
       // the unauthenticated request with 401 — exactly the wiring we want.
       expect(res.status).toBe(401);
     } finally {
-      process.env.NODE_ENV = "test";
+      process.env.NODE_ENV = orig;
       delete process.env.ENABLE_PUSH_DEBUG;
     }
   });

@@ -5,6 +5,18 @@ import Database from "better-sqlite3";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/auth", () => ({
+  requireAuth: vi.fn(async () => ({
+    user: {
+      id: 1,
+      email: "test@example.com",
+      name: null,
+      apple_sub: "test-sub",
+      timezone: null,
+    },
+    source: "ios" as const,
+  })),
+}));
 
 // WHOOP_DB_PATH must be set BEFORE importing any module that touches the DB —
 // connection.ts reads it via dbPath() which lazy-creates the schema on first
@@ -145,8 +157,6 @@ function shiftDate(date: string, days: number): string {
 }
 
 beforeAll(async () => {
-  // Force the route's auth path to fall through to the bootstrap user.
-  process.env.NODE_ENV = "test";
   // Force schema bootstrap. Importing @/lib/db alone doesn't open the DB; a
   // write through settings.setSetting goes via openWrite() which lazy-creates
   // every CREATE TABLE in connection.ts.

@@ -19,7 +19,7 @@ You review code for the Coach (whoop-dashboard) repo. Output is a punch list gro
   - On `stop_reason === "max_tokens"`, return partial text with truncation marker — never throw.
   - `tool_use` and `tool_result` content blocks persisted as JSON in `blocks` column. Filter synthetic `[tool_result]` rows from UI in `getChatMessages` and `getChatThreads`.
   - Persistence buffered in memory, committed atomically via `addChatMessages` (`db.transaction(fn)`). Failed API calls leave DB untouched.
-- **Auth (`apps/web/src/lib/auth.ts`):** `requireAuth(req)` — no header → `getBootstrapUser()` (user_id=1). Bearer token present → verify JWT or return 401, no fallthrough to bootstrap on bad bearer.
+- **Auth (`apps/web/src/lib/auth.ts`):** `requireAuth(req)` — precedence Bearer → Cookie → 401. No bootstrap fallback. Bearer (iOS) verifies a session JWT or 401s; cookie (`__Host-coach_session`) is issued by `/api/auth/apple-web/callback`. Public web requests are gated upstream by `apps/web/src/proxy.ts authGate()`. Admin routes use `ADMIN_APPLE_SUB` env (fail-closed).
 - **Anthropic SDK only.** No raw HTTP for Claude. Default chat model `claude-sonnet-4-6`, titles `claude-haiku-4-5`. No `budget_tokens` (use adaptive thinking).
 - **Records gate:** only `score_state == "SCORED"` processed. Naps excluded at query time (`WHERE nap = 0`), not at sync.
 

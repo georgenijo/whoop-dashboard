@@ -69,8 +69,11 @@ export async function POST(req: Request) {
   try {
     const { user } = await requireAuth(req);
 
-    // v1 single-user gate.
-    if (user.id !== 1) {
+    const adminSub = process.env.ADMIN_APPLE_SUB;
+    if (!adminSub) {
+      return new Response("ADMIN_APPLE_SUB not configured", { status: 500 });
+    }
+    if (user.apple_sub !== adminSub) {
       return new Response("Forbidden", { status: 403 });
     }
 

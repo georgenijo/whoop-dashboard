@@ -327,8 +327,8 @@ export function openWrite(): DB | null {
     if (!userCols.some((c) => c.name === "timezone")) {
       db.exec("ALTER TABLE users ADD COLUMN timezone TEXT");
     }
-    // Case-insensitive uniqueness on email lets findOrCreateUserByEmail rely on
-    // a SQLITE_CONSTRAINT race-loser to retry instead of TOCTOU SELECT+INSERT.
+    // Case-insensitive uniqueness on email — guards against duplicate user rows
+    // across SIWA merges and (future) Google sign-in.
     db.exec(
       "CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON users(LOWER(email)) WHERE email IS NOT NULL"
     );

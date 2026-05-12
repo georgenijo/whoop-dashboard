@@ -121,27 +121,6 @@ describe("upsertUserByAppleSub tz handling", () => {
   });
 });
 
-describe("findOrCreateUserByEmail tz handling", () => {
-  it("persists tz on insert", () => {
-    const user = auth.findOrCreateUserByEmail("e@example.com", "Asia/Tokyo");
-    expect(user.timezone).toBe("Asia/Tokyo");
-    expect(readUserById(user.id)?.timezone).toBe("Asia/Tokyo");
-  });
-
-  it("updates tz on a returning user when a new value is supplied", () => {
-    const created = auth.findOrCreateUserByEmail("f@example.com", "Asia/Tokyo");
-    const updated = auth.findOrCreateUserByEmail("f@example.com", "Asia/Singapore");
-    expect(updated.id).toBe(created.id);
-    expect(readUserById(created.id)?.timezone).toBe("Asia/Singapore");
-  });
-
-  it("preserves existing tz when caller omits the parameter", () => {
-    const created = auth.findOrCreateUserByEmail("g@example.com", "Asia/Tokyo");
-    auth.findOrCreateUserByEmail("g@example.com");
-    expect(readUserById(created.id)?.timezone).toBe("Asia/Tokyo");
-  });
-});
-
 describe("upsertUserByAppleSub branch coverage (issue #262)", () => {
   // The three-branch contract from the issue:
   //   1. row with this apple_sub exists  → return it
@@ -191,7 +170,7 @@ describe("upsertUserByAppleSub branch coverage (issue #262)", () => {
   });
 
   it("branch 2 — does not clobber bootstrap email/tz when those are already populated", async () => {
-    // Pre-populate bootstrap with values from CF Access flow (email-only login).
+    // Pre-populate bootstrap with email + tz (legacy single-user state pre-SIWA).
     const db = new Database(dbFile);
     try {
       db.prepare(

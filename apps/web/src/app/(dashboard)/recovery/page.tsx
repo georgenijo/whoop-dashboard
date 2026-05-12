@@ -18,7 +18,7 @@ import {
   getSleepTrend,
   getStrainTrend,
 } from "@/lib/db";
-import { requireAuth } from "@/lib/auth";
+import { requireAuthOrSignin } from "@/lib/auth";
 import { computeIllnessSignal } from "@/lib/analytics/illness";
 import { computeRebound } from "@/lib/analytics/rebound";
 import { parseDays, formatRangeLabel } from "@/lib/range";
@@ -38,7 +38,7 @@ export default async function RecoveryPage({
   searchParams: Promise<{ range?: string }>;
 }) {
   const headerList = await headers();
-  const { user } = await requireAuth(
+  const { user } = await requireAuthOrSignin(
     new Request("http://localhost", { headers: headerList }),
   );
   const { range } = await searchParams;

@@ -15,7 +15,7 @@ Multi-tenant under the hood — every read/write is `user_id`-scoped (Phase D). 
 | Data store | SQLite (WAL) via better-sqlite3 — `shared/whoop_data.db` |
 | Sync | Next.js `runWhoopSync` (`apps/web/src/lib/sync.ts`) — manual via `/api/sync`, real-time via `/api/whoop/webhook` |
 | Auth | Sign in with Apple (web + iOS) · per-user encrypted Whoop OAuth tokens in `integrations` table |
-| Deploy | Ubuntu VM, systemd unit `whoop-web.service`, nginx + Cloudflare Access |
+| Deploy | Ubuntu VM, systemd unit `whoop-web.service`, nginx |
 
 ## Repo layout
 
@@ -122,4 +122,4 @@ WHOOP_DB_PATH            # optional override for shared/whoop_data.db
 
 ## Status
 
-Active. Phase D (data isolation) shipped; Phase B-cleanup (drop CF Access on public, kill bootstrap fallback, /signup) next. Decisions log at `docs/decisions/DECISIONS.md` tracks ordering + open tradeoffs.
+Active. Phase D (data isolation) + Phase B-cleanup (CF Access dropped, bootstrap retired, SIWA-only gate) shipped. Phase E (onboarding wizard, /signup landing) is next — tracked at issue #328. Google Sign In is a follow-up (issue #329). Decisions log at `docs/decisions/DECISIONS.md` tracks ordering + open tradeoffs.
