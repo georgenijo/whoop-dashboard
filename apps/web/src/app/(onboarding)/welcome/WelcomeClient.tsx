@@ -22,8 +22,7 @@ const GOAL_CHIPS: readonly GoalChip[] = COACH_GOAL_IDS.map((id) => ({
   label: COACH_GOAL_LABELS[id],
 }));
 
-// Feature grid for Screen 1. All four colours come from the --metric-* token
-// family so the dots track the dashboard's metric palette consistently.
+// Feature grid for Screen 1. Metric tokens for the three Whoop metrics; --ai for the Coach feature.
 const FEATURES: readonly {
   label: string;
   caption: string;

@@ -128,7 +128,8 @@ export async function GET(req: NextRequest) {
   // the initial 7-day sync. Already-onboarded users (re-auth flow) keep the
   // original "/" destination.
   const settings = getUserSettings(decoded.user_id);
-  const dest = settings?.onboarded_at == null ? "/welcome?stage=sync" : "/";
+  const dest =
+    !settings || settings.onboarded_at === null ? "/welcome?stage=sync" : "/";
   const response = NextResponse.redirect(new URL(dest, publicOrigin(req)));
   clearStateCookie(response);
   return response;

@@ -11,9 +11,9 @@ type Props = { searchParams: Promise<{ stage?: string }> };
 /**
  * Server shell. Resolves auth → onboarded gate → stage decoding, then hands
  * off to the client state machine. Already-onboarded users get bounced to /
- * UNLESS they're returning via `?stage=connect` or `?stage=sync` — those
- * deep-links exist for the OAuth callback (`stage=sync`) and for any future
- * "re-run the connect step" deep-link, so they MUST bypass the redirect.
+ * UNLESS they're returning via `?stage=connect` — the only legitimate
+ * re-entry deep-link (the OAuth callback only redirects to `?stage=sync` for
+ * unonboarded users, who don't trip the guard).
  */
 export default async function WelcomePage({ searchParams }: Props) {
   const headerList = await headers();
@@ -21,10 +21,10 @@ export default async function WelcomePage({ searchParams }: Props) {
   const { user } = await requireAuthOrSignin(req);
   const params = await searchParams;
   const stageParam = params.stage;
-  const allowReentry = stageParam === "connect" || stageParam === "sync";
+  const allowConnectReentry = stageParam === "connect";
 
   const settings = getUserSettings(user.id);
-  if (settings?.onboarded_at != null && !allowReentry) {
+  if (settings && settings.onboarded_at !== null && !allowConnectReentry) {
     redirect("/");
   }
 
