@@ -8,8 +8,14 @@ vi.mock("next/server", () => ({
 
 vi.mock("@/lib/auth", () => ({
   requireAuth: vi.fn(async () => ({
-    user: { id: 1, email: "test@example.com" },
-    source: "dev",
+    user: {
+      id: 1,
+      email: "test@example.com",
+      name: null,
+      apple_sub: "test-sub",
+      timezone: null,
+    },
+    source: "ios" as const,
   })),
 }));
 

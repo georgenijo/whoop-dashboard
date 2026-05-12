@@ -3,7 +3,7 @@ import KPIStrip from "@/components/overview/KPIStrip";
 import TrendChart from "@/components/charts/TrendChart";
 import TSBCurve from "@/components/charts/TSBCurve";
 import { getOverview, getStrainTrend } from "@/lib/db";
-import { requireAuth } from "@/lib/auth";
+import { requireAuthOrSignin } from "@/lib/auth";
 import { parseDays, formatRangeLabel } from "@/lib/range";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ export default async function StrainPage({
   searchParams: Promise<{ range?: string }>;
 }) {
   const headerList = await headers();
-  const { user } = await requireAuth(
+  const { user } = await requireAuthOrSignin(
     new Request("http://localhost", { headers: headerList }),
   );
   const { range } = await searchParams;

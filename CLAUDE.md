@@ -94,7 +94,11 @@ Threads have auto-titles via Haiku 4.5 fired in `after()` (Next.js post-response
 
 ### Auth
 
-`src/lib/auth.ts` exposes `requireAuth(req)`. With no `Authorization` header, falls back to `getBootstrapUser()` → user_id=1. Single-user today; multi-user is future work.
+`src/lib/auth.ts` exposes `requireAuth(req)`. Precedence: **Bearer → Cookie → 401**. Bearer (iOS) verifies a session JWT; cookie (`__Host-coach_session`) is set by the SIWA round-trip at `/api/auth/apple-web/callback`. No bootstrap fallback — unauthenticated requests get 401.
+
+Public web requests are gated upstream by `apps/web/src/proxy.ts authGate()`, which 307s page requests to `/signin` and returns JSON 401 for API routes. Exempt prefixes: `/signin`, `/api/auth/`, `/api/whoop/webhook`, `/api/admin/`.
+
+Admin routes use a separate gate keyed on `ADMIN_APPLE_SUB` env (fail-closed if unset).
 
 ### Data flow
 

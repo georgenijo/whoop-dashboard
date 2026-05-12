@@ -56,10 +56,6 @@ export function createSession(userId: number): { token: string; expiresAt: strin
   }
 }
 
-export function getPrimaryUser(): User | null {
-  return getUserById(1);
-}
-
 export function getUserByAppleSub(appleSub: string): User | null {
   return safeWriteQuery((db) => {
     const row = db
@@ -90,58 +86,6 @@ function selectUserByEmail(db: DB, email: string): User | undefined {
     .get(email) as User | undefined;
 }
 
-export function findOrCreateUserByEmail(email: string, tz?: string | null): User {
-  const trimmed = email.trim();
-  if (!trimmed) throw new Error("Email is required");
-  const db = openWrite();
-  if (!db) throw new Error("Database unavailable");
-  try {
-    // Wrapped in a transaction so a concurrent insert that loses the unique
-    // index race can re-SELECT inside the same logical operation. Relies on
-    // the partial unique index on LOWER(email) (see connection.ts).
-    const upsert = db.transaction((value: string): User => {
-      const existing = selectUserByEmail(db, value);
-      if (existing) {
-        // Only overwrite an existing tz when the caller provided a non-null
-        // value AND it changed — null/undefined means "no opinion, leave it".
-        if (tz != null && existing.timezone !== tz) {
-          db.prepare("UPDATE users SET timezone = ? WHERE id = ?").run(tz, existing.id);
-          existing.timezone = tz;
-        }
-        return existing;
-      }
-      try {
-        const result = db
-          .prepare("INSERT INTO users (email, timezone) VALUES (?, ?)")
-          .run(value, tz ?? null);
-        return {
-          id: Number(result.lastInsertRowid),
-          email: value,
-          name: null,
-          apple_sub: null,
-          timezone: tz ?? null,
-        };
-      } catch (err) {
-        const code = (err as { code?: string }).code;
-        if (code === "SQLITE_CONSTRAINT_UNIQUE" || code === "SQLITE_CONSTRAINT") {
-          const winner = selectUserByEmail(db, value);
-          if (winner) {
-            if (tz != null && winner.timezone !== tz) {
-              db.prepare("UPDATE users SET timezone = ? WHERE id = ?").run(tz, winner.id);
-              winner.timezone = tz;
-            }
-            return winner;
-          }
-        }
-        throw err;
-      }
-    });
-    return upsert(trimmed);
-  } finally {
-    db.close();
-  }
-}
-
 /**
  * Resolve a SIWA login to a user row.
  *
@@ -152,10 +96,6 @@ export function findOrCreateUserByEmail(email: string, tz?: string | null): User
  *     repointing every user_id FK at bySub.id, then delete byEmail. Apple sub
  *     is the more authoritative key (Apple guarantees stability; email can
  *     change at the IdP).
- *
- * Apple only sends `email` on first authentication, so the merge case only
- * fires once (the first time SIWA runs after CF Access has already created a
- * user row by email).
  */
 export function upsertUserByAppleSub(
   appleSub: string,

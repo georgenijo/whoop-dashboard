@@ -50,7 +50,7 @@ export type ChatLog = {
   error_message: string | null;
   days_context: number | null;
   type: "cli" | "api" | null;
-  source: "web" | "ios" | "dev" | null;
+  source: "web" | "ios" | null;
   details?: string | null;
 };
 

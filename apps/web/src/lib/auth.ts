@@ -2,19 +2,12 @@ import "server-only";
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
-  findOrCreateUserByEmail,
-  getPrimaryUser,
   getSessionByToken,
   getUserById,
   type User,
 } from "./db";
 import { upsertIntegration } from "./db/integrations";
 import { verifySessionToken } from "./auth/jwt";
-import {
-  CF_ACCESS_HEADER,
-  CFAccessAuthError,
-  verifyCFAccessJWT,
-} from "./auth/cf-access";
 import { COACH_SESSION_COOKIE } from "./auth/cookies";
 
 export const WHOOP_AUTH_URL = "https://api.prod.whoop.com/oauth/oauth2/auth";
@@ -57,14 +50,6 @@ export function tokensPath(): string {
   // Default: repo-root `tokens.json` (matches streamlit/whoop/auth.py:17).
   // process.cwd() is `apps/web/`, so repo root is two levels up.
   return path.resolve(process.cwd(), "..", "..", "tokens.json");
-}
-
-export function getBootstrapUser(): User {
-  const user = getPrimaryUser();
-  if (!user) {
-    throw new Response("Single-user bootstrap missing", { status: 500 });
-  }
-  return user;
 }
 
 /**
@@ -251,7 +236,7 @@ export async function getSessionUser(
   return getUserById(claims.userId) ?? null;
 }
 
-export type AuthSource = "web" | "ios" | "dev";
+export type AuthSource = "web" | "ios";
 
 export type AuthResult = {
   user: User;
@@ -276,7 +261,7 @@ function readCookie(header: string | null, name: string): string | null {
   return null;
 }
 
-// Precedence: Bearer > Cookie > CF Access > dev bootstrap. Don't flip without auditing all routes.
+// Precedence: Bearer > Cookie > 401. Don't flip without auditing all routes.
 export async function requireAuth(req: Request): Promise<AuthResult> {
   const header = req.headers.get("authorization");
 
@@ -317,27 +302,28 @@ export async function requireAuth(req: Request): Promise<AuthResult> {
       if (!user) throw new Response("User not found", { status: 401 });
       return { user, source: "web" };
     }
-    // An invalid/expired cookie shouldn't lock the user out if CF Access
-    // can vouch for them — fall through to the next layer rather than 401.
-  }
-
-  const cfAssertion = req.headers.get(CF_ACCESS_HEADER);
-  if (cfAssertion) {
-    let identity: { email: string };
-    try {
-      identity = await verifyCFAccessJWT(cfAssertion);
-    } catch (err) {
-      if (err instanceof CFAccessAuthError) {
-        throw new Response("Invalid CF Access token", { status: 401 });
-      }
-      throw err;
-    }
-    return { user: findOrCreateUserByEmail(identity.email), source: "web" };
-  }
-
-  if (process.env.NODE_ENV !== "production") {
-    return { user: getBootstrapUser(), source: "dev" };
   }
 
   throw new Response("Unauthorized", { status: 401 });
+}
+
+/**
+ * Page-handler variant: if `requireAuth` throws a 401, redirect the visitor
+ * to `/signin` instead of bubbling a thrown Response. Pre-Phase-B the dev
+ * bootstrap silently produced a user; post-cleanup an unauth'd page request
+ * has no fallback, and a thrown Response inside a Server Component renders
+ * as a 500. On prod the proxy gate already 307s before pages execute — this
+ * helper is the defense-in-depth path for dev and for any future route the
+ * proxy matcher misses.
+ */
+export async function requireAuthOrSignin(req: Request): Promise<AuthResult> {
+  const { redirect } = await import("next/navigation");
+  try {
+    return await requireAuth(req);
+  } catch (err) {
+    if (err instanceof Response && err.status === 401) {
+      redirect("/signin");
+    }
+    throw err;
+  }
 }

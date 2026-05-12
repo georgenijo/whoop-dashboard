@@ -6,13 +6,23 @@ import Database from "better-sqlite3";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/auth", () => ({
+  requireAuth: vi.fn(async () => ({
+    user: {
+      id: 1,
+      email: "test@example.com",
+      name: null,
+      apple_sub: "test-sub",
+      timezone: null,
+    },
+    source: "ios" as const,
+  })),
+}));
 
 const tmpRoot = mkdtempSync(path.join(tmpdir(), "devices-register-route-"));
 const dbFile = path.join(tmpRoot, "test.db");
 writeFileSync(dbFile, "");
 process.env.WHOOP_DB_PATH = dbFile;
-// Force test path through the dev-bootstrap branch in requireAuth.
-process.env.NODE_ENV = "test";
 
 type RouteModule = typeof import("./route");
 type ConnectionModule = typeof import("@/lib/db/connection");
@@ -138,23 +148,22 @@ describe("POST /api/devices/register", () => {
     expect(json.error).toBe("invalid_env");
   });
 
-  it("returns 401 when Authorization header is malformed in production", async () => {
-    process.env.NODE_ENV = "production";
-    try {
-      const res = await route.POST(
-        makeRequest(
-          {
-            token: "d".repeat(64),
-            platform: "ios",
-            env: "production",
-          },
-          { authorization: "NotBearer foo" }
-        )
-      );
-      expect(res.status).toBe(401);
-    } finally {
-      process.env.NODE_ENV = "test";
-    }
+  it("returns 401 when requireAuth throws a 401 Response", async () => {
+    const { requireAuth } = await import("@/lib/auth");
+    vi.mocked(requireAuth).mockRejectedValueOnce(
+      new Response("Invalid token", { status: 401 })
+    );
+    const res = await route.POST(
+      makeRequest(
+        {
+          token: "d".repeat(64),
+          platform: "ios",
+          env: "production",
+        },
+        { authorization: "NotBearer foo" }
+      )
+    );
+    expect(res.status).toBe(401);
   });
 
   it("rejects an empty trimmed app_version cleanly (treats as null)", async () => {

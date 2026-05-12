@@ -5,7 +5,7 @@ import WorkoutDistanceChart from "@/components/charts/WorkoutDistanceChart";
 import Zone2Tracker from "@/components/charts/Zone2Tracker";
 import CardiacDriftCard from "@/components/charts/CardiacDriftCard";
 import { getWorkouts, getWorkoutsRange, getBodyMeasurements } from "@/lib/db";
-import { requireAuth } from "@/lib/auth";
+import { requireAuthOrSignin } from "@/lib/auth";
 import { computeCardiacDrift } from "@/lib/analytics/cardiacDrift";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +33,7 @@ function isoNDaysAgo(n: number): string {
 
 export default async function WorkoutsPage() {
   const headerList = await headers();
-  const { user } = await requireAuth(
+  const { user } = await requireAuthOrSignin(
     new Request("http://localhost", { headers: headerList }),
   );
   const workouts = getWorkouts(user.id, 50);

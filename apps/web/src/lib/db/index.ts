@@ -5,10 +5,8 @@ export {
   getUserById,
   getSessionByToken,
   createSession,
-  getPrimaryUser,
   getUserByAppleSub,
   getUserByEmail,
-  findOrCreateUserByEmail,
   upsertUserByAppleSub,
 } from "./auth";
 

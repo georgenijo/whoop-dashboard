@@ -14,7 +14,7 @@ import {
   type DailySummaryRow,
   type RecoveryRow,
 } from "@/lib/db";
-import { requireAuth } from "@/lib/auth";
+import { requireAuthOrSignin } from "@/lib/auth";
 import {
   acquireInsightRegenerationLock,
   getInsightStatus,
@@ -30,7 +30,7 @@ export default async function OverviewPage({
   searchParams: Promise<{ range?: string }>;
 }) {
   const headerList = await headers();
-  const { user } = await requireAuth(
+  const { user } = await requireAuthOrSignin(
     new Request("http://localhost", { headers: headerList }),
   );
   const { range } = await searchParams;

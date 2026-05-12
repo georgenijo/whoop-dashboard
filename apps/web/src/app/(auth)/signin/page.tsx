@@ -125,6 +125,17 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
         <span aria-hidden style={{ fontSize: 16 }}>{""}</span>
         Sign in with Apple
       </a>
+      <div
+        style={{
+          fontSize: 12,
+          opacity: 0.5,
+          maxWidth: 360,
+          textAlign: "center",
+          lineHeight: 1.5,
+        }}
+      >
+        New here? Signing in creates your account automatically.
+      </div>
       {errorText && (
         <div
           role="alert"

@@ -4,7 +4,7 @@ This file is the global brief for any AI coding agent (Codex, Claude Code, Curso
 
 ## What this is
 
-A personal data hub. Pulls Whoop wearable data today, will pull calendar / nutrition / Apple Health and unify under one analytics + AI-coach layer. Single user, self-hosted on an Oracle Cloud VM at `coach.georgenijo.com` (web, gated by Cloudflare Access) and `coach-api.georgenijo.com` (iOS API, bearer-only). SQLite is the canonical store. Server-side OAuth vault for all third-party tokens.
+A personal data hub. Pulls Whoop wearable data today, will pull calendar / nutrition / Apple Health and unify under one analytics + AI-coach layer. Multi-tenant under the hood; hosted on an Oracle Cloud VM at `coach.georgenijo.com` (web, gated by Sign in with Apple) and `coach-api.georgenijo.com` (iOS API, bearer-only). SQLite is the canonical store. Server-side OAuth vault for all third-party tokens.
 
 ## Architecture target
 
