@@ -133,18 +133,16 @@ export default function WelcomeClient({
     }
   }, []);
 
-  // Sync auto-kicks when the user lands on (or transitions to) the sync
-  // stage. Guard is session-scoped so strict-mode double-mount doesn't
-  // double-fire — useRef re-initialises on the second mount in dev, but
-  // sessionStorage is shared across both. The redirect to "/" leaves this
-  // tab's onboarding context entirely; re-navigating to /welcome?stage=sync
-  // in the same tab without an intervening tab close intentionally skips
-  // the sync (matches "I already did this" semantics).
+  // session-scoped guard so React-19 strict-mode double-mount doesn't
+  // double-fire. Set before the fetch so the second mount sees the flag.
+  // The redirect to "/" leaves this tab's onboarding context entirely;
+  // re-navigating to /welcome?stage=sync in the same tab without an
+  // intervening tab close intentionally skips the sync (matches "I already
+  // did this" semantics).
   useEffect(() => {
     if (stage !== "sync") return;
     const key = "welcome:sync-fired";
     if (sessionStorage.getItem(key) === "1") return;
-    // Set BEFORE awaiting so strict-mode's second mount sees the flag.
     sessionStorage.setItem(key, "1");
     void runSync();
   }, [stage, runSync]);

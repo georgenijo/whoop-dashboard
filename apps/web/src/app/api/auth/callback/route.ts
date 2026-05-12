@@ -129,7 +129,9 @@ export async function GET(req: NextRequest) {
   // original "/" destination.
   const settings = getUserSettings(decoded.user_id);
   const dest =
-    !settings || settings.onboarded_at === null ? "/welcome?stage=sync" : "/";
+    settings === null || settings.onboarded_at === null
+      ? "/welcome?stage=sync"
+      : "/";
   const response = NextResponse.redirect(new URL(dest, publicOrigin(req)));
   clearStateCookie(response);
   return response;

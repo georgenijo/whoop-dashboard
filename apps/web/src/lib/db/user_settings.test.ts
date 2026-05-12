@@ -316,6 +316,13 @@ describe("user_settings + vault", () => {
     expect(settings.getUserSettings(1)!.tz).toBe("America/New_York");
   });
 
+  it("setTzIfUnset throws UserSettingsUserMissingError for unknown user_id", async () => {
+    const { settings } = await loadModules();
+    expect(() => settings.setTzIfUnset(9999, "America/New_York")).toThrow(
+      settings.UserSettingsUserMissingError
+    );
+  });
+
   it("assertVaultKeyConfigured rejects wrong-length keys", async () => {
     const { vault } = await loadModules();
     const saved = process.env.VAULT_KEY;

@@ -41,7 +41,7 @@ export default async function OverviewPage({
   // stamp; anything other than a non-null value sends the user through the
   // wizard. redirect() throws NEXT_REDIRECT — must live outside any try/catch.
   const userSettings = getUserSettings(user.id);
-  if (!userSettings || userSettings.onboarded_at === null) {
+  if (userSettings === null || userSettings.onboarded_at === null) {
     redirect("/welcome");
   }
 
