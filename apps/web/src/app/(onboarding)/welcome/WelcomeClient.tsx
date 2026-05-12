@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 
 type Stage = "welcome" | "connect" | "sync";
 
@@ -96,8 +102,12 @@ export default function WelcomeClient({
 }: WelcomeClientProps) {
   const [stage, setStage] = useState<Stage>(initialStage);
   const [goals, setGoals] = useState<Set<string>>(new Set(initialGoals));
-  const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
+  // Ref-guarded so the auto-kick effect can't double-fire on a strict-mode
+  // re-render or a `syncError` state change. Using a ref (not state) avoids
+  // the lint `react-hooks/set-state-in-effect` warning: the effect doesn't
+  // touch state synchronously, runSync does its own state writes later.
+  const syncStartedRef = useRef(false);
 
   // Fire-and-forget tz capture. Runs once on first mount of the wizard so we
   // get the IANA name before the user clicks anything. setTzIfUnset is the
@@ -118,19 +128,9 @@ export default function WelcomeClient({
     }
   }, []);
 
-  // Sync auto-kicks when the user lands on (or transitions to) the sync
-  // stage. The `syncing` guard prevents a re-render from re-firing the sync —
-  // and once `syncing` flips back to false (only happens in error paths we
-  // surface), we DON'T retry because runSync's finally block redirects away.
-  useEffect(() => {
-    if (stage !== "sync") return;
-    if (syncing) return;
-    void runSync();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage]);
-
-  async function runSync(): Promise<void> {
-    setSyncing(true);
+  // Wrapped in useCallback so the auto-kick useEffect below has a stable ref
+  // and the linter can see the dependency chain.
+  const runSync = useCallback(async (): Promise<void> => {
     setSyncError(null);
     try {
       const resp = await fetch("/api/sync/onboarding", { method: "POST" });
@@ -150,7 +150,18 @@ export default function WelcomeClient({
       // Full reload required to cross out of the (onboarding) route group.
       window.location.href = "/";
     }
-  }
+  }, []);
+
+  // Sync auto-kicks when the user lands on (or transitions to) the sync
+  // stage. The `syncStartedRef` guard prevents a re-render (or strict-mode
+  // double-mount) from re-firing the sync. We don't reset the ref — once
+  // sync starts, the user is redirected to / on completion regardless.
+  useEffect(() => {
+    if (stage !== "sync") return;
+    if (syncStartedRef.current) return;
+    syncStartedRef.current = true;
+    void runSync();
+  }, [stage, runSync]);
 
   function toggleGoal(id: string): void {
     setGoals((prev) => {
