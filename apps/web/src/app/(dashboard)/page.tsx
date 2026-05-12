@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { after } from "next/server";
 import RecoveryHero from "@/components/overview/RecoveryHero";
 import KPIStrip from "@/components/overview/KPIStrip";
@@ -6,11 +7,13 @@ import RecoveryTrend from "@/components/overview/RecoveryTrend";
 import AIInsightCard from "@/components/overview/AIInsightCard";
 import AIInsightRefreshWatcher from "@/components/overview/AIInsightRefreshWatcher";
 import PRsCard from "@/components/overview/PRsCard";
+import TzBackfill from "@/components/onboarding/TzBackfill";
 import {
   getDailySummary,
   getOverview,
   getPRStats,
   getRecoveryTrend,
+  getUserSettings,
   type DailySummaryRow,
   type RecoveryRow,
 } from "@/lib/db";
@@ -33,6 +36,15 @@ export default async function OverviewPage({
   const { user } = await requireAuthOrSignin(
     new Request("http://localhost", { headers: headerList }),
   );
+
+  // First-time visitors land on /welcome. `onboarded_at` is the set-once
+  // stamp; anything other than a non-null value sends the user through the
+  // wizard. redirect() throws NEXT_REDIRECT — must live outside any try/catch.
+  const userSettings = getUserSettings(user.id);
+  if (!userSettings || userSettings.onboarded_at === null) {
+    redirect("/welcome");
+  }
+
   const { range } = await searchParams;
   const days = parseDays(range);
   const data = getOverview(user.id, days);
@@ -63,6 +75,7 @@ export default async function OverviewPage({
 
   return (
     <>
+      <TzBackfill />
       <div className="hero">
         <RecoveryHero
           score={latestRecovery?.recovery_score ?? null}
