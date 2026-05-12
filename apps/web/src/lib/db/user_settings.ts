@@ -310,16 +310,40 @@ export function setCoachGoals(user_id: number, goals: string[] | null): void {
 }
 
 /**
- * Set-once stamp. If `onboarded_at` is already populated, return the existing
- * value and don't overwrite — protects against accidental re-runs of the
- * wizard wiping a real completion date.
+ * Set-once stamp. Returns the persisted `onboarded_at` — either the existing
+ * value (if already populated) or the new one (if first-time write).
+ *
+ * Implemented as a single INSERT … ON CONFLICT DO UPDATE … RETURNING so the
+ * read-and-write is one atomic statement, not a TOCTOU read-then-write. Two
+ * concurrent callers therefore both observe the same returned ISO string —
+ * whichever statement ran first wins, the second sees its persisted value via
+ * COALESCE. RETURNING is SQLite 3.35+ and supported by better-sqlite3.
  */
 export function markOnboarded(user_id: number, now: Date = new Date()): string {
-  const existing = getUserSettings(user_id);
-  if (existing?.onboarded_at) return existing.onboarded_at;
   const iso = now.toISOString();
-  upsertUserSettings({ user_id, onboarded_at: iso });
-  return iso;
+  const db = openWrite();
+  if (!db) throw new Error("DB unavailable");
+  try {
+    ensureUserSettingsTable(db);
+    const row = db
+      .prepare(
+        `
+        INSERT INTO user_settings (user_id, onboarded_at, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+          onboarded_at = COALESCE(user_settings.onboarded_at, excluded.onboarded_at),
+          updated_at = CASE
+            WHEN user_settings.onboarded_at IS NULL THEN excluded.updated_at
+            ELSE user_settings.updated_at
+          END
+        RETURNING onboarded_at
+        `
+      )
+      .get(user_id, iso, iso) as { onboarded_at: string };
+    return row.onboarded_at;
+  } finally {
+    db.close();
+  }
 }
 
 /**

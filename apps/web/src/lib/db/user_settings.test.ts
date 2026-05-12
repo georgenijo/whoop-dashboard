@@ -286,6 +286,20 @@ describe("user_settings + vault", () => {
     expect(second).toBe(first);
   });
 
+  it("markOnboarded — two back-to-back calls return the FIRST stamp", async () => {
+    // Tightens the idempotency guarantee. Since better-sqlite3 is sync, true
+    // OS-thread concurrency isn't expressible — but the implementation uses a
+    // single INSERT … ON CONFLICT … RETURNING statement, so the outcome is
+    // identical under ANY interleaving (the COALESCE chooses the existing
+    // value once the row exists). Two back-to-back calls is the strongest
+    // observable assertion at this layer.
+    const { settings } = await loadModules();
+    const first = settings.markOnboarded(1, new Date("2026-05-01T00:00:00Z"));
+    const second = settings.markOnboarded(1, new Date("2026-05-02T00:00:00Z"));
+    expect(first).toBe("2026-05-01T00:00:00.000Z");
+    expect(second).toBe("2026-05-01T00:00:00.000Z");
+  });
+
   it("setTzIfUnset returns true on the first write, false on subsequent calls", async () => {
     const { settings } = await loadModules();
     expect(settings.setTzIfUnset(1, "America/New_York")).toBe(true);
