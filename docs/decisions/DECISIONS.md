@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-05-12: Phase B-cleanup landed — CF Access dropped on coach.georgenijo.com, SIWA is sole web gate
+
+**Decision:** PR #332 merged + deployed 2026-05-12. `requireAuth` collapsed to Bearer → Cookie → 401. Deleted: `getBootstrapUser`, `getPrimaryUser`, `findOrCreateUserByEmail`, `lib/auth/cf-access.ts`. Admin gate on `webhook/replay/route.ts` switched from `user.id !== 1` to `ADMIN_APPLE_SUB` env match (fail-closed). New `requireAuthOrSignin` helper used by all `(dashboard)` page handlers — redirects to `/signin` instead of throwing 500 when the proxy gate misses. Four CF Access apps deleted via API in order (parent FIRST, then 3 path-bypass apps): `Coach Dashboard` (839d958e...), webhook bypass (1ca713c6...), ACME bypass (9b6b82f4...), SIWA callback bypass (e42ef1da...). Post-drop smoke green: `/` → 307 /signin, `/api/whoop/webhook` GET → 405, `/api/threads` fake bearer → 401 JSON. Cert renewal unaffected — certbot uses `--nginx` authenticator which short-circuits at the nginx layer before reaching Next.js.
+
+**Rationale:** Phase D + uid1→uid2 migration unblocked B-cleanup. Double-gate (CF Access + SIWA proxy) was costly: CF Access only allowed a single email so blocked legitimate multi-tenant flow, and the dev-mode bootstrap fallback in `requireAuth` was a code smell (a misconfigured deploy with `NODE_ENV` unset would silently auth as user_id=1). Single gate via SIWA + JWT cookie matches the scalable architecture doc Phase B. `ADMIN_APPLE_SUB` env over `ADMIN_USER_ID` because `apple_sub` is durable across user-id renumbers and smaller blast radius if VM env gets typo'd.
+
+**Status:** active
+
+**References:** PR #332, issue #327, `docs/architecture-scalable.html` (Phase B), memory `cloudflare_setup` (4 deleted apps), follow-up issues #328 (`/signup` wizard), #329 (Google SIWA), #330 (`saveTokens` uid=1 cleanup), #331 (rate-limit audit), `docs/decisions/2026-05-08-api-stack.md` (marked superseded by this entry)
+
+---
+
 ## 2026-05-11: Migrate uid=1 → uid=2 domain data (post-Phase-D fallout)
 
 **Decision:** Executed one-shot migration `apps/web/scripts/migrate-uid1-to-uid2.ts` against prod. For each composite-PK table (`recovery`, `sleep`, `cycles`, `daily_summary`): DELETE uid=1 rows whose `date` already exists on uid=2 (uid=2 wins — post-reconnect data is fresher) + UPDATE remaining uid=1 rows → uid=2. For `workouts` (PK=`id`): straight UPDATE (no overlap possible). Final pass: `recomputeDailySummary` for every uid=2 date with recovery/sleep/cycles but no summary row. Moved 482 domain rows (recovery 145, sleep 148, cycles 150, daily_summary 12, workouts 37) + recomputed 138 daily_summary rows. Pre-deploy backup at `~/whoop_data.db.backup.20260511-194420` (1.56 MB).
