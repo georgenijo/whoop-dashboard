@@ -3,7 +3,7 @@
 // callers treat TZ as opt-in — invalid input returns null and the caller
 // elides the field rather than rejecting the request.
 
-export const TZ_MAX_LENGTH = 100;
+const TZ_MAX_LENGTH = 100;
 
 export function sanitizeTimezone(value: unknown): string | null {
   if (typeof value !== "string") return null;
