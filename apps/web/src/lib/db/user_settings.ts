@@ -25,6 +25,9 @@ export type UserSettings = {
   model_pref: string | null;
   timezone: string | null;
   monthly_token_cap: number | null;
+  coach_goals: string[] | null;
+  onboarded_at: string | null;
+  tz: string | null;
   updated_at: string;
 };
 
@@ -35,6 +38,9 @@ export type UserSettingsInput = {
   model_pref?: string | null;
   timezone?: string | null;
   monthly_token_cap?: number | null;
+  coach_goals?: string[] | null;
+  onboarded_at?: string | null;
+  tz?: string | null;
 };
 
 export class UserSettingsUserMissingError extends Error {
@@ -82,6 +88,9 @@ type UserSettingsRowRaw = {
   model_pref: string | null;
   timezone: string | null;
   monthly_token_cap: number | null;
+  coach_goals: string | null;
+  onboarded_at: string | null;
+  tz: string | null;
   updated_at: string;
 };
 
@@ -103,7 +112,8 @@ export function getUserSettings(user_id: number): UserSettings | null {
       .prepare(
         `
         SELECT user_id, anthropic_key, anthropic_key_version, model_pref,
-               timezone, monthly_token_cap, updated_at
+               timezone, monthly_token_cap, coach_goals, onboarded_at, tz,
+               updated_at
         FROM user_settings
         WHERE user_id = ?
         `
@@ -131,12 +141,43 @@ export function getUserSettings(user_id: number): UserSettings | null {
       }
     }
 
+    // coach_goals is stored as JSON TEXT (e.g. `["sleep_better","train_smarter"]`).
+    // Treat malformed-on-disk as "no preferences" — UI continues to render and
+    // the user can re-pick goals from Settings. Defensive shape check: we only
+    // accept an array of strings; anything else (object, mixed types) gets
+    // dropped to null with a console.error.
+    let parsedGoals: string[] | null = null;
+    if (row.coach_goals !== null) {
+      try {
+        const decoded: unknown = JSON.parse(row.coach_goals);
+        if (
+          Array.isArray(decoded) &&
+          decoded.every((v): v is string => typeof v === "string")
+        ) {
+          parsedGoals = decoded;
+        } else {
+          console.error(
+            `[user_settings] coach_goals shape invalid for user_id=${user_id}`
+          );
+        }
+      } catch (err) {
+        console.error(
+          `[user_settings] coach_goals JSON parse failed for user_id=${user_id}: ${
+            err instanceof Error ? err.message : String(err)
+          }`
+        );
+      }
+    }
+
     return {
       user_id: row.user_id,
       anthropic_key: decryptedAnthropic,
       model_pref: row.model_pref,
       timezone: row.timezone,
       monthly_token_cap: row.monthly_token_cap,
+      coach_goals: parsedGoals,
+      onboarded_at: row.onboarded_at,
+      tz: row.tz,
       updated_at: row.updated_at,
     };
   } finally {
@@ -170,7 +211,7 @@ export function upsertUserSettings(input: UserSettingsInput): void {
       .prepare(
         `
         SELECT anthropic_key, anthropic_key_version, model_pref, timezone,
-               monthly_token_cap
+               monthly_token_cap, coach_goals, onboarded_at, tz
         FROM user_settings
         WHERE user_id = ?
         `
@@ -182,6 +223,9 @@ export function upsertUserSettings(input: UserSettingsInput): void {
           model_pref: string | null;
           timezone: string | null;
           monthly_token_cap: number | null;
+          coach_goals: string | null;
+          onboarded_at: string | null;
+          tz: string | null;
         }
       | undefined;
 
@@ -206,19 +250,36 @@ export function upsertUserSettings(input: UserSettingsInput): void {
       input.monthly_token_cap === undefined
         ? existing?.monthly_token_cap ?? null
         : input.monthly_token_cap;
+    let nextCoachGoals: string | null;
+    if (input.coach_goals === undefined) {
+      nextCoachGoals = existing?.coach_goals ?? null;
+    } else if (input.coach_goals === null) {
+      nextCoachGoals = null;
+    } else {
+      nextCoachGoals = JSON.stringify(input.coach_goals);
+    }
+    const nextOnboardedAt =
+      input.onboarded_at === undefined
+        ? existing?.onboarded_at ?? null
+        : input.onboarded_at;
+    const nextTzCol =
+      input.tz === undefined ? existing?.tz ?? null : input.tz;
 
     db.prepare(
       `
       INSERT INTO user_settings (
         user_id, anthropic_key, anthropic_key_version, model_pref, timezone,
-        monthly_token_cap, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        monthly_token_cap, coach_goals, onboarded_at, tz, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET
         anthropic_key = excluded.anthropic_key,
         anthropic_key_version = excluded.anthropic_key_version,
         model_pref = excluded.model_pref,
         timezone = excluded.timezone,
         monthly_token_cap = excluded.monthly_token_cap,
+        coach_goals = excluded.coach_goals,
+        onboarded_at = excluded.onboarded_at,
+        tz = excluded.tz,
         updated_at = excluded.updated_at
       `
     ).run(
@@ -228,8 +289,69 @@ export function upsertUserSettings(input: UserSettingsInput): void {
       nextModel,
       nextTz,
       nextCap,
+      nextCoachGoals,
+      nextOnboardedAt,
+      nextTzCol,
       new Date().toISOString()
     );
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Replace the user's coach_goals list. Pass `null` to clear it (BYOK opt-out
+ * style). Empty array `[]` means "no goals selected" and is persisted as the
+ * JSON literal `[]` — distinct from `null`, so the wizard can record an
+ * explicit "I skipped this" decision.
+ */
+export function setCoachGoals(user_id: number, goals: string[] | null): void {
+  upsertUserSettings({ user_id, coach_goals: goals });
+}
+
+/**
+ * Set-once stamp. If `onboarded_at` is already populated, return the existing
+ * value and don't overwrite — protects against accidental re-runs of the
+ * wizard wiping a real completion date.
+ */
+export function markOnboarded(user_id: number, now: Date = new Date()): string {
+  const existing = getUserSettings(user_id);
+  if (existing?.onboarded_at) return existing.onboarded_at;
+  const iso = now.toISOString();
+  upsertUserSettings({ user_id, onboarded_at: iso });
+  return iso;
+}
+
+/**
+ * Write-once IANA timezone. Bespoke SQL (not upsertUserSettings) because the
+ * "don't overwrite an existing tz" guard belongs at the SQL level — UPDATE …
+ * WHERE tz IS NULL is atomic and avoids a read-then-write race on concurrent
+ * /api/me/tz hits from multiple tabs. Returns `true` iff this call wrote a
+ * value (changes === 1); `false` means a value was already present.
+ */
+export function setTzIfUnset(user_id: number, tz: string): boolean {
+  const db = openWrite();
+  if (!db) throw new Error("DB unavailable");
+  try {
+    ensureUserSettingsTable(db);
+    if (!userExists(db, user_id)) {
+      throw new UserSettingsUserMissingError(user_id);
+    }
+    const now = new Date().toISOString();
+    // Two-step is intentional: INSERT OR IGNORE materialises a row if one
+    // doesn't exist yet (apple_sub users may have no user_settings row), then
+    // the UPDATE … WHERE tz IS NULL is the atomic write-once gate. Both run
+    // inside an implicit transaction (single statement each) — no explicit
+    // BEGIN needed because better-sqlite3 prepared statements are sync.
+    db.prepare(
+      "INSERT OR IGNORE INTO user_settings (user_id, updated_at) VALUES (?, ?)"
+    ).run(user_id, now);
+    const result = db
+      .prepare(
+        "UPDATE user_settings SET tz = ?, updated_at = ? WHERE user_id = ? AND tz IS NULL"
+      )
+      .run(tz, now, user_id);
+    return result.changes === 1;
   } finally {
     db.close();
   }
