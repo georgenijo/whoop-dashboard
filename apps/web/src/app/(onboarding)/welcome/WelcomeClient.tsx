@@ -3,10 +3,10 @@
 import {
   useCallback,
   useEffect,
-  useRef,
   useState,
   type CSSProperties,
 } from "react";
+import { COACH_GOAL_IDS, COACH_GOAL_LABELS } from "@/lib/coach/goals";
 
 type Stage = "welcome" | "connect" | "sync";
 
@@ -17,18 +17,13 @@ type WelcomeClientProps = {
 
 type GoalChip = { id: string; label: string };
 
-// Order is intentional: the four goals appear left-to-right top-to-bottom in
-// a 2x2 grid. Sleep + recovery (the "passive" goals) precede train + stress
-// (the "active" goals) — matches how most users frame their priorities.
-const GOAL_CHIPS: readonly GoalChip[] = [
-  { id: "sleep_better", label: "Sleep better" },
-  { id: "recover_faster", label: "Recover faster" },
-  { id: "train_smarter", label: "Train smarter" },
-  { id: "manage_stress", label: "Manage stress" },
-];
+const GOAL_CHIPS: readonly GoalChip[] = COACH_GOAL_IDS.map((id) => ({
+  id,
+  label: COACH_GOAL_LABELS[id],
+}));
 
-// Feature grid for Screen 1. Colours pull from existing --metric-* / --brand-*
-// / --ai tokens in theme.css — no new design tokens introduced.
+// Feature grid for Screen 1. All four colours come from the --metric-* token
+// family so the dots track the dashboard's metric palette consistently.
 const FEATURES: readonly {
   label: string;
   caption: string;
@@ -36,7 +31,7 @@ const FEATURES: readonly {
 }[] = [
   { label: "Recovery", caption: "HRV, RHR, score", colorVar: "var(--metric-recovery)" },
   { label: "Sleep", caption: "Stages, need, performance", colorVar: "var(--metric-sleep-deep)" },
-  { label: "Strain", caption: "Day load, workouts", colorVar: "var(--brand-strain)" },
+  { label: "Strain", caption: "Day load, workouts", colorVar: "var(--metric-strain)" },
   { label: "Coach", caption: "Ask anything", colorVar: "var(--ai)" },
 ];
 
@@ -102,12 +97,6 @@ export default function WelcomeClient({
 }: WelcomeClientProps) {
   const [stage, setStage] = useState<Stage>(initialStage);
   const [goals, setGoals] = useState<Set<string>>(new Set(initialGoals));
-  const [syncError, setSyncError] = useState<string | null>(null);
-  // Ref-guarded so the auto-kick effect can't double-fire on a strict-mode
-  // re-render or a `syncError` state change. Using a ref (not state) avoids
-  // the lint `react-hooks/set-state-in-effect` warning: the effect doesn't
-  // touch state synchronously, runSync does its own state writes later.
-  const syncStartedRef = useRef(false);
 
   // Fire-and-forget tz capture. Runs once on first mount of the wizard so we
   // get the IANA name before the user clicks anything. setTzIfUnset is the
@@ -116,36 +105,29 @@ export default function WelcomeClient({
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (!tz) return;
+      // intentional: wizard never blocks; tz capture is best-effort.
       void fetch("/api/me/tz", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ tz }),
-      }).catch(() => {
-        // Wizard never blocks on tz failure — write-once is best-effort.
-      });
+      }).catch(() => {});
     } catch {
       // Intl unavailable (extremely old runtime); skip silently.
     }
   }, []);
 
   // Wrapped in useCallback so the auto-kick useEffect below has a stable ref
-  // and the linter can see the dependency chain.
+  // and the linter can see the dependency chain. The wizard never blocks on
+  // sync failure — the finally clause redirects to "/" regardless so a
+  // transient error doesn't trap the user on this screen. Sync errors are
+  // recoverable from /settings later.
   const runSync = useCallback(async (): Promise<void> => {
-    setSyncError(null);
     try {
-      const resp = await fetch("/api/sync/onboarding", { method: "POST" });
-      const j = (await resp.json().catch(() => ({}))) as {
-        ok?: boolean;
-        error?: string;
-      };
-      if (!j.ok) setSyncError(j.error ?? "sync_failed");
-    } catch (e) {
-      setSyncError(e instanceof Error ? e.message : "sync_failed");
+      await fetch("/api/sync/onboarding", { method: "POST" });
+    } catch {
+      // swallow — the redirect below is the user-visible end state.
     } finally {
-      // Stamp onboarded regardless of sync outcome — the user has been
-      // through the wizard, and we don't want a transient sync error to trap
-      // them here on every page load. Fire-and-forget; the redirect below is
-      // the user-visible end state.
+      // intentional: wizard never blocks; onboarded stamp is best-effort.
       await fetch("/api/me/onboarded", { method: "POST" }).catch(() => {});
       // Full reload required to cross out of the (onboarding) route group.
       window.location.href = "/";
@@ -153,13 +135,18 @@ export default function WelcomeClient({
   }, []);
 
   // Sync auto-kicks when the user lands on (or transitions to) the sync
-  // stage. The `syncStartedRef` guard prevents a re-render (or strict-mode
-  // double-mount) from re-firing the sync. We don't reset the ref — once
-  // sync starts, the user is redirected to / on completion regardless.
+  // stage. Guard is session-scoped so strict-mode double-mount doesn't
+  // double-fire — useRef re-initialises on the second mount in dev, but
+  // sessionStorage is shared across both. The redirect to "/" leaves this
+  // tab's onboarding context entirely; re-navigating to /welcome?stage=sync
+  // in the same tab without an intervening tab close intentionally skips
+  // the sync (matches "I already did this" semantics).
   useEffect(() => {
     if (stage !== "sync") return;
-    if (syncStartedRef.current) return;
-    syncStartedRef.current = true;
+    const key = "welcome:sync-fired";
+    if (sessionStorage.getItem(key) === "1") return;
+    // Set BEFORE awaiting so strict-mode's second mount sees the flag.
+    sessionStorage.setItem(key, "1");
     void runSync();
   }, [stage, runSync]);
 
@@ -174,7 +161,8 @@ export default function WelcomeClient({
 
   async function handleContinueFromWelcome(): Promise<void> {
     // Persist the chosen goals BEFORE moving on — if the user closes the tab
-    // mid-wizard we still capture preferences. fire-and-forget on failure.
+    // mid-wizard we still capture preferences.
+    // intentional: wizard never blocks; goals are best-effort.
     await fetch("/api/me/coach-goals", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -184,6 +172,7 @@ export default function WelcomeClient({
   }
 
   async function handleSkipConnect(): Promise<void> {
+    // intentional: wizard never blocks; onboarded stamp is best-effort.
     await fetch("/api/me/onboarded", { method: "POST" }).catch(() => {});
     window.location.href = "/";
   }
@@ -192,7 +181,7 @@ export default function WelcomeClient({
     return (
       <div style={SCREEN_STYLE}>
         <div style={HEADING_STYLE}>
-          whoop<span style={{ color: "var(--ai)" }}>+</span>
+          whoop<span style={{ color: "var(--brand-strain)" }}>+</span>
         </div>
         <div style={SUBHEADING_STYLE}>
           Your Whoop data, deeper. Trends, PRs, and a coach that answers in
@@ -339,24 +328,6 @@ export default function WelcomeClient({
         This usually takes about 30 seconds. You&apos;ll land on your
         dashboard when it&apos;s done.
       </div>
-      {syncError && (
-        <div
-          role="alert"
-          style={{
-            maxWidth: 360,
-            textAlign: "center",
-            fontSize: 12,
-            color: "#ff8b8b",
-            background: "rgba(255,80,80,0.08)",
-            border: "1px solid rgba(255,80,80,0.25)",
-            padding: "10px 14px",
-            borderRadius: 8,
-          }}
-        >
-          Sync hit an error ({syncError}). Continuing to your dashboard — you
-          can retry from Settings.
-        </div>
-      )}
     </div>
   );
 }
