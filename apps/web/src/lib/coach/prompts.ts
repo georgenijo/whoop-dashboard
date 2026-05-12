@@ -1,5 +1,6 @@
 import "server-only";
 import type { TextBlockParam } from "@anthropic-ai/sdk/resources/messages";
+import { COACH_GOAL_LABELS, type CoachGoalId } from "./goals";
 
 export const COACH_MODEL = "claude-sonnet-4-6";
 export const TITLE_MODEL = "claude-haiku-4-5";
@@ -42,15 +43,14 @@ export const TITLE_SYSTEM_PROMPT = "You title chat threads. Reply with a 3-6 wor
 
 const COACH_TIME_ZONE = "America/New_York";
 
-// Canonical goal id → human-readable label used inside the system prompt.
-// Keep in sync with the canonical set in /api/me/coach-goals — unknown IDs
-// are silently dropped (matches the API's filtering posture).
-const GOAL_LABELS: Record<string, string> = {
-  sleep_better: "sleep better",
-  recover_faster: "recover faster",
-  train_smarter: "train smarter",
-  manage_stress: "manage stress",
-};
+// The system prompt embeds goals inline in a sentence ("Your stated goals are
+// sleep better, manage stress"). Lower-case the canonical labels here for
+// that sentence — the canonical map in lib/coach/goals.ts is Title Case to
+// suit the UI chips, which is the wrong register for prose.
+function goalSentenceLabel(id: string): string | undefined {
+  const canonical = COACH_GOAL_LABELS[id as CoachGoalId];
+  return canonical?.toLowerCase();
+}
 
 /**
  * Build the system prompt. The first two blocks are byte-identical to the
@@ -77,7 +77,7 @@ export function buildSystemPrompt(
   ];
   if (goals && goals.length > 0) {
     const labels = goals
-      .map((g) => GOAL_LABELS[g])
+      .map((g) => goalSentenceLabel(g))
       .filter((s): s is string => !!s);
     if (labels.length > 0) {
       blocks.push({
