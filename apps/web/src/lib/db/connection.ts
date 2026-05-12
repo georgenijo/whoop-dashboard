@@ -367,6 +367,29 @@ export function openWrite(): DB | null {
       "CREATE INDEX IF NOT EXISTS idx_integrations_provider_user ON integrations(provider, provider_user_id)"
     );
 
+    // Phase E.1 — welcome wizard. Three plaintext columns on user_settings:
+    //   - coach_goals: JSON-encoded `string[]` of canonical goal IDs
+    //   - onboarded_at: ISO 8601 set-once stamp; gates the /welcome redirect
+    //   - tz: IANA timezone, captured write-once during the wizard
+    // Gated by PRAGMA table_info so duplicate ADD COLUMNs don't crash boot.
+    // `user_settings.length === 0` guard catches the "table was never created"
+    // edge case (early test DBs); the bootstrap CREATE above already handles
+    // the common path.
+    const userSettingsCols = db
+      .prepare("PRAGMA table_info(user_settings)")
+      .all() as { name: string }[];
+    if (userSettingsCols.length > 0) {
+      if (!userSettingsCols.some((c) => c.name === "coach_goals")) {
+        db.exec("ALTER TABLE user_settings ADD COLUMN coach_goals TEXT");
+      }
+      if (!userSettingsCols.some((c) => c.name === "onboarded_at")) {
+        db.exec("ALTER TABLE user_settings ADD COLUMN onboarded_at TEXT");
+      }
+      if (!userSettingsCols.some((c) => c.name === "tz")) {
+        db.exec("ALTER TABLE user_settings ADD COLUMN tz TEXT");
+      }
+    }
+
     // Phase D — data isolation. Add `user_id` to the five domain tables so
     // every read / write is tenant-scoped. For recovery / cycles / sleep /
     // daily_summary the PK changes from `date` to composite `(user_id,

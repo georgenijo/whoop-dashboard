@@ -49,7 +49,9 @@ export class UserSettingsUserMissingError extends Error {
 function ensureUserSettingsTable(db: DB): void {
   // openWrite() already creates this, but standalone callers (tests with
   // their own DB) skip openWrite — keep this CREATE TABLE idempotent so
-  // helpers stay self-contained.
+  // helpers stay self-contained. The three Phase E.1 columns (coach_goals,
+  // onboarded_at, tz) are included here so tests using their own DB without
+  // openWrite() see the same shape as production.
   db.exec(`
     CREATE TABLE IF NOT EXISTS user_settings (
       user_id INTEGER PRIMARY KEY REFERENCES users(id),
@@ -58,6 +60,9 @@ function ensureUserSettingsTable(db: DB): void {
       model_pref TEXT,
       timezone TEXT,
       monthly_token_cap INTEGER,
+      coach_goals TEXT,
+      onboarded_at TEXT,
+      tz TEXT,
       updated_at TEXT NOT NULL
     );
   `);
