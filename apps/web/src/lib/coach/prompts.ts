@@ -42,10 +42,32 @@ export const TITLE_SYSTEM_PROMPT = "You title chat threads. Reply with a 3-6 wor
 
 const COACH_TIME_ZONE = "America/New_York";
 
-export function buildSystemPrompt(now = new Date()): TextBlockParam[] {
+// Canonical goal id → human-readable label used inside the system prompt.
+// Keep in sync with the canonical set in /api/me/coach-goals — unknown IDs
+// are silently dropped (matches the API's filtering posture).
+const GOAL_LABELS: Record<string, string> = {
+  sleep_better: "sleep better",
+  recover_faster: "recover faster",
+  train_smarter: "train smarter",
+  manage_stress: "manage stress",
+};
+
+/**
+ * Build the system prompt. The first two blocks are byte-identical to the
+ * pre-Phase-E.1 shape so the cached portion (block 2, the DEFAULT_SYSTEM_PROMPT)
+ * keeps its cache hit. When the user has stated goals, a third UNCACHED block
+ * is appended — caching per-user text would balloon cache writes for a single
+ * read each, so it's intentionally left ephemeral.
+ *
+ * `goals = null` (the default) preserves the pre-Phase-E.1 two-block shape.
+ */
+export function buildSystemPrompt(
+  now: Date = new Date(),
+  goals: readonly string[] | null = null,
+): TextBlockParam[] {
   // en-CA locale formats as YYYY-MM-DD.
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: COACH_TIME_ZONE }).format(now);
-  return [
+  const blocks: TextBlockParam[] = [
     { type: "text", text: `Today's date is ${today}.` },
     {
       type: "text",
@@ -53,4 +75,19 @@ export function buildSystemPrompt(now = new Date()): TextBlockParam[] {
       cache_control: { type: "ephemeral", ttl: "1h" },
     },
   ];
+  if (goals && goals.length > 0) {
+    const labels = goals
+      .map((g) => GOAL_LABELS[g])
+      .filter((s): s is string => !!s);
+    if (labels.length > 0) {
+      blocks.push({
+        type: "text",
+        text:
+          `The user's stated coaching goals are: ${labels.join(", ")}. ` +
+          `When relevant, frame answers around these goals — but don't force them ` +
+          `into every reply.`,
+      });
+    }
+  }
+  return blocks;
 }

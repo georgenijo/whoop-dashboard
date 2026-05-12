@@ -13,6 +13,43 @@ describe("buildSystemPrompt", () => {
       text: "Today's date is 2026-05-01.",
     });
   });
+
+  it("appends a 3rd uncached block when goals are non-empty", () => {
+    const prompt = buildSystemPrompt(
+      new Date("2026-05-02T00:00:00Z"),
+      ["sleep_better", "manage_stress"],
+    );
+    expect(prompt).toHaveLength(3);
+    expect(prompt[2]).toEqual({
+      type: "text",
+      text: expect.stringContaining("sleep better, manage stress"),
+    });
+    expect(prompt[2]).not.toHaveProperty("cache_control");
+  });
+
+  it("no-goals path returns exactly 2 blocks (byte-identical to pre-Phase-E.1)", () => {
+    const prompt = buildSystemPrompt(new Date("2026-05-02T00:00:00Z"));
+    expect(prompt).toHaveLength(2);
+    expect(prompt[1].text).toBe(DEFAULT_SYSTEM_PROMPT);
+  });
+
+  it("silently drops unknown goal IDs", () => {
+    const prompt = buildSystemPrompt(
+      new Date("2026-05-02T00:00:00Z"),
+      ["sleep_better", "this_is_not_a_real_goal"],
+    );
+    expect(prompt).toHaveLength(3);
+    expect(prompt[2].text).toContain("sleep better");
+    expect(prompt[2].text).not.toContain("this_is_not_a_real_goal");
+  });
+
+  it("returns 2 blocks when all goal IDs are unknown", () => {
+    const prompt = buildSystemPrompt(
+      new Date("2026-05-02T00:00:00Z"),
+      ["only_unknown_ids"],
+    );
+    expect(prompt).toHaveLength(2);
+  });
 });
 
 describe("DEFAULT_SYSTEM_PROMPT", () => {
