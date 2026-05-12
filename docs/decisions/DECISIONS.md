@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-05-11: Migrate uid=1 → uid=2 domain data (post-Phase-D fallout)
+
+**Decision:** Executed one-shot migration `apps/web/scripts/migrate-uid1-to-uid2.ts` against prod. For each composite-PK table (`recovery`, `sleep`, `cycles`, `daily_summary`): DELETE uid=1 rows whose `date` already exists on uid=2 (uid=2 wins — post-reconnect data is fresher) + UPDATE remaining uid=1 rows → uid=2. For `workouts` (PK=`id`): straight UPDATE (no overlap possible). Final pass: `recomputeDailySummary` for every uid=2 date with recovery/sleep/cycles but no summary row. Moved 482 domain rows (recovery 145, sleep 148, cycles 150, daily_summary 12, workouts 37) + recomputed 138 daily_summary rows. Pre-deploy backup at `~/whoop_data.db.backup.20260511-194420` (1.56 MB).
+
+**Rationale:** Phase D's `ALTER TABLE ... ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1` correctly assigned all pre-Phase-D rows to uid=1, but uid=1 hasn't been the active user since the 2026-05-09 SIWA cutover ([[cross_device_user_split]]) — George's web + iOS sessions both resolve to uid=2. The "cross-device split RESOLVED" memory marked the auth side complete but the data was never migrated; Phase D made the split user-visible ("only last week's data" reports). Migration is the actual completion of the cross-device unification. uid=1 retained in `users` table as bootstrap placeholder until Phase B-cleanup removes the `getPrimaryUser()` id=1 hardcoding at `apps/web/src/lib/db/auth.ts:59`.
+
+**Status:** active
+
+**References:** `apps/web/scripts/migrate-uid1-to-uid2.ts`, memory `cross_device_user_split.md`, PR #324 (Phase D), `apps/web/src/lib/db/auth.ts:59`
+
+---
+
 ## 2026-05-11: Phase D kickoff — PK rebuild for 4 domain tables, no operational fence, 6-step execution
 
 **Decision:** Phase D (issue #323) scopes to: (1) add `user_id` to `recovery`, `cycles`, `sleep`, `workouts`, `daily_summary` — for `recovery`/`cycles`/`sleep`/`daily_summary` the new PK is composite `(user_id, date)`, requiring a `CREATE TABLE _new` + `INSERT SELECT 1, ...` + `DROP` + `RENAME` rebuild gated by a `PRAGMA table_info` "no user_id col" check; `workouts` stays simple ALTER (PK = `id`). (2) Build `apps/web/src/lib/db/scoped.ts` `forUser(userId)` wrapper — params-only binding, no SQL parsing, call-site writes `... AND user_id = ?` as the **last** placeholder. (3) Thread `userId` through all `upsert*`, `delete*AndRecompute`, `recomputeDailySummary` and call sites. (4) Migrate every domain `safeQuery` in `lib/db/{recovery,sleep,strain,workouts,summary,prs,body}.ts` + coach `query_*` branches + dashboard page handlers. (5) CI assertion = vitest test that greps for `FROM|JOIN|INTO|UPDATE|DELETE FROM (recovery|cycles|sleep|workouts|daily_summary|body_measurements)` outside an allowlist (`scoped.ts`, `connection.ts`, `upsert.ts`, `sync.ts`). (6) Webhook user mapping via new `integrations.provider_user_id` column (see separate decision below). Scope item #8 (lift operational fence) **dropped** — pre-impl review found no fence exists; webhook hardcoded `userId = 1` at `webhook-handler.ts:40` is the only approximation and item #7 already replaces it.
