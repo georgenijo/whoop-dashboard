@@ -325,6 +325,9 @@ export function markOnboarded(user_id: number, now: Date = new Date()): string {
   if (!db) throw new Error("DB unavailable");
   try {
     ensureUserSettingsTable(db);
+    if (!userExists(db, user_id)) {
+      throw new UserSettingsUserMissingError(user_id);
+    }
     const row = db
       .prepare(
         `

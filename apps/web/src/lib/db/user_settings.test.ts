@@ -286,6 +286,13 @@ describe("user_settings + vault", () => {
     expect(second).toBe(first);
   });
 
+  it("markOnboarded throws UserSettingsUserMissingError for unknown user_id", async () => {
+    const { settings } = await loadModules();
+    expect(() => settings.markOnboarded(9999)).toThrow(
+      settings.UserSettingsUserMissingError
+    );
+  });
+
   it("markOnboarded — two back-to-back calls return the FIRST stamp", async () => {
     // Tightens the idempotency guarantee. Since better-sqlite3 is sync, true
     // OS-thread concurrency isn't expressible — but the implementation uses a
