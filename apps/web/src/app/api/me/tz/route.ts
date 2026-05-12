@@ -1,26 +1,9 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { setTzIfUnset } from "@/lib/db";
+import { sanitizeTimezone } from "@/lib/tz";
 
 export const dynamic = "force-dynamic";
-
-const TZ_MAX_LENGTH = 100;
-
-// Mirrors the validator in /api/auth/apple/route.ts. Inlined here on purpose
-// — the Phase E.1 plan explicitly defers a shared `sanitizeTimezone` util.
-function sanitizeTimezone(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  if (!trimmed || trimmed.length > TZ_MAX_LENGTH) return null;
-  try {
-    // resolvedOptions().timeZone normalises case + offset aliases so we store
-    // a single canonical IANA name regardless of browser quirks.
-    return new Intl.DateTimeFormat("en-US", { timeZone: trimmed })
-      .resolvedOptions().timeZone;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Write-once IANA timezone capture for the current user. Called from the
