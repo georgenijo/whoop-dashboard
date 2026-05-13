@@ -7,6 +7,7 @@ import CardiacDriftCard from "@/components/charts/CardiacDriftCard";
 import { getWorkouts, getWorkoutsRange, getBodyMeasurements } from "@/lib/db";
 import { requireAuthOrSignin } from "@/lib/auth";
 import { computeCardiacDrift } from "@/lib/analytics/cardiacDrift";
+import ExpandableWorkoutRow from "./ExpandableWorkoutRow";
 
 export const dynamic = "force-dynamic";
 
@@ -85,15 +86,13 @@ export default async function WorkoutsPage() {
             </thead>
             <tbody>
               {workouts.map((w) => (
-                <tr key={w.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
-                  <td style={{ padding: "8px 10px", color: "var(--fg-2)" }}>{formatDate(w.date)}</td>
-                  <td style={{ padding: "8px 10px", color: "var(--fg-0)", fontWeight: 500, fontFamily: "var(--font-sans)" }}>{w.sport ?? "—"}</td>
-                  <td style={{ padding: "8px 10px", color: "var(--fg-1)" }}>{formatDuration(w.duration_sec)}</td>
-                  <td style={{ padding: "8px 10px", color: "#ffaa00", fontWeight: 600 }}>{w.strain?.toFixed(1) ?? "—"}</td>
-                  <td style={{ padding: "8px 10px", color: "var(--fg-1)" }}>{w.avg_hr != null ? `${w.avg_hr} bpm` : "—"}</td>
-                  <td style={{ padding: "8px 10px", color: "var(--fg-1)" }}>{w.max_hr != null ? `${w.max_hr} bpm` : "—"}</td>
-                  <td style={{ padding: "8px 10px", color: "var(--fg-2)" }}>{w.kilojoule != null ? `${(w.kilojoule * 0.239).toFixed(0)}` : "—"}</td>
-                </tr>
+                <ExpandableWorkoutRow
+                  key={w.id}
+                  workout={w}
+                  formattedDate={formatDate(w.date)}
+                  formattedDuration={formatDuration(w.duration_sec)}
+                  kilojoule={w.kilojoule}
+                />
               ))}
             </tbody>
           </table>
