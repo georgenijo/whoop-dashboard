@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-05-12: Removed Coach "Use API mode" toggle — BYOK + env precedence is now the single source of truth
+
+**Decision:** Phase E.2 (issue #334, BYOK Anthropic key) dropped the `use_api_mode` setting + `api_key_present` field from `/api/settings` and removed the Coach toggle card from `/settings`. The Coach now always uses Anthropic via the SDK; the only knob is which key it uses, resolved per request: `user_settings.anthropic_key` (BYOK) wins, `process.env.ANTHROPIC_API_KEY` falls back, neither returns 503 with a Settings pointer.
+
+**Rationale:** The toggle dated to the pre-Phase-D era when there was a CLI fallback path. Phase D retired Streamlit + the CLI; the Anthropic SDK is the only code path. Keeping a "Use API mode" switch that has no off-state was confusing and let a stale `setting('use_api_mode', '0')` row sit in the DB doing nothing. BYOK + env precedence makes the user-vs-operator key distinction the only setting that matters.
+
+**Status:** active
+
+**References:** issue #334, PR for `feat/334-byok-anthropic-key`, `apps/web/src/lib/coach/api-key.ts` (resolver), `apps/web/src/app/api/me/anthropic-key/route.ts`
+
+---
+
 ## 2026-05-12: Phase B-cleanup landed — CF Access dropped on coach.georgenijo.com, SIWA is sole web gate
 
 **Decision:** PR #332 merged + deployed 2026-05-12. `requireAuth` collapsed to Bearer → Cookie → 401. Deleted: `getBootstrapUser`, `getPrimaryUser`, `findOrCreateUserByEmail`, `lib/auth/cf-access.ts`. Admin gate on `webhook/replay/route.ts` switched from `user.id !== 1` to `ADMIN_APPLE_SUB` env match (fail-closed). New `requireAuthOrSignin` helper used by all `(dashboard)` page handlers — redirects to `/signin` instead of throwing 500 when the proxy gate misses. Four CF Access apps deleted via API in order (parent FIRST, then 3 path-bypass apps): `Coach Dashboard` (839d958e...), webhook bypass (1ca713c6...), ACME bypass (9b6b82f4...), SIWA callback bypass (e42ef1da...). Post-drop smoke green: `/` → 307 /signin, `/api/whoop/webhook` GET → 405, `/api/threads` fake bearer → 401 JSON. Cert renewal unaffected — certbot uses `--nginx` authenticator which short-circuits at the nginx layer before reaching Next.js.

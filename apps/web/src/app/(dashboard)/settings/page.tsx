@@ -116,9 +116,6 @@ type ByokError =
 
 export default function SettingsPage() {
   const [localValues, setLocalValues] = useState<Record<string, boolean>>({});
-  const [useApi, setUseApi] = useState(false);
-  const [apiKeyPresent, setApiKeyPresent] = useState(false);
-  const [serverLoaded, setServerLoaded] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState("");
   const [defaultSystemPrompt, setDefaultSystemPrompt] = useState("");
   const [savedSystemPrompt, setSavedSystemPrompt] = useState("");
@@ -160,19 +157,14 @@ export default function SettingsPage() {
     fetch("/api/settings")
       .then((r) => r.json())
       .then((d: {
-        use_api_mode: boolean;
-        api_key_present: boolean;
         system_prompt: string;
         default_system_prompt: string;
       }) => {
-        setUseApi(d.use_api_mode);
-        setApiKeyPresent(d.api_key_present);
         setSystemPrompt(d.system_prompt);
         setSavedSystemPrompt(d.system_prompt);
         setDefaultSystemPrompt(d.default_system_prompt);
       })
-      .catch(() => {})
-      .finally(() => setServerLoaded(true));
+      .catch(() => {});
 
     fetch("/api/me/anthropic-key")
       .then((r) => (r.ok ? (r.json() as Promise<ByokState>) : null))
@@ -187,15 +179,6 @@ export default function SettingsPage() {
   function toggleLocal(key: string, val: boolean) {
     localStorage.setItem(key, val ? "1" : "0");
     setLocalValues((prev) => ({ ...prev, [key]: val }));
-  }
-
-  async function toggleApiMode(val: boolean) {
-    setUseApi(val);
-    await fetch("/api/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ use_api_mode: val }),
-    });
   }
 
   const trimmedByokInput = byokInput.trim();
@@ -454,29 +437,6 @@ export default function SettingsPage() {
               )}
             </div>
           </div>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-head">
-          <div className="card-title">Coach</div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-          <Row
-            isFirst
-            label="Use API mode (faster)"
-            description={
-              apiKeyPresent
-                ? "Uses the Anthropic API directly. Faster than the CLI fallback. Requires ANTHROPIC_API_KEY in .env.local."
-                : "Set ANTHROPIC_API_KEY in .env.local on the VM to enable this. Currently disabled."
-            }
-          >
-            <Toggle
-              checked={useApi && apiKeyPresent}
-              onChange={toggleApiMode}
-              disabled={!serverLoaded || !apiKeyPresent}
-            />
-          </Row>
         </div>
       </div>
 
