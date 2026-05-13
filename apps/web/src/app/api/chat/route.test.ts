@@ -31,6 +31,11 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/lib/coach/api-key", () => ({
   resolveApiKeyForUser: vi.fn(() => ({ key: "test-key", origin: "env" })),
   MissingApiKeyError: class MissingApiKeyError extends Error {},
+  BadApiKeyError: class BadApiKeyError extends Error {
+    constructor(public readonly origin: "user" | "env") {
+      super(`Anthropic API key rejected (origin=${origin})`);
+    }
+  },
 }));
 
 type RunOpts = {
@@ -54,6 +59,7 @@ let runAndPersistImpl: (
   days: unknown,
   source: unknown,
   apiKey: unknown,
+  apiKeyOrigin: unknown,
   options: RunOpts,
 ) => Promise<string> = async () => "ok";
 
@@ -67,6 +73,7 @@ vi.mock("@/lib/coach/persistence", () => ({
       days: unknown,
       source: unknown,
       apiKey: unknown,
+      apiKeyOrigin: unknown,
       options: RunOpts,
     ) =>
       runAndPersistImpl(
@@ -77,6 +84,7 @@ vi.mock("@/lib/coach/persistence", () => ({
         days,
         source,
         apiKey,
+        apiKeyOrigin,
         options,
       ),
   ),
@@ -113,7 +121,7 @@ afterEach(() => {
 
 describe("POST /api/chat — SSE wiring", () => {
   it("relays tool_progress events from the coach loop to the SSE stream", async () => {
-    runAndPersistImpl = async (_uid, _t, _u, _c, _d, _s, _k, options) => {
+    runAndPersistImpl = async (_uid, _t, _u, _c, _d, _s, _k, _ko, options) => {
       options.onToolProgress?.({ tool: "trigger_whoop_sync", stage: "fetching_sleep" });
       options.onToolProgress?.({
         tool: "trigger_whoop_sync",

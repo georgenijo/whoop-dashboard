@@ -3,6 +3,8 @@ import { after } from "next/server";
 import { createChatThread, getChatThreadById, getChatThreadConversation } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import {
+  type ApiKeyOrigin,
+  BadApiKeyError,
   MissingApiKeyError,
   resolveApiKeyForUser,
 } from "@/lib/coach/api-key";
@@ -97,8 +99,11 @@ export async function POST(req: Request) {
     // chat error, and surfacing it as a 503 keeps the chat_threads table
     // free of empty "ghost" threads created right before a 503.
     let apiKey: string;
+    let apiKeyOrigin: ApiKeyOrigin;
     try {
-      apiKey = resolveApiKeyForUser(user.id).key;
+      const resolved = resolveApiKeyForUser(user.id);
+      apiKey = resolved.key;
+      apiKeyOrigin = resolved.origin;
     } catch (err) {
       if (err instanceof MissingApiKeyError) {
         return Response.json(
@@ -138,6 +143,7 @@ export async function POST(req: Request) {
           days,
           source,
           apiKey,
+          apiKeyOrigin,
           { signal: req.signal },
         );
         if (shouldAutoTitle) {
@@ -147,6 +153,16 @@ export async function POST(req: Request) {
         }
         return Response.json({ thread_id: thread.id, reply });
       } catch (err) {
+        if (err instanceof BadApiKeyError) {
+          return Response.json(
+            {
+              error: "Anthropic API key rejected",
+              kind: "bad_api_key",
+              origin: err.origin,
+            },
+            { status: 401 },
+          );
+        }
         console.error("[chat] non-stream turn failed", {
           thread_id: thread.id,
           error: err instanceof Error ? err.message : String(err),
@@ -186,6 +202,7 @@ export async function POST(req: Request) {
             days,
             source,
             apiKey,
+            apiKeyOrigin,
             {
               signal: abortController.signal,
               onTextDelta: (text) => send("text_delta", { text }),
@@ -221,11 +238,23 @@ export async function POST(req: Request) {
           close();
         } catch (err) {
           if (!abortController.signal.aborted) {
-            const msg = err instanceof Error ? err.message : String(err);
-            try {
-              send("error", { message: msg });
-            } catch {
-              // Nothing useful to send once the SSE response is gone.
+            if (err instanceof BadApiKeyError) {
+              try {
+                send("error", {
+                  kind: "bad_api_key",
+                  origin: err.origin,
+                  message: "Anthropic API key rejected",
+                });
+              } catch {
+                // Nothing useful to send once the SSE response is gone.
+              }
+            } else {
+              const msg = err instanceof Error ? err.message : String(err);
+              try {
+                send("error", { message: msg });
+              } catch {
+                // Nothing useful to send once the SSE response is gone.
+              }
             }
           }
           close();
