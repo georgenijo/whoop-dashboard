@@ -1,5 +1,6 @@
 "use client";
 
+import BadApiKeyBanner from "@/components/coach/BadApiKeyBanner";
 import ChatInput from "@/components/coach/ChatInput";
 import MessageList from "@/components/coach/MessageList";
 import SuggestionChips from "@/components/coach/SuggestionChips";
@@ -47,6 +48,8 @@ export default function CoachWorkspace({
     handleSelectThread,
     handleDeleteThread,
     handleKeyDown,
+    badApiKey,
+    dismissBadApiKey,
   } = useCoachThread(initialThreadId, initialThreads, initialMessages);
 
   const threadTitle = activeThread?.title?.trim() || "New chat";
@@ -83,6 +86,7 @@ export default function CoachWorkspace({
         />
 
         <section className="coach-chat">
+          {badApiKey ? <BadApiKeyBanner onDismiss={dismissBadApiKey} /> : null}
           <div className="coach-messages">
             {messages.length === 0 ? (
               <div className="coach-empty">
