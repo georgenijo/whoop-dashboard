@@ -218,6 +218,42 @@ export function integrationRowExists(
   }
 }
 
+export type IntegrationStatus = { exists: boolean; needs_reauth: boolean };
+
+/**
+ * Read-only status partition for the overview-page nudge banners.
+ *
+ * Cheap by design: opens the DB read-only (no lazy ALTERs, no decrypt) and
+ * returns just enough to choose between three banners ("not set up",
+ * "needs reconnect", "fine"). Defensive on pre-Phase-A snapshots where the
+ * `needs_reauth` column may not yet have been added — falls back to
+ * `needs_reauth: false` rather than throwing.
+ *
+ * Note: `integrations` is intentionally NOT a domain table (no recovery /
+ * sleep / strain / workouts data), so tenant safety is enforced inline via
+ * `WHERE user_id = ? AND provider = ?` rather than the scoped wrapper.
+ */
+export function getIntegrationStatus(
+  user_id: number,
+  provider: string
+): IntegrationStatus {
+  const db = open();
+  if (!db) return { exists: false, needs_reauth: false };
+  try {
+    if (!hasTable(db, "integrations")) {
+      return { exists: false, needs_reauth: false };
+    }
+    const row = db
+      .prepare(
+        "SELECT needs_reauth FROM integrations WHERE user_id = ? AND provider = ?"
+      )
+      .get(user_id, provider) as { needs_reauth: number } | undefined;
+    return { exists: !!row, needs_reauth: row?.needs_reauth === 1 };
+  } finally {
+    db.close();
+  }
+}
+
 /**
  * Returns the decrypted integration, or null if:
  *   - the row does not exist

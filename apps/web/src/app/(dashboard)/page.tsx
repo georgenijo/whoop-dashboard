@@ -7,6 +7,8 @@ import RecoveryTrend from "@/components/overview/RecoveryTrend";
 import AIInsightCard from "@/components/overview/AIInsightCard";
 import AIInsightRefreshWatcher from "@/components/overview/AIInsightRefreshWatcher";
 import PRsCard from "@/components/overview/PRsCard";
+import SetupCard from "@/components/overview/SetupCard";
+import NeedsReconnectBanner from "@/components/overview/NeedsReconnectBanner";
 import TzBackfill from "@/components/onboarding/TzBackfill";
 import {
   getDailySummary,
@@ -17,6 +19,7 @@ import {
   type DailySummaryRow,
   type RecoveryRow,
 } from "@/lib/db";
+import { getIntegrationStatus } from "@/lib/db/integrations";
 import { requireAuthOrSignin } from "@/lib/auth";
 import { resolveApiKeyForUser } from "@/lib/coach/api-key";
 import {
@@ -45,6 +48,13 @@ export default async function OverviewPage({
   if (userSettings === null || userSettings.onboarded_at === null) {
     redirect("/welcome");
   }
+
+  // Three-state partition for the overview-page Whoop nudge banners:
+  //   - no integration row → SetupCard (finish onboarding)
+  //   - row exists + needs_reauth → NeedsReconnectBanner (token rejected)
+  //   - otherwise → no banner
+  // Resolved once here; rendered at one site below.
+  const whoopStatus = getIntegrationStatus(user.id, "whoop");
 
   const { range } = await searchParams;
   const days = parseDays(range);
@@ -89,6 +99,11 @@ export default async function OverviewPage({
   return (
     <>
       <TzBackfill />
+      {!whoopStatus.exists ? (
+        <SetupCard />
+      ) : whoopStatus.needs_reauth ? (
+        <NeedsReconnectBanner />
+      ) : null}
       <div className="hero">
         <RecoveryHero
           score={latestRecovery?.recovery_score ?? null}
