@@ -8,7 +8,11 @@ import {
   MissingApiKeyError,
   resolveApiKeyForUser,
 } from "@/lib/coach/api-key";
-import { runAndPersistCoachTurn, titleChatThread } from "@/lib/coach/persistence";
+import {
+  createCoachTurnHandle,
+  runAndPersistCoachTurn,
+  titleChatThread,
+} from "@/lib/coach/persistence";
 import { forModule } from "@/lib/logger";
 
 const chatLog = forModule("api.chat");
@@ -182,7 +186,11 @@ export async function POST(req: Request) {
     }
 
     const abortController = new AbortController();
-    const relayAbort = () => abortController.abort();
+    const turnHandle = createCoachTurnHandle(thread.id);
+    const relayAbort = () => {
+      turnHandle.flushAborted();
+      abortController.abort();
+    };
     req.signal.addEventListener("abort", relayAbort, { once: true });
 
     const stream = new ReadableStream<Uint8Array>({
@@ -228,7 +236,8 @@ export async function POST(req: Request) {
                   stage,
                   ...(message ? { message } : {}),
                 }),
-            }
+            },
+            turnHandle
           );
 
           if (abortController.signal.aborted) {
@@ -270,6 +279,7 @@ export async function POST(req: Request) {
         }
       },
       cancel() {
+        turnHandle.flushAborted();
         abortController.abort();
         req.signal.removeEventListener("abort", relayAbort);
       },

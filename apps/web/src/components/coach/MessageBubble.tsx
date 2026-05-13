@@ -7,11 +7,16 @@ import { formatToolProgressLabel, type ComposerMessage } from "./useChatSend";
 
 export default function MessageBubble({ msg }: { msg: ComposerMessage }) {
   const isUser = msg.role === "user";
+  const isAborted = !isUser && !msg.streaming && msg.status === "aborted";
   const [html, setHtml] = useState<string | null>(null);
   useEffect(() => {
     if (isUser) return;
     setHtml(DOMPurify.sanitize(marked.parse(msg.content) as string));
   }, [isUser, msg.content]);
+
+  // Don't render empty aborted assistant bubbles (race between abort + tool flush).
+  if (isAborted && msg.content === "") return null;
+
   const progressLabel = formatToolProgressLabel(msg.progress);
 
   return (
@@ -43,6 +48,9 @@ export default function MessageBubble({ msg }: { msg: ComposerMessage }) {
               className="prose-coach"
               dangerouslySetInnerHTML={{ __html: html ?? "" }}
             />
+            {isAborted ? (
+              <span className="coach-message-stopped">(stopped)</span>
+            ) : null}
             {msg.streaming && progressLabel ? (
               <div className={`coach-tool-progress ${msg.progress?.state ?? "running"}`}>
                 <span className="coach-tool-progress-dot" />

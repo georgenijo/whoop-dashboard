@@ -2,7 +2,12 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import type { AuthSource } from "@/lib/auth";
-import { addChatLog, addChatMessages, setChatThreadTitle } from "@/lib/db";
+import {
+  addChatLog,
+  addChatMessages,
+  setChatThreadTitle,
+  type ChatMessageInsert,
+} from "@/lib/db";
 import type { ApiKeyOrigin } from "./api-key";
 import {
   type DetailState,
@@ -17,6 +22,29 @@ import { forModule } from "@/lib/logger";
 
 const log = forModule("coach.persistence");
 
+export type CoachTurnHandle = {
+  readonly accumulator: ChatMessageInsert[];
+  markCommitted: () => void;
+  flushAborted: () => void;
+};
+
+export function createCoachTurnHandle(threadId: number): CoachTurnHandle {
+  const accumulator: ChatMessageInsert[] = [];
+  let flushed = false;
+  return {
+    accumulator,
+    markCommitted: () => {
+      flushed = true;
+    },
+    flushAborted: () => {
+      if (flushed) return;
+      flushed = true;
+      if (accumulator.length === 0) return;
+      addChatMessages(threadId, accumulator, "aborted");
+    },
+  };
+}
+
 export async function runAndPersistCoachTurn(
   userId: number,
   thread: { id: number },
@@ -26,7 +54,8 @@ export async function runAndPersistCoachTurn(
   source: AuthSource,
   apiKey: string,
   apiKeyOrigin: ApiKeyOrigin,
-  options: RunAnthropicOptions = {}
+  options: RunAnthropicOptions = {},
+  handle?: CoachTurnHandle
 ): Promise<string> {
   const startedAt = new Date().toISOString();
   const startMs = Date.now();
@@ -40,6 +69,7 @@ export async function runAndPersistCoachTurn(
     calls: 0,
   };
   const detailState: DetailState = { iterations: 0 };
+  const accumulator = handle?.accumulator;
 
   const buildDetails = () =>
     JSON.stringify({
@@ -62,10 +92,12 @@ export async function runAndPersistCoachTurn(
       detailState,
       apiKey,
       apiKeyOrigin,
-      options
+      options,
+      accumulator
     );
     detailState.iterations = result.iterations;
     addChatMessages(thread.id, result.messages);
+    handle?.markCommitted();
     addChatLog({
       started_at: startedAt,
       prompt_preview: promptPreview,

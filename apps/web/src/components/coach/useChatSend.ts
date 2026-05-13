@@ -9,7 +9,14 @@ import {
   type SetStateAction,
 } from "react";
 
-export type ChatMessage = { id: number; role: "user" | "assistant"; content: string; created_at: string };
+export type ChatMessageStatus = "complete" | "aborted";
+export type ChatMessage = {
+  id: number;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
+  status?: ChatMessageStatus;
+};
 export type ToolProgress = {
   name: string;
   state: "running" | "done";
@@ -25,6 +32,7 @@ export type ComposerMessage = {
   content: string;
   streaming?: boolean;
   progress?: ToolProgress | null;
+  status?: ChatMessageStatus;
 };
 
 type UseChatSendParams = {
@@ -154,7 +162,9 @@ function applyThreadHeader(res: Response, setThreadId: Dispatch<SetStateAction<n
 
 function isAbortError(err: unknown): boolean { return err instanceof DOMException && err.name === "AbortError"; }
 
-function toComposerMessages(messages: ChatMessage[]): ComposerMessage[] { return messages.map((m) => ({ role: m.role, content: m.content })); }
+function toComposerMessages(messages: ChatMessage[]): ComposerMessage[] {
+  return messages.map((m) => ({ role: m.role, content: m.content, status: m.status }));
+}
 
 function withoutPendingTurn(messages: ComposerMessage[]): ComposerMessage[] {
   const last = messages[messages.length - 1];
@@ -418,6 +428,7 @@ async function sendChatMessage(params: SendParams) {
   } catch (err) {
     if (isAbortError(err)) {
       if (isCurrent()) params.setMessages((prev) => prev.slice(0, assistantIdx));
+      void params.refreshThreads();
       return;
     }
     if (!isCurrent()) return;
