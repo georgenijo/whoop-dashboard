@@ -18,6 +18,7 @@ import {
   type RecoveryRow,
 } from "@/lib/db";
 import { requireAuthOrSignin } from "@/lib/auth";
+import { resolveApiKeyForUser } from "@/lib/coach/api-key";
 import {
   acquireInsightRegenerationLock,
   getInsightStatus,
@@ -66,11 +67,23 @@ export default async function OverviewPage({
   const hasInsightData =
     data.latestRecovery !== null || data.latestCycle !== null || data.latestSleep !== null;
   const insightStatus = getInsightStatus(user.id, hasInsightData);
-  const insightLock = acquireInsightRegenerationLock(insightStatus);
+
+  // BYOK-aware regen. If neither personal nor env key exists, skip
+  // regeneration silently — the rest of the overview still renders. The
+  // resolver throws MissingApiKeyError when both sources are empty; catch
+  // and treat as "no key", same shape acquireInsightRegenerationLock expects.
+  let insightApiKey: string | null = null;
+  try {
+    insightApiKey = resolveApiKeyForUser(user.id).key;
+  } catch {
+    insightApiKey = null;
+  }
+  const insightLock = acquireInsightRegenerationLock(insightStatus, insightApiKey);
   const insightRefreshing = insightStatus.isRegenerating || insightLock !== null;
 
-  if (insightLock !== null) {
-    after(() => regenerateInsight(user.id, insightLock));
+  if (insightLock !== null && insightApiKey !== null) {
+    const keyForAfter = insightApiKey;
+    after(() => regenerateInsight(user.id, keyForAfter, insightLock));
   }
 
   return (
