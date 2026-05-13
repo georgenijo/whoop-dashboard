@@ -27,13 +27,29 @@ export type ComposerMessage = {
   progress?: ToolProgress | null;
 };
 
-type UseChatSendParams = { initialMessages: ChatMessage[]; threadId: number; setThreadId: Dispatch<SetStateAction<number>>; refreshThreads: () => Promise<unknown> };
+type UseChatSendParams = {
+  initialMessages: ChatMessage[];
+  threadId: number;
+  setThreadId: Dispatch<SetStateAction<number>>;
+  refreshThreads: () => Promise<unknown>;
+  setBadApiKey?: (v: boolean) => void;
+};
 
-type SendParams = Omit<UseChatSendParams, "initialMessages"> & { text: string; messages: ComposerMessage[]; setMessages: Dispatch<SetStateAction<ComposerMessage[]>>; setInput: Dispatch<SetStateAction<string>>; setLoading: Dispatch<SetStateAction<boolean>>; inputRef: RefObject<HTMLTextAreaElement | null>; abortRef: RefObject<AbortController | null> };
+type SendParams = Omit<UseChatSendParams, "initialMessages"> & {
+  text: string;
+  messages: ComposerMessage[];
+  setMessages: Dispatch<SetStateAction<ComposerMessage[]>>;
+  setInput: Dispatch<SetStateAction<string>>;
+  setLoading: Dispatch<SetStateAction<boolean>>;
+  inputRef: RefObject<HTMLTextAreaElement | null>;
+  abortRef: RefObject<AbortController | null>;
+  setBadApiKey?: (v: boolean) => void;
+};
 type StreamHandlers = {
   appendText: (text: string) => void;
   setProgress: (progress: ToolProgress | null) => void;
   mergeProgressStage: (event: { tool: string; stage: string; message?: string }) => void;
+  badApiKey?: (event: { origin: string }) => void;
 };
 
 function setAssistantMessage(
@@ -272,6 +288,18 @@ async function readChatStream(res: Response, handlers: StreamHandlers): Promise<
       return;
     }
     if (event === "error") {
+      // Distinct path for the BYOK 401: the route emits an SSE `error` event
+      // with `kind: "bad_api_key"`. Surface that via the dedicated handler
+      // (which flips banner state in the hook) and treat the stream as
+      // terminated — no assistant error bubble, no thrown Error.
+      if (payload.kind === "bad_api_key") {
+        handlers.badApiKey?.({
+          origin:
+            typeof payload.origin === "string" ? payload.origin : "unknown",
+        });
+        sawDone = true;
+        return;
+      }
       const message = typeof payload.message === "string" ? payload.message : "Coach stream failed";
       throw new Error(message);
     }
@@ -323,6 +351,10 @@ async function readChatStream(res: Response, handlers: StreamHandlers): Promise<
 async function sendChatMessage(params: SendParams) {
   if (!params.text.trim()) return;
 
+  // Banner state is owned by the hook; reset on every new send so a previous
+  // rejection doesn't visually stick after the user fixes their key.
+  params.setBadApiKey?.(false);
+
   const userMsg: ComposerMessage = { role: "user", content: params.text };
   const nextMessages = [...withoutPendingTurn(params.messages), userMsg];
   params.setMessages(nextMessages);
@@ -337,12 +369,29 @@ async function sendChatMessage(params: SendParams) {
   const assistantIdx = nextMessages.length;
   params.setMessages((prev) => [...prev, { role: "assistant", content: "", streaming: true }]);
   const isCurrent = () => params.abortRef.current === controller;
+  let badApiKey = false;
 
   try {
     const res = await postMessage(userMsg, params.threadId, controller.signal);
     if (!isCurrent()) return;
     applyThreadHeader(res, params.setThreadId);
     if (!res.ok) {
+      if (res.status === 401) {
+        // Non-stream BYOK rejection — same kind as the SSE error, but lands
+        // here when the route returned the JSON 401 path. Surface via the
+        // banner and drop the empty assistant placeholder so no error bubble
+        // is rendered.
+        try {
+          const body = (await res.clone().json()) as { kind?: string };
+          if (body.kind === "bad_api_key") {
+            params.setBadApiKey?.(true);
+            params.setMessages((prev) => prev.slice(0, assistantIdx));
+            return;
+          }
+        } catch {
+          // Fall through to the generic error path below.
+        }
+      }
       const reply = await res.text();
       throw new Error(reply || `Server error ${res.status}`);
     }
@@ -352,8 +401,18 @@ async function sendChatMessage(params: SendParams) {
       setProgress: (progress) => setAssistantProgress(params.setMessages, assistantIdx, progress),
       mergeProgressStage: (event) =>
         mergeAssistantProgressStage(params.setMessages, assistantIdx, event),
+      badApiKey: () => {
+        badApiKey = true;
+        params.setBadApiKey?.(true);
+      },
     });
     if (!isCurrent()) return;
+    if (badApiKey) {
+      // Streamed 401: remove the empty placeholder so the banner is the
+      // sole signal of the failure (no error bubble).
+      params.setMessages((prev) => prev.slice(0, assistantIdx));
+      return;
+    }
     setAssistantMessage(params.setMessages, assistantIdx, reply);
     void params.refreshThreads();
   } catch (err) {
@@ -373,7 +432,13 @@ async function sendChatMessage(params: SendParams) {
   }
 }
 
-export function useChatSend({ initialMessages, threadId, setThreadId, refreshThreads }: UseChatSendParams) {
+export function useChatSend({
+  initialMessages,
+  threadId,
+  setThreadId,
+  refreshThreads,
+  setBadApiKey,
+}: UseChatSendParams) {
   const [messages, setMessages] = useState<ComposerMessage[]>(toComposerMessages(initialMessages));
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -400,7 +465,8 @@ export function useChatSend({ initialMessages, threadId, setThreadId, refreshThr
     inputRef,
     abortRef,
     refreshThreads,
-  }), [messages, refreshThreads, setThreadId, threadId]);
+    setBadApiKey,
+  }), [messages, refreshThreads, setThreadId, threadId, setBadApiKey]);
 
   return {
     messages,

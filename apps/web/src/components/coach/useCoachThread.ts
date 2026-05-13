@@ -41,6 +41,9 @@ export function useCoachThread(
   initialMessages: ChatMessage[]
 ) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Ephemeral banner state for the BYOK 401 path. Reset to false on every
+  // new send (inside sendChatMessage) and on dismiss; not persisted.
+  const [badApiKey, setBadApiKey] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const closeMobile = useCallback(() => setMobileOpen(false), []);
 
@@ -60,6 +63,7 @@ export function useCoachThread(
     threadId,
     setThreadId,
     refreshThreads,
+    setBadApiKey,
   });
 
   useEffect(() => scrollToBottom(bottomRef), [messages]);
@@ -68,6 +72,8 @@ export function useCoachThread(
     (e: KeyboardEvent<HTMLTextAreaElement>) => submitOnEnter(e, input, send),
     [input, send]
   );
+
+  const dismissBadApiKey = useCallback(() => setBadApiKey(false), []);
 
   return {
     threads,
@@ -87,5 +93,7 @@ export function useCoachThread(
     handleSelectThread,
     handleDeleteThread,
     handleKeyDown,
+    badApiKey,
+    dismissBadApiKey,
   };
 }
