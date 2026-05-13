@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-05-13: Phase A (per-user token encryption) closed retroactively — issue #317 was an orphan tracker
+
+**Decision:** Close issue #317 ("Phase A — per-user token storage + libsodium") as completed-by-prior-work. All acceptance criteria already satisfied on `main`: `integrations` table (`apps/web/src/lib/db/connection.ts:191`), `user_settings` table (`connection.ts:212`), encryption module (`apps/web/src/lib/crypto/vault.ts` — `encrypt`/`decrypt`/`assertVaultKeyConfigured`/`assertKeyVersionSupported`), DB helpers (`db/integrations.ts`, `db/user_settings.ts`), VAULT_KEY entry in `.env.example` with generation comment, vitest coverage in `integrations.test.ts` + `user_settings.test.ts`. No code change in this PR — receipt-only DECISIONS entry to tie off the open ticket.
+
+**Rationale:** Phase A landed silently in PR #65 (pre-tracker), then evolved in-place through Phase C (issue #320, added `provider_user_id` + `setIntegrationNeedsReauth`), Phase D (issue #323, added `lookupUserIdByProvider` for webhook routing), and Phase E.2 (issue #334, BYOK Anthropic key wired into `user_settings.anthropic_key`). The original Phase A issue text was filed against an outdated snapshot and never updated to reflect what actually shipped. Two divergences from the spec are intentional and stay: (1) the encryption lib is `tweetnacl` (pure JS NaCl secretbox) rather than `libsodium-wrappers` — same algorithm (XSalsa20-Poly1305), no async init, wire-format-compatible with `streamlit/whoop/vault.py`; (2) ciphertext columns are TEXT (base64) rather than BLOB so the Python/Node round-trip is trivial and `key_version` rotation tooling can read rows without binary handling.
+
+**Status:** active
+
+**References:** issue #317 (closed by this PR), PR #65 (original Phase A), `apps/web/src/lib/crypto/vault.ts`, `apps/web/src/lib/db/integrations.ts`, `apps/web/src/lib/db/user_settings.ts`. The 2026-05-09 Phase C kickoff entry below already noted "the Phase A surprise where `integrations` table + core vault had already shipped".
+
+---
+
 ## 2026-05-12: Removed Coach "Use API mode" toggle — BYOK + env precedence is now the single source of truth
 
 **Decision:** Phase E.2 (issue #334, BYOK Anthropic key) dropped the `use_api_mode` setting + `api_key_present` field from `/api/settings` and removed the Coach toggle card from `/settings`. The Coach now always uses Anthropic via the SDK; the only knob is which key it uses, resolved per request: `user_settings.anthropic_key` (BYOK) wins, `process.env.ANTHROPIC_API_KEY` falls back, neither returns 503 with a Settings pointer.
