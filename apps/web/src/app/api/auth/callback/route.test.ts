@@ -24,11 +24,66 @@ vi.mock("@/lib/auth/origin", () => ({
   publicOrigin: () => "http://localhost",
 }));
 
+// Phase E.1 — the callback now branches on user_settings.onboarded_at. Mock
+// the DB lookup so each test controls the destination explicitly: returning
+// null (un-onboarded) → /welcome?stage=sync; returning a populated row →
+// "/" (the re-auth path).
+const getUserSettingsMock =
+  vi.fn<(userId: number) => { onboarded_at: string | null } | null>(() => null);
+vi.mock("@/lib/db", () => ({
+  getUserSettings: (userId: number) => getUserSettingsMock(userId),
+}));
+
+// Phase D side-effect — the callback writes integrations.provider_user_id
+// after exchangeCode. Stub it out so tests don't touch the real DB; existing
+// asserts only care about the redirect + exchangeCode side-effect.
+const setProviderUserIdMock = vi.fn<
+  (userId: number, provider: string, providerUserId: string) => void
+>(() => undefined);
+vi.mock("@/lib/db/integrations", () => ({
+  setProviderUserId: (
+    userId: number,
+    provider: string,
+    providerUserId: string,
+  ) => setProviderUserIdMock(userId, provider, providerUserId),
+}));
+
+// Profile fetch — stubbed so we don't hit the real Whoop API in tests. The
+// route swallows failures from this call (provider_user_id is recoverable),
+// so a fake profile is the simplest contract.
+const getWhoopProfileMock = vi.fn<
+  (opts: { userId: number }) => Promise<{
+    user_id: number;
+    email?: string;
+    first_name?: string;
+    last_name?: string;
+  }>
+>(async () => ({
+  user_id: 123,
+  email: "x@y.z",
+  first_name: "X",
+  last_name: "Y",
+}));
+vi.mock("@/lib/whoop/client", () => ({
+  getWhoopProfile: (opts: { userId: number }) => getWhoopProfileMock(opts),
+}));
+
 const TEST_SECRET = "test-secret-for-callback-route";
 
 beforeEach(() => {
   exchangeCodeMock.mockReset();
   exchangeCodeMock.mockImplementation(async () => undefined);
+  getUserSettingsMock.mockReset();
+  getUserSettingsMock.mockImplementation(() => null);
+  setProviderUserIdMock.mockReset();
+  setProviderUserIdMock.mockImplementation(() => undefined);
+  getWhoopProfileMock.mockReset();
+  getWhoopProfileMock.mockImplementation(async () => ({
+    user_id: 123,
+    email: "x@y.z",
+    first_name: "X",
+    last_name: "Y",
+  }));
   process.env.WHOOP_STATE_SECRET = TEST_SECRET;
 });
 
@@ -64,20 +119,40 @@ function buildRequest({
 }
 
 describe("GET /api/auth/callback — Whoop OAuth state verification", () => {
-  it("happy path: matched state + valid HMAC → calls exchangeCode(user_id)", async () => {
+  it("happy path (un-onboarded): matched state + valid HMAC → /welcome?stage=sync", async () => {
     const { encodeWhoopOAuthState } = await importState();
     const { GET } = await importRoute();
     const signed = encodeWhoopOAuthState({ user_id: 42 });
+
+    // Default mock returns null = un-onboarded. Phase E.1 routes these users
+    // into the wizard's sync stage so the first 7-day pull runs visibly.
+    const res = await GET(
+      buildRequest({ state: signed, cookieState: signed }),
+    );
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe(
+      "http://localhost/welcome?stage=sync",
+    );
+    expect(exchangeCodeMock).toHaveBeenCalledTimes(1);
+    expect(exchangeCodeMock.mock.calls[0][0]).toBe(42);
+  });
+
+  it("happy path (already onboarded): matched state + valid HMAC → /", async () => {
+    const { encodeWhoopOAuthState } = await importState();
+    const { GET } = await importRoute();
+    const signed = encodeWhoopOAuthState({ user_id: 42 });
+    getUserSettingsMock.mockImplementation(() => ({
+      onboarded_at: "2026-01-01T00:00:00Z",
+    }));
 
     const res = await GET(
       buildRequest({ state: signed, cookieState: signed }),
     );
 
     expect(res.status).toBe(307);
-    // Redirects home after a successful exchange.
+    // Re-auth flow lands back on the dashboard, not the wizard.
     expect(res.headers.get("location")).toBe("http://localhost/");
-    expect(exchangeCodeMock).toHaveBeenCalledTimes(1);
-    expect(exchangeCodeMock.mock.calls[0][0]).toBe(42);
   });
 
   it("state_missing: no cookie → redirect to /settings?whoop_error=state_missing, no exchange", async () => {

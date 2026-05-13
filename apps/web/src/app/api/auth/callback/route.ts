@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import crypto from "node:crypto";
 import { exchangeCode } from "@/lib/auth";
 import { publicOrigin } from "@/lib/auth/origin";
+import { getUserSettings } from "@/lib/db";
 import { setProviderUserId } from "@/lib/db/integrations";
 import { getWhoopProfile } from "@/lib/whoop/client";
 import { decodeWhoopOAuthState } from "@/lib/whoop/oauth-state";
@@ -122,7 +123,16 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  const response = NextResponse.redirect(new URL("/", publicOrigin(req)));
+  // Phase E.1 — route un-onboarded users to /welcome?stage=sync so the
+  // wizard's Screen 3 picks up where the OAuth handshake left off and runs
+  // the initial 7-day sync. Already-onboarded users (re-auth flow) keep the
+  // original "/" destination.
+  const settings = getUserSettings(decoded.user_id);
+  const dest =
+    settings === null || settings.onboarded_at === null
+      ? "/welcome?stage=sync"
+      : "/";
+  const response = NextResponse.redirect(new URL(dest, publicOrigin(req)));
   clearStateCookie(response);
   return response;
 }

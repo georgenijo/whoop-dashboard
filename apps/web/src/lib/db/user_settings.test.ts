@@ -230,6 +230,99 @@ describe("user_settings + vault", () => {
     }
   });
 
+  // -------------------------------------------------------------------------
+  // Phase E.1 — coach_goals / onboarded_at / tz
+  // -------------------------------------------------------------------------
+
+  it("getUserSettings returns null for the three new fields on a bare row", async () => {
+    const { settings } = await loadModules();
+    settings.upsertUserSettings({ user_id: 1, model_pref: "claude-sonnet-4-6" });
+    const got = settings.getUserSettings(1);
+    expect(got).not.toBeNull();
+    expect(got!.coach_goals).toBeNull();
+    expect(got!.onboarded_at).toBeNull();
+    expect(got!.tz).toBeNull();
+  });
+
+  it("setCoachGoals round-trips an array of strings", async () => {
+    const { settings } = await loadModules();
+    settings.setCoachGoals(1, ["sleep_better", "manage_stress"]);
+    const got = settings.getUserSettings(1);
+    expect(got).not.toBeNull();
+    expect(got!.coach_goals).toEqual(["sleep_better", "manage_stress"]);
+  });
+
+  it("setCoachGoals can persist an empty array distinct from null", async () => {
+    const { settings } = await loadModules();
+    settings.setCoachGoals(1, []);
+    expect(settings.getUserSettings(1)!.coach_goals).toEqual([]);
+    settings.setCoachGoals(1, null);
+    expect(settings.getUserSettings(1)!.coach_goals).toBeNull();
+  });
+
+  it("getUserSettings returns null coach_goals when on-disk JSON is malformed", async () => {
+    const { settings, conn } = await loadModules();
+    // Seed a real row first so the UPDATE has something to mutate.
+    settings.upsertUserSettings({ user_id: 1, model_pref: "claude-sonnet-4-6" });
+    const db = conn.openWrite();
+    db!
+      .prepare("UPDATE user_settings SET coach_goals = ? WHERE user_id = 1")
+      .run("not json");
+    db!.close();
+    const got = settings.getUserSettings(1);
+    expect(got).not.toBeNull();
+    expect(got!.coach_goals).toBeNull();
+    // Other columns still populated — malformed goals don't poison the row.
+    expect(got!.model_pref).toBe("claude-sonnet-4-6");
+  });
+
+  it("markOnboarded is idempotent — second call returns the original stamp", async () => {
+    const { settings } = await loadModules();
+    const first = settings.markOnboarded(1);
+    expect(first).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    // Sleep so a fresh `new Date()` would produce a different ISO.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const second = settings.markOnboarded(1);
+    expect(second).toBe(first);
+  });
+
+  it("markOnboarded throws UserSettingsUserMissingError for unknown user_id", async () => {
+    const { settings } = await loadModules();
+    expect(() => settings.markOnboarded(9999)).toThrow(
+      settings.UserSettingsUserMissingError
+    );
+  });
+
+  it("markOnboarded — two back-to-back calls return the FIRST stamp", async () => {
+    // Tightens the idempotency guarantee. Since better-sqlite3 is sync, true
+    // OS-thread concurrency isn't expressible — but the implementation uses a
+    // single INSERT … ON CONFLICT … RETURNING statement, so the outcome is
+    // identical under ANY interleaving (the COALESCE chooses the existing
+    // value once the row exists). Two back-to-back calls is the strongest
+    // observable assertion at this layer.
+    const { settings } = await loadModules();
+    const first = settings.markOnboarded(1, new Date("2026-05-01T00:00:00Z"));
+    const second = settings.markOnboarded(1, new Date("2026-05-02T00:00:00Z"));
+    expect(first).toBe("2026-05-01T00:00:00.000Z");
+    expect(second).toBe("2026-05-01T00:00:00.000Z");
+  });
+
+  it("setTzIfUnset returns true on the first write, false on subsequent calls", async () => {
+    const { settings } = await loadModules();
+    expect(settings.setTzIfUnset(1, "America/New_York")).toBe(true);
+    expect(settings.getUserSettings(1)!.tz).toBe("America/New_York");
+    // Second call must not overwrite the existing tz.
+    expect(settings.setTzIfUnset(1, "Europe/Berlin")).toBe(false);
+    expect(settings.getUserSettings(1)!.tz).toBe("America/New_York");
+  });
+
+  it("setTzIfUnset throws UserSettingsUserMissingError for unknown user_id", async () => {
+    const { settings } = await loadModules();
+    expect(() => settings.setTzIfUnset(9999, "America/New_York")).toThrow(
+      settings.UserSettingsUserMissingError
+    );
+  });
+
   it("assertVaultKeyConfigured rejects wrong-length keys", async () => {
     const { vault } = await loadModules();
     const saved = process.env.VAULT_KEY;

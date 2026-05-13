@@ -10,7 +10,7 @@ import type {
   TextBlock,
   ToolUseBlock,
 } from "@anthropic-ai/sdk/resources/messages";
-import { type ChatMessageInsert } from "@/lib/db";
+import { getUserSettings, type ChatMessageInsert } from "@/lib/db";
 import { COACH_MODEL, buildSystemPrompt } from "./prompts";
 import {
   TOOLS,
@@ -179,7 +179,14 @@ export async function runAnthropicSdk(
     apiKey: process.env.ANTHROPIC_API_KEY,
     defaultHeaders: { "anthropic-beta": "extended-cache-ttl-2025-04-11" },
   });
-  const systemPrompt = buildSystemPrompt();
+  // Phase E.1 — surface the user's stated goals into the system prompt as a
+  // third (uncached) block. Null/empty → byte-identical to the pre-Phase-E.1
+  // two-block prompt, preserving the cache hit.
+  const userSettings = getUserSettings(userId);
+  const systemPrompt = buildSystemPrompt(
+    new Date(),
+    userSettings?.coach_goals ?? null,
+  );
   const messagesToPersist: ChatMessageInsert[] = [
     {
       role: "user",

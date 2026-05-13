@@ -1,5 +1,6 @@
 import "server-only";
 import type { TextBlockParam } from "@anthropic-ai/sdk/resources/messages";
+import { COACH_GOAL_LABELS, type CoachGoalId } from "./goals";
 
 export const COACH_MODEL = "claude-sonnet-4-6";
 export const TITLE_MODEL = "claude-haiku-4-5";
@@ -42,10 +43,31 @@ export const TITLE_SYSTEM_PROMPT = "You title chat threads. Reply with a 3-6 wor
 
 const COACH_TIME_ZONE = "America/New_York";
 
-export function buildSystemPrompt(now = new Date()): TextBlockParam[] {
+// The system prompt embeds goals inline in a sentence ("Your stated goals are
+// sleep better, manage stress"). Lower-case the canonical labels here for
+// that sentence — the canonical map in lib/coach/goals.ts is Title Case to
+// suit the UI chips, which is the wrong register for prose.
+function goalSentenceLabel(id: string): string | undefined {
+  const canonical = COACH_GOAL_LABELS[id as CoachGoalId];
+  return canonical?.toLowerCase();
+}
+
+/**
+ * Build the system prompt. The first two blocks are byte-identical to the
+ * pre-Phase-E.1 shape so the cached portion (block 2, the DEFAULT_SYSTEM_PROMPT)
+ * keeps its cache hit. When the user has stated goals, a third UNCACHED block
+ * is appended — caching per-user text would balloon cache writes for a single
+ * read each, so it's intentionally left ephemeral.
+ *
+ * `goals = null` (the default) preserves the pre-Phase-E.1 two-block shape.
+ */
+export function buildSystemPrompt(
+  now: Date = new Date(),
+  goals: readonly string[] | null = null,
+): TextBlockParam[] {
   // en-CA locale formats as YYYY-MM-DD.
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: COACH_TIME_ZONE }).format(now);
-  return [
+  const blocks: TextBlockParam[] = [
     { type: "text", text: `Today's date is ${today}.` },
     {
       type: "text",
@@ -53,4 +75,19 @@ export function buildSystemPrompt(now = new Date()): TextBlockParam[] {
       cache_control: { type: "ephemeral", ttl: "1h" },
     },
   ];
+  if (goals && goals.length > 0) {
+    const labels = goals
+      .map((g) => goalSentenceLabel(g))
+      .filter((s): s is string => !!s);
+    if (labels.length > 0) {
+      blocks.push({
+        type: "text",
+        text:
+          `The user's stated coaching goals are: ${labels.join(", ")}. ` +
+          `When relevant, frame answers around these goals — but don't force them ` +
+          `into every reply.`,
+      });
+    }
+  }
+  return blocks;
 }

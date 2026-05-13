@@ -116,6 +116,9 @@ export {
   getUserSettings,
   upsertUserSettings,
   deleteUserSettings,
+  setCoachGoals,
+  markOnboarded,
+  setTzIfUnset,
 } from "./user_settings";
 
 export type { WebhookEventRow, WebhookEventStatus, InsertWebhookEventInput } from "./webhook";
