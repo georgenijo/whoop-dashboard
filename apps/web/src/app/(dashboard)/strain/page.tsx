@@ -50,7 +50,6 @@ export default async function StrainPage({
             gradientId="strain"
             data={strainData}
             unit=""
-            showRollingToggle
           />
         </div>
         <div className="col">
