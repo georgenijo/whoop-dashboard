@@ -158,7 +158,7 @@ Whoop sync runs server-side: cron-triggered via `/api/sync`, real-time via webho
 
 ## Local verification (live testing)
 
-Worktrees created via `git worktree add` don't carry `shared/whoop_data.db`, `tokens.json`, or `.env` — those live only in the main worktree. Use the **`whoop-dev` skill** at `~/.claude/skills/whoop-dev/` to spin up a dev server in any worktree against a snapshot of the production DB. Pairs with `claude-in-chrome` MCP for headless render/behavior verification.
+Worktrees created via `git worktree add` don't carry `shared/whoop_data.db`, `tokens.json`, or `.env` — those live only in the main worktree. Use the **`whoop-dev` skill** at `~/.claude/skills/whoop-dev/` to spin up a dev server in any worktree against a snapshot of the production DB. Pairs with the **`agent-browser` CLI** (global npm; `agent-browser skills get core --full` for usage) for headless render/behavior verification.
 
 ```bash
 # Up: snapshots shared DB → /tmp/whoop-dev-<port>.db, starts dev, returns JSON
@@ -166,7 +166,11 @@ RESULT=$(bash ~/.claude/skills/whoop-dev/bin/up.sh <worktree-path> [--seed <scen
 URL=$(echo "$RESULT"  | jq -r .url)
 PORT=$(echo "$RESULT" | jq -r .port)
 
-# Drive Chrome via mcp__claude-in-chrome__* against $URL/<route>, run inline JS checks.
+# Drive Chrome via agent-browser against $URL/<route>:
+#   agent-browser open "$URL/<route>"
+#   agent-browser snapshot -i        # @e refs for interactive elements
+#   agent-browser click @eN          # act on refs; re-snapshot after page change
+#   agent-browser close              # tear down browser session
 
 # Down: kill, remove temp DB + log, drop from state
 bash ~/.claude/skills/whoop-dev/bin/down.sh --port $PORT

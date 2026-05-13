@@ -40,7 +40,7 @@ Do not write any code until the user approves the plan.
 
 After approval, implement exactly what was planned. No scope creep — do not refactor surrounding code, add comments to unchanged code, or introduce features not in the ticket.
 
-**For UI / API changes:** typecheck + build alone won't catch render or behavior bugs. Use the `whoop-dev` skill (`~/.claude/skills/whoop-dev/`) to spin up a dev server in your worktree against a snapshot of the prod DB, then verify the change in a browser or via inline JS checks paired with the `claude-in-chrome` MCP. If you cannot test the UI, say so explicitly rather than claiming success.
+**For UI / API changes:** typecheck + build alone won't catch render or behavior bugs. Use the `whoop-dev` skill (`~/.claude/skills/whoop-dev/`) to spin up a dev server in your worktree against a snapshot of the prod DB, then verify the change in a browser or via inline JS checks paired with the `agent-browser` CLI (global npm; run `agent-browser skills get core --full` for usage). If you cannot test the UI, say so explicitly rather than claiming success.
 
 ## 6. Verify
 
