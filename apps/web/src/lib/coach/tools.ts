@@ -136,7 +136,7 @@ export const TOOLS: ToolSchema[] = [
       "Pull the latest Whoop data into the local DB. Idempotent. Takes 10-30s. " +
       "Returns one of: " +
       "{ success: true, ...sync details } on a fresh sync; " +
-      "{ success: true, skipped: true, reason, last_sync_at, cooldown_seconds, next_sync_allowed_at } when a recent sync is still within the cooldown window — the DB may already have fresh rows; re-query before answering and use next_sync_allowed_at to tell the user when they can sync again; " +
+      "{ success: true, skipped: true, reason, last_sync_at, cooldown_window_seconds, next_sync_allowed_at } when a recent sync is still within the cooldown window — the DB may already have fresh rows; re-query before answering and use next_sync_allowed_at to tell the user when they can sync again; " +
       "{ success: false, already_synced: true, error } if this turn already attempted a sync; " +
       "{ success: false, error, ... } on any other failure.",
     input_schema: EMPTY_INPUT_SCHEMA,
@@ -266,7 +266,7 @@ type SyncToolSkipped = {
   skipped: true;
   reason: string;
   last_sync_at: string;
-  cooldown_seconds: number;
+  cooldown_window_seconds: number;
   next_sync_allowed_at: string;
 };
 
@@ -305,7 +305,7 @@ async function handleTriggerWhoopSync(
       skipped: true,
       reason: "Recent sync within cooldown window",
       last_sync_at: lastOk.toISOString(),
-      cooldown_seconds: SYNC_COOLDOWN_MS / 1000,
+      cooldown_window_seconds: SYNC_COOLDOWN_MS / 1000,
       next_sync_allowed_at: new Date(
         lastOk.getTime() + SYNC_COOLDOWN_MS,
       ).toISOString(),

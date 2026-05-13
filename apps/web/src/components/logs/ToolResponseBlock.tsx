@@ -119,7 +119,7 @@ type SyncResponseShape = {
   skipped?: boolean;
   reason?: string;
   last_sync_at?: string;
-  cooldown_seconds?: number;
+  cooldown_window_seconds?: number;
   next_sync_allowed_at?: string;
   rows_inserted?: Record<string, number>;
   fetched_counts?: Record<string, number>;
@@ -176,8 +176,8 @@ function SyncResponse({ response }: { response: unknown }) {
             value={`${fmtRelative(data.last_sync_at)} · ${data.last_sync_at}`}
           />
         ) : null}
-        {data.cooldown_seconds !== undefined ? (
-          <Field label="Cooldown" value={`${data.cooldown_seconds}s`} />
+        {data.cooldown_window_seconds !== undefined ? (
+          <Field label="Cooldown" value={`${data.cooldown_window_seconds}s`} />
         ) : null}
         {data.next_sync_allowed_at ? (
           <Field
