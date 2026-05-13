@@ -337,4 +337,45 @@ describe("integrations + vault", () => {
     });
     expect(integrations.getIntegration(1, "whoop")?.needs_reauth).toBe(false);
   });
+
+  // Three-state coverage for getIntegrationStatus — drives the overview-page
+  // nudge banner partition (not set up / needs reconnect / fine).
+  it("getIntegrationStatus returns { exists: false, needs_reauth: false } when no row exists", async () => {
+    const { integrations } = await loadModules();
+    expect(integrations.getIntegrationStatus(1, "whoop")).toEqual({
+      exists: false,
+      needs_reauth: false,
+    });
+  });
+
+  it("getIntegrationStatus returns { exists: true, needs_reauth: false } after a fresh upsert", async () => {
+    const { integrations } = await loadModules();
+    integrations.upsertIntegration({
+      user_id: 1,
+      provider: "whoop",
+      access_token: "a",
+      refresh_token: "r",
+      expires_at: "2026-05-09T00:00:00+00:00",
+    });
+    expect(integrations.getIntegrationStatus(1, "whoop")).toEqual({
+      exists: true,
+      needs_reauth: false,
+    });
+  });
+
+  it("getIntegrationStatus returns { exists: true, needs_reauth: true } when flag is set", async () => {
+    const { integrations } = await loadModules();
+    integrations.upsertIntegration({
+      user_id: 1,
+      provider: "whoop",
+      access_token: "a",
+      refresh_token: "r",
+      expires_at: "2026-05-09T00:00:00+00:00",
+    });
+    integrations.setIntegrationNeedsReauth(1, "whoop", true);
+    expect(integrations.getIntegrationStatus(1, "whoop")).toEqual({
+      exists: true,
+      needs_reauth: true,
+    });
+  });
 });
