@@ -1,5 +1,5 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
+import Anthropic, { APIError } from "@anthropic-ai/sdk";
 import type {
   ContentBlock,
   ContentBlockParam,
@@ -11,6 +11,7 @@ import type {
   ToolUseBlock,
 } from "@anthropic-ai/sdk/resources/messages";
 import { getUserSettings, type ChatMessageInsert } from "@/lib/db";
+import { BadApiKeyError, type ApiKeyOrigin } from "./api-key";
 import { COACH_MODEL, buildSystemPrompt } from "./prompts";
 import {
   TOOLS,
@@ -166,19 +167,32 @@ export async function runAnthropicSdk(
   toolDetails: ToolDetail[],
   usage: Usage,
   detailState: DetailState,
+  apiKey: string,
+  apiKeyOrigin: ApiKeyOrigin,
   options: RunAnthropicOptions = {}
 ): Promise<{ reply: string; iterations: number; messages: ChatMessageInsert[] }> {
   // Per-turn state shared across all `executeToolResult` calls in this turn.
   // Currently used to hard-cap `trigger_whoop_sync` at one attempt per turn.
   const turnState = newToolTurnState();
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error("ANTHROPIC_API_KEY is not configured");
-  }
 
   const client = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
+    apiKey,
     defaultHeaders: { "anthropic-beta": "extended-cache-ttl-2025-04-11" },
   });
+
+  // Wrap an Anthropic SDK call and translate a 401 into our BadApiKeyError
+  // (carrying origin) so the chat route can render a "your key was
+  // rejected" banner instead of a generic 500.
+  async function callModel(params: MessageCreateParamsBase): Promise<Message> {
+    try {
+      return await streamMessage(client, params, threadId, usage, options);
+    } catch (err) {
+      if (err instanceof APIError && err.status === 401) {
+        throw new BadApiKeyError(apiKeyOrigin);
+      }
+      throw err;
+    }
+  }
   // Phase E.1 — surface the user's stated goals into the system prompt as a
   // third (uncached) block. Null/empty → byte-identical to the pre-Phase-E.1
   // two-block prompt, preserving the cache hit.
@@ -195,20 +209,14 @@ export async function runAnthropicSdk(
     },
   ];
 
-  let response = await streamMessage(
-    client,
-    {
-      model: COACH_MODEL,
-      thinking: { type: "adaptive" },
-      tools: TOOLS,
-      max_tokens: MAX_OUTPUT_TOKENS,
-      system: systemPrompt,
-      messages: withCacheBreakpoint(conversation),
-    },
-    threadId,
-    usage,
-    options
-  );
+  let response = await callModel({
+    model: COACH_MODEL,
+    thinking: { type: "adaptive" },
+    tools: TOOLS,
+    max_tokens: MAX_OUTPUT_TOKENS,
+    system: systemPrompt,
+    messages: withCacheBreakpoint(conversation),
+  });
 
   let assistantText = textFromContent(response.content);
   messagesToPersist.push({
@@ -279,20 +287,14 @@ export async function runAnthropicSdk(
       content: toolResults,
     });
 
-    response = await streamMessage(
-      client,
-      {
-        model: COACH_MODEL,
-        thinking: { type: "adaptive" },
-        tools: TOOLS,
-        max_tokens: MAX_OUTPUT_TOKENS,
-        system: systemPrompt,
-        messages: withCacheBreakpoint(conversation),
-      },
-      threadId,
-      usage,
-      options
-    );
+    response = await callModel({
+      model: COACH_MODEL,
+      thinking: { type: "adaptive" },
+      tools: TOOLS,
+      max_tokens: MAX_OUTPUT_TOKENS,
+      system: systemPrompt,
+      messages: withCacheBreakpoint(conversation),
+    });
 
     assistantText = textFromContent(response.content);
     messagesToPersist.push({

@@ -79,23 +79,23 @@ export function getInsightStatus(userId: number, hasData: boolean): InsightStatu
   };
 }
 
-export function acquireInsightRegenerationLock(status: InsightStatus): SettingLock | null {
+export function acquireInsightRegenerationLock(
+  status: InsightStatus,
+  apiKey: string | null,
+): SettingLock | null {
   if (!status.isStale) return null;
-  if (!process.env.ANTHROPIC_API_KEY) return null;
+  if (apiKey === null) return null;
   return acquireSettingLock(INSIGHT_LOCK_KEY, INSIGHT_LOCK_TTL_MS);
 }
 
 export async function regenerateInsight(
   userId: number,
+  apiKey: string,
   lock: SettingLock,
 ): Promise<void> {
   try {
-    if (!process.env.ANTHROPIC_API_KEY) {
-      throw new Error("ANTHROPIC_API_KEY is not configured");
-    }
-
     const context = getHealthContext(userId, INSIGHT_DAYS);
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
       model: INSIGHT_MODEL,
       thinking: { type: "adaptive" },

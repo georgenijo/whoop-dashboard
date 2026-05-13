@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import type { AuthSource } from "@/lib/auth";
 import { addChatLog, addChatMessages, setChatThreadTitle } from "@/lib/db";
+import type { ApiKeyOrigin } from "./api-key";
 import {
   type DetailState,
   type RunAnthropicOptions,
@@ -20,6 +21,8 @@ export async function runAndPersistCoachTurn(
   conversation: MessageParam[],
   days: number | null,
   source: AuthSource,
+  apiKey: string,
+  apiKeyOrigin: ApiKeyOrigin,
   options: RunAnthropicOptions = {}
 ): Promise<string> {
   const startedAt = new Date().toISOString();
@@ -54,6 +57,8 @@ export async function runAndPersistCoachTurn(
       toolDetails,
       usage,
       detailState,
+      apiKey,
+      apiKeyOrigin,
       options
     );
     detailState.iterations = result.iterations;
@@ -89,11 +94,13 @@ export async function runAndPersistCoachTurn(
   }
 }
 
-export async function titleChatThread(threadId: number, firstUserText: string): Promise<void> {
-  if (!process.env.ANTHROPIC_API_KEY) return;
-
+export async function titleChatThread(
+  threadId: number,
+  firstUserText: string,
+  apiKey: string,
+): Promise<void> {
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
       model: TITLE_MODEL,
       max_tokens: 30,

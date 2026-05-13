@@ -108,17 +108,25 @@ function Row({ label, description, children, isFirst }: { label: string; descrip
   );
 }
 
+type ByokState = { present: boolean; masked: string | null };
+type ByokError =
+  | { kind: "invalid_key" }
+  | { kind: "probe_failed" }
+  | { kind: "request_failed"; message: string };
+
 export default function SettingsPage() {
   const [localValues, setLocalValues] = useState<Record<string, boolean>>({});
-  const [useApi, setUseApi] = useState(false);
-  const [apiKeyPresent, setApiKeyPresent] = useState(false);
-  const [serverLoaded, setServerLoaded] = useState(false);
   const [systemPrompt, setSystemPrompt] = useState("");
   const [defaultSystemPrompt, setDefaultSystemPrompt] = useState("");
   const [savedSystemPrompt, setSavedSystemPrompt] = useState("");
   const [saving, setSaving] = useState(false);
   const [whoop, setWhoop] = useState<WhoopConnector | null>(null);
   const [whoopWorking, setWhoopWorking] = useState(false);
+  const [byok, setByok] = useState<ByokState>({ present: false, masked: null });
+  const [byokInput, setByokInput] = useState("");
+  const [byokSaving, setByokSaving] = useState(false);
+  const [byokClearing, setByokClearing] = useState(false);
+  const [byokError, setByokError] = useState<ByokError | null>(null);
 
   const refreshWhoop = useCallback(() => {
     // Promise chain (not async/await) so the function returns synchronously
@@ -149,19 +157,23 @@ export default function SettingsPage() {
     fetch("/api/settings")
       .then((r) => r.json())
       .then((d: {
-        use_api_mode: boolean;
-        api_key_present: boolean;
         system_prompt: string;
         default_system_prompt: string;
       }) => {
-        setUseApi(d.use_api_mode);
-        setApiKeyPresent(d.api_key_present);
         setSystemPrompt(d.system_prompt);
         setSavedSystemPrompt(d.system_prompt);
         setDefaultSystemPrompt(d.default_system_prompt);
       })
-      .catch(() => {})
-      .finally(() => setServerLoaded(true));
+      .catch(() => {});
+
+    fetch("/api/me/anthropic-key")
+      .then((r) => (r.ok ? (r.json() as Promise<ByokState>) : null))
+      .then((data) => {
+        if (data) setByok(data);
+      })
+      .catch(() => {
+        // Non-critical — UI defaults to "not set", user can still paste.
+      });
   }, []);
 
   function toggleLocal(key: string, val: boolean) {
@@ -169,13 +181,88 @@ export default function SettingsPage() {
     setLocalValues((prev) => ({ ...prev, [key]: val }));
   }
 
-  async function toggleApiMode(val: boolean) {
-    setUseApi(val);
-    await fetch("/api/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ use_api_mode: val }),
-    });
+  const trimmedByokInput = byokInput.trim();
+  const byokShapeValid =
+    trimmedByokInput.startsWith("sk-ant-") && trimmedByokInput.length >= 20;
+
+  async function handleByokSave() {
+    if (byokSaving || !byokShapeValid) return;
+    setByokSaving(true);
+    setByokError(null);
+    try {
+      const r = await fetch("/api/me/anthropic-key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: trimmedByokInput }),
+      });
+      if (!r.ok) {
+        setByokError({ kind: "request_failed", message: `HTTP ${r.status}` });
+        return;
+      }
+      const d = (await r.json()) as
+        | { ok: true; present: true; masked: string }
+        | { ok: false; code: "invalid_key" | "invalid_request" | "probe_failed" };
+      if (d.ok === true) {
+        // POST response carries the mask, but re-fetch GET so the displayed
+        // state matches the server's read path (defense-in-depth: if a
+        // future POST returns a slightly different shape we still render
+        // truth from GET).
+        const got = await fetch("/api/me/anthropic-key");
+        if (got.ok) {
+          const fresh = (await got.json()) as ByokState;
+          setByok(fresh);
+        } else {
+          setByok({ present: d.present, masked: d.masked });
+        }
+        setByokInput("");
+        return;
+      }
+      if (d.code === "invalid_key") {
+        setByokError({ kind: "invalid_key" });
+      } else if (d.code === "probe_failed") {
+        setByokError({ kind: "probe_failed" });
+      } else {
+        setByokError({ kind: "request_failed", message: d.code });
+      }
+    } catch (err) {
+      setByokError({
+        kind: "request_failed",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setByokSaving(false);
+    }
+  }
+
+  async function handleByokClear() {
+    if (byokClearing) return;
+    if (!confirm("Remove your personal Anthropic key? The Coach will fall back to the shared server key.")) {
+      return;
+    }
+    setByokClearing(true);
+    setByokError(null);
+    try {
+      const r = await fetch("/api/me/anthropic-key", { method: "DELETE" });
+      if (!r.ok) {
+        setByokError({ kind: "request_failed", message: `HTTP ${r.status}` });
+        return;
+      }
+      setByok({ present: false, masked: null });
+      setByokInput("");
+    } finally {
+      setByokClearing(false);
+    }
+  }
+
+  function byokErrorMessage(err: ByokError): string {
+    switch (err.kind) {
+      case "invalid_key":
+        return "That key was rejected by Anthropic. Double-check and try again.";
+      case "probe_failed":
+        return "Couldn't reach Anthropic to verify the key. Try again in a moment.";
+      case "request_failed":
+        return `Request failed: ${err.message}`;
+    }
   }
 
   async function saveSystemPrompt() {
@@ -353,26 +440,112 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="card">
+      <div className="card" id="coach-byok">
         <div className="card-head">
-          <div className="card-title">Coach</div>
+          <div className="card-title">Coach API key</div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-          <Row
-            isFirst
-            label="Use API mode (faster)"
-            description={
-              apiKeyPresent
-                ? "Uses the Anthropic API directly. Faster than the CLI fallback. Requires ANTHROPIC_API_KEY in .env.local."
-                : "Set ANTHROPIC_API_KEY in .env.local on the VM to enable this. Currently disabled."
-            }
-          >
-            <Toggle
-              checked={useApi && apiKeyPresent}
-              onChange={toggleApiMode}
-              disabled={!serverLoaded || !apiKeyPresent}
-            />
-          </Row>
+        <div style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
+          {byok.present ? (
+            <>
+              <div
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 12,
+                  color: "var(--fg-2)",
+                  lineHeight: 1.55,
+                }}
+              >
+                Using your personal key (<code style={{ fontFamily: "var(--font-mono)" }}>{byok.masked}</code>).
+              </div>
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  onClick={handleByokClear}
+                  disabled={byokClearing}
+                  style={{
+                    background: "transparent",
+                    border: "1px solid rgba(255,80,80,0.3)",
+                    color: "#ff8b8b",
+                    padding: "6px 14px",
+                    borderRadius: 6,
+                    fontSize: 12,
+                    fontFamily: "var(--font-sans)",
+                    cursor: byokClearing ? "wait" : "pointer",
+                    opacity: byokClearing ? 0.5 : 1,
+                  }}
+                >
+                  {byokClearing ? "Removing…" : "Remove key"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div
+                style={{
+                  fontFamily: "var(--font-sans)",
+                  fontSize: 12,
+                  color: "var(--fg-2)",
+                  lineHeight: 1.55,
+                }}
+              >
+                Using shared server key. Paste your own <code style={{ fontFamily: "var(--font-mono)" }}>sk-ant-…</code> key to override.
+              </div>
+              <input
+                type="password"
+                value={byokInput}
+                onChange={(e) => {
+                  setByokInput(e.target.value);
+                  if (byokError) setByokError(null);
+                }}
+                placeholder="sk-ant-…"
+                autoComplete="off"
+                spellCheck={false}
+                style={{
+                  width: "100%",
+                  background: "rgba(0,0,0,0.25)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 8,
+                  padding: "10px 12px",
+                  color: "var(--fg-0)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 12,
+                  outline: "none",
+                }}
+              />
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  onClick={handleByokSave}
+                  disabled={!byokShapeValid || byokSaving}
+                  style={{
+                    background: byokShapeValid && !byokSaving ? "#7b61ff" : "rgba(255,255,255,0.08)",
+                    border: "none",
+                    color: byokShapeValid && !byokSaving ? "#fff" : "var(--fg-3)",
+                    padding: "6px 14px",
+                    borderRadius: 6,
+                    fontSize: 12,
+                    cursor: byokShapeValid && !byokSaving ? "pointer" : "default",
+                    fontFamily: "var(--font-sans)",
+                  }}
+                >
+                  {byokSaving ? "Verifying…" : "Save key"}
+                </button>
+              </div>
+            </>
+          )}
+          {byokError ? (
+            <div
+              role="alert"
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontSize: 12,
+                color: "#ff8b8b",
+                lineHeight: 1.5,
+              }}
+            >
+              {byokErrorMessage(byokError)}
+            </div>
+          ) : null}
         </div>
       </div>
 
