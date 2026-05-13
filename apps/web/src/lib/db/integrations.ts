@@ -243,23 +243,12 @@ export function getIntegrationStatus(
     if (!hasTable(db, "integrations")) {
       return { exists: false, needs_reauth: false };
     }
-    try {
-      const row = db
-        .prepare(
-          "SELECT needs_reauth FROM integrations WHERE user_id = ? AND provider = ?"
-        )
-        .get(user_id, provider) as { needs_reauth: number } | undefined;
-      return { exists: !!row, needs_reauth: row?.needs_reauth === 1 };
-    } catch {
-      // Column missing on pre-Phase-A snapshot; defer to openWrite() to migrate.
-      const exists =
-        db
-          .prepare(
-            "SELECT 1 FROM integrations WHERE user_id = ? AND provider = ?"
-          )
-          .get(user_id, provider) !== undefined;
-      return { exists, needs_reauth: false };
-    }
+    const row = db
+      .prepare(
+        "SELECT needs_reauth FROM integrations WHERE user_id = ? AND provider = ?"
+      )
+      .get(user_id, provider) as { needs_reauth: number } | undefined;
+    return { exists: !!row, needs_reauth: row?.needs_reauth === 1 };
   } finally {
     db.close();
   }
