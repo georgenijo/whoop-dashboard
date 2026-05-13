@@ -37,12 +37,12 @@ export default function BadApiKeyBanner({ onDismiss }: Props) {
           lineHeight: 1.5,
         }}
       >
-        Your Anthropic key was rejected.{" "}
+        Your Anthropic key was rejected. Update it in{" "}
         <a
           href="/settings#coach-byok"
           style={{ color: "#ff8b8b", textDecoration: "underline" }}
         >
-          Update in Settings
+          Settings → Coach
         </a>
         .
       </span>
