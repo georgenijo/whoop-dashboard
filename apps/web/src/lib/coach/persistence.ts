@@ -20,6 +20,7 @@ export async function runAndPersistCoachTurn(
   conversation: MessageParam[],
   days: number | null,
   source: AuthSource,
+  apiKey: string,
   options: RunAnthropicOptions = {}
 ): Promise<string> {
   const startedAt = new Date().toISOString();
@@ -54,6 +55,7 @@ export async function runAndPersistCoachTurn(
       toolDetails,
       usage,
       detailState,
+      apiKey,
       options
     );
     detailState.iterations = result.iterations;
@@ -89,11 +91,13 @@ export async function runAndPersistCoachTurn(
   }
 }
 
-export async function titleChatThread(threadId: number, firstUserText: string): Promise<void> {
-  if (!process.env.ANTHROPIC_API_KEY) return;
-
+export async function titleChatThread(
+  threadId: number,
+  firstUserText: string,
+  apiKey: string,
+): Promise<void> {
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
       model: TITLE_MODEL,
       max_tokens: 30,

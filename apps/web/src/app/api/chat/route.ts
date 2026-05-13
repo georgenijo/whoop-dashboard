@@ -2,6 +2,10 @@ import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { after } from "next/server";
 import { createChatThread, getChatThreadById, getChatThreadConversation } from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
+import {
+  MissingApiKeyError,
+  resolveApiKeyForUser,
+} from "@/lib/coach/api-key";
 import { runAndPersistCoachTurn, titleChatThread } from "@/lib/coach/persistence";
 
 type ChatMessageInput = { role: "user" | "assistant"; content: string };
@@ -87,6 +91,27 @@ function chatStreamResponse(body: BodyInit, threadId: number): Response {
 export async function POST(req: Request) {
   try {
     const { user, source } = await requireAuth(req);
+
+    // Resolve the Anthropic API key BEFORE parsing the request body or
+    // creating a thread — a missing key is a configuration failure, not a
+    // chat error, and surfacing it as a 503 keeps the chat_threads table
+    // free of empty "ghost" threads created right before a 503.
+    let apiKey: string;
+    try {
+      apiKey = resolveApiKeyForUser(user.id).key;
+    } catch (err) {
+      if (err instanceof MissingApiKeyError) {
+        return Response.json(
+          {
+            error:
+              "No Anthropic API key configured. Add a personal key in Settings or set ANTHROPIC_API_KEY on the server.",
+          },
+          { status: 503 },
+        );
+      }
+      throw err;
+    }
+
     const { lastUser, requestedThreadId, days } = await parseChatRequest(req);
 
     const thread =
@@ -105,12 +130,19 @@ export async function POST(req: Request) {
 
     if (!wantsStream(req)) {
       try {
-        const reply = await runAndPersistCoachTurn(user.id, thread, lastUser, conversation, days, source, {
-          signal: req.signal,
-        });
+        const reply = await runAndPersistCoachTurn(
+          user.id,
+          thread,
+          lastUser,
+          conversation,
+          days,
+          source,
+          apiKey,
+          { signal: req.signal },
+        );
         if (shouldAutoTitle) {
           after(() => {
-            void titleChatThread(thread.id, lastUser);
+            void titleChatThread(thread.id, lastUser, apiKey);
           });
         }
         return Response.json({ thread_id: thread.id, reply });
@@ -153,6 +185,7 @@ export async function POST(req: Request) {
             conversation,
             days,
             source,
+            apiKey,
             {
               signal: abortController.signal,
               onTextDelta: (text) => send("text_delta", { text }),
@@ -182,7 +215,7 @@ export async function POST(req: Request) {
           send("done", { reply });
           if (shouldAutoTitle) {
             after(() => {
-              void titleChatThread(thread.id, lastUser);
+              void titleChatThread(thread.id, lastUser, apiKey);
             });
           }
           close();

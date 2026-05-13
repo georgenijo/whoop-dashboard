@@ -23,6 +23,14 @@ vi.mock("@/lib/db", () => ({
   createChatThread: vi.fn(() => ({ id: 42, title: "existing" })),
   getChatThreadById: vi.fn(() => ({ id: 42, title: "existing" })),
   getChatThreadConversation: vi.fn(() => []),
+  getUserSettings: vi.fn(() => null),
+}));
+
+// Stub the BYOK resolver so the route always sees a usable key in tests.
+// (Real resolver reads getUserSettings + process.env.ANTHROPIC_API_KEY.)
+vi.mock("@/lib/coach/api-key", () => ({
+  resolveApiKeyForUser: vi.fn(() => ({ key: "test-key", origin: "env" })),
+  MissingApiKeyError: class MissingApiKeyError extends Error {},
 }));
 
 type RunOpts = {
@@ -45,6 +53,7 @@ let runAndPersistImpl: (
   conversation: unknown,
   days: unknown,
   source: unknown,
+  apiKey: unknown,
   options: RunOpts,
 ) => Promise<string> = async () => "ok";
 
@@ -57,9 +66,19 @@ vi.mock("@/lib/coach/persistence", () => ({
       conversation: unknown,
       days: unknown,
       source: unknown,
+      apiKey: unknown,
       options: RunOpts,
     ) =>
-      runAndPersistImpl(userId, thread, lastUser, conversation, days, source, options),
+      runAndPersistImpl(
+        userId,
+        thread,
+        lastUser,
+        conversation,
+        days,
+        source,
+        apiKey,
+        options,
+      ),
   ),
   titleChatThread: vi.fn(async () => undefined),
 }));
@@ -94,7 +113,7 @@ afterEach(() => {
 
 describe("POST /api/chat — SSE wiring", () => {
   it("relays tool_progress events from the coach loop to the SSE stream", async () => {
-    runAndPersistImpl = async (_uid, _t, _u, _c, _d, _s, options) => {
+    runAndPersistImpl = async (_uid, _t, _u, _c, _d, _s, _k, options) => {
       options.onToolProgress?.({ tool: "trigger_whoop_sync", stage: "fetching_sleep" });
       options.onToolProgress?.({
         tool: "trigger_whoop_sync",

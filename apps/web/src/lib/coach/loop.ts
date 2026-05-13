@@ -166,17 +166,15 @@ export async function runAnthropicSdk(
   toolDetails: ToolDetail[],
   usage: Usage,
   detailState: DetailState,
+  apiKey: string,
   options: RunAnthropicOptions = {}
 ): Promise<{ reply: string; iterations: number; messages: ChatMessageInsert[] }> {
   // Per-turn state shared across all `executeToolResult` calls in this turn.
   // Currently used to hard-cap `trigger_whoop_sync` at one attempt per turn.
   const turnState = newToolTurnState();
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error("ANTHROPIC_API_KEY is not configured");
-  }
 
   const client = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
+    apiKey,
     defaultHeaders: { "anthropic-beta": "extended-cache-ttl-2025-04-11" },
   });
   // Phase E.1 — surface the user's stated goals into the system prompt as a
