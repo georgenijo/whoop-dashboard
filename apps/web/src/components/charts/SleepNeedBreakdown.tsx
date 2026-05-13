@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useId } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import type { SleepRow } from "@/lib/db";
 
@@ -33,6 +34,71 @@ type TooltipPayload = {
   value: number;
   color: string;
 };
+
+const SLEEP_NEED_EXPLANATION =
+  "Sleep Need = Baseline (your nightly baseline set by Whoop) + Strain add-on (extra sleep earned by recent activity) + Sleep debt (deficit carried from recent under-sleep) − Nap credit (any sleep already logged as a nap).";
+
+function InfoIcon({ explanation }: { explanation: string }) {
+  const [visible, setVisible] = useState(false);
+  const tooltipId = useId();
+  return (
+    <span
+      style={{ position: "relative", display: "inline-flex", alignItems: "center" }}
+      onMouseEnter={() => setVisible(true)}
+      onMouseLeave={() => setVisible(false)}
+    >
+      <span
+        tabIndex={0}
+        aria-describedby={tooltipId}
+        onFocus={() => setVisible(true)}
+        onBlur={() => setVisible(false)}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: 14,
+          height: 14,
+          borderRadius: "50%",
+          border: "1px solid rgba(255,255,255,0.25)",
+          fontFamily: "var(--font-mono)",
+          fontSize: 9,
+          color: "var(--fg-3)",
+          cursor: "default",
+          userSelect: "none",
+          lineHeight: 1,
+        }}
+      >
+        i
+      </span>
+      {visible && (
+        <span
+          id={tooltipId}
+          role="tooltip"
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 6px)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: 240,
+            background: "rgba(12,12,18,0.96)",
+            border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 8,
+            padding: "8px 10px",
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            color: "var(--fg-2)",
+            lineHeight: 1.5,
+            zIndex: 20,
+            pointerEvents: "none",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
+          }}
+        >
+          {explanation}
+        </span>
+      )}
+    </span>
+  );
+}
 
 function StackTooltip({
   active,
@@ -75,7 +141,8 @@ export default function SleepNeedBreakdown({ row }: Props) {
         <div className="card-head">
           <div className="card-title">
             <span className="dot" style={{ background: "#7b61ff", color: "#7b61ff" }} />
-            Sleep need breakdown
+            Sleep need breakdown{" "}
+            <InfoIcon explanation={SLEEP_NEED_EXPLANATION} />
           </div>
         </div>
         <div className="empty-state">
@@ -89,9 +156,10 @@ export default function SleepNeedBreakdown({ row }: Props) {
   const baseline = row.need_from_baseline_ms;
   const debt = row.need_from_debt_ms;
   const strain = row.need_from_strain_ms;
-  // Whoop's nap component is typically negative (a credit reducing need).
-  const napCreditMs = Math.abs(row.need_from_nap_ms);
-  const total = baseline + debt + strain - napCreditMs;
+  // need_from_nap_ms is always non-positive per Whoop API (a credit reducing need).
+  const napCreditMs = row.need_from_nap_ms < 0 ? Math.abs(row.need_from_nap_ms) : 0;
+  // Use the pre-computed value from the DB to keep header and bar consistent.
+  const total = row.sleep_need_ms ?? (baseline + debt + strain - napCreditMs);
 
   const data: StackDatum[] = [
     {
@@ -106,7 +174,7 @@ export default function SleepNeedBreakdown({ row }: Props) {
     { key: "Baseline", ms: baseline, sign: 1 },
     { key: "Debt", ms: debt, sign: 1 },
     { key: "Strain", ms: strain, sign: 1 },
-    { key: "Nap credit", ms: napCreditMs, sign: -1 },
+    ...(napCreditMs > 0 ? [{ key: "Nap credit" as ComponentKey, ms: napCreditMs, sign: -1 as const }] : []),
   ];
 
   return (
@@ -115,7 +183,8 @@ export default function SleepNeedBreakdown({ row }: Props) {
         <div>
           <div className="card-title">
             <span className="dot" style={{ background: "#7b61ff", color: "#7b61ff" }} />
-            Sleep need breakdown
+            Sleep need breakdown{" "}
+            <InfoIcon explanation={SLEEP_NEED_EXPLANATION} />
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
             {new Date(row.date + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
