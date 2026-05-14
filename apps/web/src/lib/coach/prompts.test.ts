@@ -81,9 +81,9 @@ describe("DEFAULT_SYSTEM_PROMPT", () => {
   });
 
   it("requires a one-sentence text block before any tool call", () => {
-    expect(DEFAULT_SYSTEM_PROMPT).toMatch(/before calling any tool/i);
+    expect(DEFAULT_SYSTEM_PROMPT).toMatch(/every turn must start with text/i);
     expect(DEFAULT_SYSTEM_PROMPT).toMatch(/under 12 words/i);
-    expect(DEFAULT_SYSTEM_PROMPT).toMatch(/never lead with a tool_use block/i);
+    expect(DEFAULT_SYSTEM_PROMPT).toMatch(/never emit a tool_use block as the first content/i);
   });
 
   it("tells the model to surface a concrete cooldown duration from next_sync_allowed_at", () => {
