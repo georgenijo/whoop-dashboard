@@ -113,6 +113,29 @@ function insertWorkouts(
   }
 }
 
+function insertWorkoutWithRaw(row: {
+  id: string;
+  date: string;
+  start: string;
+  end: string;
+  sport?: string | null;
+}): void {
+  const db = new Database(dbFile);
+  try {
+    db.prepare(
+      "INSERT INTO workouts (user_id, id, date, sport, raw) VALUES (?, ?, ?, ?, ?)"
+    ).run(
+      1,
+      row.id,
+      row.date,
+      row.sport ?? null,
+      JSON.stringify({ id: row.id, start: row.start, end: row.end }),
+    );
+  } finally {
+    db.close();
+  }
+}
+
 function clearWorkouts(): void {
   const db = new Database(dbFile);
   try {
@@ -197,5 +220,35 @@ describe("getWorkoutsRange", () => {
 
     const result = workouts.getWorkoutsRange(1, "2026-01-01", "2026-01-31");
     expect(result.rows.map((r) => r.id)).toEqual(["w-new", "w-mid", "w-old"]);
+  });
+
+  // Regression for issue #347: query_workouts must surface workout start/end
+  // timestamps. WORKOUT_COLUMNS pulls them from raw via json_extract; the
+  // coach-tool boundary then layers start_local/end_local on top.
+  it("surfaces start_utc and end_utc from raw JSON", () => {
+    insertWorkoutWithRaw({
+      id: "w-raw-1",
+      date: "2026-05-13",
+      start: "2026-05-14T01:30:00.000Z",
+      end: "2026-05-14T02:15:00.000Z",
+      sport: "running",
+    });
+
+    const result = workouts.getWorkoutsRange(1, "2026-05-13", "2026-05-13");
+    expect(result.rows).toHaveLength(1);
+    const row = result.rows[0];
+    expect(row.start_utc).toBe("2026-05-14T01:30:00.000Z");
+    expect(row.end_utc).toBe("2026-05-14T02:15:00.000Z");
+  });
+
+  it("returns null start_utc/end_utc when raw JSON is absent", () => {
+    // Rows inserted without `raw` (legacy backfilled rows) must still
+    // serialise — null timestamps are expected, not undefined or a throw.
+    insertWorkouts([{ id: "w-no-raw", date: "2026-01-10", sport: "yoga" }]);
+
+    const result = workouts.getWorkoutsRange(1, "2026-01-10", "2026-01-10");
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0].start_utc).toBeNull();
+    expect(result.rows[0].end_utc).toBeNull();
   });
 });
