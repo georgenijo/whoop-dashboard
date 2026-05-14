@@ -156,11 +156,16 @@ export function deleteChatThread(threadId: number, userId: number): boolean {
       "SELECT id FROM chat_threads WHERE id = ? AND user_id = ? LIMIT 1"
     );
     const deleteMessages = db.prepare("DELETE FROM chat_messages WHERE thread_id = ?");
+    // Lane F's chat_logs.thread_id REFERENCES chat_threads(id) has no
+    // ON DELETE action, so any log row pointing at this thread blocks the
+    // parent delete via FK. Drop the log rows in the same transaction.
+    const deleteLogs = db.prepare("DELETE FROM chat_logs WHERE thread_id = ?");
     const deleteThread = db.prepare("DELETE FROM chat_threads WHERE id = ? AND user_id = ?");
     const removeThread = db.transaction(() => {
       const thread = getThread.get(threadId, userId) as { id: number } | undefined;
       if (!thread) return false;
       deleteMessages.run(threadId);
+      deleteLogs.run(threadId);
       deleteThread.run(threadId, userId);
       return true;
     });
