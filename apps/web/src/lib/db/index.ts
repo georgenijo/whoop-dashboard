@@ -89,10 +89,11 @@ export {
   clearChatMessages,
 } from "./coach";
 
-export type { ChatLog, SyncLog, RouteLog } from "./logs";
+export type { ChatLog, ChatThreadInfo, SyncLog, RouteLog } from "./logs";
 export {
   addChatLog,
   getChatLogs,
+  getChatThreadInfo,
   clearChatLogs,
   addSyncLog,
   getSyncLogs,

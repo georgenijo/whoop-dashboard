@@ -1,8 +1,18 @@
-import { getChatLogs, getRouteLogs, getSyncLogs } from "@/lib/db";
-import ChatLogsTable from "./ChatLogsTable";
+import { getChatLogs, getChatThreadInfo, getRouteLogs, getSyncLogs } from "@/lib/db";
+import ChatLogsByThread from "./ChatLogsByThread";
 import CollapsibleCard from "./CollapsibleCard";
 import RouteLogsTable from "./RouteLogsTable";
 import SyncLogsTable from "./SyncLogsTable";
+
+function deriveThreadIdFromDetails(details?: string | null): number | null {
+  if (!details) return null;
+  try {
+    const parsed = JSON.parse(details) as { thread_id?: unknown };
+    return typeof parsed?.thread_id === "number" ? parsed.thread_id : null;
+  } catch {
+    return null;
+  }
+}
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +20,20 @@ export default function LogsPage() {
   const logs = getChatLogs(500);
   const syncLogs = getSyncLogs(200);
   const routeLogs = getRouteLogs(200);
+
+  // Resolve thread metadata for grouping. Pull thread_id from the column when
+  // present, fall back to the legacy details JSON for older rows.
+  const threadIdSet = new Set<number>();
+  for (const log of logs) {
+    const tid = log.thread_id ?? deriveThreadIdFromDetails(log.details);
+    if (tid != null) threadIdSet.add(tid);
+  }
+  const threadInfoMap = getChatThreadInfo(Array.from(threadIdSet));
+  const threadsObj: Record<string, { id: number; title: string | null; first_user_message: string | null }> = {};
+  for (const [id, info] of threadInfoMap) {
+    threadsObj[String(id)] = info;
+  }
+  const distinctThreads = threadIdSet.size;
 
   const okLogs = logs.filter((l) => l.status === "ok");
   const avgDur = okLogs.length
@@ -72,14 +96,18 @@ export default function LogsPage() {
         </div>
       </div>
 
-      <CollapsibleCard title="Chat request log" sub={`${logs.length} entries · most recent first`} defaultOpen={false}>
+      <CollapsibleCard
+        title="Chat by thread"
+        sub={`${distinctThreads} thread${distinctThreads === 1 ? "" : "s"} · ${logs.length} call${logs.length === 1 ? "" : "s"}`}
+        defaultOpen={false}
+      >
         {logs.length === 0 ? (
           <div className="empty-state">
             <div className="title">No chat requests yet</div>
             <div className="sub">Send a message in Coach to populate this log</div>
           </div>
         ) : (
-          <ChatLogsTable logs={logs} />
+          <ChatLogsByThread logs={logs} threads={threadsObj} />
         )}
       </CollapsibleCard>
 
