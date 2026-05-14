@@ -549,15 +549,8 @@ export async function executeToolResult(
   };
 }
 
-/**
- * Cap on the persisted response payload per tool call, in JSON characters.
- * chat_logs.details is a TEXT blob and large query_* responses (30+ days of
- * recovery / sleep rows with `raw` JSON) can hit hundreds of KB. We persist
- * a structured-but-bounded view so the /logs detail UI has something to
- * render without bloating the DB. Past 12KB the rendered JSON is replaced
- * with a `_truncated` marker; the UI still shows row count, date range, and
- * a 5-row preview from the same payload before the cap.
- */
+// Cap on the persisted response payload per tool call (JSON chars). Past this,
+// emit a `_truncated` marker with a 5-row preview when the shape allows it.
 const TOOL_RESPONSE_MAX_CHARS = 12_000;
 
 function captureToolResponse(response: unknown): unknown {
@@ -576,6 +569,24 @@ function captureToolResponse(response: unknown): unknown {
       _truncated: true,
       total_count: response.length,
       preview: response.slice(0, 5),
+    };
+  }
+  // query_workouts wraps rows in `{ rows, _meta }`. Preserve the preview
+  // shape so the UI doesn't fall through to a near-empty JSON viewer.
+  if (
+    typeof response === "object" &&
+    response !== null &&
+    !Array.isArray(response) &&
+    Array.isArray((response as { rows?: unknown }).rows)
+  ) {
+    const rows = (response as { rows: unknown[] }).rows;
+    const meta = (response as { _meta?: { total_count?: unknown } })._meta;
+    const totalCount =
+      meta && typeof meta.total_count === "number" ? meta.total_count : rows.length;
+    return {
+      _truncated: true,
+      total_count: totalCount,
+      preview: rows.slice(0, 5),
     };
   }
   return {

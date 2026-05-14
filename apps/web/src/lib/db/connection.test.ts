@@ -185,12 +185,7 @@ describe("Phase D — domain tables carry user_id", () => {
     try {
       const cols = columns(db!, "route_logs");
       expect(cols).toEqual(
-        expect.arrayContaining([
-          "response_bytes",
-          "server_timing",
-          "cache_status",
-          "render_ms",
-        ])
+        expect.arrayContaining(["response_bytes", "render_ms"])
       );
     } finally {
       db?.close();
@@ -201,8 +196,8 @@ describe("Phase D — domain tables carry user_id", () => {
     const file = newDbFile();
     // Mimic a prod DB that pre-dates issue #296: route_logs exists with the
     // older schema (status + details only) and already has rows. The lazy
-    // ALTER must add the four new columns AND leave existing rows intact
-    // with NULLs for the new fields — that's the "no migration" guarantee.
+    // ALTER must add the new columns AND leave existing rows intact with
+    // NULLs for the new fields — that's the "no migration" guarantee.
     const raw = new Database(file);
     raw.exec(`
       CREATE TABLE route_logs (
@@ -222,26 +217,22 @@ describe("Phase D — domain tables carry user_id", () => {
     const db = conn.openWrite();
     try {
       const cols = columns(db!, "route_logs");
-      for (const c of ["response_bytes", "server_timing", "cache_status", "render_ms"]) {
+      for (const c of ["response_bytes", "render_ms"]) {
         expect(cols).toContain(c);
       }
       const row = db!
         .prepare(
-          "SELECT route, status, response_bytes, server_timing, cache_status, render_ms FROM route_logs WHERE id = 1"
+          "SELECT route, status, response_bytes, render_ms FROM route_logs WHERE id = 1"
         )
         .get() as {
           route: string;
           status: number;
           response_bytes: number | null;
-          server_timing: string | null;
-          cache_status: string | null;
           render_ms: number | null;
         };
       expect(row.route).toBe("/recovery");
       expect(row.status).toBe(200);
       expect(row.response_bytes).toBeNull();
-      expect(row.server_timing).toBeNull();
-      expect(row.cache_status).toBeNull();
       expect(row.render_ms).toBeNull();
     } finally {
       db?.close();

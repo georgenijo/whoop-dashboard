@@ -37,15 +37,8 @@ export const viewport: Viewport = {
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  // Snapshot at the very top of the Server Component so the `render_ms`
-  // figure captures wall-clock time inside React's render pass (between
-  // layout entry and `after()` firing post-stream). This is distinct from
-  // `duration_ms`, which includes the proxy-injected start time and
-  // therefore covers a couple of extra ms of edge-runtime overhead.
-  // Date.now() is "impure" by React's rules-of-purity rule, but the value
-  // is consumed inside an `after()` post-response hook (not in rendered
-  // output), so a re-render with a different value would have no visible
-  // effect — it only changes one logged number.
+  // Date.now() here violates React purity, but the value is only consumed
+  // inside `after()` (post-response), so a re-render can't observe drift.
   // eslint-disable-next-line react-hooks/purity
   const layoutStartMs = Date.now();
   const requestHeaders = await headers();
@@ -59,25 +52,15 @@ export default async function RootLayout({
       try {
         const now = Date.now();
         const renderMs = Math.max(0, now - layoutStartMs);
-        // `server_timing` is JSON so it stays cheap to extend later (db_ms,
-        // stream_ms, etc.). For now we just capture the render-pass figure
-        // — it's what /logs can render today.
-        const serverTiming = JSON.stringify({ render_ms: renderMs });
         addRouteLog({
           started_at: startedAt,
           route,
           duration_ms: Math.max(0, now - startMs),
           status: 200,
           details,
-          // `response_bytes` stays NULL: Next.js 16's `after()` runs after
-          // the streamed response is closed and the framework does not
-          // expose the rendered byte count to user code. Documented trim.
+          // response_bytes stays NULL: Next.js 16's `after()` runs after the
+          // streamed response is closed and exposes no rendered byte count.
           response_bytes: null,
-          server_timing: serverTiming,
-          // No ISR / CDN cache layer in front of these dynamic dashboard
-          // routes; emit a stable marker so the column has signal when a
-          // future caching experiment lights it up.
-          cache_status: "none",
           render_ms: renderMs,
         });
       } catch {

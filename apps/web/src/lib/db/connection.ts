@@ -166,8 +166,6 @@ export function openWrite(): DB | null {
         status INTEGER NOT NULL,
         details TEXT,
         response_bytes INTEGER,
-        server_timing TEXT,
-        cache_status TEXT,
         render_ms INTEGER
       );
       CREATE INDEX IF NOT EXISTS route_logs_started_at_idx ON route_logs(started_at DESC);
@@ -282,18 +280,10 @@ export function openWrite(): DB | null {
     if (!routeCols.some((c) => c.name === "details")) {
       db.exec("ALTER TABLE route_logs ADD COLUMN details TEXT");
     }
-    // Issue #296 — page-render perf signal. response_bytes is currently
-    // always NULL (Next.js 16's `after()` callback has no clean handle on the
-    // streamed response body; documented in the PR). The other three are
-    // populated from layout timing + the proxy-injected start marker.
+    // Issue #296 — page-render perf signal. response_bytes always NULL
+    // (Next.js 16 `after()` has no handle on the streamed response body).
     if (!routeCols.some((c) => c.name === "response_bytes")) {
       db.exec("ALTER TABLE route_logs ADD COLUMN response_bytes INTEGER");
-    }
-    if (!routeCols.some((c) => c.name === "server_timing")) {
-      db.exec("ALTER TABLE route_logs ADD COLUMN server_timing TEXT");
-    }
-    if (!routeCols.some((c) => c.name === "cache_status")) {
-      db.exec("ALTER TABLE route_logs ADD COLUMN cache_status TEXT");
     }
     if (!routeCols.some((c) => c.name === "render_ms")) {
       db.exec("ALTER TABLE route_logs ADD COLUMN render_ms INTEGER");

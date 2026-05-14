@@ -2,30 +2,9 @@
 
 import { useMemo, useState } from "react";
 
-/**
- * Renders the response payload from a single Coach tool call inside the
- * /logs chat-call detail view. Switches on tool name to pick a treatment:
- *
- *   trigger_whoop_sync  — labelled key/value summary (success/skipped pill,
- *                         last_sync_at relative time, cooldown fields if
- *                         present) + collapsible JSON.
- *   query_recovery      — top-line `N rows · D1 → D2`, 5-row preview table
- *                         (date / recovery_score / hrv / rhr), JSON below.
- *   query_sleep         — same shape, columns (date / perf / duration / eff).
- *   query_strain        — same shape, columns (date / strain / kJ / avg_hr).
- *   query_workouts      — top-line `N workouts · D1 → D2`, compact list
- *                         (sport / strain / duration / date).
- *   query_journal       — top-line `N entries · D1 → D2`, date + first-line.
- *   query_naps          — same shape as sleep, naps-only.
- *   fallback            — pretty-printed JSON with copy button.
- *
- * Defaults: JSON > 500 chars starts collapsed; row tables start expanded
- * showing first 5 with "Show all N" toggle. Copy button on every block.
- *
- * Past chat_logs rows pre-dating the response capture in tools.ts will pass
- * `response === undefined` here — the component returns a muted "no response
- * data" notice so the existing input/duration block still renders cleanly.
- */
+// Renders a captureToolResponse() payload (or `_truncated` marker) from one
+// Coach tool call in the /logs detail view. Truncated payloads expose
+// total_count + a 5-row preview; full payloads render the native shape.
 export default function ToolResponseBlock({
   toolName,
   response,
@@ -455,9 +434,6 @@ function JournalResponse({
   response: unknown;
   truncated: TruncatedInfo | null;
 }) {
-  // useState must run unconditionally before any early return — Rules of
-  // Hooks. The "no journal rows" branch falls through to the JSON viewer
-  // below with the toggle state unused but harmlessly initialised.
   const [showAll, setShowAll] = useState(false);
   const { rows, totalCount } = extractRows(response, truncated);
   if (!rows) {
@@ -546,10 +522,10 @@ function JsonResponse({
       return String(response);
     }
   }, [response]);
-  // Long payloads collapse by default; short ones (under 500 chars JSON) ride
-  // the caller's default.
-  const heuristicallyOpen = defaultOpen && serialized.length <= 500;
-  const [open, setOpen] = useState(heuristicallyOpen);
+  // Long payloads (>500 chars JSON) always collapse regardless of caller's
+  // `defaultOpen` — keeps the detail view scannable.
+  const preferOpen = defaultOpen && serialized.length <= 500;
+  const [open, setOpen] = useState(preferOpen);
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -594,19 +570,10 @@ function CopyButton({ text }: { text: string }) {
     <button
       type="button"
       onClick={async () => {
-        try {
-          // Older Safari / non-secure-context fallback isn't worth shipping —
-          // /logs is always served over HTTPS behind CF Access. If the
-          // Clipboard API is unavailable we just silently no-op.
-          if (typeof navigator !== "undefined" && navigator.clipboard) {
-            await navigator.clipboard.writeText(text);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 1500);
-          }
-        } catch {
-          // Permission denied or transient failure — surface as "failed" so
-          // the user knows to copy by hand.
-          setCopied(false);
+        if (typeof navigator !== "undefined" && navigator.clipboard) {
+          await navigator.clipboard.writeText(text);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
         }
       }}
       style={{

@@ -10,29 +10,8 @@ type RouteLogRow = {
   status: number;
   details?: string | null;
   response_bytes?: number | null;
-  server_timing?: string | null;
-  cache_status?: string | null;
   render_ms?: number | null;
 };
-
-type ServerTiming = Record<string, number | string>;
-
-function parseServerTiming(raw?: string | null): ServerTiming | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as unknown;
-    if (!isRecord(parsed)) return null;
-    const out: ServerTiming = {};
-    for (const [k, v] of Object.entries(parsed)) {
-      if (typeof v === "number" || typeof v === "string") {
-        out[k] = v;
-      }
-    }
-    return out;
-  } catch {
-    return null;
-  }
-}
 
 function fmtMs(value: number | null | undefined): string {
   if (value === null || value === undefined) return "Not captured";
@@ -228,23 +207,13 @@ function Chevron({ open }: { open: boolean }) {
 function LogRow({ log }: { log: RouteLogRow }) {
   const [open, setOpen] = useState(false);
   const details = useMemo(() => parseDetails(log.details), [log.details]);
-  const serverTiming = useMemo(
-    () => parseServerTiming(log.server_timing),
-    [log.server_timing]
-  );
   const dur = fmtDuration(log.duration_ms);
   const detailsId = `route-details-${log.id}`;
-  // A row is "instrumented" once any of the four new fields land. Existing
-  // historical rows pre-dating the migration will have all four NULL and
-  // continue to render the legacy "Not captured" notice.
+  // A row is "instrumented" once any perf field lands. Pre-migration rows
+  // render all NULL and continue to show the "Not captured" notice.
   const hasPerfSignal =
-    log.response_bytes !== null && log.response_bytes !== undefined
-      ? true
-      : log.server_timing !== null && log.server_timing !== undefined
-        ? true
-        : log.cache_status !== null && log.cache_status !== undefined
-          ? true
-          : log.render_ms !== null && log.render_ms !== undefined;
+    (log.response_bytes !== null && log.response_bytes !== undefined) ||
+    (log.render_ms !== null && log.render_ms !== undefined);
 
   return (
     <>
@@ -323,22 +292,6 @@ function LogRow({ log }: { log: RouteLogRow }) {
                   label="Render"
                   value={fmtMs(log.render_ms)}
                   muted={log.render_ms === null || log.render_ms === undefined}
-                />
-                <DetailLine
-                  label="Server timing"
-                  value={
-                    serverTiming
-                      ? Object.entries(serverTiming)
-                          .map(([k, v]) => `${k}=${v}${typeof v === "number" ? "ms" : ""}`)
-                          .join(" · ")
-                      : "Not captured"
-                  }
-                  muted={!serverTiming}
-                />
-                <DetailLine
-                  label="Cache"
-                  value={log.cache_status ?? "Not captured"}
-                  muted={!log.cache_status}
                 />
                 {!details && !hasPerfSignal ? (
                   <div style={{
