@@ -458,6 +458,11 @@ export type ToolDetail = {
   rows: number | null;
   status: "ok" | "error";
   error?: string;
+  /** Tool response payload, captured so /logs detail view can render it.
+   *  Truncated to ~12KB (JSON-stringified) when persisted via
+   *  `chatLogToolSummaries` to keep chat_logs.details under any practical
+   *  size cap. */
+  response?: unknown;
 };
 
 export type ToolProgressHandlers = {
@@ -580,6 +585,7 @@ export async function executeToolResult(
     duration_ms: durationMs,
     rows,
     status: "ok",
+    response: result,
   });
   progress?.onToolUseEnd?.({
     name: toolUse.name,
@@ -601,13 +607,62 @@ export async function executeToolResult(
   };
 }
 
+// Cap on the persisted response payload per tool call (JSON chars). Past this,
+// emit a `_truncated` marker with a 5-row preview when the shape allows it.
+const TOOL_RESPONSE_MAX_CHARS = 12_000;
+
+function captureToolResponse(response: unknown): unknown {
+  if (response === undefined) return undefined;
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(response);
+  } catch {
+    return { _truncated: true, reason: "non_serializable" };
+  }
+  if (serialized.length <= TOOL_RESPONSE_MAX_CHARS) {
+    return response;
+  }
+  if (Array.isArray(response)) {
+    return {
+      _truncated: true,
+      total_count: response.length,
+      preview: response.slice(0, 5),
+    };
+  }
+  // query_workouts wraps rows in `{ rows, _meta }`. Preserve the preview
+  // shape so the UI doesn't fall through to a near-empty JSON viewer.
+  if (
+    typeof response === "object" &&
+    response !== null &&
+    !Array.isArray(response) &&
+    Array.isArray((response as { rows?: unknown }).rows)
+  ) {
+    const rows = (response as { rows: unknown[] }).rows;
+    const meta = (response as { _meta?: { total_count?: unknown } })._meta;
+    const totalCount =
+      meta && typeof meta.total_count === "number" ? meta.total_count : rows.length;
+    return {
+      _truncated: true,
+      total_count: totalCount,
+      preview: rows.slice(0, 5),
+    };
+  }
+  return {
+    _truncated: true,
+    size_chars: serialized.length,
+  };
+}
+
 export function chatLogToolSummaries(toolDetails: ToolDetail[]) {
-  return toolDetails.map(({ name, input, duration_ms, rows, status, error }) => ({
-    name,
-    input,
-    duration_ms,
-    rows,
-    status,
-    ...(error ? { error: error.slice(0, 200) } : {}),
-  }));
+  return toolDetails.map(
+    ({ name, input, duration_ms, rows, status, error, response }) => ({
+      name,
+      input,
+      duration_ms,
+      rows,
+      status,
+      ...(error ? { error: error.slice(0, 200) } : {}),
+      ...(response === undefined ? {} : { response: captureToolResponse(response) }),
+    })
+  );
 }

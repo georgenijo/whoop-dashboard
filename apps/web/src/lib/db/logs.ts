@@ -20,13 +20,22 @@ function openRouteLogWrite(): DB | null {
             route TEXT NOT NULL,
             duration_ms INTEGER NOT NULL,
             status INTEGER NOT NULL,
-            details TEXT
+            details TEXT,
+            response_bytes INTEGER,
+            render_ms INTEGER
           );
           CREATE INDEX IF NOT EXISTS route_logs_started_at_idx ON route_logs(started_at DESC);
         `);
         const cols = db.prepare("PRAGMA table_info(route_logs)").all() as { name: string }[];
         if (!cols.some((c) => c.name === "details")) {
           db.exec("ALTER TABLE route_logs ADD COLUMN details TEXT");
+        }
+        // Issue #296 — keep in sync with the canonical migration in connection.ts.
+        if (!cols.some((c) => c.name === "response_bytes")) {
+          db.exec("ALTER TABLE route_logs ADD COLUMN response_bytes INTEGER");
+        }
+        if (!cols.some((c) => c.name === "render_ms")) {
+          db.exec("ALTER TABLE route_logs ADD COLUMN render_ms INTEGER");
         }
         routeLogsSchemaReady = true;
       }
@@ -213,6 +222,11 @@ export type RouteLog = {
   duration_ms: number;
   status: number;
   details?: string | null;
+  /** Bytes in the response body. Currently always NULL — Next.js 16's
+   *  `after()` callback fires post-response with no handle on the rendered
+   *  HTML size. */
+  response_bytes?: number | null;
+  render_ms?: number | null;
 };
 
 export function addRouteLog(log: Omit<RouteLog, "id">): void {
@@ -220,8 +234,16 @@ export function addRouteLog(log: Omit<RouteLog, "id">): void {
   if (!db) return;
   try {
     db.prepare(
-      "INSERT INTO route_logs (started_at, route, duration_ms, status, details) VALUES (?, ?, ?, ?, ?)"
-    ).run(log.started_at, log.route, log.duration_ms, log.status, log.details ?? null);
+      "INSERT INTO route_logs (started_at, route, duration_ms, status, details, response_bytes, render_ms) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    ).run(
+      log.started_at,
+      log.route,
+      log.duration_ms,
+      log.status,
+      log.details ?? null,
+      log.response_bytes ?? null,
+      log.render_ms ?? null,
+    );
   } finally {
     db.close();
   }
@@ -234,9 +256,15 @@ export function getRouteLogs(limit = 200): RouteLog[] {
       const detailsSelect = hasColumn(db, "route_logs", "details")
         ? "details"
         : "NULL AS details";
+      const responseBytesSelect = hasColumn(db, "route_logs", "response_bytes")
+        ? "response_bytes"
+        : "NULL AS response_bytes";
+      const renderMsSelect = hasColumn(db, "route_logs", "render_ms")
+        ? "render_ms"
+        : "NULL AS render_ms";
       return db
         .prepare(
-          `SELECT id, started_at, route, duration_ms, status, ${detailsSelect} FROM route_logs ORDER BY started_at DESC, id DESC LIMIT ?`
+          `SELECT id, started_at, route, duration_ms, status, ${detailsSelect}, ${responseBytesSelect}, ${renderMsSelect} FROM route_logs ORDER BY started_at DESC, id DESC LIMIT ?`
         )
         .all(limit) as RouteLog[];
     }) ?? []

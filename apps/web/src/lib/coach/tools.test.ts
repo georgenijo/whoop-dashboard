@@ -30,7 +30,7 @@ import {
   getWorkoutsRange,
 } from "@/lib/db";
 import { runWhoopSync } from "@/lib/sync";
-import { executeTool, newToolTurnState } from "./tools";
+import { chatLogToolSummaries, executeTool, newToolTurnState, type ToolDetail } from "./tools";
 
 const addSyncLogMock = vi.mocked(addSyncLog);
 const getLastSuccessfulSyncAtMock = vi.mocked(getLastSuccessfulSyncAt);
@@ -341,5 +341,70 @@ describe("query_workouts tool — timestamps", () => {
 
     expect(result.rows[0].start_local).toBeNull();
     expect(result.rows[0].end_local).toBeNull();
+  });
+});
+
+describe("chatLogToolSummaries", () => {
+  it("passes a small array response through verbatim", () => {
+    const rows = [{ date: "2026-05-12", recovery_score: 67 }];
+    const detail: ToolDetail = {
+      name: "query_recovery",
+      input: { start_date: "2026-05-12", end_date: "2026-05-12" },
+      duration_ms: 4,
+      rows: 1,
+      status: "ok",
+      response: rows,
+    };
+
+    const [summary] = chatLogToolSummaries([detail]);
+
+    expect(summary.response).toEqual(rows);
+  });
+
+  it("replaces oversized array responses with a 5-row preview marker", () => {
+    // 200 rows × ~80 chars/row sails past the 12KB cap.
+    const rows = Array.from({ length: 200 }, (_, i) => ({
+      date: `2026-${String((i % 12) + 1).padStart(2, "0")}-01`,
+      recovery_score: i,
+      hrv: 50 + i,
+      rhr: 45 + (i % 20),
+      spo2: 96.5,
+      skin_temp: 33.4,
+      raw: { score: { recovery_score: i }, note: "padded".repeat(10) },
+    }));
+    const detail: ToolDetail = {
+      name: "query_recovery",
+      input: { start_date: "2026-01-01", end_date: "2026-12-31" },
+      duration_ms: 12,
+      rows: rows.length,
+      status: "ok",
+      response: rows,
+    };
+
+    const [summary] = chatLogToolSummaries([detail]);
+
+    expect(summary.response).toMatchObject({
+      _truncated: true,
+      total_count: 200,
+    });
+    const preview = (summary.response as { preview: unknown[] }).preview;
+    expect(Array.isArray(preview)).toBe(true);
+    expect(preview).toHaveLength(5);
+  });
+
+  it("omits the response key entirely when the ToolDetail has no response", () => {
+    const detail: ToolDetail = {
+      name: "query_recovery",
+      input: {},
+      duration_ms: 1,
+      rows: null,
+      status: "error",
+      error: "boom",
+    };
+
+    const [summary] = chatLogToolSummaries([detail]);
+
+    expect(summary).not.toHaveProperty("response");
+    expect(summary.error).toBe("boom");
   });
 });
