@@ -25,6 +25,29 @@ describe("encodeWhoopOAuthState / decodeWhoopOAuthState", () => {
     expect(decoded?.user_id).toBe(42);
     // exp is set on encode and surfaced on decode.
     expect(decoded?.exp).toBeGreaterThan(Date.now());
+    // Default flow is "web" — absent on the wire, surfaced on decode.
+    expect(decoded?.flow).toBe("web");
+  });
+
+  it("round-trips flow=ios through sign+verify", () => {
+    const signed = encodeWhoopOAuthState({ user_id: 42, flow: "ios" });
+    const decoded = decodeWhoopOAuthState(signed);
+    expect(decoded?.user_id).toBe(42);
+    expect(decoded?.flow).toBe("ios");
+  });
+
+  it("treats unknown flow values as web (no privilege escalation via attacker-chosen tag)", () => {
+    // Hand-craft a signed payload with f="rogue" — decoder must coerce to "web".
+    const malformed = (() => {
+      const body = { u: 7, n: "abc", e: Date.now() + 60_000, f: "rogue" };
+      const payloadBuf = Buffer.from(JSON.stringify(body), "utf8");
+      const mac = nodeCrypto
+        .createHmac("sha256", process.env.WHOOP_STATE_SECRET as string)
+        .update(payloadBuf)
+        .digest();
+      return `${payloadBuf.toString("base64url")}.${mac.toString("base64url")}`;
+    })();
+    expect(decodeWhoopOAuthState(malformed)?.flow).toBe("web");
   });
 
   it("rejects a tampered payload (mac no longer matches)", () => {
