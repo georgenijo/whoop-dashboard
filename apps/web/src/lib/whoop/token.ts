@@ -1,28 +1,20 @@
 import "server-only";
-import fs from "node:fs/promises";
 import {
   clientId,
   clientSecret,
   computeExpiresAtIso,
   saveTokens,
-  tokensPath,
   type StoredTokens,
   WHOOP_TOKEN_URL,
 } from "@/lib/auth";
 import {
   getIntegration,
-  integrationRowExists,
   setIntegrationNeedsReauth,
 } from "@/lib/db/integrations";
 
-// KEEP IN SYNC WITH streamlit/whoop/auth.py (load/refresh/save semantics).
-// Lookup order on read:
-//   1. integrations DB row (encrypted). If row exists but decrypts to null,
-//      we DO NOT fall back to tokens.json — masking corruption that way is
-//      worse than a hard upstream auth failure.
-//   2. tokens.json (only when no DB row exists at all). LEGACY FALLBACK —
-//      tokens.json is single-user by definition, so this branch is gated to
-//      userId === 1 with a TODO marker for Phase D cutover.
+// Post-Phase-D: the encrypted `integrations` row is the sole token store.
+// The legacy `tokens.json` file fallback (#330) is gone. If the row is
+// missing or undecryptable, callers see `null` and route to the reauth path.
 
 const REFRESH_BUFFER_S = 60;
 const WHOOP_PROVIDER = "whoop";
@@ -42,88 +34,31 @@ const REAUTH_ERROR_CODES = new Set(["invalid_grant", "invalid_token"]);
  */
 const inflightRefreshByUser = new Map<number, Promise<StoredTokens | null>>();
 
-function isStoredTokensShape(v: unknown): v is StoredTokens {
-  if (!v || typeof v !== "object") return false;
-  const o = v as Record<string, unknown>;
-  return (
-    typeof o.access_token === "string" &&
-    typeof o.refresh_token === "string" &&
-    typeof o.expires_at === "string" &&
-    typeof o.expires_in === "number"
-  );
-}
-
 /**
- * Read tokens for `userId`, preferring the encrypted integrations row.
+ * Read tokens for `userId` from the encrypted integrations row.
  *
  * Returns:
- *   - StoredTokens if the DB row decrypts cleanly, OR (legacy, userId === 1
- *     only) if no row exists and tokens.json contains a valid record.
- *   - null when the DB row exists but cannot be decrypted, OR when neither
- *     source produces a valid record.
+ *   - StoredTokens if the row exists AND decrypts cleanly.
+ *   - null otherwise (no row, undecryptable row, or DB unavailable).
+ *
+ * Note: `getIntegration` already returns null when the row exists but
+ * decryption fails (it logs the underlying error). Either case ends in the
+ * same "no usable credentials" state for the caller.
  */
 async function loadTokens(userId: number): Promise<StoredTokens | null> {
   const integration = getIntegration(userId, WHOOP_PROVIDER);
-  if (integration) {
-    const raw = (integration.raw ?? {}) as Record<string, unknown>;
-    const expiresIn =
-      typeof raw.expires_in === "number" ? (raw.expires_in as number) : 0;
-    return {
-      access_token: integration.access_token,
-      refresh_token: integration.refresh_token,
-      expires_at: integration.expires_at,
-      expires_in: expiresIn,
-      token_type: integration.token_type ?? undefined,
-      scope: integration.scope ?? undefined,
-    };
-  }
-
-  if (integrationRowExists(userId, WHOOP_PROVIDER)) {
-    // Row exists but undecryptable. Do NOT fall back to tokens.json — that
-    // would silently mask a corruption / wrong-key scenario.
-    console.warn(
-      `[token] integrations row present but undecryptable for user_id=${userId}; refusing file fallback`
-    );
-    return null;
-  }
-
-  // TODO(phase-d-cutover): remove file fallback. tokens.json is the legacy
-  // single-user store from pre-PR-#318 installs; only user_id=1 (the
-  // maintainer's bootstrap user) is allowed to read from it. Any other user
-  // who has no integrations row is genuinely disconnected.
-  if (userId !== 1) return null;
-
-  try {
-    const data = await fs.readFile(tokensPath(), "utf8");
-    const parsed = JSON.parse(data) as Record<string, unknown>;
-    if (
-      typeof parsed.access_token !== "string" ||
-      typeof parsed.refresh_token !== "string"
-    ) {
-      return null;
-    }
-    // Normalize legacy numeric `expires_at` → ISO 8601 string in-memory.
-    // The migration script handles persistent normalization.
-    if (typeof parsed.expires_at === "number") {
-      parsed.expires_at = new Date(
-        (parsed.expires_at as number) * 1000
-      ).toISOString();
-    }
-    if (!isStoredTokensShape(parsed)) {
-      // Tolerate missing expires_in by defaulting to 0 — `isExpired` will
-      // then return true and force a refresh on next call.
-      const fallback = {
-        ...parsed,
-        expires_in:
-          typeof parsed.expires_in === "number" ? parsed.expires_in : 0,
-      } as StoredTokens;
-      if (typeof fallback.expires_at !== "string") return null;
-      return fallback;
-    }
-    return parsed;
-  } catch {
-    return null;
-  }
+  if (!integration) return null;
+  const raw = (integration.raw ?? {}) as Record<string, unknown>;
+  const expiresIn =
+    typeof raw.expires_in === "number" ? (raw.expires_in as number) : 0;
+  return {
+    access_token: integration.access_token,
+    refresh_token: integration.refresh_token,
+    expires_at: integration.expires_at,
+    expires_in: expiresIn,
+    token_type: integration.token_type ?? undefined,
+    scope: integration.scope ?? undefined,
+  };
 }
 
 function isExpired(tokens: StoredTokens, nowMs: number = Date.now()): boolean {

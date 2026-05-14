@@ -63,6 +63,10 @@ function StackTooltip({
 }
 
 export default function SleepNeedBreakdown({ row }: Props) {
+  const tooltipText =
+    "Sleep need = baseline + recent strain + sleep debt − nap credit. " +
+    "Strain and debt add to tonight's target; nap time already taken subtracts.";
+
   if (
     !row ||
     row.need_from_baseline_ms == null ||
@@ -73,7 +77,7 @@ export default function SleepNeedBreakdown({ row }: Props) {
     return (
       <div className="card">
         <div className="card-head">
-          <div className="card-title">
+          <div className="card-title" title={tooltipText}>
             <span className="dot" style={{ background: "#7b61ff", color: "#7b61ff" }} />
             Sleep need breakdown
           </div>
@@ -113,12 +117,13 @@ export default function SleepNeedBreakdown({ row }: Props) {
     <div className="card">
       <div className="card-head">
         <div>
-          <div className="card-title">
+          <div className="card-title" title={tooltipText}>
             <span className="dot" style={{ background: "#7b61ff", color: "#7b61ff" }} />
             Sleep need breakdown
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
             {new Date(row.date + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+            {" · baseline + strain + debt − nap credit"}
           </div>
         </div>
         <div

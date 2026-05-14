@@ -74,6 +74,7 @@ export async function runAndPersistCoachTurn(
       type: "api",
       source,
       details: buildDetails(),
+      thread_id: thread.id,
     });
     return result.reply;
   } catch (err) {
@@ -89,6 +90,7 @@ export async function runAndPersistCoachTurn(
       type: "api",
       source,
       details: buildDetails(),
+      thread_id: thread.id,
     });
     throw err;
   }

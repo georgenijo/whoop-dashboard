@@ -38,8 +38,18 @@ export {
   getRecentNaps,
 } from "./sleep";
 
-export type { WorkoutRow, WorkoutsRangeResult } from "./workouts";
-export { getWorkouts, getWorkoutsRange } from "./workouts";
+export type {
+  WorkoutRow,
+  WorkoutsRangeResult,
+  TodayWorkoutRow,
+  TodayStrainAggregate,
+} from "./workouts";
+export {
+  getWorkouts,
+  getWorkoutsRange,
+  getTodayWorkouts,
+  getTodayStrainAggregate,
+} from "./workouts";
 
 export type { PRStats, PRValue, PRStreak } from "./prs";
 export { getPRStats } from "./prs";
@@ -89,10 +99,11 @@ export {
   clearChatMessages,
 } from "./coach";
 
-export type { ChatLog, SyncLog, RouteLog } from "./logs";
+export type { ChatLog, ChatThreadInfo, SyncLog, RouteLog } from "./logs";
 export {
   addChatLog,
   getChatLogs,
+  getChatThreadInfo,
   clearChatLogs,
   addSyncLog,
   getSyncLogs,

@@ -132,7 +132,8 @@ export function openWrite(): DB | null {
         days_context INTEGER,
         type TEXT,
         source TEXT,
-        details TEXT
+        details TEXT,
+        thread_id INTEGER REFERENCES chat_threads(id)
       );
       CREATE INDEX IF NOT EXISTS idx_chat_logs_started ON chat_logs(started_at DESC);
       CREATE TABLE IF NOT EXISTS app_settings (
@@ -187,7 +188,7 @@ export function openWrite(): DB | null {
       -- access_token and refresh_token are encrypted with VAULT_KEY via NaCl
       -- secretbox; key_version pairs the row with the key used to encrypt.
       -- Column name is "scopes" (plural); public-API callers see "scope"
-      -- (singular) to match Whoop OAuth + tokens.json shape.
+      -- (singular) to match the Whoop OAuth response shape.
       CREATE TABLE IF NOT EXISTS integrations (
         user_id INTEGER NOT NULL REFERENCES users(id),
         provider TEXT NOT NULL,
@@ -267,6 +268,10 @@ export function openWrite(): DB | null {
     if (!cols.some((c) => c.name === "source")) {
       db.exec("ALTER TABLE chat_logs ADD COLUMN source TEXT");
     }
+    if (!cols.some((c) => c.name === "thread_id")) {
+      db.exec("ALTER TABLE chat_logs ADD COLUMN thread_id INTEGER REFERENCES chat_threads(id)");
+    }
+    db.exec("CREATE INDEX IF NOT EXISTS idx_chat_logs_thread ON chat_logs(thread_id, id DESC)");
     const syncCols = db.prepare("PRAGMA table_info(sync_logs)").all() as { name: string }[];
     if (!syncCols.some((c) => c.name === "details")) {
       db.exec("ALTER TABLE sync_logs ADD COLUMN details TEXT");

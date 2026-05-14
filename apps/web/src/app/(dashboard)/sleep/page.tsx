@@ -99,30 +99,35 @@ export default async function SleepPage({
             data={durationData}
             unit="h"
           />
-          <SleepCyclesBarChart rows={trend14} />
         </div>
         <div className="col">
           <SleepQualityRadar latest={latestSleep} window={trend30} />
           <SleepConsistencyCard rows={trend14} />
-          <BedWakeTimeline rows={trend14} />
           <RespiratoryRateChart rows={trend14} />
+        </div>
+      </div>
+
+      <div className="grid-2col">
+        <TrendChart
+          title="Sleep Performance"
+          subtitle={rangeLabel}
+          color="#7b61ff"
+          gradientId="sleep-perf"
+          data={perfData}
+          unit="%"
+        />
+        <TrendChart
+          title="Sleep Need"
+          subtitle={rangeLabel}
+          color="#00aaff"
+          gradientId="sleep-need"
+          data={needData}
+          unit="h"
+        />
+        <BedWakeTimeline rows={trend14} />
+        <SleepCyclesBarChart rows={trend14} />
+        <div className="span-2">
           <BedtimePatternsCard result={bedtimePatternsResult} />
-          <TrendChart
-            title="Sleep Performance"
-            subtitle={rangeLabel}
-            color="#7b61ff"
-            gradientId="sleep-perf"
-            data={perfData}
-            unit="%"
-          />
-          <TrendChart
-            title="Sleep Need"
-            subtitle={rangeLabel}
-            color="#00aaff"
-            gradientId="sleep-need"
-            data={needData}
-            unit="h"
-          />
         </div>
       </div>
 

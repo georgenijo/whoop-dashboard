@@ -8,8 +8,10 @@ import {
   getRecoveryRange,
   getSleepRange,
   getStrainRange,
+  getUserSettings,
   getWorkoutsRange,
 } from "@/lib/db";
+import type { WorkoutRow } from "@/lib/db";
 import {
   runWhoopSync,
   SYNC_COOLDOWN_MS,
@@ -109,7 +111,7 @@ export const TOOLS: ToolSchema[] = [
   {
     name: "query_workouts",
     description:
-      "Query Whoop workout rows for a date range. Returns sport, duration, heart rate (avg/max), strain, kilojoules, distance (meters), and time-in-zone breakdown (zone_0_ms through zone_5_ms; zone 2 = aerobic base, zones 4-5 = high intensity).",
+      "Query Whoop workout rows for a date range. Returns sport, duration, heart rate (avg/max), strain, kilojoules, distance (meters), time-in-zone breakdown (zone_0_ms through zone_5_ms; zone 2 = aerobic base, zones 4-5 = high intensity), and workout timestamps in UTC and user-local time (start_utc/end_utc as ISO 8601 UTC; start_local/end_local in YYYY-MM-DDTHH:MM:SS format when the user's timezone is known).",
     input_schema: DATE_RANGE_SCHEMA,
     strict: true,
   },
@@ -198,6 +200,42 @@ function parseDateRangeInput(input: unknown): DateRangeInput {
   }
 
   return { start_date: startDate, end_date: endDate };
+}
+
+// Format a UTC ISO timestamp as a naive local ISO (YYYY-MM-DDTHH:MM:SS) in the
+// given IANA tz via Intl. DST-correct through ICU. Returns null on missing
+// input or invalid tz so the surrounding payload still serialises cleanly.
+// Mirrors the wording the sleep tool description uses for start_local/end_local.
+function formatLocalIso(utcIso: string | null, tz: string): string | null {
+  if (!utcIso) return null;
+  const d = new Date(utcIso);
+  if (Number.isNaN(d.getTime())) return null;
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).formatToParts(d);
+    const get = (type: string) =>
+      parts.find((p) => p.type === type)?.value ?? "";
+    const year = get("year");
+    const month = get("month");
+    const day = get("day");
+    // Intl returns "24" for midnight in some locales — clamp to "00".
+    let hour = get("hour");
+    if (hour === "24") hour = "00";
+    const minute = get("minute");
+    const second = get("second");
+    if (!year || !month || !day || !minute || !second) return null;
+    return `${year}-${month}-${day}T${hour}:${minute}:${second}`;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -363,6 +401,15 @@ export async function executeTool(
       return getStrainRange(options.userId, startDate, endDate);
     case "query_workouts": {
       const result = getWorkoutsRange(options.userId, startDate, endDate);
+      // Resolve the user's IANA tz once per call; fall back to UTC if unset
+      // (new users pre-/welcome haven't captured a tz). UTC keeps the field
+      // populated and parseable instead of silently dropping it.
+      const tz = getUserSettings(options.userId)?.tz ?? "UTC";
+      const rows: WorkoutRow[] = result.rows.map((r) => ({
+        ...r,
+        start_local: formatLocalIso(r.start_utc, tz),
+        end_local: formatLocalIso(r.end_utc, tz),
+      }));
       const _meta: {
         truncated: boolean;
         total_count: number;
@@ -371,12 +418,12 @@ export async function executeTool(
       } = {
         truncated: result.truncated,
         total_count: result.total_count,
-        returned: result.rows.length,
+        returned: rows.length,
       };
       if (result.truncated) {
-        _meta.note = `Showing the ${result.rows.length} most recent workouts in this range. Total in range: ${result.total_count}.`;
+        _meta.note = `Showing the ${rows.length} most recent workouts in this range. Total in range: ${result.total_count}.`;
       }
-      return { rows: result.rows, _meta };
+      return { rows, _meta };
     }
     case "query_naps":
       return getNaps(options.userId, startDate, endDate);

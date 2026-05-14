@@ -11,7 +11,7 @@ import {
 } from "recharts";
 import type { WorkoutRow } from "@/lib/db";
 
-type Props = { rows: WorkoutRow[]; maxHR?: number | null };
+type Props = { rows: WorkoutRow[]; maxHR?: number | null; rangeLabel?: string };
 
 const ZONES = [
   { key: "zone_0_ms" as const, label: "Z0", color: "#1e3a8a", lowPct: 0,  highPct: 50 },
@@ -48,30 +48,37 @@ function buildLegendLabel(
   return `${zone.label} ${zone.lowPct}–${zone.highPct}% · ${lowBpm}–${highBpm} bpm`;
 }
 
-export default function WorkoutZoneChart({ rows, maxHR }: Props) {
+export default function WorkoutZoneChart({ rows, maxHR, rangeLabel }: Props) {
   const effectiveMax =
     maxHR != null && Number.isFinite(maxHR) && maxHR > 0 ? maxHR : null;
 
+  // Rows arrive ordered date DESC (newest first) from getWorkoutsRange. Take
+  // the first MAX_ROWS so the most-recent workout always appears, and keep
+  // newest-on-top in the rendered vertical bar list.
   const withZones = rows
     .filter((r) => {
       const total = ZONES.reduce((sum, z) => sum + (r[z.key] ?? 0), 0);
       return total > 0;
     })
-    .slice(-MAX_ROWS)
-    .reverse();
+    .slice(0, MAX_ROWS);
 
   if (withZones.length === 0) {
     return (
       <div className="card">
         <div className="card-head">
-          <div className="card-title">
-            <span className="dot" style={{ background: "#06b6d4", color: "#06b6d4" }} />
-            HR zone breakdown
+          <div>
+            <div className="card-title">
+              <span className="dot" style={{ background: "#06b6d4", color: "#06b6d4" }} />
+              HR zone breakdown
+            </div>
+            {rangeLabel ? (
+              <div className="card-sub" style={{ marginTop: 4 }}>{rangeLabel}</div>
+            ) : null}
           </div>
         </div>
         <div className="empty-state">
-          <div className="title">No zone data yet</div>
-          <div className="sub">Sync Whoop to see per-workout HR zones</div>
+          <div className="title">No zone data in range</div>
+          <div className="sub">Extend the date range or sync Whoop</div>
         </div>
       </div>
     );
@@ -103,9 +110,13 @@ export default function WorkoutZoneChart({ rows, maxHR }: Props) {
             HR zone breakdown
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
-            {effectiveMax
-              ? `${withZones.length} sessions · minutes per zone · max HR ${effectiveMax} bpm`
-              : `${withZones.length} sessions · minutes per zone`}
+            {[
+              rangeLabel,
+              `${withZones.length} sessions · minutes per zone`,
+              effectiveMax ? `max HR ${effectiveMax} bpm` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
