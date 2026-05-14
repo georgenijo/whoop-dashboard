@@ -18,10 +18,18 @@ export type WorkoutRow = {
   zone_3_ms: number | null;
   zone_4_ms: number | null;
   zone_5_ms: number | null;
+  // UTC ISO timestamps pulled from raw JSON. Local-time variants
+  // (`start_local`/`end_local`) are derived at the coach-tool boundary using
+  // the user's IANA tz from `user_settings`; rows surfaced to the dashboard
+  // page don't need them and they remain optional on the type.
+  start_utc: string | null;
+  end_utc: string | null;
+  start_local?: string | null;
+  end_local?: string | null;
 };
 
 const WORKOUT_COLUMNS =
-  "id, date, sport, duration_sec, avg_hr, max_hr, strain, kilojoule, distance_m, zone_0_ms, zone_1_ms, zone_2_ms, zone_3_ms, zone_4_ms, zone_5_ms";
+  "id, date, sport, duration_sec, avg_hr, max_hr, strain, kilojoule, distance_m, zone_0_ms, zone_1_ms, zone_2_ms, zone_3_ms, zone_4_ms, zone_5_ms, json_extract(raw, '$.start') AS start_utc, json_extract(raw, '$.end') AS end_utc";
 
 // Workouts run 1-3/day, so 500 = ~6 months — covers any reasonable single-query use.
 const DEFAULT_WORKOUTS_LIMIT = 50;

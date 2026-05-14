@@ -14,6 +14,7 @@ vi.mock("@/lib/db", () => ({
   getRecoveryRange: vi.fn(),
   getSleepRange: vi.fn(),
   getStrainRange: vi.fn(),
+  getUserSettings: vi.fn(),
   getWorkoutsRange: vi.fn(),
 }));
 
@@ -22,12 +23,19 @@ vi.mock("@/lib/sync", () => ({
   SYNC_COOLDOWN_MS: 5 * 60 * 1000,
 }));
 
-import { addSyncLog, getLastSuccessfulSyncAt } from "@/lib/db";
+import {
+  addSyncLog,
+  getLastSuccessfulSyncAt,
+  getUserSettings,
+  getWorkoutsRange,
+} from "@/lib/db";
 import { runWhoopSync } from "@/lib/sync";
 import { executeTool, newToolTurnState } from "./tools";
 
 const addSyncLogMock = vi.mocked(addSyncLog);
 const getLastSuccessfulSyncAtMock = vi.mocked(getLastSuccessfulSyncAt);
+const getUserSettingsMock = vi.mocked(getUserSettings);
+const getWorkoutsRangeMock = vi.mocked(getWorkoutsRange);
 const runWhoopSyncMock = vi.mocked(runWhoopSync);
 
 function makeSuccessSyncResult(overrides: Partial<SyncResult> = {}): SyncResult {
@@ -183,5 +191,149 @@ describe("trigger_whoop_sync tool", () => {
       "[coach] sync_log_write_failed",
       expect.objectContaining({ error: "database is locked", sync_success: true })
     );
+  });
+});
+
+// Regression for issue #347: the coach claimed workout timestamps were
+// unavailable when query_workouts had silently omitted them. start_utc/
+// end_utc come straight from json_extract; start_local/end_local are
+// derived at the coach-tool boundary using the user's IANA tz.
+describe("query_workouts tool — timestamps", () => {
+  beforeEach(() => {
+    getUserSettingsMock.mockReset();
+    getWorkoutsRangeMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("layers start_local/end_local using the user's IANA tz from user_settings", async () => {
+    getUserSettingsMock.mockReturnValue({
+      user_id: 1,
+      anthropic_key: null,
+      model_pref: null,
+      timezone: null,
+      monthly_token_cap: null,
+      coach_goals: null,
+      onboarded_at: null,
+      tz: "America/New_York",
+      updated_at: "2026-05-14T00:00:00.000Z",
+    });
+    getWorkoutsRangeMock.mockReturnValue({
+      rows: [
+        {
+          id: "w-1",
+          date: "2026-05-13",
+          sport: "running",
+          duration_sec: 2700,
+          avg_hr: 150,
+          max_hr: 170,
+          strain: 12.5,
+          kilojoule: 1500,
+          distance_m: 5000,
+          zone_0_ms: 0,
+          zone_1_ms: 0,
+          zone_2_ms: 0,
+          zone_3_ms: 0,
+          zone_4_ms: 0,
+          zone_5_ms: 0,
+          start_utc: "2026-05-14T01:30:00.000Z",
+          end_utc: "2026-05-14T02:15:00.000Z",
+        },
+      ],
+      truncated: false,
+      total_count: 1,
+    });
+
+    const result = (await executeTool(
+      "query_workouts",
+      { start_date: "2026-05-13", end_date: "2026-05-13" },
+      { userId: 1, turnState: newToolTurnState() },
+    )) as { rows: Array<Record<string, unknown>> };
+
+    expect(result.rows).toHaveLength(1);
+    const row = result.rows[0];
+    expect(row.start_utc).toBe("2026-05-14T01:30:00.000Z");
+    expect(row.end_utc).toBe("2026-05-14T02:15:00.000Z");
+    // 01:30Z in America/New_York is 21:30 the previous local day (EDT, -04:00).
+    expect(row.start_local).toBe("2026-05-13T21:30:00");
+    expect(row.end_local).toBe("2026-05-13T22:15:00");
+  });
+
+  it("falls back to UTC when the user has no tz captured yet", async () => {
+    getUserSettingsMock.mockReturnValue(null);
+    getWorkoutsRangeMock.mockReturnValue({
+      rows: [
+        {
+          id: "w-2",
+          date: "2026-05-13",
+          sport: "running",
+          duration_sec: 1800,
+          avg_hr: 140,
+          max_hr: 160,
+          strain: 10,
+          kilojoule: 1000,
+          distance_m: null,
+          zone_0_ms: 0,
+          zone_1_ms: 0,
+          zone_2_ms: 0,
+          zone_3_ms: 0,
+          zone_4_ms: 0,
+          zone_5_ms: 0,
+          start_utc: "2026-05-13T12:00:00.000Z",
+          end_utc: "2026-05-13T12:30:00.000Z",
+        },
+      ],
+      truncated: false,
+      total_count: 1,
+    });
+
+    const result = (await executeTool(
+      "query_workouts",
+      { start_date: "2026-05-13", end_date: "2026-05-13" },
+      { userId: 1, turnState: newToolTurnState() },
+    )) as { rows: Array<Record<string, unknown>> };
+
+    expect(result.rows[0].start_local).toBe("2026-05-13T12:00:00");
+    expect(result.rows[0].end_local).toBe("2026-05-13T12:30:00");
+  });
+
+  it("returns null start_local/end_local when start_utc/end_utc are missing", async () => {
+    getUserSettingsMock.mockReturnValue(null);
+    getWorkoutsRangeMock.mockReturnValue({
+      rows: [
+        {
+          id: "w-3",
+          date: "2026-05-13",
+          sport: "yoga",
+          duration_sec: 1800,
+          avg_hr: 90,
+          max_hr: 110,
+          strain: 4,
+          kilojoule: 400,
+          distance_m: null,
+          zone_0_ms: 0,
+          zone_1_ms: 0,
+          zone_2_ms: 0,
+          zone_3_ms: 0,
+          zone_4_ms: 0,
+          zone_5_ms: 0,
+          start_utc: null,
+          end_utc: null,
+        },
+      ],
+      truncated: false,
+      total_count: 1,
+    });
+
+    const result = (await executeTool(
+      "query_workouts",
+      { start_date: "2026-05-13", end_date: "2026-05-13" },
+      { userId: 1, turnState: newToolTurnState() },
+    )) as { rows: Array<Record<string, unknown>> };
+
+    expect(result.rows[0].start_local).toBeNull();
+    expect(result.rows[0].end_local).toBeNull();
   });
 });
