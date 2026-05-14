@@ -5,10 +5,9 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import type { WorkoutRow } from "@/lib/db";
 import { sportColor } from "@/lib/sport-color";
 
-type Props = { rows: WorkoutRow[] };
+type Props = { rows: WorkoutRow[]; rangeLabel?: string };
 
 type Metric = "count" | "kj" | "duration";
-type Window = 30 | 90;
 
 const METRICS: { key: Metric; label: string }[] = [
   { key: "count", label: "Sessions" },
@@ -38,21 +37,12 @@ function formatValue(v: number, metric: Metric): string {
   }
 }
 
-function daysAgoIso(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
-}
-
-export default function SportFrequencyChart({ rows }: Props) {
+export default function SportFrequencyChart({ rows, rangeLabel }: Props) {
   const [metric, setMetric] = useState<Metric>("count");
-  const [window, setWindow] = useState<Window>(30);
 
   const slices = useMemo(() => {
-    const since = daysAgoIso(window);
-    const filtered = rows.filter((r) => r.date >= since);
     const totals = new Map<string, number>();
-    for (const r of filtered) {
+    for (const r of rows) {
       const sport = r.sport ?? "Unknown";
       totals.set(sport, (totals.get(sport) ?? 0) + metricValue(r, metric));
     }
@@ -68,9 +58,10 @@ export default function SportFrequencyChart({ rows }: Props) {
       ...top.map(([name, value]) => ({ name, value, color: sportColor(name) })),
       { name: "Other", value: otherValue, color: "#3f3f46" },
     ];
-  }, [rows, metric, window]);
+  }, [rows, metric]);
 
   const total = slices.reduce((sum, s) => sum + s.value, 0);
+  const sub = rangeLabel ? `${rangeLabel} · top 5 + other` : "top 5 + other";
 
   return (
     <div className="card">
@@ -80,7 +71,7 @@ export default function SportFrequencyChart({ rows }: Props) {
             <span className="dot" style={{ background: "#ffaa00", color: "#ffaa00" }} />
             Sport frequency
           </div>
-          <div className="card-sub" style={{ marginTop: 4 }}>last {window} days · top 5 + other</div>
+          <div className="card-sub" style={{ marginTop: 4 }}>{sub}</div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Toggle
@@ -88,21 +79,13 @@ export default function SportFrequencyChart({ rows }: Props) {
             value={metric}
             onChange={(v) => setMetric(v as Metric)}
           />
-          <Toggle
-            options={[
-              { key: "30", label: "30d" },
-              { key: "90", label: "90d" },
-            ]}
-            value={String(window)}
-            onChange={(v) => setWindow(Number(v) as Window)}
-          />
         </div>
       </div>
 
       {slices.length === 0 ? (
         <div className="empty-state">
-          <div className="title">No workouts in window</div>
-          <div className="sub">Sync Whoop or extend the window</div>
+          <div className="title">No workouts in range</div>
+          <div className="sub">Sync Whoop or extend the date range</div>
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "minmax(180px, 1fr) 1fr", gap: 16, alignItems: "center" }}>
