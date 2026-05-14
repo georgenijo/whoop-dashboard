@@ -43,6 +43,7 @@ targets:
           - Default
     dependencies:
       - sdk: AuthenticationServices.framework
+      - sdk: SafariServices.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.georgenijo.coach

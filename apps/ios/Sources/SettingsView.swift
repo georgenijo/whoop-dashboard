@@ -8,6 +8,10 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section("Connectors") {
+                    WhoopConnectorCard()
+                }
+
                 Section {
                     LabeledContent("Version", value: versionString)
                 }
