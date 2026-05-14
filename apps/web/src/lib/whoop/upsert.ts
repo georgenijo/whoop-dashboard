@@ -90,27 +90,33 @@ export type WhoopWorkoutRecord = {
   };
 };
 
-// Whoop V2 sends Z-suffix timestamps throughout; `new Date(iso).toISOString()`
-// therefore produces the same UTC date as Python's _parse_date (streamlit/whoop/db.py:143-144).
-// If Whoop ever sends a non-Z offset, this would diverge — safe assumption for V2.
-export function parseDate(iso: string): string {
-  return new Date(iso).toISOString().slice(0, 10);
+// File the row under the user's local calendar day per their IANA tz. DST-correct
+// via ICU. `tz` is required (no implicit UTC default) — past silent UTC defaults
+// produced misfiled rows for evening activity in west-of-UTC zones (issue #345).
+// Callers that genuinely have no user tz must pass `"UTC"` explicitly.
+export function parseDate(iso: string, tz: string): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(iso));
 }
 
-export function sleepSummaryDate(r: WhoopSleepRecord): string {
-  return parseDate(r.start);
+export function sleepSummaryDate(r: WhoopSleepRecord, tz: string): string {
+  return parseDate(r.start, tz);
 }
 
-export function workoutSummaryDate(r: WhoopWorkoutRecord): string {
-  return parseDate(r.start);
+export function workoutSummaryDate(r: WhoopWorkoutRecord, tz: string): string {
+  return parseDate(r.start, tz);
 }
 
-export function recoverySummaryDate(r: WhoopRecoveryRecord): string {
-  return parseDate(r.created_at);
+export function recoverySummaryDate(r: WhoopRecoveryRecord, tz: string): string {
+  return parseDate(r.created_at, tz);
 }
 
-export function cycleSummaryDate(r: WhoopCycleRecord): string {
-  return parseDate(r.start);
+export function cycleSummaryDate(r: WhoopCycleRecord, tz: string): string {
+  return parseDate(r.start, tz);
 }
 
 // Mirrors streamlit/whoop/db.py:_to_local_iso — convert UTC ISO + "+HH:MM" offset
@@ -141,7 +147,7 @@ export function toLocalIso(
   }
 }
 
-export function upsertSleep(record: WhoopSleepRecord, userId: number): boolean {
+export function upsertSleep(record: WhoopSleepRecord, userId: number, tz: string): boolean {
   if (record.score_state !== "SCORED" || !record.score) return false;
   const db = openWrite();
   if (!db) return false;
@@ -166,7 +172,7 @@ export function upsertSleep(record: WhoopSleepRecord, userId: number): boolean {
          @raw)
     `).run({
       user_id: userId,
-      date: parseDate(record.start),
+      date: parseDate(record.start, tz),
       in_bed_ms: ss.total_in_bed_time_milli,
       light_ms: ss.total_light_sleep_time_milli,
       deep_ms: ss.total_slow_wave_sleep_time_milli,
@@ -198,7 +204,7 @@ export function upsertSleep(record: WhoopSleepRecord, userId: number): boolean {
   }
 }
 
-export function upsertCycle(record: WhoopCycleRecord, userId: number): boolean {
+export function upsertCycle(record: WhoopCycleRecord, userId: number, tz: string): boolean {
   if (record.score_state !== "SCORED" || !record.score) return false;
   const db = openWrite();
   if (!db) return false;
@@ -211,7 +217,7 @@ export function upsertCycle(record: WhoopCycleRecord, userId: number): boolean {
         (@user_id, @date, @strain, @kilojoule, @avg_hr, @max_hr, @raw)
     `).run({
       user_id: userId,
-      date: parseDate(record.start),
+      date: parseDate(record.start, tz),
       strain: record.score.strain,
       kilojoule: record.score.kilojoule,
       avg_hr: record.score.average_heart_rate,
@@ -278,7 +284,7 @@ export function upsertBodyMeasurement(
   }
 }
 
-export function upsertRecovery(record: WhoopRecoveryRecord, userId: number): boolean {
+export function upsertRecovery(record: WhoopRecoveryRecord, userId: number, tz: string): boolean {
   if (record.score_state !== "SCORED" || !record.score) return false;
   const db = openWrite();
   if (!db) return false;
@@ -291,7 +297,7 @@ export function upsertRecovery(record: WhoopRecoveryRecord, userId: number): boo
         (@user_id, @date, @recovery_score, @hrv, @rhr, @spo2, @skin_temp, @raw)
     `).run({
       user_id: userId,
-      date: parseDate(record.created_at),
+      date: parseDate(record.created_at, tz),
       recovery_score: record.score.recovery_score,
       hrv: record.score.hrv_rmssd_milli,
       rhr: record.score.resting_heart_rate,
@@ -305,7 +311,7 @@ export function upsertRecovery(record: WhoopRecoveryRecord, userId: number): boo
   }
 }
 
-export function upsertWorkout(record: WhoopWorkoutRecord, userId: number): boolean {
+export function upsertWorkout(record: WhoopWorkoutRecord, userId: number, tz: string): boolean {
   if (record.score_state !== "SCORED" || !record.score) return false;
   const db = openWrite();
   if (!db) return false;
@@ -324,7 +330,7 @@ export function upsertWorkout(record: WhoopWorkoutRecord, userId: number): boole
     `).run({
       user_id: userId,
       id: record.id,
-      date: parseDate(record.start),
+      date: parseDate(record.start, tz),
       sport: record.sport_name ?? "Unknown",
       duration_sec: durationSec,
       avg_hr: record.score.average_heart_rate,

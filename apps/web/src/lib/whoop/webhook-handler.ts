@@ -1,4 +1,5 @@
 import "server-only";
+import { getUserSettings } from "@/lib/db";
 import { lookupUserIdByProvider } from "@/lib/db/integrations";
 import { whoopGet, WhoopRecoveryListMissError } from "./client";
 import {
@@ -53,18 +54,20 @@ export async function handleEvent(evt: WhoopWebhookEvent): Promise<HandleEventOu
   if (userId === null) {
     return { kind: "noop", reason: "unknown_whoop_user" };
   }
+  const userSettings = getUserSettings(userId);
+  const tz = userSettings?.tz ?? "UTC";
 
   switch (evt.type) {
     case "sleep.updated": {
       const r = await whoopGet<WhoopSleepRecord>(`/v2/activity/sleep/${evt.id}`, { userId });
-      upsertSleep(r, userId);
-      recomputeDailySummary(sleepSummaryDate(r), userId);
+      upsertSleep(r, userId, tz);
+      recomputeDailySummary(sleepSummaryDate(r, tz), userId);
       return { kind: "handled" };
     }
     case "workout.updated": {
       const r = await whoopGet<WhoopWorkoutRecord>(`/v2/activity/workout/${evt.id}`, { userId });
-      upsertWorkout(r, userId);
-      recomputeDailySummary(workoutSummaryDate(r), userId);
+      upsertWorkout(r, userId, tz);
+      recomputeDailySummary(workoutSummaryDate(r, tz), userId);
       return { kind: "handled" };
     }
     case "recovery.updated": {
@@ -80,8 +83,8 @@ export async function handleEvent(evt: WhoopWebhookEvent): Promise<HandleEventOu
           `recovery sleep_id=${evt.id} not in latest 10`,
         );
       }
-      upsertRecovery(r, userId);
-      recomputeDailySummary(recoverySummaryDate(r), userId);
+      upsertRecovery(r, userId, tz);
+      recomputeDailySummary(recoverySummaryDate(r, tz), userId);
       return { kind: "handled" };
     }
     case "sleep.deleted": {

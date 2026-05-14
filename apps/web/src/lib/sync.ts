@@ -1,5 +1,6 @@
 import "server-only";
 import { openWrite } from "@/lib/db/connection";
+import { getUserSettings } from "@/lib/db";
 import {
   getIntegration,
   setProviderUserId,
@@ -262,21 +263,21 @@ INSERT OR REPLACE INTO daily_summary (
 )
 `;
 
-function syncedDates(data: FetchedData): string[] {
+function syncedDates(data: FetchedData, tz: string): string[] {
   const dates = new Set<string>();
   for (const r of data.recovery) {
-    if (r.score_state === "SCORED") dates.add(recoverySummaryDate(r));
+    if (r.score_state === "SCORED") dates.add(recoverySummaryDate(r, tz));
   }
   for (const r of data.cycles) {
-    if (r.score_state === "SCORED") dates.add(cycleSummaryDate(r));
+    if (r.score_state === "SCORED") dates.add(cycleSummaryDate(r, tz));
   }
   for (const r of data.sleep) {
-    if (r.score_state === "SCORED") dates.add(sleepSummaryDate(r));
+    if (r.score_state === "SCORED") dates.add(sleepSummaryDate(r, tz));
   }
   // Workouts are not gated on score_state in Python (require_scored=False),
   // so we mirror that here.
   for (const r of data.workouts) {
-    dates.add(workoutSummaryDate(r));
+    dates.add(workoutSummaryDate(r, tz));
   }
   return [...dates].sort();
 }
@@ -293,7 +294,8 @@ function syncedDates(data: FetchedData): string[] {
 function persistAll(
   data: FetchedData,
   userId: number,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
+  tz: string,
 ): SyncCounts {
   const counts: SyncCounts = {
     recovery: 0,
@@ -349,7 +351,7 @@ function persistAll(
         if (r.score_state !== "SCORED" || !r.score) continue;
         recoveryStmt.run({
           user_id: userId,
-          date: parseDate(r.created_at),
+          date: parseDate(r.created_at, tz),
           recovery_score: r.score.recovery_score,
           hrv: r.score.hrv_rmssd_milli,
           rhr: r.score.resting_heart_rate,
@@ -364,7 +366,7 @@ function persistAll(
         if (r.score_state !== "SCORED" || !r.score) continue;
         cyclesStmt.run({
           user_id: userId,
-          date: parseDate(r.start),
+          date: parseDate(r.start, tz),
           strain: r.score.strain,
           kilojoule: r.score.kilojoule,
           avg_hr: r.score.average_heart_rate,
@@ -380,7 +382,7 @@ function persistAll(
         const sn = r.score.sleep_needed;
         sleepStmt.run({
           user_id: userId,
-          date: parseDate(r.start),
+          date: parseDate(r.start, tz),
           in_bed_ms: ss.total_in_bed_time_milli,
           light_ms: ss.total_light_sleep_time_milli,
           deep_ms: ss.total_slow_wave_sleep_time_milli,
@@ -417,7 +419,7 @@ function persistAll(
         workoutsStmt.run({
           user_id: userId,
           id: r.id,
-          date: parseDate(r.start),
+          date: parseDate(r.start, tz),
           sport: r.sport_name ?? "Unknown",
           duration_sec: durationSec,
           avg_hr: r.score.average_heart_rate,
@@ -437,7 +439,7 @@ function persistAll(
       }
       checkAborted(signal);
       // Recompute daily_summary for all dates touched by this sync.
-      for (const date of syncedDates(data)) {
+      for (const date of syncedDates(data, tz)) {
         const row = summarySelect.get(
           date,
           date,
@@ -571,7 +573,9 @@ export async function runWhoopSync(
 
     opts.onProgress?.({ stage: "upserting" });
     const dbT0 = Date.now();
-    const counts = persistAll(data, opts.userId, opts.signal);
+    const userSettings = getUserSettings(opts.userId);
+    const tz = userSettings?.tz ?? "UTC";
+    const counts = persistAll(data, opts.userId, opts.signal, tz);
     details.sync_db_ms = Date.now() - dbT0;
     post = {
       counts,
@@ -599,7 +603,7 @@ export async function runWhoopSync(
         err instanceof Error ? err.message : String(err);
     }
     details.body_ms = Date.now() - bodyT0;
-    details.summary_dates = syncedDates(data).length;
+    details.summary_dates = syncedDates(data, tz).length;
 
     checkAborted(opts.signal);
 
