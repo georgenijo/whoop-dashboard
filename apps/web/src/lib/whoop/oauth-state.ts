@@ -25,16 +25,29 @@ import { whoopStateSecret } from "@/lib/auth";
 const TTL_MS = 5 * 60 * 1000;
 const NONCE_BYTES = 16;
 
+export type WhoopOAuthFlow = "web" | "ios";
+
 export type WhoopOAuthStatePayload = {
   user_id: number;
   /** Expiry in epoch milliseconds. Generated server-side; callers don't pass this. */
   exp?: number;
+  /**
+   * Origin of the OAuth start request. Web (default) goes through
+   * /api/auth/login and uses the cookie-pair CSRF gate at the callback.
+   * iOS goes through ASWebAuthenticationSession with no cookie jar, so
+   * the callback verifies HMAC + TTL only and redirects to a custom
+   * scheme on completion. Optional; absent means "web".
+   */
+  flow?: WhoopOAuthFlow;
 };
 
 type EncodedPayload = {
   u: number;
   n: string;
   e: number;
+  /** Optional flow tag. Omitted on the wire when "web" so existing
+   * pre-flow-tag signed states still verify. */
+  f?: WhoopOAuthFlow;
 };
 
 function toBase64Url(buf: Buffer): string {
@@ -55,16 +68,22 @@ function fromBase64Url(s: string): Buffer | null {
  */
 export function encodeWhoopOAuthState(payload: WhoopOAuthStatePayload): string {
   const exp = payload.exp ?? Date.now() + TTL_MS;
-  // Object literal key order (u, n, e) is the canonical signing order.
+  // Object literal key order (u, n, e, [f]) is the canonical signing order.
   // V8 preserves insertion order on string keys, so this round-trips
   // deterministically. Do not refactor into a spread or a Map without
   // re-checking that JSON.stringify produces the same byte sequence —
   // a different order makes every existing signed state un-verifiable.
+  // The `f` (flow) key is appended last and OMITTED when "web", so the
+  // wire format for default-web flows matches every state encoded before
+  // this field existed.
   const body: EncodedPayload = {
     u: payload.user_id,
     n: crypto.randomBytes(NONCE_BYTES).toString("hex"),
     e: exp,
   };
+  if (payload.flow && payload.flow !== "web") {
+    body.f = payload.flow;
+  }
   const payloadBuf = Buffer.from(JSON.stringify(body), "utf8");
   const payloadB64 = toBase64Url(payloadBuf);
   const mac = crypto
@@ -84,7 +103,7 @@ export function encodeWhoopOAuthState(payload: WhoopOAuthStatePayload): string {
  */
 export function decodeWhoopOAuthState(
   raw: string | null | undefined
-): { user_id: number; exp: number } | null {
+): { user_id: number; exp: number; flow: WhoopOAuthFlow } | null {
   if (!raw || typeof raw !== "string") return null;
   const dot = raw.indexOf(".");
   if (dot <= 0 || dot === raw.length - 1) return null;
@@ -127,5 +146,11 @@ export function decodeWhoopOAuthState(
 
   if (Date.now() > o.e) return null;
 
-  return { user_id: o.u, exp: o.e };
+  // `f` is optional on the wire; tolerate unknown values by defaulting to
+  // "web" so an attacker can't synthesise a privileged flow by injecting
+  // an arbitrary string. Only the explicit "ios" tag opts into the
+  // cookie-less callback path.
+  const flow: WhoopOAuthFlow = o.f === "ios" ? "ios" : "web";
+
+  return { user_id: o.u, exp: o.e, flow };
 }

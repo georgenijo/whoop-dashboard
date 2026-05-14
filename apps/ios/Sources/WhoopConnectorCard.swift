@@ -1,5 +1,23 @@
 import SwiftUI
 
+private let isoWithFractional: ISO8601DateFormatter = {
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return f
+}()
+
+private let isoPlain: ISO8601DateFormatter = {
+    let f = ISO8601DateFormatter()
+    f.formatOptions = [.withInternetDateTime]
+    return f
+}()
+
+private let relativeFormatter: RelativeDateTimeFormatter = {
+    let f = RelativeDateTimeFormatter()
+    f.unitsStyle = .short
+    return f
+}()
+
 struct WhoopConnectorCard: View {
     @Environment(\.api) private var api
     @Environment(\.scenePhase) private var scenePhase
@@ -7,7 +25,8 @@ struct WhoopConnectorCard: View {
     @State private var connector: WhoopConnector?
     @State private var loading = false
     @State private var loadError: String?
-    @State private var safariURL: IdentifiedURL?
+    @State private var reconnecting = false
+    @State private var lastRefreshAt: Date?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -18,9 +37,16 @@ struct WhoopConnectorCard: View {
                 statusBadge
                 Spacer()
                 if connector?.status == .needsReconnect {
-                    Button("Reconnect", action: handleReconnect)
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
+                    Button(action: { Task { await handleReconnect() } }) {
+                        if reconnecting {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Text("Reconnect")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(reconnecting)
                 }
             }
 
@@ -32,12 +58,6 @@ struct WhoopConnectorCard: View {
         .task { await refresh() }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active { Task { await refresh() } }
-        }
-        .sheet(item: $safariURL) { wrapper in
-            SafariView(url: wrapper.url) {
-                Task { await refresh() }
-            }
-            .ignoresSafeArea()
         }
     }
 
@@ -60,13 +80,10 @@ struct WhoopConnectorCard: View {
     private var detailText: String {
         if let err = loadError { return err }
         guard let connector else { return "Loading…" }
-        var parts: [String] = []
         if let last = connector.lastSyncAt, let formatted = relative(from: last) {
-            parts.append("Last sync \(formatted)")
-        } else {
-            parts.append("No sync yet")
+            return "Last sync \(formatted)"
         }
-        return parts.joined(separator: " · ")
+        return "No sync yet"
     }
 
     private func badgeColor(for status: WhoopConnectorStatus) -> Color {
@@ -85,47 +102,75 @@ struct WhoopConnectorCard: View {
         }
     }
 
-    private func handleReconnect() {
-        let url = api.baseURL.appending(path: "api/auth/login")
-        safariURL = IdentifiedURL(url: url)
+    @MainActor
+    private func handleReconnect() async {
+        guard !reconnecting else { return }
+        reconnecting = true
+        defer { reconnecting = false }
+        loadError = nil
+        do {
+            let service = WhoopConnectorService(api: api)
+            let authorizeURL = try await service.startIosAuthorizeURL()
+            let session = OAuthSession()
+            let callback = try await session.start(
+                authorizeURL: authorizeURL,
+                callbackScheme: "coach"
+            )
+            handle(callback: callback)
+        } catch OAuthSessionError.canceled {
+            // User dismissed the in-app browser. No-op — leave existing state intact.
+        } catch OAuthSessionError.failed(let message) {
+            loadError = "Reconnect failed: \(message)"
+        } catch {
+            loadError = "Reconnect failed."
+        }
+        // Always re-fetch — the backend may have updated tokens even on a
+        // surface-level "canceled" if the user completed Whoop's screen first.
+        await refresh(force: true)
+    }
+
+    private func handle(callback url: URL) {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return
+        }
+        let status = components.queryItems?.first { $0.name == "status" }?.value
+        if status == "error" {
+            let code = components.queryItems?.first { $0.name == "code" }?.value
+            loadError = "Reconnect failed (\(code ?? "unknown"))."
+        }
     }
 
     @MainActor
-    private func refresh() async {
+    private func refresh(force: Bool = false) async {
         if loading { return }
+        // Debounce — `.task` and `scenePhase == .active` both fire when the
+        // OAuth sheet dismisses. Without this, the connector endpoint sees
+        // two back-to-back GETs.
+        if !force, let last = lastRefreshAt, Date().timeIntervalSince(last) < 0.5 {
+            return
+        }
         loading = true
-        defer { loading = false }
+        defer {
+            loading = false
+            lastRefreshAt = Date()
+        }
         do {
             let service = WhoopConnectorService(api: api)
             connector = try await service.fetch()
             loadError = nil
         } catch APIError.unauthorized {
-            loadError = nil
+            // APIClient.handleUnauthorized already posted .apiUnauthorized
+            // and wiped the keychain; CoachApp will bounce to AuthView.
+            // Surface a hint in case the unmount lags by a frame.
+            loadError = "Sign in expired."
         } catch {
             loadError = "Couldn't load connector status."
         }
     }
 
     private func relative(from iso: String) -> String? {
-        let isoFormatter = ISO8601DateFormatter()
-        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let date = isoFormatter.date(from: iso) ?? {
-            let plain = ISO8601DateFormatter()
-            plain.formatOptions = [.withInternetDateTime]
-            return plain.date(from: iso)
-        }()
+        let date = isoWithFractional.date(from: iso) ?? isoPlain.date(from: iso)
         guard let date else { return nil }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .short
-        return formatter.localizedString(for: date, relativeTo: Date())
+        return relativeFormatter.localizedString(for: date, relativeTo: Date())
     }
-}
-
-private struct IdentifiedURL: Identifiable {
-    let url: URL
-    var id: String { url.absoluteString }
-}
-
-#Preview {
-    WhoopConnectorCard()
 }
