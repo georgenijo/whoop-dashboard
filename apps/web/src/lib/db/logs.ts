@@ -52,6 +52,7 @@ export type ChatLog = {
   type: "cli" | "api" | null;
   source: "web" | "ios" | null;
   details?: string | null;
+  thread_id: number | null;
 };
 
 export function addChatLog(log: Omit<ChatLog, "id">): void {
@@ -59,7 +60,7 @@ export function addChatLog(log: Omit<ChatLog, "id">): void {
   if (!db) return;
   try {
     db.prepare(
-      "INSERT INTO chat_logs (started_at, prompt_preview, duration_ms, status, response_length, error_message, days_context, type, source, details) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO chat_logs (started_at, prompt_preview, duration_ms, status, response_length, error_message, days_context, type, source, details, thread_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(
       log.started_at,
       log.prompt_preview,
@@ -70,7 +71,8 @@ export function addChatLog(log: Omit<ChatLog, "id">): void {
       log.days_context,
       log.type,
       log.source,
-      log.details ?? null
+      log.details ?? null,
+      log.thread_id ?? null
     );
   } finally {
     db.close();
@@ -84,13 +86,45 @@ export function getChatLogs(limit = 200): ChatLog[] {
       const sourceSelect = hasColumn(db, "chat_logs", "source")
         ? "source"
         : "NULL AS source";
+      const threadSelect = hasColumn(db, "chat_logs", "thread_id")
+        ? "thread_id"
+        : "NULL AS thread_id";
       return db
         .prepare(
-          `SELECT id, started_at, prompt_preview, duration_ms, status, response_length, error_message, days_context, type, ${sourceSelect}, details FROM chat_logs ORDER BY id DESC LIMIT ?`
+          `SELECT id, started_at, prompt_preview, duration_ms, status, response_length, error_message, days_context, type, ${sourceSelect}, details, ${threadSelect} FROM chat_logs ORDER BY id DESC LIMIT ?`
         )
         .all(limit) as ChatLog[];
     }) ?? []
   );
+}
+
+export type ChatThreadInfo = {
+  id: number;
+  title: string | null;
+  first_user_message: string | null;
+};
+
+export function getChatThreadInfo(threadIds: number[]): Map<number, ChatThreadInfo> {
+  const result = new Map<number, ChatThreadInfo>();
+  if (threadIds.length === 0) return result;
+  const rows =
+    safeQuery((db) => {
+      if (!hasTable(db, "chat_threads")) return [] as ChatThreadInfo[];
+      const placeholders = threadIds.map(() => "?").join(",");
+      const hasMessages = hasTable(db, "chat_messages");
+      const firstUserSelect = hasMessages
+        ? `(SELECT content FROM chat_messages WHERE thread_id = t.id AND role = 'user' ORDER BY id ASC LIMIT 1) AS first_user_message`
+        : `NULL AS first_user_message`;
+      return db
+        .prepare(
+          `SELECT t.id, t.title, ${firstUserSelect} FROM chat_threads t WHERE t.id IN (${placeholders})`
+        )
+        .all(...threadIds) as ChatThreadInfo[];
+    }) ?? [];
+  for (const row of rows) {
+    result.set(row.id, row);
+  }
+  return result;
 }
 
 export function clearChatLogs(): void {

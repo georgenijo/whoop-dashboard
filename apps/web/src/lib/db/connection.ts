@@ -132,9 +132,11 @@ export function openWrite(): DB | null {
         days_context INTEGER,
         type TEXT,
         source TEXT,
-        details TEXT
+        details TEXT,
+        thread_id INTEGER REFERENCES chat_threads(id)
       );
       CREATE INDEX IF NOT EXISTS idx_chat_logs_started ON chat_logs(started_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_chat_logs_thread ON chat_logs(thread_id, id DESC);
       CREATE TABLE IF NOT EXISTS app_settings (
         key TEXT PRIMARY KEY,
         value TEXT
@@ -267,6 +269,10 @@ export function openWrite(): DB | null {
     if (!cols.some((c) => c.name === "source")) {
       db.exec("ALTER TABLE chat_logs ADD COLUMN source TEXT");
     }
+    if (!cols.some((c) => c.name === "thread_id")) {
+      db.exec("ALTER TABLE chat_logs ADD COLUMN thread_id INTEGER REFERENCES chat_threads(id)");
+    }
+    db.exec("CREATE INDEX IF NOT EXISTS idx_chat_logs_thread ON chat_logs(thread_id, id DESC)");
     const syncCols = db.prepare("PRAGMA table_info(sync_logs)").all() as { name: string }[];
     if (!syncCols.some((c) => c.name === "details")) {
       db.exec("ALTER TABLE sync_logs ADD COLUMN details TEXT");
