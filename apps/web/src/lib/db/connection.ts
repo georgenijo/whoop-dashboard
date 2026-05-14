@@ -136,7 +136,6 @@ export function openWrite(): DB | null {
         thread_id INTEGER REFERENCES chat_threads(id)
       );
       CREATE INDEX IF NOT EXISTS idx_chat_logs_started ON chat_logs(started_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_chat_logs_thread ON chat_logs(thread_id, id DESC);
       CREATE TABLE IF NOT EXISTS app_settings (
         key TEXT PRIMARY KEY,
         value TEXT
