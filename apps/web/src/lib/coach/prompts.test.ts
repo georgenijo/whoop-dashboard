@@ -79,4 +79,16 @@ describe("DEFAULT_SYSTEM_PROMPT", () => {
       /contests your data answer[\s\S]*re-query/i,
     );
   });
+
+  it("requires a one-sentence text block before any tool call", () => {
+    expect(DEFAULT_SYSTEM_PROMPT).toMatch(/before calling any tool/i);
+    expect(DEFAULT_SYSTEM_PROMPT).toMatch(/under 12 words/i);
+    expect(DEFAULT_SYSTEM_PROMPT).toMatch(/never lead with a tool_use block/i);
+  });
+
+  it("tells the model to surface a concrete cooldown duration from next_sync_allowed_at", () => {
+    expect(DEFAULT_SYSTEM_PROMPT).toMatch(/cooldown_seconds/);
+    expect(DEFAULT_SYSTEM_PROMPT).toMatch(/next_sync_allowed_at/);
+    expect(DEFAULT_SYSTEM_PROMPT).toMatch(/try again in/i);
+  });
 });
