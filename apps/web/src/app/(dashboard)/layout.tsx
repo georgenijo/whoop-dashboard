@@ -37,6 +37,10 @@ export const viewport: Viewport = {
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  // Date.now() here violates React purity, but the value is only consumed
+  // inside `after()` (post-response), so a re-render can't observe drift.
+  // eslint-disable-next-line react-hooks/purity
+  const layoutStartMs = Date.now();
   const requestHeaders = await headers();
   const route = requestHeaders.get("x-whoop-route-log-route");
   const startedAt = requestHeaders.get("x-whoop-route-log-started-at");
@@ -46,12 +50,18 @@ export default async function RootLayout({
   if (route && startedAt && Number.isFinite(startMs)) {
     after(() => {
       try {
+        const now = Date.now();
+        const renderMs = Math.max(0, now - layoutStartMs);
         addRouteLog({
           started_at: startedAt,
           route,
-          duration_ms: Math.max(0, Date.now() - startMs),
+          duration_ms: Math.max(0, now - startMs),
           status: 200,
           details,
+          // response_bytes stays NULL: Next.js 16's `after()` runs after the
+          // streamed response is closed and exposes no rendered byte count.
+          response_bytes: null,
+          render_ms: renderMs,
         });
       } catch {
         // Route timing must never affect the rendered page.

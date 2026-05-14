@@ -261,4 +261,54 @@ describe("GET /api/auth/callback — Whoop OAuth state verification", () => {
     // The error message must NOT leak into the URL — only the short code.
     expect(res.headers.get("location")).not.toMatch(/oops/);
   });
+
+  it("iOS flow happy path: state with flow=ios, no cookie required → coach://oauth-complete?status=ok", async () => {
+    const { encodeWhoopOAuthState } = await importState();
+    const { GET } = await importRoute();
+    const signed = encodeWhoopOAuthState({ user_id: 42, flow: "ios" });
+
+    // No cookieState — iOS flow uses an ephemeral cookie jar inside
+    // ASWebAuthenticationSession that has no path back to the web session.
+    const res = await GET(buildRequest({ state: signed, cookieState: null }));
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toBe(
+      "coach://oauth-complete?status=ok",
+    );
+    expect(exchangeCodeMock).toHaveBeenCalledTimes(1);
+    expect(exchangeCodeMock.mock.calls[0][0]).toBe(42);
+  });
+
+  it("iOS flow exchange failure: redirects to coach://oauth-complete?status=error&code=exchange_failed", async () => {
+    const { encodeWhoopOAuthState } = await importState();
+    const { GET } = await importRoute();
+    exchangeCodeMock.mockImplementation(async () => {
+      throw new Error("whoop 500: oops");
+    });
+    const signed = encodeWhoopOAuthState({ user_id: 42, flow: "ios" });
+
+    const res = await GET(buildRequest({ state: signed, cookieState: null }));
+
+    expect(res.headers.get("location")).toBe(
+      "coach://oauth-complete?status=error&code=exchange_failed",
+    );
+  });
+
+  it("iOS flow user cancel: ?error=access_denied with flow=ios → custom scheme, not /settings", async () => {
+    const { encodeWhoopOAuthState } = await importState();
+    const { GET } = await importRoute();
+    const signed = encodeWhoopOAuthState({ user_id: 42, flow: "ios" });
+
+    const url = new URL("http://localhost/api/auth/callback");
+    url.searchParams.set("error", "access_denied");
+    url.searchParams.set("state", signed);
+    const req = new NextRequest(url.toString(), { method: "GET" });
+
+    const res = await GET(req);
+
+    expect(res.headers.get("location")).toBe(
+      "coach://oauth-complete?status=error&code=user_cancelled",
+    );
+    expect(exchangeCodeMock).not.toHaveBeenCalled();
+  });
 });

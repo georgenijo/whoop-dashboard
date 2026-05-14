@@ -9,7 +9,23 @@ type RouteLogRow = {
   duration_ms: number;
   status: number;
   details?: string | null;
+  response_bytes?: number | null;
+  render_ms?: number | null;
 };
+
+function fmtMs(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "Not captured";
+  if (!Number.isFinite(value)) return "Not captured";
+  return `${value}ms`;
+}
+
+function fmtBytes(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "Not captured";
+  if (!Number.isFinite(value)) return "Not captured";
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+}
 
 type RouteDetails = {
   method: string | null;
@@ -193,6 +209,11 @@ function LogRow({ log }: { log: RouteLogRow }) {
   const details = useMemo(() => parseDetails(log.details), [log.details]);
   const dur = fmtDuration(log.duration_ms);
   const detailsId = `route-details-${log.id}`;
+  // A row is "instrumented" once any perf field lands. Pre-migration rows
+  // render all NULL and continue to show the "Not captured" notice.
+  const hasPerfSignal =
+    (log.response_bytes !== null && log.response_bytes !== undefined) ||
+    (log.render_ms !== null && log.render_ms !== undefined);
 
   return (
     <>
@@ -214,6 +235,11 @@ function LogRow({ log }: { log: RouteLogRow }) {
         <td style={{ padding: "10px 16px", textAlign: "right", color: dur.color, fontFamily: "var(--font-mono)", fontSize: 12, fontVariantNumeric: "tabular-nums" }}>
           {dur.text}
         </td>
+        <td style={{ padding: "10px 16px", textAlign: "right", color: "var(--fg-2)", fontFamily: "var(--font-mono)", fontSize: 12, fontVariantNumeric: "tabular-nums" }}>
+          {log.render_ms !== null && log.render_ms !== undefined
+            ? `${log.render_ms}ms`
+            : <span style={{ color: "var(--fg-3)" }}>—</span>}
+        </td>
         <td style={{ padding: "10px 16px", textAlign: "center" }}>
           <StatusBadge status={log.status} />
         </td>
@@ -223,7 +249,7 @@ function LogRow({ log }: { log: RouteLogRow }) {
       </tr>
       {open && (
         <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-          <td id={detailsId} colSpan={5} style={{ padding: "14px 20px", background: "rgba(255,255,255,0.02)" }}>
+          <td id={detailsId} colSpan={6} style={{ padding: "14px 20px", background: "rgba(255,255,255,0.02)" }}>
             <div style={{ display: "grid", gridTemplateColumns: "minmax(320px, 1fr) minmax(320px, 1fr)", gap: 18, minWidth: 720 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -257,10 +283,17 @@ function LogRow({ log }: { log: RouteLogRow }) {
                   value={details?.user_agent_class ?? "Not captured"}
                   muted={!details?.user_agent_class}
                 />
-                <DetailLine label="Response size" value="Not captured" muted />
-                <DetailLine label="Server timing" value="Not captured" muted />
-                <DetailLine label="Cache / render" value="Not captured" muted />
-                {!details ? (
+                <DetailLine
+                  label="Response size"
+                  value={fmtBytes(log.response_bytes)}
+                  muted={log.response_bytes === null || log.response_bytes === undefined}
+                />
+                <DetailLine
+                  label="Render"
+                  value={fmtMs(log.render_ms)}
+                  muted={log.render_ms === null || log.render_ms === undefined}
+                />
+                {!details && !hasPerfSignal ? (
                   <div style={{
                     marginTop: 2,
                     padding: 10,
@@ -293,6 +326,7 @@ export default function RouteLogsTable({ logs }: { logs: RouteLogRow[] }) {
             <th style={{ padding: "10px 16px", textAlign: "left", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", fontWeight: 500 }}>Time</th>
             <th style={{ padding: "10px 16px", textAlign: "left", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", fontWeight: 500 }}>Route</th>
             <th style={{ padding: "10px 16px", textAlign: "right", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", fontWeight: 500 }}>Duration</th>
+            <th style={{ padding: "10px 16px", textAlign: "right", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", fontWeight: 500 }}>Render</th>
             <th style={{ padding: "10px 16px", textAlign: "center", color: "var(--fg-3)", fontSize: 11, textTransform: "uppercase", fontWeight: 500 }}>Status</th>
             <th style={{ padding: "10px 8px", width: 32 }} aria-hidden="true" />
           </tr>
