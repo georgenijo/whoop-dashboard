@@ -2,7 +2,14 @@ import { headers } from "next/headers";
 import KPIStrip from "@/components/overview/KPIStrip";
 import TrendChart from "@/components/charts/TrendChart";
 import TSBCurve from "@/components/charts/TSBCurve";
-import { getOverview, getStrainTrend } from "@/lib/db";
+import TodayKpis from "@/components/strain/TodayKpis";
+import TodayWorkouts from "@/components/strain/TodayWorkouts";
+import {
+  getOverview,
+  getStrainTrend,
+  getTodayStrainAggregate,
+  getTodayWorkouts,
+} from "@/lib/db";
 import { requireAuthOrSignin } from "@/lib/auth";
 import { parseDays, formatRangeLabel } from "@/lib/range";
 
@@ -27,6 +34,10 @@ export default async function StrainPage({
   const strainData = trend.map((r) => ({ date: r.date, value: r.strain }));
   const hrData = trend.map((r) => ({ date: r.date, value: r.avg_hr }));
 
+  const today = new Date().toISOString().slice(0, 10);
+  const todayAgg = getTodayStrainAggregate(user.id, today);
+  const todayWorkouts = getTodayWorkouts(user.id, today);
+
   return (
     <>
       <KPIStrip
@@ -41,6 +52,15 @@ export default async function StrainPage({
         sleepTrend={data.sleepTrend}
       />
 
+      <TodayKpis
+        totalKilojoule={todayAgg.total_kilojoule}
+        avgHr={todayAgg.avg_hr}
+        maxHr={todayAgg.max_hr}
+        workoutCount={todayAgg.workout_count}
+      />
+
+      <TodayWorkouts rows={todayWorkouts} />
+
       <div className="grid-main">
         <div className="col">
           <TrendChart
@@ -50,7 +70,6 @@ export default async function StrainPage({
             gradientId="strain"
             data={strainData}
             unit=""
-            showRollingToggle
           />
         </div>
         <div className="col">

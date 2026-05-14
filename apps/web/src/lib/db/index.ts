@@ -38,8 +38,18 @@ export {
   getRecentNaps,
 } from "./sleep";
 
-export type { WorkoutRow, WorkoutsRangeResult } from "./workouts";
-export { getWorkouts, getWorkoutsRange } from "./workouts";
+export type {
+  WorkoutRow,
+  WorkoutsRangeResult,
+  TodayWorkoutRow,
+  TodayStrainAggregate,
+} from "./workouts";
+export {
+  getWorkouts,
+  getWorkoutsRange,
+  getTodayWorkouts,
+  getTodayStrainAggregate,
+} from "./workouts";
 
 export type { PRStats, PRValue, PRStreak } from "./prs";
 export { getPRStats } from "./prs";

@@ -49,6 +49,12 @@ export function formatDelta(
   };
 }
 
+/** Convert kilojoules to kilocalories (1 kJ ≈ 0.239 kcal). */
+export function kJToKcal(kj: number | null | undefined): number | null {
+  if (kj == null || !Number.isFinite(kj)) return null;
+  return kj * 0.239;
+}
+
 export function formatHours(ms: number | null | undefined, precision = 1): string {
   if (ms == null) return "—";
   return (ms / (1000 * 60 * 60)).toFixed(precision);
