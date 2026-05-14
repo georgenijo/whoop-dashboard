@@ -1,6 +1,4 @@
 import "server-only";
-import fs from "node:fs/promises";
-import path from "node:path";
 import {
   getSessionByToken,
   getUserById,
@@ -43,13 +41,6 @@ export function redirectUri(): string {
   return (
     process.env.WHOOP_REDIRECT_URI ?? "http://localhost:3000/api/auth/callback"
   );
-}
-
-export function tokensPath(): string {
-  if (process.env.WHOOP_TOKENS_PATH) return process.env.WHOOP_TOKENS_PATH;
-  // Default: repo-root `tokens.json` (matches streamlit/whoop/auth.py:17).
-  // process.cwd() is `apps/web/`, so repo root is two levels up.
-  return path.resolve(process.cwd(), "..", "..", "tokens.json");
 }
 
 /**
@@ -133,89 +124,31 @@ export async function exchangeCode(
 }
 
 /**
- * Persist Whoop tokens.
+ * Persist Whoop tokens to the encrypted `integrations` row.
  *
- * Dual-write:
- *   1. Encrypted `integrations` row (primary). The `raw` column is UNENCRYPTED
- *      JSON, so we MUST NEVER pass credential fields (access_token /
- *      refresh_token) into it — that would defeat the vault. Today nothing
- *      else needs `raw`, so we always pass `raw=undefined`. If we later need
- *      to persist non-credential metadata, add a tight allowlist or a
- *      separately-encrypted column.
- *   2. Atomic tmp+rename to `tokens.json` (parallel — file is the recovery
- *      anchor; never delete from this layer). Matches Python save_tokens.
+ * The `raw` column is UNENCRYPTED JSON, so we MUST NEVER pass credential
+ * fields (access_token / refresh_token) into it — that would defeat the
+ * vault. Today nothing else needs `raw`, so we always pass `raw=undefined`.
+ * If we later need to persist non-credential metadata, add a tight allowlist
+ * or a separately-encrypted column.
  *
- * Error handling: each write is logged on individual failure so the other can
- * still serve as a persistent copy. If BOTH writes fail, we throw so the
- * caller doesn't proceed assuming tokens were saved.
+ * Post-Phase-D: the integrations table is the sole source of truth. The
+ * legacy `tokens.json` parallel write (issue #330) is gone.
  */
 export async function saveTokens(
   userId: number,
   tokens: StoredTokens
 ): Promise<void> {
-  let dbOk = false;
-  let fileOk = false;
-  let dbErr: unknown;
-  let fileErr: unknown;
-
-  // 1) Encrypted DB write. `raw=undefined` — see docstring above.
-  try {
-    upsertIntegration({
-      user_id: userId,
-      provider: WHOOP_PROVIDER,
-      access_token: tokens.access_token,
-      refresh_token: tokens.refresh_token,
-      expires_at: tokens.expires_at,
-      scope: tokens.scope ?? null,
-      token_type: tokens.token_type ?? null,
-      raw: undefined,
-    });
-    dbOk = true;
-  } catch (err) {
-    dbErr = err;
-    console.error(
-      `[auth] integrations upsert failed user_id=${userId}: ${
-        err instanceof Error ? err.message : String(err)
-      }`
-    );
-  }
-
-  // 2) Parallel write to tokens.json (atomic tmp+rename) — LEGACY,
-  // userId === 1 only. tokens.json is single-user by construction; writing
-  // it for any other user_id would silently overwrite the maintainer's
-  // file with a different account's tokens. Other users go DB-only.
-  // TODO(phase-d-cutover): drop this branch entirely once the file
-  // fallback in token.loadTokens is removed.
-  if (userId === 1) {
-    try {
-      const p = tokensPath();
-      const tmp = `${p}.tmp`;
-      await fs.writeFile(tmp, JSON.stringify(tokens), "utf8");
-      await fs.rename(tmp, p);
-      fileOk = true;
-    } catch (err) {
-      fileErr = err;
-      console.error(
-        `[auth] tokens.json write failed: ${
-          err instanceof Error ? err.message : String(err)
-        }`
-      );
-    }
-  } else {
-    // For non-maintainer users, "skipped" is the desired end state — count
-    // it as ok so the "both writes failed" guard below doesn't fire.
-    fileOk = true;
-  }
-
-  if (!dbOk && !fileOk) {
-    const dbMsg =
-      dbErr instanceof Error ? dbErr.message : String(dbErr ?? "unknown");
-    const fileMsg =
-      fileErr instanceof Error ? fileErr.message : String(fileErr ?? "unknown");
-    throw new Error(
-      `saveTokens: both writes failed (db: ${dbMsg}; file: ${fileMsg})`
-    );
-  }
+  upsertIntegration({
+    user_id: userId,
+    provider: WHOOP_PROVIDER,
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    expires_at: tokens.expires_at,
+    scope: tokens.scope ?? null,
+    token_type: tokens.token_type ?? null,
+    raw: undefined,
+  });
 }
 
 /**
