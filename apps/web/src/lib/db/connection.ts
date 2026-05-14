@@ -187,7 +187,7 @@ export function openWrite(): DB | null {
       -- access_token and refresh_token are encrypted with VAULT_KEY via NaCl
       -- secretbox; key_version pairs the row with the key used to encrypt.
       -- Column name is "scopes" (plural); public-API callers see "scope"
-      -- (singular) to match Whoop OAuth + tokens.json shape.
+      -- (singular) to match the Whoop OAuth response shape.
       CREATE TABLE IF NOT EXISTS integrations (
         user_id INTEGER NOT NULL REFERENCES users(id),
         provider TEXT NOT NULL,

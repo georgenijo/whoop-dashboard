@@ -249,57 +249,43 @@ describe("integrations + vault", () => {
     bootstrap!.exec("INSERT OR IGNORE INTO users (id) VALUES (1)");
     bootstrap!.close();
 
-    // Point tokens.json at a tmp path so we don't touch the repo file.
-    const tokensTmp = path.join(path.dirname(dbPath), "tokens.json");
-    process.env.WHOOP_TOKENS_PATH = tokensTmp;
-    try {
-      const auth = await import("@/lib/auth");
-      await auth.saveTokens(1, {
-        access_token: "PLAINTEXT-ACCESS-SHOULD-NEVER-LAND-IN-RAW",
-        refresh_token: "PLAINTEXT-REFRESH-SHOULD-NEVER-LAND-IN-RAW",
-        expires_at: "2026-05-09T18:42:11+00:00",
-        expires_in: 3600,
-        token_type: "bearer",
-        scope: "offline read:profile",
-      });
+    const auth = await import("@/lib/auth");
+    await auth.saveTokens(1, {
+      access_token: "PLAINTEXT-ACCESS-SHOULD-NEVER-LAND-IN-RAW",
+      refresh_token: "PLAINTEXT-REFRESH-SHOULD-NEVER-LAND-IN-RAW",
+      expires_at: "2026-05-09T18:42:11+00:00",
+      expires_in: 3600,
+      token_type: "bearer",
+      scope: "offline read:profile",
+    });
 
-      const db = conn.openWrite();
-      expect(db).not.toBeNull();
-      const row = db!
-        .prepare(
-          "SELECT access_token, refresh_token, raw FROM integrations WHERE user_id = ? AND provider = ?"
-        )
-        .get(1, "whoop") as
-        | {
-            access_token: string;
-            refresh_token: string;
-            raw: string | null;
-          }
-        | undefined;
-      db!.close();
+    const db = conn.openWrite();
+    expect(db).not.toBeNull();
+    const row = db!
+      .prepare(
+        "SELECT access_token, refresh_token, raw FROM integrations WHERE user_id = ? AND provider = ?"
+      )
+      .get(1, "whoop") as
+      | {
+          access_token: string;
+          refresh_token: string;
+          raw: string | null;
+        }
+      | undefined;
+    db!.close();
 
-      expect(row).toBeDefined();
-      // Hard invariant: on-disk `raw` MUST be NULL.
-      expect(row!.raw).toBeNull();
-      // Defense-in-depth: the encrypted columns must NOT contain the
-      // plaintext substrings (i.e. encryption ran).
-      expect(row!.access_token).not.toContain("PLAINTEXT-ACCESS");
-      expect(row!.refresh_token).not.toContain("PLAINTEXT-REFRESH");
-    } finally {
-      delete process.env.WHOOP_TOKENS_PATH;
-      try {
-        fs.unlinkSync(tokensTmp);
-      } catch {
-        // ignore
-      }
-    }
+    expect(row).toBeDefined();
+    // Hard invariant: on-disk `raw` MUST be NULL.
+    expect(row!.raw).toBeNull();
+    // Defense-in-depth: the encrypted columns must NOT contain the
+    // plaintext substrings (i.e. encryption ran).
+    expect(row!.access_token).not.toContain("PLAINTEXT-ACCESS");
+    expect(row!.refresh_token).not.toContain("PLAINTEXT-REFRESH");
   });
 
-  // BLOCK 3 — Node side: there is no Node `clearTokens` equivalent today
-  // (token clearing lives in streamlit/whoop/auth.py only, since the web
-  // surface doesn't expose a Disconnect action). The test for "clearTokens
-  // preserves tokens.json" lives in tests/test_integrations.py. If a Node
-  // clearTokens is added later, mirror that test here.
+  // Post-#330: the legacy `tokens.json` parallel write is gone. saveTokens
+  // is DB-only now, so the per-file fixture this test used to set up is
+  // no longer needed.
 
   it("setIntegrationNeedsReauth flips the flag and getIntegration reflects it", async () => {
     const { integrations } = await loadModules();

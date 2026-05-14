@@ -15,7 +15,7 @@ type WhoopConnector = {
   status: WhoopConnectorStatus;
   expires_at: string | null;
   scope: string | null;
-  source: "db" | "file" | null;
+  source: "db" | null;
   last_sync_at: string | null;
 };
 

@@ -4,7 +4,7 @@ import "server-only";
 // Convention:
 //   - DB column for OAuth scopes is named `scopes` (plural).
 //   - Public API key on the integration object is `scope` (singular), to
-//     match the Whoop OAuth response and the legacy tokens.json shape.
+//     match the Whoop OAuth response shape.
 //   - `expires_at` is always an ISO 8601 string (e.g. "2026-05-09T18:42:11+00:00").
 //     Floats are not accepted at this layer.
 //   - `key_version` is a small int that pairs the row with the key used to
@@ -194,8 +194,9 @@ type IntegrationRowRaw = {
  * Returns true iff a row exists for (user_id, provider). Does NOT decrypt.
  *
  * Use this to distinguish "no row at all" from "row exists but decrypt
- * failed" — the file-fallback in load_tokens uses this to know it should
- * not silently mask a corrupt row by reading tokens.json.
+ * failed" without paying the vault round-trip — useful in tests and in any
+ * future diagnostic path. Production token reads go through `getIntegration`
+ * (which returns null on either "no row" or "decrypt failed").
  */
 export function integrationRowExists(
   user_id: number,
