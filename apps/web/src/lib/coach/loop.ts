@@ -71,6 +71,39 @@ export function textFromContent(content: ContentBlock[]): string {
     .trim();
 }
 
+// Sonnet 4.6 routinely ignores the system-prompt rule that says "open every
+// turn with a text sentence before any tool_use" — especially when the user
+// asks for an action like "sync" or "check". When that happens the UI sits on
+// "Thinking..." for the full model-thinking window and the user has no idea
+// what's about to happen. Synthesize a short preamble so the assistant bubble
+// always has visible text before tools fire. Not persisted into chat_messages
+// (the model didn't actually say it); purely a transient UI hint streamed via
+// SSE.
+export function synthesizePreamble(toolUses: ToolUseBlock[]): string {
+  const names = new Set(toolUses.map((t) => t.name));
+  if (names.has("trigger_whoop_sync")) {
+    return names.size > 1 ? "Trying a fresh sync and pulling your data." : "Trying a fresh sync.";
+  }
+  if (names.size > 1) return "Pulling your data.";
+  const only = toolUses[0]?.name;
+  switch (only) {
+    case "query_recovery":
+      return "Pulling your recovery data.";
+    case "query_sleep":
+      return "Checking your sleep.";
+    case "query_strain":
+      return "Pulling your strain.";
+    case "query_workouts":
+      return "Looking at your workouts.";
+    case "query_naps":
+      return "Checking your naps.";
+    case "query_journal":
+      return "Checking your journal entries.";
+    default:
+      return "Looking into that.";
+  }
+}
+
 function withCacheBreakpoint(messages: MessageParam[]): MessageParam[] {
   if (messages.length === 0) return messages;
   const out = messages.slice();
@@ -241,6 +274,13 @@ export async function runAnthropicSdk(
     const toolUses = response.content.filter(isToolUseBlock);
     if (toolUses.length === 0) {
       throw new Error("Claude stopped for tool_use without requesting a tool");
+    }
+
+    // If the model emitted no preceding text, inject a synthetic preamble so
+    // the assistant bubble has visible text before the spinner fires. See
+    // synthesizePreamble for why. Skip if the model already wrote something.
+    if (!assistantText && options.onTextDelta) {
+      options.onTextDelta(synthesizePreamble(toolUses) + "\n\n");
     }
 
     // If the model emits trigger_whoop_sync alongside query_* in the same
