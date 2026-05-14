@@ -102,7 +102,6 @@ describe("trigger_whoop_sync tool", () => {
     expect(result.skipped).toBe(true);
     expect(result.reason).toMatch(/cooldown/i);
     expect(result.last_sync_at).toBe(lastOk.toISOString());
-    // Cooldown info so the model can tell the user exactly when to retry.
     expect(result.cooldown_seconds).toBe(300);
     expect(result.next_sync_allowed_at).toBe(
       new Date(lastOk.getTime() + 5 * 60 * 1000).toISOString(),

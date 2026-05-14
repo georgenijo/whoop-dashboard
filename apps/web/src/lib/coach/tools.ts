@@ -228,9 +228,7 @@ type SyncToolSkipped = {
   skipped: true;
   reason: string;
   last_sync_at: string;
-  /** Length of the cooldown window in seconds. Matches SYNC_COOLDOWN_MS / 1000. */
   cooldown_seconds: number;
-  /** ISO timestamp when the next sync attempt will be allowed. */
   next_sync_allowed_at: string;
 };
 
