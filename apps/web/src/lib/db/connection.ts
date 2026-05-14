@@ -164,7 +164,11 @@ export function openWrite(): DB | null {
         route TEXT NOT NULL,
         duration_ms INTEGER NOT NULL,
         status INTEGER NOT NULL,
-        details TEXT
+        details TEXT,
+        response_bytes INTEGER,
+        server_timing TEXT,
+        cache_status TEXT,
+        render_ms INTEGER
       );
       CREATE INDEX IF NOT EXISTS route_logs_started_at_idx ON route_logs(started_at DESC);
       CREATE TABLE IF NOT EXISTS users (
@@ -277,6 +281,22 @@ export function openWrite(): DB | null {
     const routeCols = db.prepare("PRAGMA table_info(route_logs)").all() as { name: string }[];
     if (!routeCols.some((c) => c.name === "details")) {
       db.exec("ALTER TABLE route_logs ADD COLUMN details TEXT");
+    }
+    // Issue #296 — page-render perf signal. response_bytes is currently
+    // always NULL (Next.js 16's `after()` callback has no clean handle on the
+    // streamed response body; documented in the PR). The other three are
+    // populated from layout timing + the proxy-injected start marker.
+    if (!routeCols.some((c) => c.name === "response_bytes")) {
+      db.exec("ALTER TABLE route_logs ADD COLUMN response_bytes INTEGER");
+    }
+    if (!routeCols.some((c) => c.name === "server_timing")) {
+      db.exec("ALTER TABLE route_logs ADD COLUMN server_timing TEXT");
+    }
+    if (!routeCols.some((c) => c.name === "cache_status")) {
+      db.exec("ALTER TABLE route_logs ADD COLUMN cache_status TEXT");
+    }
+    if (!routeCols.some((c) => c.name === "render_ms")) {
+      db.exec("ALTER TABLE route_logs ADD COLUMN render_ms INTEGER");
     }
     const insightCols = db.prepare("PRAGMA table_info(insights)").all() as { name: string }[];
     if (!insightCols.some((c) => c.name === "created_at")) {

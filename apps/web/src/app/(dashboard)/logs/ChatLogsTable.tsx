@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import ToolResponseBlock from "@/components/logs/ToolResponseBlock";
 
 type ChatLogRow = {
   id: number;
@@ -23,6 +24,7 @@ type ToolDetail = {
   rows: number | null;
   status: "ok" | "error";
   error?: string;
+  response?: unknown;
 };
 
 type LogDetails = {
@@ -309,6 +311,12 @@ function LogRow({ log }: { log: ChatLogRow }) {
                               {tool.error}
                             </div>
                           ) : null}
+                          <div style={{ marginTop: 10 }}>
+                            <div style={{ color: "var(--fg-3)", fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                              Response
+                            </div>
+                            <ToolResponseBlock toolName={tool.name} response={tool.response} />
+                          </div>
                         </div>
                       );
                     })}

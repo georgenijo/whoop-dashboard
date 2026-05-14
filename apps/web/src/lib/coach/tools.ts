@@ -400,6 +400,11 @@ export type ToolDetail = {
   rows: number | null;
   status: "ok" | "error";
   error?: string;
+  /** Tool response payload, captured so /logs detail view can render it.
+   *  Truncated to ~12KB (JSON-stringified) when persisted via
+   *  `chatLogToolSummaries` to keep chat_logs.details under any practical
+   *  size cap. */
+  response?: unknown;
 };
 
 export type ToolProgressHandlers = {
@@ -522,6 +527,7 @@ export async function executeToolResult(
     duration_ms: durationMs,
     rows,
     status: "ok",
+    response: result,
   });
   progress?.onToolUseEnd?.({
     name: toolUse.name,
@@ -543,13 +549,51 @@ export async function executeToolResult(
   };
 }
 
+/**
+ * Cap on the persisted response payload per tool call, in JSON characters.
+ * chat_logs.details is a TEXT blob and large query_* responses (30+ days of
+ * recovery / sleep rows with `raw` JSON) can hit hundreds of KB. We persist
+ * a structured-but-bounded view so the /logs detail UI has something to
+ * render without bloating the DB. Past 12KB the rendered JSON is replaced
+ * with a `_truncated` marker; the UI still shows row count, date range, and
+ * a 5-row preview from the same payload before the cap.
+ */
+const TOOL_RESPONSE_MAX_CHARS = 12_000;
+
+function captureToolResponse(response: unknown): unknown {
+  if (response === undefined) return undefined;
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(response);
+  } catch {
+    return { _truncated: true, reason: "non_serializable" };
+  }
+  if (serialized.length <= TOOL_RESPONSE_MAX_CHARS) {
+    return response;
+  }
+  if (Array.isArray(response)) {
+    return {
+      _truncated: true,
+      total_count: response.length,
+      preview: response.slice(0, 5),
+    };
+  }
+  return {
+    _truncated: true,
+    size_chars: serialized.length,
+  };
+}
+
 export function chatLogToolSummaries(toolDetails: ToolDetail[]) {
-  return toolDetails.map(({ name, input, duration_ms, rows, status, error }) => ({
-    name,
-    input,
-    duration_ms,
-    rows,
-    status,
-    ...(error ? { error: error.slice(0, 200) } : {}),
-  }));
+  return toolDetails.map(
+    ({ name, input, duration_ms, rows, status, error, response }) => ({
+      name,
+      input,
+      duration_ms,
+      rows,
+      status,
+      ...(error ? { error: error.slice(0, 200) } : {}),
+      ...(response === undefined ? {} : { response: captureToolResponse(response) }),
+    })
+  );
 }
