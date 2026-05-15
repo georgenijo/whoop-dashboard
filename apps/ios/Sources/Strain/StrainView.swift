@@ -41,6 +41,21 @@ struct StrainView: View {
                     if !payload.today.workouts.isEmpty {
                         TodayWorkoutsListView(workouts: payload.today.workouts)
                     }
+                    NavigationLink {
+                        WorkoutsView()
+                    } label: {
+                        HStack {
+                            Text("All workouts")
+                                .font(.subheadline.weight(.semibold))
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding()
+                        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
                     TrendChartView(
                         title: "Daily strain",
                         subtitle: payload.rangeLabel,
