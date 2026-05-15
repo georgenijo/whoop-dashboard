@@ -5,19 +5,29 @@ struct RootView: View {
 
     var body: some View {
         TabView {
-            DashboardView()
+            DashboardView(onSignOut: onSignOut)
                 .tabItem {
                     Label("Dashboard", systemImage: "chart.bar.fill")
+                }
+
+            RecoveryView()
+                .tabItem {
+                    Label("Recovery", systemImage: "heart.fill")
+                }
+
+            SleepView()
+                .tabItem {
+                    Label("Sleep", systemImage: "moon.fill")
+                }
+
+            StrainView()
+                .tabItem {
+                    Label("Strain", systemImage: "bolt.fill")
                 }
 
             CoachView()
                 .tabItem {
                     Label("Coach", systemImage: "bubble.left.and.bubble.right.fill")
-                }
-
-            SettingsView(onSignOut: onSignOut)
-                .tabItem {
-                    Label("Settings", systemImage: "gear")
                 }
         }
     }
