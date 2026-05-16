@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { Plus, Trash2 } from "lucide-react";
 
 type ThreadSummary = {
   id: number;
@@ -19,10 +20,6 @@ type ThreadSidebarProps = {
   onSelectThread: (threadId: number) => void;
   onDeleteThread: (threadId: number) => Promise<void>;
 };
-
-function icon(name: string) {
-  return `https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/${name}.svg`;
-}
 
 function formatRelativeTime(value: string): string {
   const minutes = Math.round((Date.now() - new Date(value).getTime()) / 60000);
@@ -84,8 +81,7 @@ function ThreadList({
               aria-label={`Delete ${thread.title?.trim() || "New chat"}`}
               onClick={() => void onDeleteThread(thread.id)}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={icon("trash-2")} alt="" />
+              <Trash2 size={14} strokeWidth={1.8} aria-hidden />
             </button>
           </div>
         );
@@ -178,8 +174,7 @@ export default function ThreadSidebar({
           className="sb-link coach-new-thread"
           onClick={() => void onCreateThread()}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={icon("plus")} alt="" />
+          <Plus size={16} strokeWidth={1.8} aria-hidden />
           New chat
         </button>
 
@@ -212,8 +207,7 @@ export default function ThreadSidebar({
               className="sb-link coach-new-thread"
               onClick={() => void onCreateThread()}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={icon("plus")} alt="" />
+              <Plus size={16} strokeWidth={1.8} aria-hidden />
               New chat
             </button>
             <ThreadList
