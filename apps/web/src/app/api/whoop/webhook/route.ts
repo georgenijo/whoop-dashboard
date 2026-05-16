@@ -9,6 +9,9 @@ import {
 import { WhoopNotFoundError } from "@/lib/whoop/client";
 import { verifyWhoopSignature } from "@/lib/whoop/signature";
 import { handleEvent, type WhoopWebhookEvent } from "@/lib/whoop/webhook-handler";
+import { forModule } from "@/lib/logger";
+
+const log = forModule("whoop.webhook");
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +46,7 @@ export async function POST(req: Request) {
   const verify = verifyWhoopSignature(raw, sig, ts, clientSecret());
   if (!verify.ok) {
     // Bad-sig events are not persisted in v1.
-    console.warn(`[whoop-webhook] signature rejected: ${verify.reason} url=${req.url}`);
+    log.warn({ reason: verify.reason, url: req.url }, "signature rejected");
     return new Response(`Unauthorized: ${verify.reason}`, { status: 401 });
   }
 

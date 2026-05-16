@@ -27,6 +27,9 @@ import {
   type WhoopSleepRecord,
   type WhoopWorkoutRecord,
 } from "@/lib/whoop/upsert";
+import { forModule } from "@/lib/logger";
+
+const log = forModule("sync");
 
 export type SyncStage =
   | "refreshing_token"
@@ -551,10 +554,13 @@ export async function runWhoopSync(
         }
       }
     } catch (err) {
-      console.warn("[sync] provider_user_id backfill failed", {
-        user_id: opts.userId,
-        error: err instanceof Error ? err.message : String(err),
-      });
+      log.warn(
+        {
+          user_id: opts.userId,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        "provider_user_id backfill failed",
+      );
     }
 
     const fetchT0 = Date.now();

@@ -258,6 +258,43 @@ export function openWrite(): DB | null {
       );
       CREATE INDEX IF NOT EXISTS idx_webhook_events_status ON webhook_events(status);
       CREATE INDEX IF NOT EXISTS idx_webhook_events_received_at ON webhook_events(received_at);
+      -- Issue #388 — unified logs view storage.
+      --  server_logs: warn+ events from the backend logger module. INFO stays
+      --  in journald (volume control). Use module + trace_id to correlate.
+      --  client_logs: errors, pageviews, key clicks, lifecycle from web + iOS.
+      --  source='web'|'ios' distinguishes; kind='error'|'pageview'|'click'|
+      --  'lifecycle'|'event' is the routable type. Both feed the unified
+      --  /logs timeline.
+      CREATE TABLE IF NOT EXISTS server_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at TEXT NOT NULL,
+        level TEXT NOT NULL,
+        module TEXT NOT NULL,
+        message TEXT NOT NULL,
+        details TEXT,
+        user_id INTEGER,
+        trace_id TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_server_logs_created ON server_logs(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_server_logs_level ON server_logs(level);
+      CREATE INDEX IF NOT EXISTS idx_server_logs_module ON server_logs(module);
+      CREATE TABLE IF NOT EXISTS client_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at TEXT NOT NULL,
+        source TEXT NOT NULL,
+        level TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        message TEXT NOT NULL,
+        details TEXT,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        user_agent TEXT,
+        app_version TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_client_logs_created ON client_logs(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_client_logs_source ON client_logs(source);
+      CREATE INDEX IF NOT EXISTS idx_client_logs_kind ON client_logs(kind);
+      CREATE INDEX IF NOT EXISTS idx_client_logs_user_created
+        ON client_logs(user_id, created_at DESC);
     `);
     db.prepare("INSERT OR IGNORE INTO users (id) VALUES (1)").run();
     const cols = db.prepare("PRAGMA table_info(chat_logs)").all() as { name: string }[];
