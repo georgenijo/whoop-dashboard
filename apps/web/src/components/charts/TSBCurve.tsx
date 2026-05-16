@@ -213,7 +213,6 @@ export default function TSBCurve({ rows }: { rows: CycleRow[] }) {
               dot={false}
               activeDot={{ r: 3 }}
               connectNulls={false}
-              legendType="none"
             />
             <Line
               type="monotone"
