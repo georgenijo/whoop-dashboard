@@ -4,6 +4,7 @@ import TrendChart from "@/components/charts/TrendChart";
 import TSBCurve from "@/components/charts/TSBCurve";
 import TodayKpis from "@/components/strain/TodayKpis";
 import TodayWorkouts from "@/components/strain/TodayWorkouts";
+import FreshnessBanner from "@/components/strain/FreshnessBanner";
 import {
   getOverview,
   getStrainTrend,
@@ -39,8 +40,11 @@ export default async function StrainPage({
   const todayAgg = getTodayStrainAggregate(user.id, today);
   const todayWorkouts = getTodayWorkouts(user.id, today);
 
+  const latestStrainDate = trend.length > 0 ? trend[trend.length - 1].date : null;
+
   return (
     <>
+      <FreshnessBanner latestDate={latestStrainDate} today={today} />
       <KPIStrip
         latestRecovery={data.latestRecovery}
         previousRecovery={data.previousRecovery}
@@ -71,6 +75,7 @@ export default async function StrainPage({
             gradientId="strain"
             data={strainData}
             unit=""
+            showRollingToggle
           />
         </div>
         <div className="col">
@@ -81,6 +86,7 @@ export default async function StrainPage({
             gradientId="avg-hr"
             data={hrData}
             unit=" bpm"
+            showRollingToggle
           />
         </div>
       </div>
