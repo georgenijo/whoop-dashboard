@@ -6,6 +6,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Sidebar from "@/components/chrome/Sidebar";
 import TopBar from "@/components/chrome/TopBar";
 import BottomNav from "@/components/chrome/BottomNav";
+import ClientLogBootstrap from "@/components/ClientLogBootstrap";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { addRouteLog } from "@/lib/db";
 import "../globals.css";
 
@@ -76,6 +78,7 @@ export default async function RootLayout({
       style={{ colorScheme: "dark" }}
     >
       <body>
+        <ClientLogBootstrap />
         <div className="aurora" aria-hidden />
         <div className="app">
           <Suspense fallback={null}>
@@ -85,7 +88,9 @@ export default async function RootLayout({
             <Suspense fallback={null}>
               <TopBar />
             </Suspense>
-            <div className="content">{children}</div>
+            <div className="content">
+              <ErrorBoundary>{children}</ErrorBoundary>
+            </div>
           </main>
         </div>
         <Suspense fallback={null}>
