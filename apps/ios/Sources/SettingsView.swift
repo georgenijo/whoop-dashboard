@@ -51,6 +51,7 @@ struct SettingsView: View {
                 titleVisibility: .visible
             ) {
                 Button("Sign out", role: .destructive) {
+                    ClientLogger.shared.lifecycle("signout")
                     KeychainStore.deleteSessionToken()
                     onSignOut()
                 }

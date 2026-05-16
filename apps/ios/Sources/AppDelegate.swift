@@ -30,6 +30,24 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
         print("[push] APNs registration failed: \(error.localizedDescription)")
+        ClientLogger.shared.warn(
+            "apns_register_failed",
+            details: ["error": error.localizedDescription]
+        )
+    }
+
+    // MARK: - Silent / background push
+
+    func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) {
+        ClientLogger.shared.lifecycle(
+            "push_received",
+            details: Self.payloadSummary(userInfo)
+        )
+        completionHandler(.noData)
     }
 
     // MARK: - Foreground presentation
@@ -43,7 +61,29 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        ClientLogger.shared.lifecycle(
+            "push_received",
+            details: Self.payloadSummary(notification.request.content.userInfo)
+        )
         completionHandler([.banner, .list, .sound, .badge])
+    }
+
+    private static func payloadSummary(_ userInfo: [AnyHashable: Any]) -> [String: Any] {
+        var summary: [String: Any] = [:]
+        if let aps = userInfo["aps"] as? [String: Any] {
+            if let alert = aps["alert"] as? [String: Any] {
+                if let title = alert["title"] as? String { summary["title"] = title }
+                if let body = alert["body"] as? String { summary["body"] = body }
+            } else if let alert = aps["alert"] as? String {
+                summary["body"] = alert
+            }
+            if let badge = aps["badge"] { summary["badge"] = badge }
+            if let category = aps["category"] as? String { summary["category"] = category }
+        }
+        for (key, value) in userInfo where key as? String != "aps" {
+            if let k = key as? String { summary[k] = String(describing: value) }
+        }
+        return summary
     }
 
     // didReceive (tap handler) lives in #274b — the foundation PR doesn't
