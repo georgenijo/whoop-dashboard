@@ -87,7 +87,7 @@ describe("DEFAULT_SYSTEM_PROMPT", () => {
   });
 
   it("tells the model to surface a concrete cooldown duration from next_sync_allowed_at", () => {
-    expect(DEFAULT_SYSTEM_PROMPT).toMatch(/cooldown_seconds/);
+    expect(DEFAULT_SYSTEM_PROMPT).toMatch(/cooldown_window_seconds/);
     expect(DEFAULT_SYSTEM_PROMPT).toMatch(/next_sync_allowed_at/);
     expect(DEFAULT_SYSTEM_PROMPT).toMatch(/try again in/i);
   });

@@ -102,7 +102,7 @@ describe("trigger_whoop_sync tool", () => {
       skipped: boolean;
       reason: string;
       last_sync_at: string;
-      cooldown_seconds: number;
+      cooldown_window_seconds: number;
       next_sync_allowed_at: string;
     };
 
@@ -110,7 +110,7 @@ describe("trigger_whoop_sync tool", () => {
     expect(result.skipped).toBe(true);
     expect(result.reason).toMatch(/cooldown/i);
     expect(result.last_sync_at).toBe(lastOk.toISOString());
-    expect(result.cooldown_seconds).toBe(300);
+    expect(result.cooldown_window_seconds).toBe(300);
     expect(result.next_sync_allowed_at).toBe(
       new Date(lastOk.getTime() + 5 * 60 * 1000).toISOString(),
     );
