@@ -27,10 +27,6 @@ export default class ErrorBoundary extends Component<Props, State> {
     });
   }
 
-  reset = () => {
-    this.setState({ hasError: false, message: null });
-  };
-
   render() {
     if (!this.state.hasError) return this.props.children;
     return (

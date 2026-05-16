@@ -26,11 +26,9 @@ function send(payload: Payload): void {
         message: payload.message.slice(0, MESSAGE_MAX),
       };
       if (payload.details) {
-        const serialized = JSON.stringify(payload.details).slice(0, DETAILS_MAX);
-        try {
-          body.details = JSON.parse(serialized);
-        } catch {
-          body.details = { truncated: serialized };
+        const serialized = JSON.stringify(payload.details);
+        if (serialized.length > DETAILS_MAX) {
+          body.details = { truncated: serialized.slice(0, DETAILS_MAX) };
         }
       }
       void fetch("/api/log/client", {

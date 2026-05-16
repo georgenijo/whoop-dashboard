@@ -26,12 +26,19 @@ export default function ClientLogBootstrap() {
     };
     const onRejection = (ev: PromiseRejectionEvent) => {
       const reason = ev.reason;
-      clog.error("unhandledrejection", {
-        reason:
-          reason instanceof Error
-            ? { message: reason.message, stack: reason.stack }
-            : String(reason),
-      });
+      let reasonDetail: unknown;
+      if (reason instanceof Error) {
+        reasonDetail = { message: reason.message, stack: reason.stack };
+      } else if (typeof reason === "object" && reason !== null) {
+        try {
+          reasonDetail = JSON.parse(JSON.stringify(reason));
+        } catch {
+          reasonDetail = String(reason);
+        }
+      } else {
+        reasonDetail = String(reason);
+      }
+      clog.error("unhandledrejection", { reason: reasonDetail });
     };
     const onClick = (ev: MouseEvent) => {
       const target = ev.target as HTMLElement | null;
