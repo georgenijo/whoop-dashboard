@@ -12,6 +12,7 @@ import {
 } from "@/lib/db";
 import { requireAuthOrSignin } from "@/lib/auth";
 import { parseDays, formatRangeLabel } from "@/lib/range";
+import { localToday } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export default async function StrainPage({
   const strainData = trend.map((r) => ({ date: r.date, value: r.strain }));
   const hrData = trend.map((r) => ({ date: r.date, value: r.avg_hr }));
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localToday();
   const todayAgg = getTodayStrainAggregate(user.id, today);
   const todayWorkouts = getTodayWorkouts(user.id, today);
 
