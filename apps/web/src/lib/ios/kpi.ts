@@ -25,7 +25,13 @@ export type KPITile = {
 function shapeDelta(
   latest: number | null | undefined,
   previous: number | null | undefined,
-  opts: { unit?: string; precision?: number; reverse?: boolean },
+  opts: {
+    unit?: string;
+    precision?: number;
+    reverse?: boolean;
+    latestDate?: string;
+    previousDate?: string;
+  },
 ): KPIDelta | null {
   if (latest == null || previous == null) return null;
   const d = formatDelta(latest, previous, opts);
@@ -54,6 +60,10 @@ export function buildKPITiles(overview: Overview): KPITile[] {
   const latestSleepHours = msToHoursNumber(ls?.in_bed_ms ?? null);
   const previousSleepHours = msToHoursNumber(ps?.in_bed_ms ?? null);
 
+  const recoveryDates = { latestDate: lr?.date, previousDate: pr?.date };
+  const cycleDates = { latestDate: lc?.date, previousDate: pc?.date };
+  const sleepDates = { latestDate: ls?.date, previousDate: ps?.date };
+
   return [
     {
       key: "recovery",
@@ -64,6 +74,7 @@ export function buildKPITiles(overview: Overview): KPITile[] {
       delta: shapeDelta(lr?.recovery_score, pr?.recovery_score, {
         unit: "",
         precision: 0,
+        ...recoveryDates,
       }),
       href: "/recovery",
       color_hex: "#00d4aa",
@@ -74,7 +85,11 @@ export function buildKPITiles(overview: Overview): KPITile[] {
       value: lr?.hrv ?? null,
       unit: "ms",
       precision: 0,
-      delta: shapeDelta(lr?.hrv, pr?.hrv, { unit: " ms", precision: 0 }),
+      delta: shapeDelta(lr?.hrv, pr?.hrv, {
+        unit: " ms",
+        precision: 0,
+        ...recoveryDates,
+      }),
       href: "/recovery",
       color_hex: "#7b61ff",
     },
@@ -88,6 +103,7 @@ export function buildKPITiles(overview: Overview): KPITile[] {
         unit: " bpm",
         precision: 0,
         reverse: true,
+        ...recoveryDates,
       }),
       href: "/recovery",
       color_hex: "#ff6b6b",
@@ -101,6 +117,7 @@ export function buildKPITiles(overview: Overview): KPITile[] {
       delta: shapeDelta(latestSleepHours, previousSleepHours, {
         unit: "h",
         precision: 1,
+        ...sleepDates,
       }),
       href: "/sleep",
       color_hex: "#00d4aa",
@@ -111,7 +128,11 @@ export function buildKPITiles(overview: Overview): KPITile[] {
       value: lc?.strain ?? null,
       unit: "",
       precision: 1,
-      delta: shapeDelta(lc?.strain, pc?.strain, { unit: "", precision: 1 }),
+      delta: shapeDelta(lc?.strain, pc?.strain, {
+        unit: "",
+        precision: 1,
+        ...cycleDates,
+      }),
       href: "/strain",
       color_hex: "#ffaa00",
     },
@@ -121,7 +142,11 @@ export function buildKPITiles(overview: Overview): KPITile[] {
       value: lr?.spo2 ?? null,
       unit: "%",
       precision: 1,
-      delta: shapeDelta(lr?.spo2, pr?.spo2, { unit: "%", precision: 1 }),
+      delta: shapeDelta(lr?.spo2, pr?.spo2, {
+        unit: "%",
+        precision: 1,
+        ...recoveryDates,
+      }),
       href: "/recovery",
       color_hex: "#00d4aa",
     },

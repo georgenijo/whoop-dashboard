@@ -120,4 +120,27 @@ describe("buildKPITiles", () => {
       "spo2",
     ]);
   });
+
+  it("delta label says 'vs yesterday' when the rows are exactly 1 day apart", () => {
+    const overview: Overview = {
+      ...EMPTY_OVERVIEW,
+      latestRecovery: recoveryRow("2026-05-10", 75, 60, 50, 97.5),
+      previousRecovery: recoveryRow("2026-05-09", 70, 55, 52, 96.5),
+      hasData: true,
+    };
+    const tiles = buildKPITiles(overview);
+    expect(tiles[0].delta!.label).toContain("vs yesterday");
+  });
+
+  it("delta label says 'vs N days ago' when the rows have a gap", () => {
+    const overview: Overview = {
+      ...EMPTY_OVERVIEW,
+      latestRecovery: recoveryRow("2026-05-15", 75, 60, 50, 97.5),
+      previousRecovery: recoveryRow("2026-05-09", 70, 55, 52, 96.5),
+      hasData: true,
+    };
+    const tiles = buildKPITiles(overview);
+    expect(tiles[0].delta!.label).toContain("vs 6 days ago");
+    expect(tiles[0].delta!.label).not.toContain("vs yesterday");
+  });
 });
