@@ -4,6 +4,8 @@ import SwiftUI
 struct CoachApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
+    @Environment(\.scenePhase) private var scenePhase
+
     @State private var isSignedIn: Bool = {
         guard
             KeychainStore.loadSessionToken() != nil,
@@ -18,6 +20,19 @@ struct CoachApp: App {
 
     private let api = APIClient()
 
+    init() {
+        NSSetUncaughtExceptionHandler { exception in
+            ClientLogger.shared.error(
+                "uncaught: \(exception.name.rawValue)",
+                details: [
+                    "name": exception.name.rawValue,
+                    "reason": exception.reason ?? "",
+                    "stack": exception.callStackSymbols.joined(separator: "\n"),
+                ]
+            )
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
             content
@@ -29,6 +44,16 @@ struct CoachApp: App {
                 .onAppear {
                     if isSignedIn {
                         PushService.shared.requestAuthorizationIfNeeded()
+                    }
+                }
+                .onChange(of: scenePhase) { _, newPhase in
+                    switch newPhase {
+                    case .active:
+                        ClientLogger.shared.lifecycle("foreground")
+                    case .background:
+                        ClientLogger.shared.lifecycle("background")
+                    default:
+                        break
                     }
                 }
         }
@@ -43,6 +68,7 @@ struct CoachApp: App {
         } else {
             AuthView(onSignedIn: {
                 isSignedIn = true
+                ClientLogger.shared.lifecycle("signin")
                 PushService.shared.requestAuthorizationIfNeeded()
             })
         }

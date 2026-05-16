@@ -55,7 +55,7 @@ final class APIClient {
 
     func get<T: Decodable>(_ path: String, query: [URLQueryItem]? = nil) async throws -> T {
         let request = makeRequest(path: path, query: query, method: "GET", bodyData: nil)
-        return try await execute(request)
+        return try await execute(request, path: path)
     }
 
     func post<T: Decodable, U: Encodable>(
@@ -67,10 +67,14 @@ final class APIClient {
         do {
             bodyData = try encoder.encode(body)
         } catch {
+            ClientLogger.shared.error(
+                "api_failure",
+                details: ["endpoint": path, "stage": "encode", "error": String(describing: error)]
+            )
             throw APIError.decode(error)
         }
         let request = makeRequest(path: path, query: query, method: "POST", bodyData: bodyData)
-        return try await execute(request)
+        return try await execute(request, path: path)
     }
 
     private func makeRequest(
@@ -96,16 +100,28 @@ final class APIClient {
         return request
     }
 
-    private func execute<T: Decodable>(_ request: URLRequest) async throws -> T {
+    private func execute<T: Decodable>(_ request: URLRequest, path: String) async throws -> T {
         let data: Data
         let response: URLResponse
         do {
             (data, response) = try await session.data(for: request)
         } catch {
+            if path != "/api/log/client" {
+                ClientLogger.shared.error(
+                    "api_failure",
+                    details: ["endpoint": path, "error": String(describing: error)]
+                )
+            }
             throw APIError.network(error)
         }
 
         guard let http = response as? HTTPURLResponse else {
+            if path != "/api/log/client" {
+                ClientLogger.shared.error(
+                    "api_failure",
+                    details: ["endpoint": path, "error": "non-http response"]
+                )
+            }
             throw APIError.badResponse
         }
 
@@ -114,6 +130,16 @@ final class APIClient {
             do {
                 return try decoder.decode(T.self, from: data)
             } catch {
+                if path != "/api/log/client" {
+                    ClientLogger.shared.error(
+                        "api_failure",
+                        details: [
+                            "endpoint": path,
+                            "stage": "decode",
+                            "error": String(describing: error),
+                        ]
+                    )
+                }
                 throw APIError.decode(error)
             }
         case 401:
@@ -122,6 +148,17 @@ final class APIClient {
             }
             throw APIError.unauthorized
         default:
+            if path != "/api/log/client" {
+                let bodyPreview = String(data: data.prefix(500), encoding: .utf8) ?? ""
+                ClientLogger.shared.warn(
+                    "api_non2xx",
+                    details: [
+                        "endpoint": path,
+                        "status": http.statusCode,
+                        "body_preview": bodyPreview,
+                    ]
+                )
+            }
             throw APIError.serverError(http.statusCode)
         }
     }
