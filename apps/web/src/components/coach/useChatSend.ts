@@ -210,10 +210,10 @@ export function formatToolProgressLabel(progress: ToolProgress | null | undefine
   if (progress.state === "running") {
     if (progress.name === "trigger_whoop_sync") {
       return progress.stage
-        ? `Syncing Whoop… (${formatStage(progress.stage)})`
-        : "Syncing Whoop…";
+        ? `Coach is running sync… (${formatStage(progress.stage)})`
+        : "Coach is running sync…";
     }
-    return `Querying ${name}...`;
+    return `Coach is running ${name}…`;
   }
   const duration = formatDuration(progress.duration_ms);
   if (progress.name === "trigger_whoop_sync") {

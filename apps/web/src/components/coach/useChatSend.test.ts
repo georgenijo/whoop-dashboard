@@ -241,7 +241,7 @@ describe("useChatSend", () => {
         name: "query_recovery",
         state: "running",
       });
-      expect(result.current.progressLabel).toBe("Querying recovery...");
+      expect(result.current.progressLabel).toBe("Coach is running recovery…");
     });
 
     act(() => {
