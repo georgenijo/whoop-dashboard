@@ -19,29 +19,36 @@ struct TrendChartView: View {
 
     @State private var mode: TrendMode = .raw
 
+    private var accent: Color { Color(hex: colorHex) }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            if showRollingToggle {
-                Picker("Mode", selection: $mode) {
-                    ForEach(visibleModes) { m in
-                        Text(m.rawValue).tag(m)
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title.uppercased())
+                        .font(Theme.FontStyle.sans(10, weight: .semibold))
+                        .tracking(1.4)
+                        .foregroundStyle(Theme.Palette.fg2)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(Theme.FontStyle.mono(10.5))
+                            .foregroundStyle(Theme.Palette.fg3)
                     }
                 }
-                .pickerStyle(.segmented)
+                Spacer()
+                if showRollingToggle {
+                    Picker("Mode", selection: $mode) {
+                        ForEach(visibleModes) { m in
+                            Text(m.rawValue).tag(m)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: enableMa30 ? 140 : 110)
+                }
             }
             chartBody
         }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        .glassCard(padding: Theme.Spacing.md)
     }
 
     private var visibleModes: [TrendMode] {
@@ -52,34 +59,51 @@ struct TrendChartView: View {
     private var chartBody: some View {
         let plotData = plottable
         if plotData.isEmpty {
-            ContentUnavailableView(
-                "Not enough data yet",
-                systemImage: "chart.line.uptrend.xyaxis"
-            )
-            .frame(height: 180)
+            VStack(spacing: 8) {
+                Image(systemName: "chart.line.uptrend.xyaxis")
+                    .font(.title2)
+                    .foregroundStyle(Theme.Palette.fg3)
+                Text("Not enough data yet")
+                    .font(Theme.FontStyle.sans(12))
+                    .foregroundStyle(Theme.Palette.fg2)
+            }
+            .frame(maxWidth: .infinity, minHeight: 160)
         } else {
             Chart {
                 ForEach(plotData, id: \.date) { point in
                     if let v = point.value {
-                        LineMark(x: .value("Date", point.date),
-                                 y: .value(title, v))
-                            .interpolationMethod(.catmullRom)
-                            .foregroundStyle(Color(hex: colorHex))
                         AreaMark(x: .value("Date", point.date),
                                  y: .value(title, v))
                             .interpolationMethod(.catmullRom)
                             .foregroundStyle(.linearGradient(
-                                colors: [Color(hex: colorHex).opacity(0.3), .clear],
+                                colors: [accent.opacity(0.35), accent.opacity(0.0)],
                                 startPoint: .top, endPoint: .bottom))
+                        LineMark(x: .value("Date", point.date),
+                                 y: .value(title, v))
+                            .interpolationMethod(.catmullRom)
+                            .foregroundStyle(accent)
+                            .lineStyle(StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
                     }
                 }
             }
             .frame(height: 180)
             .chartXAxis {
-                AxisMarks(preset: .aligned, values: .automatic(desiredCount: 4))
+                AxisMarks(preset: .aligned, values: .automatic(desiredCount: 4)) { _ in
+                    AxisValueLabel()
+                        .foregroundStyle(Theme.Palette.fg3)
+                        .font(Theme.FontStyle.mono(9.5))
+                    AxisGridLine()
+                        .foregroundStyle(Theme.Palette.borderSubtle)
+                }
             }
             .chartYAxis {
-                AxisMarks(position: .leading, values: .automatic(desiredCount: 4))
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { _ in
+                    AxisValueLabel()
+                        .foregroundStyle(Theme.Palette.fg3)
+                        .font(Theme.FontStyle.mono(9.5))
+                    AxisGridLine()
+                        .foregroundStyle(Theme.Palette.borderSubtle)
+                }
             }
         }
     }
@@ -101,12 +125,16 @@ struct TrendChartView: View {
         let v = 60.0 + Double(i) * 0.5 + sin(Double(i) * 0.3) * 8
         return TrendPoint(date: day, raw: v, ma7: v - 1, ma30: v - 2)
     }
-    return TrendChartView(
-        title: "Recovery score",
-        subtitle: "Last 30 days",
-        unit: "%",
-        colorHex: "#00d4aa",
-        points: mock
-    )
-    .padding()
+    return ZStack {
+        Color.black
+        TrendChartView(
+            title: "Recovery score",
+            subtitle: "Last 30 days",
+            unit: "%",
+            colorHex: "#00d4aa",
+            points: mock
+        )
+        .padding()
+    }
+    .preferredColorScheme(.dark)
 }
