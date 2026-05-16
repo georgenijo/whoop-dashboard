@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { NAV_ICONS } from "./icons";
 
 type NavItem = { href: string; label: string; icon: string };
 
@@ -18,10 +19,6 @@ const secondary: NavItem[] = [
   { href: "/logs", label: "Logs", icon: "list" },
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
-
-function icon(name: string) {
-  return `https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/${name}.svg`;
-}
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -40,29 +37,33 @@ export default function Sidebar() {
 
       <div className="sb-nav">
         <div className="sb-group-label">Dashboard</div>
-        {nav.map((n) => (
-          <Link
-            key={n.href}
-            href={withRange(n.href)}
-            className={`sb-link ${pathname === n.href ? "active" : ""}`}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={icon(n.icon)} alt="" />
-            {n.label}
-          </Link>
-        ))}
+        {nav.map((n) => {
+          const Icon = NAV_ICONS[n.icon];
+          return (
+            <Link
+              key={n.href}
+              href={withRange(n.href)}
+              className={`sb-link ${pathname === n.href ? "active" : ""}`}
+            >
+              <Icon size={17} strokeWidth={1.8} aria-hidden />
+              {n.label}
+            </Link>
+          );
+        })}
         <div className="sb-group-label">Intelligence</div>
-        {secondary.map((n) => (
-          <Link
-            key={n.href}
-            href={n.href}
-            className={`sb-link ${pathname === n.href ? "active" : ""}`}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={icon(n.icon)} alt="" />
-            {n.label}
-          </Link>
-        ))}
+        {secondary.map((n) => {
+          const Icon = NAV_ICONS[n.icon];
+          return (
+            <Link
+              key={n.href}
+              href={n.href}
+              className={`sb-link ${pathname === n.href ? "active" : ""}`}
+            >
+              <Icon size={17} strokeWidth={1.8} aria-hidden />
+              {n.label}
+            </Link>
+          );
+        })}
       </div>
 
       <div className="sb-profile">

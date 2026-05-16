@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { NAV_ICONS } from "./icons";
 
 type Item = { href: string; label: string; icon: string };
 
@@ -21,10 +22,6 @@ const more: Item[] = [
 ];
 
 const moreHrefs = new Set(more.map((m) => m.href));
-
-function icon(name: string) {
-  return `https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/${name}.svg`;
-}
 
 export default function BottomNav() {
   const pathname = usePathname();
@@ -50,46 +47,54 @@ export default function BottomNav() {
           />
           <div className="bn-drawer" role="dialog" aria-label="More navigation">
             <div className="bn-drawer-handle" />
-            {more.map((m) => (
-              <Link
-                key={m.href}
-                href={m.href}
-                className={`bn-drawer-link ${pathname === m.href ? "active" : ""}`}
-                onClick={() => setDrawerOpen(false)}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={icon(m.icon)} alt="" />
-                {m.label}
-              </Link>
-            ))}
+            {more.map((m) => {
+              const Icon = NAV_ICONS[m.icon];
+              return (
+                <Link
+                  key={m.href}
+                  href={m.href}
+                  className={`bn-drawer-link ${pathname === m.href ? "active" : ""}`}
+                  onClick={() => setDrawerOpen(false)}
+                >
+                  <Icon size={18} strokeWidth={1.8} aria-hidden />
+                  {m.label}
+                </Link>
+              );
+            })}
           </div>
         </>
       )}
 
       <nav className="bottom-nav" aria-label="Primary navigation">
         <div className="bn-tabs">
-          {tabs.map((t) => (
-            <Link
-              key={t.href}
-              href={withRange(t.href)}
-              className={`bn-tab ${pathname === t.href ? "active" : ""}`}
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={icon(t.icon)} alt="" />
-              {t.label}
-            </Link>
-          ))}
-          <button
-            type="button"
-            className={`bn-tab ${moreActive || drawerOpen ? "active" : ""}`}
-            onClick={() => setDrawerOpen((v) => !v)}
-            aria-expanded={drawerOpen}
-            aria-haspopup="dialog"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={icon("menu")} alt="" />
-            More
-          </button>
+          {tabs.map((t) => {
+            const Icon = NAV_ICONS[t.icon];
+            return (
+              <Link
+                key={t.href}
+                href={withRange(t.href)}
+                className={`bn-tab ${pathname === t.href ? "active" : ""}`}
+              >
+                <Icon size={20} strokeWidth={1.8} aria-hidden />
+                {t.label}
+              </Link>
+            );
+          })}
+          {(() => {
+            const MenuIcon = NAV_ICONS.menu;
+            return (
+              <button
+                type="button"
+                className={`bn-tab ${moreActive || drawerOpen ? "active" : ""}`}
+                onClick={() => setDrawerOpen((v) => !v)}
+                aria-expanded={drawerOpen}
+                aria-haspopup="dialog"
+              >
+                <MenuIcon size={20} strokeWidth={1.8} aria-hidden />
+                More
+              </button>
+            );
+          })()}
         </div>
       </nav>
     </>

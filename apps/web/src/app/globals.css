@@ -86,15 +86,15 @@ body {
   text-decoration: none;
   border-bottom: none;
 }
-.sb-link img { width: 17px; height: 17px; opacity: 0.65; filter: invert(1); transition: opacity var(--dur-base); }
+.sb-link svg { width: 17px; height: 17px; opacity: 0.65; transition: opacity var(--dur-base); flex: 0 0 auto; }
 .sb-link:hover { background: rgba(255,255,255,0.03); color: var(--fg-0); }
-.sb-link:hover img { opacity: 1; }
+.sb-link:hover svg { opacity: 1; }
 .sb-link.active {
   background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
   color: var(--fg-0);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
 }
-.sb-link.active img { opacity: 1; }
+.sb-link.active svg { opacity: 1; }
 .sb-link.active::before {
   content: ""; position: absolute; left: 4px; top: 12px; bottom: 12px; width: 2px;
   background: var(--brand-strain); border-radius: 2px;
@@ -190,7 +190,7 @@ body {
 }
 .icon-btn:hover:not(:disabled) { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.12); }
 .icon-btn:disabled { cursor: wait; }
-.icon-btn img { width: 15px; height: 15px; filter: invert(1); opacity: 0.8; }
+.icon-btn svg { width: 15px; height: 15px; opacity: 0.8; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -465,12 +465,9 @@ body {
   transition: color var(--dur-base);
   padding: 0;
 }
-.bn-tab img { width: 20px; height: 20px; opacity: 0.6; filter: invert(1); transition: opacity var(--dur-base); }
+.bn-tab svg { width: 20px; height: 20px; opacity: 0.6; transition: opacity var(--dur-base); }
 .bn-tab.active { color: var(--brand-strain); }
-.bn-tab.active img {
-  opacity: 1;
-  filter: invert(16%) sepia(98%) saturate(5669%) hue-rotate(337deg) brightness(105%) contrast(105%);
-}
+.bn-tab.active svg { opacity: 1; }
 .bn-tab.active::before {
   content: ""; position: absolute; top: 0; width: 28px; height: 2px;
   background: var(--brand-strain); border-radius: 0 0 2px 2px;
@@ -508,9 +505,9 @@ body {
   border: 0; cursor: pointer; text-align: left; width: 100%;
   transition: background var(--dur-base);
 }
-.bn-drawer-link img { width: 18px; height: 18px; opacity: 0.75; filter: invert(1); }
+.bn-drawer-link svg { width: 18px; height: 18px; opacity: 0.75; flex: 0 0 auto; }
 .bn-drawer-link.active { background: rgba(255,255,255,0.05); color: var(--fg-0); }
-.bn-drawer-link.active img { opacity: 1; }
+.bn-drawer-link.active svg { opacity: 1; }
 
 @keyframes bn-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes bn-slide { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -998,7 +995,7 @@ body {
   .range { padding: 3px; gap: 1px; }
   .range button { padding: 5px 9px; font-size: 10px; }
   .icon-btn { width: 30px; height: 30px; }
-  .icon-btn img { width: 13px; height: 13px; }
+  .icon-btn svg { width: 13px; height: 13px; }
 
   .content {
     padding: 6px 14px calc(72px + env(safe-area-inset-bottom));
