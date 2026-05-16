@@ -50,6 +50,7 @@ export default function ChatInput({
           onClick={onSubmit}
           disabled={!input.trim() || loading}
           aria-label="Send message"
+          data-track="coach:send"
         >
           ↑
         </button>

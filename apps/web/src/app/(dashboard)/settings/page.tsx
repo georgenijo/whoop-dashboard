@@ -385,6 +385,7 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={handleConnectWhoop}
+                    data-track="whoop:reconnect"
                     style={{
                       background: "rgba(255,255,255,0.08)",
                       border: "1px solid rgba(255,255,255,0.1)",
@@ -402,6 +403,7 @@ export default function SettingsPage() {
                     type="button"
                     onClick={handleDisconnectWhoop}
                     disabled={whoopWorking}
+                    data-track="whoop:disconnect"
                     style={{
                       background: "transparent",
                       border: "1px solid rgba(255,80,80,0.3)",
@@ -421,6 +423,7 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={handleConnectWhoop}
+                  data-track="whoop:connect"
                   style={{
                     background: "#7b61ff",
                     border: "none",
@@ -462,6 +465,7 @@ export default function SettingsPage() {
                   type="button"
                   onClick={handleByokClear}
                   disabled={byokClearing}
+                  data-track="settings:byok-clear"
                   style={{
                     background: "transparent",
                     border: "1px solid rgba(255,80,80,0.3)",
@@ -517,6 +521,7 @@ export default function SettingsPage() {
                   type="button"
                   onClick={handleByokSave}
                   disabled={!byokShapeValid || byokSaving}
+                  data-track="settings:byok-save"
                   style={{
                     background: byokShapeValid && !byokSaving ? "#7b61ff" : "rgba(255,255,255,0.08)",
                     border: "none",
@@ -638,6 +643,7 @@ export default function SettingsPage() {
           >
             <button
               type="submit"
+              data-track="auth:signout"
               style={{
                 background: "transparent",
                 border: "1px solid rgba(255,80,80,0.3)",

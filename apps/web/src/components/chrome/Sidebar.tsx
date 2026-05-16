@@ -44,6 +44,7 @@ export default function Sidebar() {
               key={n.href}
               href={withRange(n.href)}
               className={`sb-link ${pathname === n.href ? "active" : ""}`}
+              data-track={`nav:${n.href}`}
             >
               <Icon size={17} strokeWidth={1.8} aria-hidden />
               {n.label}
@@ -58,6 +59,7 @@ export default function Sidebar() {
               key={n.href}
               href={n.href}
               className={`sb-link ${pathname === n.href ? "active" : ""}`}
+              data-track={`nav:${n.href}`}
             >
               <Icon size={17} strokeWidth={1.8} aria-hidden />
               {n.label}
