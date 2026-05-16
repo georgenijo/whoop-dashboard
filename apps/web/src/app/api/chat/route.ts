@@ -9,6 +9,9 @@ import {
   resolveApiKeyForUser,
 } from "@/lib/coach/api-key";
 import { runAndPersistCoachTurn, titleChatThread } from "@/lib/coach/persistence";
+import { forModule } from "@/lib/logger";
+
+const chatLog = forModule("api.chat");
 
 type ChatMessageInput = { role: "user" | "assistant"; content: string };
 type ChatSseEvent =
@@ -163,10 +166,14 @@ export async function POST(req: Request) {
             { status: 401 },
           );
         }
-        console.error("[chat] non-stream turn failed", {
-          thread_id: thread.id,
-          error: err instanceof Error ? err.message : String(err),
-        });
+        chatLog.error(
+          {
+            thread_id: thread.id,
+            user_id: user.id,
+            err: err instanceof Error ? err.message : String(err),
+          },
+          "non-stream turn failed",
+        );
         return Response.json(
           { error: "Coach call failed. Please try again." },
           { status: 500 }

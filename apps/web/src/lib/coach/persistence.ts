@@ -13,6 +13,9 @@ import {
 } from "./loop";
 import { TITLE_MODEL, TITLE_SYSTEM_PROMPT } from "./prompts";
 import { type ToolDetail, chatLogToolSummaries } from "./tools";
+import { forModule } from "@/lib/logger";
+
+const log = forModule("coach.persistence");
 
 export async function runAndPersistCoachTurn(
   userId: number,
@@ -122,9 +125,12 @@ export async function titleChatThread(
       setChatThreadTitle(threadId, title);
     }
   } catch (err) {
-    console.warn("[coach] title_failed", {
-      thread_id: threadId,
-      error: err instanceof Error ? err.message : String(err),
-    });
+    log.warn(
+      {
+        thread_id: threadId,
+        err: err instanceof Error ? err.message : String(err),
+      },
+      "title_failed",
+    );
   }
 }

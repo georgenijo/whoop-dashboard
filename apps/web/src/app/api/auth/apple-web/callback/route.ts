@@ -21,6 +21,9 @@ import {
   isSafeReturnPath,
 } from "@/lib/auth/apple-state";
 import { publicOrigin } from "@/lib/auth/origin";
+import { forModule } from "@/lib/logger";
+
+const log = forModule("auth.apple-web.callback");
 
 export const dynamic = "force-dynamic";
 
@@ -98,15 +101,14 @@ export async function POST(req: NextRequest) {
   // we're hitting. Previously both fell through as `state_cookie_missing`,
   // which made browser-policy drops indistinguishable from encoding drift.
   if (cookieRaw === undefined) {
-    console.error("[apple-web/callback] state cookie absent on request");
+    log.error({}, "state cookie absent on request");
     return bail(req, "state_cookie_missing", 400);
   }
   const cookiePayload = decodeAppleOAuthState(cookieRaw);
   if (!cookiePayload) {
-    console.error(
-      "[apple-web/callback] state cookie present but failed to decode (length=" +
-        cookieRaw.length +
-        ")"
+    log.error(
+      { cookie_length: cookieRaw.length },
+      "state cookie present but failed to decode",
     );
     return bail(req, "state_cookie_invalid", 400);
   }
@@ -128,10 +130,9 @@ export async function POST(req: NextRequest) {
   try {
     tokenResp = await exchangeAppleAuthCode(code, callbackUrl(req), cfg);
   } catch (err) {
-    console.error(
-      `[apple-web/callback] token exchange failed: ${
-        err instanceof Error ? err.message : String(err)
-      }`
+    log.error(
+      { err: err instanceof Error ? err.message : String(err) },
+      "token exchange failed",
     );
     return bail(req, "token_exchange_failed", 502);
   }
@@ -142,10 +143,9 @@ export async function POST(req: NextRequest) {
       audience: cfg.servicesId,
     });
   } catch (err) {
-    console.error(
-      `[apple-web/callback] id_token verify failed: ${
-        err instanceof Error ? err.message : String(err)
-      }`
+    log.error(
+      { err: err instanceof Error ? err.message : String(err) },
+      "id_token verify failed",
     );
     if (err instanceof AppleAuthError) {
       return bail(req, "id_token_invalid", 401);

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { clientId, clientSecret, requireAuth } from "@/lib/auth";
 import { deleteIntegration, getIntegration } from "@/lib/db/integrations";
+import { forModule } from "@/lib/logger";
+
+const log = forModule("auth.whoop.disconnect");
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +48,7 @@ export async function POST(req: Request) {
     }
   } catch (err) {
     revokeError = err instanceof Error ? err.message : String(err);
-    console.error(`[whoop/disconnect] revoke error: ${revokeError}`);
+    log.error({ user_id: auth.user.id, err: revokeError }, "revoke error");
   }
 
   // Step 2 + 3: delete integrations row for signed-in user AND the legacy
@@ -55,10 +58,9 @@ export async function POST(req: Request) {
   try {
     dbRemoved = deleteIntegration(auth.user.id, WHOOP_PROVIDER) > 0;
   } catch (err) {
-    console.error(
-      `[whoop/disconnect] integrations delete failed user_id=${auth.user.id}: ${
-        err instanceof Error ? err.message : String(err)
-      }`
+    log.error(
+      { user_id: auth.user.id, err: err instanceof Error ? err.message : String(err) },
+      "integrations delete failed",
     );
   }
   if (auth.user.id !== LEGACY_DEFAULT_USER_ID) {
@@ -66,16 +68,16 @@ export async function POST(req: Request) {
       legacyRemoved =
         deleteIntegration(LEGACY_DEFAULT_USER_ID, WHOOP_PROVIDER) > 0;
     } catch (err) {
-      console.error(
-        `[whoop/disconnect] legacy integrations delete failed: ${
-          err instanceof Error ? err.message : String(err)
-        }`
+      log.error(
+        { err: err instanceof Error ? err.message : String(err) },
+        "legacy integrations delete failed",
       );
     }
   }
 
-  console.info(
-    `[whoop/disconnect] user_id=${auth.user.id} dbRemoved=${dbRemoved} legacyRemoved=${legacyRemoved} revoked=${revoked} revokeError=${revokeError}`
+  log.info(
+    { user_id: auth.user.id, dbRemoved, legacyRemoved, revoked, revokeError },
+    "disconnect complete",
   );
 
   return NextResponse.json({
@@ -119,17 +121,14 @@ async function revokeWhoopToken(refreshToken: string): Promise<boolean> {
       signal: AbortSignal.timeout(5_000),
     });
     if (!resp.ok) {
-      console.warn(
-        `[whoop/disconnect] revoke non-2xx status=${resp.status}`
-      );
+      log.warn({ status: resp.status }, "revoke non-2xx");
       return false;
     }
     return true;
   } catch (err) {
-    console.warn(
-      `[whoop/disconnect] revoke fetch failed: ${
-        err instanceof Error ? err.message : String(err)
-      }`
+    log.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "revoke fetch failed",
     );
     return false;
   }
