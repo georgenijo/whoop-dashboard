@@ -94,9 +94,21 @@ export async function POST(req: NextRequest) {
   }
 
   const cookieRaw = req.cookies.get(APPLE_OAUTH_STATE_COOKIE)?.value;
+  // Split the two failure modes so the next #304 flake reveals which one
+  // we're hitting. Previously both fell through as `state_cookie_missing`,
+  // which made browser-policy drops indistinguishable from encoding drift.
+  if (cookieRaw === undefined) {
+    console.error("[apple-web/callback] state cookie absent on request");
+    return bail(req, "state_cookie_missing", 400);
+  }
   const cookiePayload = decodeAppleOAuthState(cookieRaw);
   if (!cookiePayload) {
-    return bail(req, "state_cookie_missing", 400);
+    console.error(
+      "[apple-web/callback] state cookie present but failed to decode (length=" +
+        cookieRaw.length +
+        ")"
+    );
+    return bail(req, "state_cookie_invalid", 400);
   }
   if (!safeStringEqual(cookiePayload.state, state)) {
     return bail(req, "state_mismatch", 400);

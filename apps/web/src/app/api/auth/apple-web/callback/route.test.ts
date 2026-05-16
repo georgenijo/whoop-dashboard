@@ -181,6 +181,21 @@ describe("POST /api/auth/apple-web/callback — happy path", () => {
     expect(res.headers.get("location")).toContain("error=state_cookie_missing");
   });
 
+  it("rejects with state_cookie_invalid when cookie present but undecodable", async () => {
+    // Distinct from `state_cookie_missing`: the browser DID send a cookie,
+    // but decodeAppleOAuthState returned null. Could be encoding drift, a
+    // tampered value, or a stale cookie from a previous signing-key era.
+    // Distinguishing this case in logs is the diagnostic split for #304.
+    const req = makeRequest(
+      { code: "x", state: "state-abc" },
+      { apple_oauth_state: "{not-valid-json-and-not-the-legacy-format" }
+    );
+    const { NextRequest } = await import("next/server");
+    const res = await route.POST(new NextRequest(req));
+    expect(res.status).toBe(303);
+    expect(res.headers.get("location")).toContain("error=state_cookie_invalid");
+  });
+
   it("rejects when state values do not match", async () => {
     const req = makeRequest(
       { code: "x", state: "wrong" },
