@@ -2,13 +2,16 @@
 
 import DOMPurify from "dompurify";
 import { marked } from "marked";
+import { useEffect, useState } from "react";
 import { formatToolProgressLabel, type ComposerMessage } from "./useChatSend";
 
 export default function MessageBubble({ msg }: { msg: ComposerMessage }) {
   const isUser = msg.role === "user";
-  const html = !isUser
-    ? DOMPurify.sanitize(marked.parse(msg.content) as string)
-    : null;
+  const [html, setHtml] = useState<string | null>(null);
+  useEffect(() => {
+    if (isUser) return;
+    setHtml(DOMPurify.sanitize(marked.parse(msg.content) as string));
+  }, [isUser, msg.content]);
   const progressLabel = formatToolProgressLabel(msg.progress);
 
   return (
