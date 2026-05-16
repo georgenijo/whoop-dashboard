@@ -257,8 +257,7 @@ export default function TrendChart({
               <stop offset="100%" stopColor={color} />
             </linearGradient>
           </defs>
-          <line x1="0" y1="33" x2="100" y2="33" stroke="rgba(255,255,255,0.04)" strokeDasharray="0.3 0.6" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />
-          <line x1="0" y1="66" x2="100" y2="66" stroke="rgba(255,255,255,0.04)" strokeDasharray="0.3 0.6" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />
+          <line x1="0" y1="50" x2="100" y2="50" stroke="rgba(255,255,255,0.04)" strokeDasharray="0.3 0.6" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />
           <path d={areaPath} fill={`url(#${gradientId}-area)`} />
           <path d={linePath} fill="none" stroke={`url(#${gradientId}-line)`} strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
           {rollingLinePath && (
