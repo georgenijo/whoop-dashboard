@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Bell, RefreshCw } from "lucide-react";
 
 const RANGES = ["7d", "14d", "30d", "90d", "all"] as const;
 type Range = (typeof RANGES)[number];
@@ -27,10 +28,6 @@ const TITLES: Record<string, string> = {
   "/history": "History",
   "/settings": "Settings",
 };
-
-function icon(name: string) {
-  return `https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/${name}.svg`;
-}
 
 function formatToday(): string {
   const d = new Date();
@@ -151,16 +148,15 @@ export default function TopBar() {
           disabled={syncing}
           style={{ cursor: syncing ? "wait" : "pointer", opacity: syncing ? 0.6 : 1 }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={icon("refresh-cw")}
-            alt="sync"
+          <RefreshCw
+            size={15}
+            strokeWidth={1.8}
+            aria-label="sync"
             style={{ animation: syncing ? "spin 1s linear infinite" : undefined }}
           />
         </button>
         <div className="icon-btn" title="Notifications" role="button">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={icon("bell")} alt="notifications" />
+          <Bell size={15} strokeWidth={1.8} aria-label="notifications" />
         </div>
       </div>
     </div>
