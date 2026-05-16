@@ -90,7 +90,11 @@ export async function POST(req: Request) {
   if (!isString(body.kind) || !VALID_KINDS.includes(body.kind as ClientLogKind)) {
     return Response.json({ ok: false, error: "bad_kind" }, { status: 400 });
   }
-  if (!isString(body.message) || body.message.length === 0) {
+  if (
+    !isString(body.message) ||
+    body.message.length === 0 ||
+    body.message.length > 4096
+  ) {
     return Response.json({ ok: false, error: "bad_message" }, { status: 400 });
   }
 

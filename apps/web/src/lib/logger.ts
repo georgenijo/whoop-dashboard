@@ -36,22 +36,38 @@ type LogFields = {
   [key: string]: unknown;
 };
 
+function safeStringify(value: unknown): string {
+  // Guard against circular refs + JSON.stringify throw paths so a log call
+  // never crashes the request. Falls back to a stub describing the failure.
+  try {
+    const seen = new WeakSet();
+    return JSON.stringify(value, (_key, val) => {
+      if (typeof val === "object" && val !== null) {
+        if (seen.has(val as object)) return "[Circular]";
+        seen.add(val as object);
+      }
+      return val;
+    });
+  } catch (err) {
+    return JSON.stringify({
+      details_serialize_failed: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 function persistWarnOrAbove(
   level: "warn" | "error" | "fatal",
   module: string,
   message: string,
   fields: LogFields,
 ): void {
-  // Synchronous best-effort write. Swallow failures so a log call NEVER
-  // crashes the request. DB unavailable (no shared/whoop_data.db yet)
-  // returns null silently from openWrite — the log still hit stdout.
   try {
     const { user_id = null, trace_id = null, ...rest } = fields;
     insertServerLog({
       level,
       module,
       message,
-      details: Object.keys(rest).length ? JSON.stringify(rest) : null,
+      details: Object.keys(rest).length ? safeStringify(rest) : null,
       user_id: user_id ?? null,
       trace_id: trace_id ?? null,
     });

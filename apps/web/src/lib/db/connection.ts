@@ -293,6 +293,8 @@ export function openWrite(): DB | null {
       CREATE INDEX IF NOT EXISTS idx_client_logs_created ON client_logs(created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_client_logs_source ON client_logs(source);
       CREATE INDEX IF NOT EXISTS idx_client_logs_kind ON client_logs(kind);
+      CREATE INDEX IF NOT EXISTS idx_client_logs_user_created
+        ON client_logs(user_id, created_at DESC);
     `);
     db.prepare("INSERT OR IGNORE INTO users (id) VALUES (1)").run();
     const cols = db.prepare("PRAGMA table_info(chat_logs)").all() as { name: string }[];

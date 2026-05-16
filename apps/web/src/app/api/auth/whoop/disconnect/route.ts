@@ -69,7 +69,10 @@ export async function POST(req: Request) {
         deleteIntegration(LEGACY_DEFAULT_USER_ID, WHOOP_PROVIDER) > 0;
     } catch (err) {
       log.error(
-        { err: err instanceof Error ? err.message : String(err) },
+        {
+          user_id: auth.user.id,
+          err: err instanceof Error ? err.message : String(err),
+        },
         "legacy integrations delete failed",
       );
     }
