@@ -14,16 +14,15 @@ struct SleepView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                RangeSelectorView(selection: $range)
-                    .padding(.top, 8)
-                    .onChange(of: range) { _, _ in
-                        Task { await load(showSpinner: true) }
+            content
+                .navigationTitle("Sleep")
+                .toolbarBackground(.hidden, for: .navigationBar)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        rangeMenu
                     }
-                content
-            }
-            .navigationTitle("Sleep")
-            .refreshable { await load(showSpinner: false) }
+                }
+                .refreshable { await load(showSpinner: false) }
         }
         .task { await load(showSpinner: true) }
     }
@@ -35,7 +34,7 @@ struct SleepView: View {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         case .loaded(let payload):
             ScrollView {
-                VStack(spacing: 16) {
+                VStack(spacing: Theme.Spacing.sm) {
                     KPIStripView(tiles: payload.kpi)
                     if let latest = payload.latestSleep, let stages = latest.stages {
                         SleepStageDonutView(stages: stages, date: latest.date)
@@ -47,7 +46,7 @@ struct SleepView: View {
                         title: "Duration",
                         subtitle: payload.rangeLabel,
                         unit: "h",
-                        colorHex: "#4dabf7",
+                        colorHex: "#0055ff",
                         points: payload.durationTrend.map {
                             TrendPoint(date: $0.date, raw: $0.rawHours, ma7: $0.ma7, ma30: nil)
                         },
@@ -58,21 +57,46 @@ struct SleepView: View {
                         title: "Performance",
                         subtitle: payload.rangeLabel,
                         unit: "%",
-                        colorHex: "#a78bfa",
+                        colorHex: "#7b61ff",
                         points: payload.performanceTrend,
                         showRollingToggle: true,
                         enableMa30: false
                     )
                 }
-                .padding()
+                .padding(Theme.Spacing.md)
             }
+            .scrollContentBackground(.hidden)
         case .error(let msg):
             VStack(spacing: 12) {
-                Text(msg).font(.footnote).foregroundStyle(.secondary)
+                Text(msg)
+                    .font(Theme.FontStyle.sans(12))
+                    .foregroundStyle(Theme.Palette.fg2)
                 Button("Retry") { Task { await load(showSpinner: true) } }
                     .buttonStyle(.borderedProminent)
+                    .tint(Theme.Palette.brandStrain)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    private var rangeMenu: some View {
+        Menu {
+            ForEach(DateRange.allCases) { r in
+                Button {
+                    range = r
+                    Task { await load(showSpinner: true) }
+                } label: {
+                    Label(r.label, systemImage: range == r ? "checkmark" : "")
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text(range.label)
+                    .font(Theme.FontStyle.mono(11, weight: .medium))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .foregroundStyle(Theme.Palette.brandStrain)
         }
     }
 
