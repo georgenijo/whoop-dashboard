@@ -45,6 +45,18 @@ type Props = {
 export default function KPIStrip(p: Props) {
   const latestSleepHours = msToHoursNumber(p.latestSleep?.in_bed_ms ?? null);
   const previousSleepHours = msToHoursNumber(p.previousSleep?.in_bed_ms ?? null);
+  const recoveryDates = {
+    latestDate: p.latestRecovery?.date,
+    previousDate: p.previousRecovery?.date,
+  };
+  const cycleDates = {
+    latestDate: p.latestCycle?.date,
+    previousDate: p.previousCycle?.date,
+  };
+  const sleepDates = {
+    latestDate: p.latestSleep?.date,
+    previousDate: p.previousSleep?.date,
+  };
 
   return (
     <section className="kpi-strip" aria-label="KPIs">
@@ -54,7 +66,7 @@ export default function KPIStrip(p: Props) {
         unit="%"
         color="#00d4aa"
         tint="rgba(0,212,170,0.12)"
-        delta={formatDelta(p.latestRecovery?.recovery_score ?? null, p.previousRecovery?.recovery_score ?? null, { unit: "", precision: 0 })}
+        delta={formatDelta(p.latestRecovery?.recovery_score ?? null, p.previousRecovery?.recovery_score ?? null, { unit: "", precision: 0, ...recoveryDates })}
         href="/recovery"
       />
       <KPI
@@ -63,7 +75,7 @@ export default function KPIStrip(p: Props) {
         unit="ms"
         color="#7b61ff"
         tint="rgba(123,97,255,0.12)"
-        delta={formatDelta(p.latestRecovery?.hrv ?? null, p.previousRecovery?.hrv ?? null, { unit: " ms", precision: 0 })}
+        delta={formatDelta(p.latestRecovery?.hrv ?? null, p.previousRecovery?.hrv ?? null, { unit: " ms", precision: 0, ...recoveryDates })}
         href="/recovery"
       />
       <KPI
@@ -72,7 +84,7 @@ export default function KPIStrip(p: Props) {
         unit="bpm"
         color="#ff6b6b"
         tint="rgba(255,107,107,0.08)"
-        delta={formatDelta(p.latestRecovery?.rhr ?? null, p.previousRecovery?.rhr ?? null, { unit: " bpm", precision: 0, reverse: true })}
+        delta={formatDelta(p.latestRecovery?.rhr ?? null, p.previousRecovery?.rhr ?? null, { unit: " bpm", precision: 0, reverse: true, ...recoveryDates })}
         href="/recovery"
       />
       <KPI
@@ -81,7 +93,7 @@ export default function KPIStrip(p: Props) {
         unit="h"
         color="#00d4aa"
         tint="rgba(0,212,170,0.08)"
-        delta={formatDelta(latestSleepHours, previousSleepHours, { unit: "h", precision: 1 })}
+        delta={formatDelta(latestSleepHours, previousSleepHours, { unit: "h", precision: 1, ...sleepDates })}
         href="/sleep"
       />
       <KPI
@@ -90,7 +102,7 @@ export default function KPIStrip(p: Props) {
         unit=""
         color="#ffaa00"
         tint="rgba(255,170,0,0.08)"
-        delta={formatDelta(p.latestCycle?.strain ?? null, p.previousCycle?.strain ?? null, { unit: "", precision: 1 })}
+        delta={formatDelta(p.latestCycle?.strain ?? null, p.previousCycle?.strain ?? null, { unit: "", precision: 1, ...cycleDates })}
         href="/strain"
       />
       <KPI
@@ -99,7 +111,7 @@ export default function KPIStrip(p: Props) {
         unit="%"
         color="#00d4aa"
         tint="rgba(0,212,170,0.08)"
-        delta={formatDelta(p.latestRecovery?.spo2 ?? null, p.previousRecovery?.spo2 ?? null, { unit: "%", precision: 1 })}
+        delta={formatDelta(p.latestRecovery?.spo2 ?? null, p.previousRecovery?.spo2 ?? null, { unit: "%", precision: 1, ...recoveryDates })}
         href="/recovery"
       />
     </section>

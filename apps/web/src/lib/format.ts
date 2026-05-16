@@ -26,11 +26,38 @@ export function recoveryZoneGradientStops(zone: Zone): [string, string] {
   return ["#ff4444", "#cc3333"];
 }
 
-/** Format a day-over-day delta; returns `{ label, dir }` for the `.delta` CSS. */
+/** Render the trailing date-context suffix on a KPI delta. When both dates
+ * are known and exactly 1 day apart it's "vs yesterday"; when >1 day apart
+ * it's "vs N days ago"; when the previous date is unknown (or dates can't
+ * be parsed) it's "vs prev" — never silently lies about the comparison
+ * being adjacent (issue #375). */
+function deltaSinceLabel(
+  latestDate: string | undefined,
+  previousDate: string | undefined
+): string {
+  if (!latestDate || !previousDate) return "vs prev";
+  const a = Date.parse(latestDate + "T00:00:00");
+  const b = Date.parse(previousDate + "T00:00:00");
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return "vs prev";
+  const diffDays = Math.round((a - b) / (1000 * 60 * 60 * 24));
+  if (diffDays === 1) return "vs yesterday";
+  if (diffDays < 1) return "vs prev";
+  return `vs ${diffDays} days ago`;
+}
+
+/** Format a day-over-day delta; returns `{ label, dir }` for the `.delta` CSS.
+ * Pass `latestDate` + `previousDate` (YYYY-MM-DD) so the suffix reflects
+ * the actual gap rather than always claiming "vs yesterday". */
 export function formatDelta(
   latest: number | null | undefined,
   previous: number | null | undefined,
-  opts: { unit?: string; precision?: number; reverse?: boolean } = {}
+  opts: {
+    unit?: string;
+    precision?: number;
+    reverse?: boolean;
+    latestDate?: string;
+    previousDate?: string;
+  } = {}
 ): { label: string; dir: "up" | "down" | "flat" } {
   if (latest == null || previous == null) return { label: "—", dir: "flat" };
   const diff = latest - previous;
@@ -43,8 +70,9 @@ export function formatDelta(
   const isImprovement = opts.reverse ? diff < 0 : diff > 0;
   const arrow = diff > 0 ? "↑" : "↓";
   const unit = opts.unit ?? "";
+  const since = deltaSinceLabel(opts.latestDate, opts.previousDate);
   return {
-    label: `${arrow} ${abs.toFixed(precision)}${unit} vs yesterday`,
+    label: `${arrow} ${abs.toFixed(precision)}${unit} ${since}`,
     dir: isImprovement ? "up" : "down",
   };
 }
