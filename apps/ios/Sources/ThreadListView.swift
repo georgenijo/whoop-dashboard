@@ -13,12 +13,15 @@ struct ThreadListView: View {
 
     var body: some View {
         content
+            .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
                         ChatView(threadId: nil, initialTitle: nil)
                     } label: {
                         Image(systemName: "square.and.pencil")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(Theme.Palette.ai)
                     }
                 }
             }
@@ -35,32 +38,56 @@ struct ThreadListView: View {
         case .error(let message) where threads.isEmpty:
             VStack(spacing: 12) {
                 Text(message)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(Theme.FontStyle.sans(12))
+                    .foregroundStyle(Theme.Palette.fg2)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
                 Button("Retry") { Task { await load() } }
                     .buttonStyle(.borderedProminent)
+                    .tint(Theme.Palette.brandStrain)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         default:
             if threads.isEmpty {
-                ContentUnavailableView(
-                    "No threads yet",
-                    systemImage: "bubble.left.and.bubble.right",
-                    description: Text("Tap the compose button to start one.")
-                )
+                emptyState
             } else {
-                List(threads) { thread in
-                    NavigationLink {
-                        ChatView(threadId: thread.id, initialTitle: thread.title)
-                    } label: {
-                        ThreadRow(thread: thread)
+                ScrollView {
+                    VStack(spacing: 10) {
+                        ForEach(threads) { thread in
+                            NavigationLink {
+                                ChatView(threadId: thread.id, initialTitle: thread.title)
+                            } label: {
+                                ThreadRow(thread: thread)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
+                    .padding(Theme.Spacing.md)
                 }
-                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(Theme.Palette.ai.opacity(0.12))
+                    .frame(width: 80, height: 80)
+                Image(systemName: "sparkles")
+                    .font(.system(size: 32, weight: .light))
+                    .foregroundStyle(Theme.Palette.ai)
+                    .shadow(color: Theme.Palette.ai.opacity(0.6), radius: 12)
+            }
+            Text("No threads yet")
+                .font(Theme.FontStyle.sans(16, weight: .semibold))
+                .foregroundStyle(Theme.Palette.fg0)
+            Text("Tap the compose button to start one.")
+                .font(Theme.FontStyle.sans(12))
+                .foregroundStyle(Theme.Palette.fg2)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @MainActor
@@ -84,24 +111,25 @@ private struct ThreadRow: View {
     let thread: ChatThread
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
                 Text(thread.displayTitle)
-                    .font(.subheadline.weight(.semibold))
+                    .font(Theme.FontStyle.sans(14, weight: .medium))
+                    .foregroundStyle(Theme.Palette.fg0)
                     .lineLimit(1)
                 Spacer()
                 Text(thread.updatedAt, format: .dateTime.month(.abbreviated).day())
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(Theme.FontStyle.mono(10.5))
+                    .foregroundStyle(Theme.Palette.fg3)
             }
             if let preview = thread.lastPreview {
                 Text(preview)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(Theme.FontStyle.sans(12))
+                    .foregroundStyle(Theme.Palette.fg2)
                     .lineLimit(2)
             }
         }
-        .padding(.vertical, 4)
+        .glassCard(padding: Theme.Spacing.md)
     }
 }
 
