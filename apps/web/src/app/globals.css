@@ -345,6 +345,12 @@ body {
 /* =========================== CHART SURFACES =========================== */
 .chart-body { height: 220px; position: relative; }
 .chart-body svg { width: 100%; height: 100%; display: block; overflow: visible; }
+/* Recharts legend icons carry explicit width="14" height="14" — without this
+   override the blanket rule above stretches them to fill the legend slot,
+   producing ~96×96px pill blobs over the chart (issue #374). Scoping the
+   outer rule with `>` would break ResponsiveContainer (it nests the chart
+   svg inside a div), so this layered override is the safe path. */
+.chart-body .recharts-legend-wrapper svg { width: auto; height: auto; }
 .chart-axis {
   display: flex; justify-content: space-between;
   margin-top: 8px;
