@@ -8,12 +8,27 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Connectors") {
+                Section {
                     WhoopConnectorCard()
+                        .listRowBackground(rowBackground)
+                } header: {
+                    Text("CONNECTORS")
+                        .font(Theme.FontStyle.sans(10, weight: .semibold))
+                        .tracking(1.4)
+                        .foregroundStyle(Theme.Palette.fg2)
                 }
 
                 Section {
-                    LabeledContent("Version", value: versionString)
+                    HStack {
+                        Text("Version")
+                            .font(Theme.FontStyle.sans(13))
+                            .foregroundStyle(Theme.Palette.fg1)
+                        Spacer()
+                        Text(versionString)
+                            .font(Theme.FontStyle.mono(11))
+                            .foregroundStyle(Theme.Palette.fg3)
+                    }
+                    .listRowBackground(rowBackground)
                 }
 
                 Section {
@@ -21,10 +36,15 @@ struct SettingsView: View {
                         confirmingSignOut = true
                     } label: {
                         Text("Sign out")
+                            .font(Theme.FontStyle.sans(13, weight: .medium))
+                            .foregroundStyle(Theme.Palette.brandStrain)
                     }
+                    .listRowBackground(rowBackground)
                 }
             }
+            .scrollContentBackground(.hidden)
             .navigationTitle("Settings")
+            .toolbarBackground(.hidden, for: .navigationBar)
             .confirmationDialog(
                 "Sign out of Coach?",
                 isPresented: $confirmingSignOut,
@@ -39,6 +59,15 @@ struct SettingsView: View {
                 Text("You'll need to sign in with Apple again to use Coach.")
             }
         }
+    }
+
+    @ViewBuilder
+    private var rowBackground: some View {
+        LinearGradient(
+            colors: [Color.white.opacity(0.04), Color.white.opacity(0.01)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 
     private var versionString: String {

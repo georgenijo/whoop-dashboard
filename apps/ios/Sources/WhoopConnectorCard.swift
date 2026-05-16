@@ -32,8 +32,8 @@ struct WhoopConnectorCard: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Text("Whoop")
-                    .font(.body)
-                    .fontWeight(.medium)
+                    .font(Theme.FontStyle.sans(14, weight: .medium))
+                    .foregroundStyle(Theme.Palette.fg0)
                 statusBadge
                 Spacer()
                 if connector?.status == .needsReconnect {
@@ -42,17 +42,19 @@ struct WhoopConnectorCard: View {
                             ProgressView().controlSize(.small)
                         } else {
                             Text("Reconnect")
+                                .font(Theme.FontStyle.sans(11, weight: .semibold))
                         }
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
+                    .tint(Theme.Palette.brandStrain)
                     .disabled(reconnecting)
                 }
             }
 
             Text(detailText)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(Theme.FontStyle.mono(10.5))
+                .foregroundStyle(Theme.Palette.fg3)
         }
         .padding(.vertical, 4)
         .task { await refresh() }
@@ -67,9 +69,10 @@ struct WhoopConnectorCard: View {
             HStack(spacing: 4) {
                 Circle()
                     .fill(badgeColor(for: status))
-                    .frame(width: 7, height: 7)
+                    .frame(width: 6, height: 6)
+                    .shadow(color: badgeColor(for: status).opacity(0.7), radius: 3)
                 Text(badgeLabel(for: status))
-                    .font(.caption)
+                    .font(Theme.FontStyle.sans(11, weight: .medium))
                     .foregroundStyle(badgeColor(for: status))
             }
         } else if loading {
@@ -88,9 +91,9 @@ struct WhoopConnectorCard: View {
 
     private func badgeColor(for status: WhoopConnectorStatus) -> Color {
         switch status {
-        case .connected: return .green
-        case .needsReconnect: return .orange
-        case .disconnected: return .secondary
+        case .connected: return Theme.Palette.success
+        case .needsReconnect: return Theme.Palette.warning
+        case .disconnected: return Theme.Palette.fg3
         }
     }
 

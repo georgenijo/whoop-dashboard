@@ -8,60 +8,65 @@ struct SleepStageDonutView: View {
     private struct StageEntry: Identifiable {
         let name: String
         let ms: Double
-        let colorHex: String
+        let color: Color
         var id: String { name }
     }
 
     private var entries: [StageEntry] {
         [
-            StageEntry(name: "Light", ms: stages.lightMs, colorHex: "#4dabf7"),
-            StageEntry(name: "Deep",  ms: stages.deepMs,  colorHex: "#1d4ed8"),
-            StageEntry(name: "REM",   ms: stages.remMs,   colorHex: "#a78bfa"),
-            StageEntry(name: "Awake", ms: stages.awakeMs, colorHex: "#888888")
+            StageEntry(name: "Light", ms: stages.lightMs, color: Theme.Palette.sleepLight),
+            StageEntry(name: "Deep",  ms: stages.deepMs,  color: Theme.Palette.sleepDeep),
+            StageEntry(name: "REM",   ms: stages.remMs,   color: Theme.Palette.sleepRem),
+            StageEntry(name: "Awake", ms: stages.awakeMs, color: Theme.Palette.rhr)
         ]
     }
 
-    private var total: Double { entries.reduce(0) { $0 + $1.ms } }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Sleep stages")
-                    .font(.headline)
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("STAGES")
+                    .font(Theme.FontStyle.sans(10, weight: .semibold))
+                    .tracking(1.4)
+                    .foregroundStyle(Theme.Palette.fg2)
                 Text(date)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(Theme.FontStyle.mono(10.5))
+                    .foregroundStyle(Theme.Palette.fg3)
             }
-            HStack(spacing: 16) {
+
+            HStack(spacing: 18) {
                 Chart(entries) { e in
                     SectorMark(
                         angle: .value(e.name, e.ms),
-                        innerRadius: .ratio(0.6),
+                        innerRadius: .ratio(0.66),
                         angularInset: 1.5
                     )
                     .cornerRadius(4)
-                    .foregroundStyle(Color(hex: e.colorHex))
+                    .foregroundStyle(e.color)
                 }
                 .frame(width: 120, height: 120)
-                VStack(alignment: .leading, spacing: 6) {
+                .shadow(color: Theme.Palette.sleepDeep.opacity(0.25), radius: 12)
+
+                VStack(spacing: 9) {
                     ForEach(entries) { e in
-                        HStack(spacing: 6) {
-                            Rectangle()
-                                .fill(Color(hex: e.colorHex))
-                                .frame(width: 10, height: 10)
+                        HStack(spacing: 8) {
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(e.color)
+                                .frame(width: 9, height: 9)
+                                .shadow(color: e.color.opacity(0.6), radius: 3)
                             Text(e.name)
-                                .font(.caption)
+                                .font(Theme.FontStyle.sans(12.5, weight: .medium))
+                                .foregroundStyle(Theme.Palette.fg1)
                             Spacer()
                             Text(formatHm(e.ms))
-                                .font(.caption.weight(.medium))
-                                .monospacedDigit()
+                                .font(Theme.FontStyle.mono(11.5))
+                                .foregroundStyle(Theme.Palette.fg2)
                         }
                     }
                 }
+                .frame(maxWidth: .infinity)
             }
         }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        .glassCard(padding: Theme.Spacing.md)
     }
 
     private func formatHm(_ ms: Double) -> String {

@@ -4,32 +4,38 @@ struct RootView: View {
     var onSignOut: () -> Void
 
     var body: some View {
-        TabView {
-            DashboardView(onSignOut: onSignOut)
-                .tabItem {
-                    Label("Dashboard", systemImage: "chart.bar.fill")
-                }
+        ZStack {
+            AmbientAurora()
 
-            RecoveryView()
-                .tabItem {
-                    Label("Recovery", systemImage: "heart.fill")
-                }
+            TabView {
+                DashboardView(onSignOut: onSignOut)
+                    .tabItem {
+                        Label("Dashboard", systemImage: "square.grid.2x2.fill")
+                    }
 
-            SleepView()
-                .tabItem {
-                    Label("Sleep", systemImage: "moon.fill")
-                }
+                RecoveryView()
+                    .tabItem {
+                        Label("Recovery", systemImage: "waveform.path.ecg")
+                    }
 
-            StrainView()
-                .tabItem {
-                    Label("Strain", systemImage: "bolt.fill")
-                }
+                SleepView()
+                    .tabItem {
+                        Label("Sleep", systemImage: "moon.fill")
+                    }
 
-            CoachView()
-                .tabItem {
-                    Label("Coach", systemImage: "bubble.left.and.bubble.right.fill")
-                }
+                StrainView()
+                    .tabItem {
+                        Label("Strain", systemImage: "flame.fill")
+                    }
+
+                CoachView()
+                    .tabItem {
+                        Label("Coach", systemImage: "sparkles")
+                    }
+            }
+            .tint(Theme.Palette.brandStrain)
         }
+        .preferredColorScheme(.dark)
     }
 }
 

@@ -5,17 +5,25 @@ struct WorkoutsTableView: View {
     @State private var expandedId: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("All workouts")
-                .font(.headline)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 0) {
+            Text("ALL WORKOUTS")
+                .font(Theme.FontStyle.sans(10, weight: .semibold))
+                .tracking(1.4)
+                .foregroundStyle(Theme.Palette.fg2)
+                .padding(.bottom, 8)
             if workouts.isEmpty {
-                ContentUnavailableView(
-                    "No workouts in range",
-                    systemImage: "figure.walk",
-                    description: Text("Adjust the date range or sync Whoop.")
-                )
-                .frame(height: 160)
+                VStack(spacing: 8) {
+                    Image(systemName: "figure.walk")
+                        .font(.title2)
+                        .foregroundStyle(Theme.Palette.fg3)
+                    Text("No workouts in range")
+                        .font(Theme.FontStyle.sans(13))
+                        .foregroundStyle(Theme.Palette.fg1)
+                    Text("Adjust the date range or sync Whoop.")
+                        .font(Theme.FontStyle.sans(11))
+                        .foregroundStyle(Theme.Palette.fg3)
+                }
+                .frame(maxWidth: .infinity, minHeight: 140)
             } else {
                 VStack(spacing: 0) {
                     ForEach(workouts) { workout in
@@ -25,14 +33,15 @@ struct WorkoutsTableView: View {
                             }
                         }
                         if workout.id != workouts.last?.id {
-                            Divider()
+                            Rectangle()
+                                .fill(Theme.Palette.borderSubtle)
+                                .frame(height: 1)
                         }
                     }
                 }
             }
         }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        .glassCard(padding: Theme.Spacing.md)
     }
 }
 
@@ -47,37 +56,39 @@ private struct WorkoutRow: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(workout.sport ?? "Workout")
-                            .font(.subheadline.weight(.semibold))
+                            .font(Theme.FontStyle.sans(13.5, weight: .medium))
+                            .foregroundStyle(Theme.Palette.fg0)
                         Text(workout.date)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .font(Theme.FontStyle.mono(10.5))
+                            .foregroundStyle(Theme.Palette.fg3)
                     }
                     Spacer()
                     if let strain = workout.strain {
                         Text(String(format: "%.1f", strain))
-                            .font(.subheadline.weight(.bold))
-                            .foregroundStyle(.tint)
+                            .font(Theme.FontStyle.display(16, weight: .medium))
+                            .foregroundStyle(Theme.Palette.strain)
+                            .monospacedDigit()
                     }
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.Palette.fg3)
                 }
                 if isExpanded {
-                    HStack(alignment: .top) {
-                        DetailColumn(label: "Duration", value: formatDuration(workout.durationSec))
-                        DetailColumn(label: "Avg HR", value: workout.avgHr.map { "\(Int($0.rounded())) bpm" } ?? "—")
-                        DetailColumn(label: "Max HR", value: workout.maxHr.map { "\(Int($0.rounded())) bpm" } ?? "—")
-                        DetailColumn(label: "kcal", value: workout.kilojoule.map { "\(Int(($0 * 0.239).rounded()))" } ?? "—")
+                    HStack(spacing: 10) {
+                        DetailColumn(label: "DURATION", value: formatDuration(workout.durationSec))
+                        DetailColumn(label: "AVG HR", value: workout.avgHr.map { "\(Int($0.rounded())) bpm" } ?? "—")
+                        DetailColumn(label: "MAX HR", value: workout.maxHr.map { "\(Int($0.rounded())) bpm" } ?? "—")
+                        DetailColumn(label: "KCAL", value: workout.kilojoule.map { "\(Int(($0 * 0.239).rounded()))" } ?? "—")
                     }
                     if let m = workout.distanceM, m > 0 {
-                        Text(String(format: "Distance: %.2f km", m / 1000))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
+                        Text(String(format: "Distance · %.2f km", m / 1000))
+                            .font(Theme.FontStyle.mono(10.5))
+                            .foregroundStyle(Theme.Palette.fg3)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, 10)
         }
         .buttonStyle(.plain)
     }
@@ -99,10 +110,12 @@ private struct DetailColumn: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(Theme.FontStyle.sans(9, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(Theme.Palette.fg3)
             Text(value)
-                .font(.caption.weight(.medium))
+                .font(Theme.FontStyle.mono(11, weight: .medium))
+                .foregroundStyle(Theme.Palette.fg1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

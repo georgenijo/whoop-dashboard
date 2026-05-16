@@ -4,23 +4,24 @@ struct TodayKpisView: View {
     let today: StrainPayload.Today
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             HStack {
-                Text("Today")
-                    .font(.headline)
+                Text("TODAY")
+                    .font(Theme.FontStyle.sans(10, weight: .semibold))
+                    .tracking(1.4)
+                    .foregroundStyle(Theme.Palette.fg2)
                 Spacer()
                 Text("\(today.workoutCount) workout\(today.workoutCount == 1 ? "" : "s")")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(Theme.FontStyle.mono(10.5))
+                    .foregroundStyle(Theme.Palette.fg3)
             }
-            HStack(spacing: 10) {
-                tile(label: "Calories", primary: kcalText, subscriptText: kjText)
-                tile(label: "Avg HR",  primary: hrText(today.avgHr), subscriptText: nil)
-                tile(label: "Max HR",  primary: hrText(today.maxHr), subscriptText: nil)
+            HStack(spacing: 8) {
+                tile(label: "Calories", primary: kcalText, sub: kjText, accent: Theme.Palette.strain)
+                tile(label: "Avg HR", primary: hrText(today.avgHr), sub: "all day", accent: Theme.Palette.rhr)
+                tile(label: "Max HR", primary: hrText(today.maxHr), sub: maxPctText, accent: Theme.Palette.danger)
             }
         }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        .glassCard(padding: Theme.Spacing.md)
     }
 
     private var kcalText: String {
@@ -33,30 +34,51 @@ struct TodayKpisView: View {
         return "\(Int(kj.rounded())) kJ"
     }
 
+    private var maxPctText: String? {
+        guard let max = today.maxHr, max > 0 else { return nil }
+        return "max recorded"
+    }
+
     private func hrText(_ v: Double?) -> String {
         guard let v else { return "—" }
         return "\(Int(v.rounded()))"
     }
 
-    private func tile(label: String, primary: String, subscriptText: String?) -> some View {
+    private func tile(label: String, primary: String, sub: String?, accent: Color) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(primary)
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
-            }
-            if let sub = subscriptText {
+            Text(label.uppercased())
+                .font(Theme.FontStyle.sans(9.5, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(Theme.Palette.fg2)
+            Text(primary)
+                .font(Theme.FontStyle.display(22, weight: .medium))
+                .foregroundStyle(Theme.Palette.fg0)
+                .monospacedDigit()
+            if let sub {
                 Text(sub)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                    .font(Theme.FontStyle.mono(9.5))
+                    .foregroundStyle(Theme.Palette.fg3)
             } else {
-                Text(" ").font(.caption2).accessibilityHidden(true)
+                Text(" ")
+                    .font(Theme.FontStyle.mono(9.5))
+                    .accessibilityHidden(true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(10)
-        .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10))
+        .padding(12)
+        .background(
+            ZStack {
+                LinearGradient(colors: [Color.white.opacity(0.035), Color.white.opacity(0.008)],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+                RadialGradient(colors: [accent.opacity(0.14), .clear],
+                               center: UnitPoint(x: 1, y: 0),
+                               startRadius: 0, endRadius: 120)
+            }
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 }

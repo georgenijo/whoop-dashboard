@@ -22,6 +22,7 @@ struct CoachApp: App {
         WindowGroup {
             content
                 .environment(\.api, api)
+                .preferredColorScheme(.dark)
                 .onReceive(NotificationCenter.default.publisher(for: .apiUnauthorized)) { _ in
                     isSignedIn = false
                 }

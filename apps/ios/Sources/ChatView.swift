@@ -34,11 +34,14 @@ struct ChatView: View {
     var body: some View {
         VStack(spacing: 0) {
             messagesList
-            Divider()
+            Rectangle()
+                .fill(Theme.Palette.borderSubtle)
+                .frame(height: 1)
             composer
         }
         .navigationTitle(initialTitle ?? "New chat")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .task {
             if !didLoadInitial {
                 didLoadInitial = true
@@ -52,40 +55,38 @@ struct ChatView: View {
         if rows.isEmpty, let loadError {
             VStack(spacing: 12) {
                 Text(loadError)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .font(Theme.FontStyle.sans(12))
+                    .foregroundStyle(Theme.Palette.fg2)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
                 Button("Retry") { Task { await loadHistory() } }
                     .buttonStyle(.borderedProminent)
+                    .tint(Theme.Palette.brandStrain)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if rows.isEmpty && threadId != nil {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if rows.isEmpty {
-            ContentUnavailableView(
-                "Ask the coach",
-                systemImage: "sparkles",
-                description: Text("Try “How was my recovery this week?”")
-            )
+            emptyAsk
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 12) {
+                    LazyVStack(spacing: 10) {
                         ForEach(rows) { row in
                             MessageBubble(row: row)
                                 .id(row.id)
                         }
                         if let sendError {
                             Text(sendError)
-                                .font(.footnote)
-                                .foregroundStyle(.red)
+                                .font(Theme.FontStyle.sans(11))
+                                .foregroundStyle(Theme.Palette.danger)
                                 .padding(.horizontal)
                         }
                     }
-                    .padding()
+                    .padding(Theme.Spacing.md)
                 }
+                .scrollContentBackground(.hidden)
                 .onChange(of: rows.last?.id) { _, newLastId in
                     if let newLastId {
                         withAnimation { proxy.scrollTo(newLastId, anchor: .bottom) }
@@ -95,22 +96,68 @@ struct ChatView: View {
         }
     }
 
+    private var emptyAsk: some View {
+        VStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(Theme.Palette.ai.opacity(0.14))
+                    .frame(width: 76, height: 76)
+                Image(systemName: "sparkles")
+                    .font(.system(size: 30, weight: .light))
+                    .foregroundStyle(Theme.Palette.ai)
+                    .shadow(color: Theme.Palette.ai.opacity(0.6), radius: 10)
+            }
+            Text("Ask the coach")
+                .font(Theme.FontStyle.sans(17, weight: .semibold))
+                .foregroundStyle(Theme.Palette.fg0)
+            Text("Try “How was my recovery this week?”")
+                .font(Theme.FontStyle.sans(12))
+                .foregroundStyle(Theme.Palette.fg2)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     private var composer: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            TextField("Message", text: $input, axis: .vertical)
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(1...5)
-                .disabled(isSending)
+        HStack(spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.Palette.fg3)
+                TextField("Ask your data…", text: $input, axis: .vertical)
+                    .font(Theme.FontStyle.sans(13))
+                    .foregroundStyle(Theme.Palette.fg0)
+                    .lineLimit(1...5)
+                    .disabled(isSending)
+                    .textFieldStyle(.plain)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(Color.black.opacity(0.4), in: Capsule())
+            .overlay(Capsule().strokeBorder(Theme.Palette.borderDefault, lineWidth: 1))
 
             Button {
                 Task { await send() }
             } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.title)
+                Text("Send")
+                    .font(Theme.FontStyle.sans(11.5, weight: .semibold))
+                    .foregroundStyle(Color.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(
+                        LinearGradient(
+                            colors: [Color(hex: "#8b6fff"), Color(hex: "#6a4dff")],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        in: Capsule()
+                    )
+                    .shadow(color: Theme.Palette.ai.opacity(0.45), radius: 8, y: 3)
+                    .opacity(canSend ? 1 : 0.4)
             }
             .disabled(!canSend)
         }
-        .padding()
+        .padding(.horizontal, Theme.Spacing.md)
+        .padding(.vertical, 10)
     }
 
     private var canSend: Bool {
@@ -154,12 +201,9 @@ struct ChatView: View {
                 content: trimmed
             )
             threadId = response.threadId
-            // Refresh from server so IDs/timestamps are canonical.
             let detail = try await ChatService(api: api).threadDetail(id: response.threadId)
             rows = detail.messages.map { .persisted($0) }
         } catch APIError.unauthorized {
-            // RootView observes .apiUnauthorized and swaps to AuthView;
-            // skip the in-view error so we don't flash a stale message.
             rollbackOptimistic(optimisticId: optimisticId, restore: trimmed)
         } catch APIError.network(let err) {
             sendError = "Network error: \(err.localizedDescription)"
@@ -193,14 +237,16 @@ private struct MessageBubble: View {
         case .optimistic(_, let content):
             bubble(role: .user, content: content, dimmed: true)
         case .typing:
-            HStack {
+            HStack(spacing: 8) {
                 ProgressView()
+                    .controlSize(.small)
+                    .tint(Theme.Palette.ai)
                 Text("Thinking…")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(Theme.FontStyle.sans(11))
+                    .foregroundStyle(Theme.Palette.fg2)
                 Spacer()
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 6)
         }
     }
 
@@ -209,15 +255,12 @@ private struct MessageBubble: View {
         HStack {
             if role == .user { Spacer(minLength: 40) }
             bubbleContent(role: role, content: content)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(
-                    role == .user
-                        ? Color.accentColor.opacity(dimmed ? 0.6 : 1)
-                        : Color(.secondarySystemGroupedBackground)
-                )
-                .foregroundStyle(role == .user ? .white : .primary)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .padding(.horizontal, 13)
+                .padding(.vertical, 10)
+                .background(bubbleBackground(role: role, dimmed: dimmed))
+                .overlay(bubbleBorder(role: role))
+                .foregroundStyle(role == .user ? Theme.Palette.fg0 : Theme.Palette.fg1)
+                .clipShape(bubbleShape(role: role))
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: role == .user ? .trailing : .leading)
             if role == .assistant { Spacer(minLength: 40) }
@@ -228,8 +271,36 @@ private struct MessageBubble: View {
     private func bubbleContent(role: ChatMessage.Role, content: String) -> some View {
         if role == .assistant {
             MarkdownView(content: content)
+                .font(Theme.FontStyle.sans(13))
         } else {
             Text(content)
+                .font(Theme.FontStyle.sans(13))
+        }
+    }
+
+    private func bubbleBackground(role: ChatMessage.Role, dimmed: Bool) -> some View {
+        Group {
+            if role == .user {
+                Color.white.opacity(dimmed ? 0.04 : 0.06)
+            } else {
+                Theme.Palette.ai.opacity(0.08)
+            }
+        }
+    }
+
+    private func bubbleBorder(role: ChatMessage.Role) -> some View {
+        bubbleShape(role: role)
+            .strokeBorder(
+                role == .user ? Theme.Palette.borderDefault : Theme.Palette.ai.opacity(0.22),
+                lineWidth: 1
+            )
+    }
+
+    private func bubbleShape(role: ChatMessage.Role) -> UnevenRoundedRectangle {
+        if role == .user {
+            UnevenRoundedRectangle(cornerRadii: .init(topLeading: 14, bottomLeading: 14, bottomTrailing: 4, topTrailing: 14))
+        } else {
+            UnevenRoundedRectangle(cornerRadii: .init(topLeading: 14, bottomLeading: 4, bottomTrailing: 14, topTrailing: 14))
         }
     }
 }

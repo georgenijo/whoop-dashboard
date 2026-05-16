@@ -6,18 +6,18 @@ struct SleepNeedBreakdownView: View {
     private struct Segment: Identifiable {
         let label: String
         let ms: Double
-        let colorHex: String
+        let color: Color
         var id: String { label }
     }
 
     private var segments: [Segment] {
         var s = [
-            Segment(label: "Baseline", ms: need.baselineMs, colorHex: "#4dabf7"),
-            Segment(label: "Debt",     ms: need.debtMs,     colorHex: "#ff8c61"),
-            Segment(label: "Strain",   ms: need.strainMs,   colorHex: "#ff6b6b")
+            Segment(label: "Baseline", ms: need.baselineMs, color: Theme.Palette.sleepDeep),
+            Segment(label: "Debt",     ms: need.debtMs,     color: Theme.Palette.warning),
+            Segment(label: "Strain",   ms: need.strainMs,   color: Theme.Palette.rhr)
         ]
         if need.napMs > 0 {
-            s.append(Segment(label: "Nap credit", ms: need.napMs, colorHex: "#00d4aa"))
+            s.append(Segment(label: "Nap credit", ms: need.napMs, color: Theme.Palette.recovery))
         }
         return s
     }
@@ -27,45 +27,51 @@ struct SleepNeedBreakdownView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             HStack {
-                Text("Sleep need")
-                    .font(.headline)
+                Text("SLEEP NEED")
+                    .font(Theme.FontStyle.sans(10, weight: .semibold))
+                    .tracking(1.4)
+                    .foregroundStyle(Theme.Palette.fg2)
                 Spacer()
                 Text(formatHm(totalNeed))
-                    .font(.subheadline.weight(.semibold))
+                    .font(Theme.FontStyle.display(15, weight: .semibold))
+                    .foregroundStyle(Theme.Palette.fg0)
                     .monospacedDigit()
             }
+
             GeometryReader { geo in
                 HStack(spacing: 2) {
                     ForEach(segments) { seg in
                         Rectangle()
-                            .fill(Color(hex: seg.colorHex))
+                            .fill(LinearGradient(colors: [seg.color, seg.color.opacity(0.7)],
+                                                 startPoint: .top, endPoint: .bottom))
                             .frame(width: max(0, geo.size.width * width(of: seg)))
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 4))
+                .clipShape(RoundedRectangle(cornerRadius: 7))
+                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
             }
-            .frame(height: 18)
+            .frame(height: 14)
+
             VStack(spacing: 6) {
                 ForEach(segments) { seg in
-                    HStack(spacing: 6) {
-                        Rectangle()
-                            .fill(Color(hex: seg.colorHex))
-                            .frame(width: 10, height: 10)
+                    HStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(seg.color)
+                            .frame(width: 9, height: 9)
                         Text(seg.label)
-                            .font(.caption)
+                            .font(Theme.FontStyle.sans(12))
+                            .foregroundStyle(Theme.Palette.fg1)
                         Spacer()
                         Text(formatHm(seg.ms))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
+                            .font(Theme.FontStyle.mono(11))
+                            .foregroundStyle(Theme.Palette.fg3)
                     }
                 }
             }
         }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        .glassCard(tint: .sleep, padding: Theme.Spacing.md)
     }
 
     private func width(of seg: Segment) -> Double {
