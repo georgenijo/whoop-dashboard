@@ -69,6 +69,13 @@ function formatDate(dateStr: string): string {
   });
 }
 
+function formatTick(v: number): string {
+  const abs = Math.abs(v);
+  if (abs >= 100) return v.toFixed(0);
+  if (abs >= 10) return v.toFixed(1);
+  return v.toFixed(2);
+}
+
 export default function TrendChart({
   title,
   subtitle,
@@ -207,13 +214,38 @@ export default function TrendChart({
         </div>
       </div>
 
-      <div
-        ref={bodyRef}
-        className="chart-body"
-        style={{ position: "relative", cursor: "crosshair" }}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => setTooltip(null)}
-      >
+      <div className="chart-body" style={{ position: "relative", paddingLeft: 28 }}>
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: 24,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            pointerEvents: "none",
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            color: "var(--fg-3)",
+            textAlign: "right",
+            paddingRight: 4,
+            letterSpacing: "0.02em",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          <span>{formatTick(max)}{unit}</span>
+          <span>{formatTick((min + max) / 2)}{unit}</span>
+          <span>{formatTick(min)}{unit}</span>
+        </div>
+        <div
+          ref={bodyRef}
+          style={{ position: "relative", cursor: "crosshair", width: "100%", height: "100%" }}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={() => setTooltip(null)}
+        >
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ width: "100%", height: "100%", display: "block", overflow: "visible" }}>
           <defs>
             <linearGradient id={`${gradientId}-area`} x1="0" y1="0" x2="0" y2="1">
@@ -303,9 +335,10 @@ export default function TrendChart({
             )}
           </div>
         )}
+        </div>
       </div>
 
-      <div className="chart-axis">
+      <div className="chart-axis" style={{ paddingLeft: 28 }}>
         {axis.map((label, i) => (
           <span key={`${label}-${i}`}>{label}</span>
         ))}
