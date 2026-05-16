@@ -1,47 +1,58 @@
+import {
+  Activity,
+  Bike,
+  Brain,
+  CircleDot,
+  Dumbbell,
+  Flag,
+  Flame,
+  Flower,
+  Footprints,
+  Mountain,
+  Sailboat,
+  Snowflake,
+  Swords,
+  Waves,
+  type LucideIcon,
+} from "lucide-react";
 import { sportColor } from "@/lib/sport-color";
 import type { TodayWorkoutRow } from "@/lib/db";
 
 const STRAIN_COLOR = "#ffaa00";
 
-// lucide-static icon name per sport. Unknowns fall back to "activity".
-// Keep keys lowercase — sport names from Whoop are mixed-case.
-const SPORT_ICON: Record<string, string> = {
-  running: "footprints",
-  walking: "footprints",
-  hiking: "mountain",
-  cycling: "bike",
-  swimming: "waves",
-  rowing: "rowing-boat",
-  weightlifting: "dumbbell",
-  strength: "dumbbell",
-  "functional fitness": "dumbbell",
-  yoga: "flower",
-  pilates: "flower",
-  meditation: "brain",
-  basketball: "circle-dot",
-  soccer: "circle-dot",
-  tennis: "circle-dot",
-  golf: "flag",
-  skiing: "snowflake",
-  snowboarding: "snowflake",
-  boxing: "swords",
-  martial: "swords",
-  hiit: "flame",
-  crossfit: "flame",
+const SPORT_ICON: Record<string, LucideIcon> = {
+  running: Footprints,
+  walking: Footprints,
+  hiking: Mountain,
+  cycling: Bike,
+  swimming: Waves,
+  rowing: Sailboat,
+  weightlifting: Dumbbell,
+  strength: Dumbbell,
+  "functional fitness": Dumbbell,
+  yoga: Flower,
+  pilates: Flower,
+  meditation: Brain,
+  basketball: CircleDot,
+  soccer: CircleDot,
+  tennis: CircleDot,
+  golf: Flag,
+  skiing: Snowflake,
+  snowboarding: Snowflake,
+  boxing: Swords,
+  martial: Swords,
+  hiit: Flame,
+  crossfit: Flame,
 };
 
-function iconNameForSport(sport: string | null | undefined): string {
-  if (!sport) return "activity";
+function iconForSport(sport: string | null | undefined): LucideIcon {
+  if (!sport) return Activity;
   const key = sport.toLowerCase();
   if (SPORT_ICON[key]) return SPORT_ICON[key];
   for (const [k, v] of Object.entries(SPORT_ICON)) {
     if (key.includes(k)) return v;
   }
-  return "activity";
-}
-
-function iconUrl(name: string): string {
-  return `https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/${name}.svg`;
+  return Activity;
 }
 
 function formatStartTime(start: string | null): string {
@@ -103,6 +114,7 @@ export default function TodayWorkouts({ rows }: Props) {
         {rows.map((w) => {
           const dotColor = sportColor(w.sport);
           const distance = formatDistance(w.distance_m);
+          const Icon = iconForSport(w.sport);
           return (
             <li
               key={w.id}
@@ -130,17 +142,7 @@ export default function TodayWorkouts({ rows }: Props) {
                   flex: "0 0 auto",
                 }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={iconUrl(iconNameForSport(w.sport))}
-                  alt=""
-                  style={{
-                    width: 16,
-                    height: 16,
-                    filter: "invert(1)",
-                    opacity: 0.85,
-                  }}
-                />
+                <Icon size={16} strokeWidth={1.8} color="#fff" style={{ opacity: 0.85 }} />
               </span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div
