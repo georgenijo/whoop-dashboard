@@ -1,5 +1,6 @@
 "use client";
 
+import { Menu } from "lucide-react";
 import BadApiKeyBanner from "@/components/coach/BadApiKeyBanner";
 import ChatInput from "@/components/coach/ChatInput";
 import MessageList from "@/components/coach/MessageList";
@@ -16,10 +17,6 @@ type CoachWorkspaceProps = {
   initialThreads: ThreadSummary[];
   initialMessages: ChatMessage[];
 };
-
-function icon(name: string) {
-  return `https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/${name}.svg`;
-}
 
 function formatCount(n: number): string {
   return n === 1 ? "1 message" : `${n} messages`;
@@ -68,8 +65,7 @@ export default function CoachWorkspace({
           className="coach-mobile-threads"
           onClick={() => setMobileOpen(true)}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={icon("menu")} alt="" />
+          <Menu size={16} strokeWidth={1.8} aria-hidden />
           Threads
         </button>
       </div>

@@ -578,10 +578,9 @@ body {
   cursor: pointer;
 }
 
-.coach-mobile-threads img {
+.coach-mobile-threads svg {
   width: 16px;
   height: 16px;
-  filter: invert(1);
   opacity: 0.8;
 }
 
@@ -616,10 +615,9 @@ body {
   background: rgba(255,255,255,0.03);
 }
 
-.coach-new-thread img {
+.coach-new-thread svg {
   width: 16px;
   height: 16px;
-  filter: invert(1);
   opacity: 0.8;
 }
 
@@ -684,10 +682,9 @@ body {
   background: rgba(255,255,255,0.06);
 }
 
-.coach-thread-delete img {
+.coach-thread-delete svg {
   width: 14px;
   height: 14px;
-  filter: invert(1);
 }
 
 .coach-chat {
