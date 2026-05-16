@@ -98,6 +98,7 @@ export default async function SleepPage({
             gradientId="sleep-dur"
             data={durationData}
             unit="h"
+            showRollingToggle
           />
         </div>
         <div className="col">
@@ -115,6 +116,7 @@ export default async function SleepPage({
           gradientId="sleep-perf"
           data={perfData}
           unit="%"
+          showRollingToggle
         />
         <TrendChart
           title="Sleep Need"
@@ -123,6 +125,7 @@ export default async function SleepPage({
           gradientId="sleep-need"
           data={needData}
           unit="h"
+          showRollingToggle
         />
         <BedWakeTimeline rows={trend14} />
         <SleepCyclesBarChart rows={trend14} />
