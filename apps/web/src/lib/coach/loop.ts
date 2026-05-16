@@ -202,7 +202,8 @@ export async function runAnthropicSdk(
   detailState: DetailState,
   apiKey: string,
   apiKeyOrigin: ApiKeyOrigin,
-  options: RunAnthropicOptions = {}
+  options: RunAnthropicOptions = {},
+  accumulator?: ChatMessageInsert[]
 ): Promise<{ reply: string; iterations: number; messages: ChatMessageInsert[] }> {
   // Per-turn state shared across all `executeToolResult` calls in this turn.
   // Currently used to hard-cap `trigger_whoop_sync` at one attempt per turn.
@@ -216,9 +217,9 @@ export async function runAnthropicSdk(
   // Wrap an Anthropic SDK call and translate a 401 into our BadApiKeyError
   // (carrying origin) so the chat route can render a "your key was
   // rejected" banner instead of a generic 500.
-  async function callModel(params: MessageCreateParamsBase): Promise<Message> {
+  async function callModel(params: MessageCreateParamsBase, callOptions: RunAnthropicOptions): Promise<Message> {
     try {
-      return await streamMessage(client, params, threadId, usage, options);
+      return await streamMessage(client, params, threadId, usage, callOptions);
     } catch (err) {
       if (err instanceof APIError && err.status === 401) {
         throw new BadApiKeyError(apiKeyOrigin);
@@ -234,13 +235,26 @@ export async function runAnthropicSdk(
     new Date(),
     userSettings?.coach_goals ?? null,
   );
-  const messagesToPersist: ChatMessageInsert[] = [
-    {
-      role: "user",
-      content: newUserText,
-      blocks: [{ type: "text", text: newUserText }],
+  const messagesToPersist: ChatMessageInsert[] = accumulator ?? [];
+  messagesToPersist.push({
+    role: "user",
+    content: newUserText,
+    blocks: [{ type: "text", text: newUserText }],
+  });
+
+  const pendingAssistant: ChatMessageInsert = {
+    role: "assistant",
+    content: "",
+    blocks: [],
+  };
+  messagesToPersist.push(pendingAssistant);
+  const optionsForFirstTurn: RunAnthropicOptions = {
+    ...options,
+    onTextDelta: (text) => {
+      pendingAssistant.content = `${pendingAssistant.content}${text}`;
+      options.onTextDelta?.(text);
     },
-  ];
+  };
 
   let response = await callModel({
     model: COACH_MODEL,
@@ -249,14 +263,11 @@ export async function runAnthropicSdk(
     max_tokens: MAX_OUTPUT_TOKENS,
     system: systemPrompt,
     messages: withCacheBreakpoint(conversation),
-  });
+  }, optionsForFirstTurn);
 
   let assistantText = textFromContent(response.content);
-  messagesToPersist.push({
-    role: "assistant",
-    content: assistantText,
-    blocks: response.content,
-  });
+  pendingAssistant.content = assistantText;
+  pendingAssistant.blocks = response.content;
   conversation.push({
     role: "assistant",
     content: response.content as ContentBlockParam[],
@@ -327,6 +338,20 @@ export async function runAnthropicSdk(
       content: toolResults,
     });
 
+    const pendingTurnAssistant: ChatMessageInsert = {
+      role: "assistant",
+      content: "",
+      blocks: [],
+    };
+    messagesToPersist.push(pendingTurnAssistant);
+    const optionsForTurn: RunAnthropicOptions = {
+      ...options,
+      onTextDelta: (text) => {
+        pendingTurnAssistant.content = `${pendingTurnAssistant.content}${text}`;
+        options.onTextDelta?.(text);
+      },
+    };
+
     response = await callModel({
       model: COACH_MODEL,
       thinking: { type: "adaptive" },
@@ -334,14 +359,11 @@ export async function runAnthropicSdk(
       max_tokens: MAX_OUTPUT_TOKENS,
       system: systemPrompt,
       messages: withCacheBreakpoint(conversation),
-    });
+    }, optionsForTurn);
 
     assistantText = textFromContent(response.content);
-    messagesToPersist.push({
-      role: "assistant",
-      content: assistantText,
-      blocks: response.content,
-    });
+    pendingTurnAssistant.content = assistantText;
+    pendingTurnAssistant.blocks = response.content;
     conversation.push({
       role: "assistant",
       content: response.content as ContentBlockParam[],

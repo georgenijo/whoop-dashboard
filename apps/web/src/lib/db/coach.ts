@@ -22,11 +22,14 @@ export type ChatThreadSummary = {
   last_preview: string | null;
 };
 
+export type ChatMessageStatus = "complete" | "aborted";
+
 export type ChatMessage = {
   id: number;
   role: "user" | "assistant";
   content: string;
   created_at: string;
+  status: ChatMessageStatus;
 };
 
 export type ChatMessageInsert = {
@@ -37,6 +40,11 @@ export type ChatMessageInsert = {
 
 function visibleChatMessageClause(alias: string): string {
   return `${alias}.content != '[tool_result]' AND NOT (${alias}.role = 'assistant' AND ${alias}.blocks LIKE '%"type":"tool_use"%')`;
+}
+
+/** Like visibleChatMessageClause but also excludes aborted assistant messages (used for last_preview). */
+function visibleChatPreviewClause(alias: string): string {
+  return `${visibleChatMessageClause(alias)} AND (${alias}.status IS NULL OR ${alias}.status != 'aborted' OR ${alias}.role != 'assistant')`;
 }
 
 function hasChatThread(db: DB, threadId: number, userId?: number): boolean {
@@ -54,7 +62,7 @@ export function getChatThreads(userId: number): ChatThreadSummary[] {
     safeWriteQuery((db) => {
       if (!hasTable(db, "chat_threads")) return [] as ChatThreadSummary[];
       const visibleM = visibleChatMessageClause("m");
-      const visibleM2 = visibleChatMessageClause("m2");
+      const previewM2 = visibleChatPreviewClause("m2");
       return db
         .prepare(`
           SELECT
@@ -65,7 +73,7 @@ export function getChatThreads(userId: number): ChatThreadSummary[] {
             (
               SELECT m2.content
               FROM chat_messages m2
-              WHERE m2.thread_id = t.id AND ${visibleM2}
+              WHERE m2.thread_id = t.id AND ${previewM2}
               ORDER BY m2.id DESC
               LIMIT 1
             ) AS last_preview
@@ -198,7 +206,7 @@ export function getChatThreadSummary(userId: number, threadId: number): ChatThre
     safeWriteQuery((db) => {
       if (!hasTable(db, "chat_threads")) return null;
       const visibleM = visibleChatMessageClause("m");
-      const visibleM2 = visibleChatMessageClause("m2");
+      const previewM2 = visibleChatPreviewClause("m2");
       const row = db
         .prepare(
           `
@@ -210,7 +218,7 @@ export function getChatThreadSummary(userId: number, threadId: number): ChatThre
             (
               SELECT m2.content
               FROM chat_messages m2
-              WHERE m2.thread_id = t.id AND ${visibleM2}
+              WHERE m2.thread_id = t.id AND ${previewM2}
               ORDER BY m2.id DESC
               LIMIT 1
             ) AS last_preview
@@ -236,11 +244,24 @@ export function getChatThreadMessages(userId: number, threadId: number): ChatMes
       }
       if (!hasChatThread(db, threadId, userId)) return [] as ChatMessage[];
       const visibleMessage = visibleChatMessageClause("chat_messages");
-      return db
+      const rows = db
         .prepare(
-          `SELECT id, role, content, created_at FROM chat_messages WHERE thread_id = ? AND ${visibleMessage} ORDER BY id ASC`
+          `SELECT id, role, content, created_at, status FROM chat_messages WHERE thread_id = ? AND ${visibleMessage} ORDER BY id ASC`
         )
-        .all(threadId) as ChatMessage[];
+        .all(threadId) as {
+          id: number;
+          role: "user" | "assistant";
+          content: string;
+          created_at: string;
+          status: string | null;
+        }[];
+      return rows.map((row) => ({
+        id: row.id,
+        role: row.role,
+        content: row.content,
+        created_at: row.created_at,
+        status: row.status === "aborted" ? "aborted" : "complete",
+      }));
     }) ?? []
   );
 }
@@ -262,7 +283,7 @@ export function getChatThreadConversation(
       }
       const rows = db
         .prepare(
-          "SELECT role, content, blocks FROM chat_messages WHERE thread_id = ? ORDER BY id DESC LIMIT ?"
+          "SELECT role, content, blocks FROM chat_messages WHERE thread_id = ? AND (status IS NULL OR status != 'aborted') ORDER BY id DESC LIMIT ?"
         )
         .all(threadId, MAX_HISTORY_ROWS) as {
           role: "user" | "assistant";
@@ -341,26 +362,41 @@ export function addChatMessage(
   addChatMessages(threadId, [{ role, content, blocks }]);
 }
 
-export function addChatMessages(threadId: number, messages: ChatMessageInsert[]): void {
+export function addChatMessages(
+  threadId: number,
+  messages: ChatMessageInsert[],
+  status: ChatMessageStatus = "complete"
+): void {
   if (messages.length === 0) return;
 
   const db = openWrite();
   if (!db) return;
   try {
     const insert = db.prepare(
-      "INSERT INTO chat_messages (thread_id, role, content, blocks, created_at) VALUES (?, ?, ?, ?, ?)"
+      "INSERT INTO chat_messages (thread_id, role, content, blocks, created_at, status) VALUES (?, ?, ?, ?, ?, ?)"
     );
     const touch = db.prepare("UPDATE chat_threads SET updated_at = datetime('now') WHERE id = ?");
+    // When status='aborted', only the final assistant row in the batch
+    // represents the interrupted reply; earlier rows (user prompt, prior
+    // tool turns) were completed normally and stay 'complete'.
+    const lastAssistantIdx = (() => {
+      if (status !== "aborted") return -1;
+      for (let i = messages.length - 1; i >= 0; i -= 1) {
+        if (messages[i].role === "assistant") return i;
+      }
+      return -1;
+    })();
     const writeTurn = db.transaction((rows: ChatMessageInsert[]) => {
-      for (const message of rows) {
+      rows.forEach((message, idx) => {
         insert.run(
           threadId,
           message.role,
           message.content,
           message.blocks === undefined ? null : JSON.stringify(message.blocks),
-          new Date().toISOString()
+          new Date().toISOString(),
+          idx === lastAssistantIdx ? "aborted" : "complete"
         );
-      }
+      });
       touch.run(threadId);
     });
     writeTurn(messages);

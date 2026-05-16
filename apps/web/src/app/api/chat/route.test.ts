@@ -88,6 +88,11 @@ vi.mock("@/lib/coach/persistence", () => ({
         options,
       ),
   ),
+  createCoachTurnHandle: vi.fn(() => ({
+    accumulator: [],
+    markCommitted: () => undefined,
+    flushAborted: () => undefined,
+  })),
   titleChatThread: vi.fn(async () => undefined),
 }));
 

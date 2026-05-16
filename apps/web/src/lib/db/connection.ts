@@ -118,7 +118,8 @@ export function openWrite(): DB | null {
         role TEXT NOT NULL,
         content TEXT NOT NULL,
         blocks TEXT,
-        created_at TEXT NOT NULL
+        created_at TEXT NOT NULL,
+        status TEXT DEFAULT 'complete'
       );
       CREATE INDEX IF NOT EXISTS idx_chat_messages_id ON chat_messages(id);
       CREATE TABLE IF NOT EXISTS chat_logs (
@@ -342,6 +343,9 @@ export function openWrite(): DB | null {
     }
     if (!chatCols.some((c) => c.name === "thread_id")) {
       db.exec("ALTER TABLE chat_messages ADD COLUMN thread_id INTEGER REFERENCES chat_threads(id)");
+    }
+    if (!chatCols.some((c) => c.name === "status")) {
+      db.exec("ALTER TABLE chat_messages ADD COLUMN status TEXT DEFAULT 'complete'");
     }
     db.exec("CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id, id)");
     const sleepCols = db.prepare("PRAGMA table_info(sleep)").all() as { name: string }[];

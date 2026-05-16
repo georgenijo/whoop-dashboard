@@ -75,6 +75,7 @@ export type {
   ChatThreadSummary,
   ChatMessage,
   ChatMessageInsert,
+  ChatMessageStatus,
 } from "./coach";
 export {
   getChatThreads,
