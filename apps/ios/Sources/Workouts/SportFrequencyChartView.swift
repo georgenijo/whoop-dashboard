@@ -13,24 +13,28 @@ struct SportFrequencyChartView: View {
     @State private var metric: SportMetric = .sessions
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Sport breakdown")
-                .font(.headline)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Picker("Metric", selection: $metric) {
-                ForEach(SportMetric.allCases) { m in
-                    Text(m.rawValue).tag(m)
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            HStack {
+                Text("SPORT BREAKDOWN")
+                    .font(Theme.FontStyle.sans(10, weight: .semibold))
+                    .tracking(1.4)
+                    .foregroundStyle(Theme.Palette.fg2)
+                Spacer()
+                Picker("Metric", selection: $metric) {
+                    ForEach(SportMetric.allCases) { m in
+                        Text(m.rawValue).tag(m)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .frame(width: 180)
             }
-            .pickerStyle(.segmented)
             if items.isEmpty {
-                ContentUnavailableView("No workouts in range", systemImage: "figure.run")
-                    .frame(height: 200)
+                emptyState
             } else {
                 Chart(items) { item in
                     SectorMark(
                         angle: .value(metric.rawValue, value(for: item)),
-                        innerRadius: .ratio(0.55),
+                        innerRadius: .ratio(0.6),
                         angularInset: 1.5
                     )
                     .cornerRadius(4)
@@ -40,8 +44,19 @@ struct SportFrequencyChartView: View {
                 legend
             }
         }
-        .padding()
-        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        .glassCard(padding: Theme.Spacing.md)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "figure.run")
+                .font(.title2)
+                .foregroundStyle(Theme.Palette.fg3)
+            Text("No workouts in range")
+                .font(Theme.FontStyle.sans(12))
+                .foregroundStyle(Theme.Palette.fg2)
+        }
+        .frame(maxWidth: .infinity, minHeight: 200)
     }
 
     private func value(for item: WorkoutsPayload.SportFreq) -> Double {
@@ -58,14 +73,16 @@ struct SportFrequencyChartView: View {
                 HStack(spacing: 6) {
                     Circle()
                         .fill(Color(hex: item.colorHex))
-                        .frame(width: 10, height: 10)
+                        .frame(width: 8, height: 8)
+                        .shadow(color: Color(hex: item.colorHex).opacity(0.7), radius: 3)
                     Text(item.sport)
-                        .font(.caption)
+                        .font(Theme.FontStyle.sans(11.5))
+                        .foregroundStyle(Theme.Palette.fg1)
                         .lineLimit(1)
                     Spacer()
                     Text(legendValueText(for: item))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .font(Theme.FontStyle.mono(10.5))
+                        .foregroundStyle(Theme.Palette.fg3)
                 }
             }
         }
