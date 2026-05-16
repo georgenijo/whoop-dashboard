@@ -40,7 +40,8 @@ function deltaSinceLabel(
   const b = Date.parse(previousDate + "T00:00:00");
   if (!Number.isFinite(a) || !Number.isFinite(b)) return "vs prev";
   const diffDays = Math.round((a - b) / (1000 * 60 * 60 * 24));
-  if (diffDays <= 1) return "vs yesterday";
+  if (diffDays === 1) return "vs yesterday";
+  if (diffDays < 1) return "vs prev";
   return `vs ${diffDays} days ago`;
 }
 

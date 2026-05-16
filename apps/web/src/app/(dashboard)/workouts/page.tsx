@@ -9,14 +9,9 @@ import { getWorkoutsRange, getBodyMeasurements } from "@/lib/db";
 import { requireAuthOrSignin } from "@/lib/auth";
 import { computeCardiacDrift } from "@/lib/analytics/cardiacDrift";
 import { parseDays, formatRangeLabel } from "@/lib/range";
+import { localToday, localDateNDaysAgo } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
-
-function isoNDaysAgo(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
-}
 
 // CardiacDrift baseline needs a long window regardless of the page selector.
 const CARDIAC_DRIFT_LOOKBACK_DAYS = 180;
@@ -34,14 +29,14 @@ export default async function WorkoutsPage({
   const days = parseDays(range);
   const rangeLabel = formatRangeLabel(range);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const rangeRows = getWorkoutsRange(user.id, isoNDaysAgo(days), today).rows;
+  const today = localToday();
+  const rangeRows = getWorkoutsRange(user.id, localDateNDaysAgo(days), today).rows;
 
   // CardiacDrift baseline is analytics-only; always use a long fixed window.
   const driftRows =
     days >= CARDIAC_DRIFT_LOOKBACK_DAYS
       ? rangeRows
-      : getWorkoutsRange(user.id, isoNDaysAgo(CARDIAC_DRIFT_LOOKBACK_DAYS), today).rows;
+      : getWorkoutsRange(user.id, localDateNDaysAgo(CARDIAC_DRIFT_LOOKBACK_DAYS), today).rows;
   const body = getBodyMeasurements(user.id);
   const maxHR = body?.max_heart_rate ?? null;
   const driftReport = computeCardiacDrift(driftRows);

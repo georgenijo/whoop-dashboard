@@ -22,6 +22,7 @@ import { requireAuthOrSignin } from "@/lib/auth";
 import { computeIllnessSignal } from "@/lib/analytics/illness";
 import { computeRebound } from "@/lib/analytics/rebound";
 import { parseDays, formatRangeLabel } from "@/lib/range";
+import { localToday, localDateNDaysAgo } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -63,11 +64,8 @@ export default async function RecoveryPage({
   // Illness signal needs ~14 days of pre-window history for the baseline,
   // plus the current display window.
   const illnessDays = Math.max(days, 30) + 14;
-  const today = new Date();
-  const end = today.toISOString().slice(0, 10);
-  const start = new Date(today.getTime() - illnessDays * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
+  const end = localToday();
+  const start = localDateNDaysAgo(illnessDays);
   const illnessRecovery = getRecoveryRange(user.id, start, end);
   const illnessSleep = getSleepRange(user.id, start, end);
   const illnessRows = computeIllnessSignal(illnessRecovery, illnessSleep);
