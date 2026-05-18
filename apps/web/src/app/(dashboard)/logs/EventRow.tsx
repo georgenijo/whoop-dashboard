@@ -5,25 +5,6 @@ import type { EventRow as EventRowData } from "@/lib/db/events";
 import { SOURCE_COLORS, SOURCE_LABELS } from "./SourceChips";
 import { LEVEL_COLORS } from "./LevelFilter";
 
-function defaultExpand(event: EventRowData): ReactNode {
-  return (
-    <pre
-      style={{
-        margin: 0,
-        padding: 12,
-        background: "rgba(0,0,0,0.3)",
-        borderRadius: 6,
-        color: "var(--fg-1)",
-        fontSize: 11,
-        overflow: "auto",
-        maxHeight: 480,
-      }}
-    >
-      {JSON.stringify(event.payload, null, 2)}
-    </pre>
-  );
-}
-
 function formatTs(iso: string): string {
   try {
     const d = new Date(iso);
@@ -127,7 +108,24 @@ export default function EventRow({
       </button>
       {open ? (
         <div style={{ padding: "0 12px 12px 12px", background: "rgba(255,255,255,0.02)" }}>
-          {customExpand ? customExpand(event) ?? defaultExpand(event) : defaultExpand(event)}
+          {customExpand ? (
+            customExpand(event)
+          ) : (
+            <pre
+              style={{
+                margin: 0,
+                padding: 12,
+                background: "rgba(0,0,0,0.3)",
+                borderRadius: 6,
+                color: "var(--fg-1)",
+                fontSize: 11,
+                overflow: "auto",
+                maxHeight: 480,
+              }}
+            >
+              {JSON.stringify(event.payload, null, 2)}
+            </pre>
+          )}
         </div>
       ) : null}
     </div>

@@ -8,14 +8,6 @@ import LevelFilter from "./LevelFilter";
 import TimeRangeSelect, { type TimeRange } from "./TimeRangeSelect";
 import SearchBox from "./SearchBox";
 import LiveTailToggle from "./LiveTailToggle";
-import CoachBlockChain from "./CoachBlockChain";
-
-function coachCustomExpand(event: EventRowData): ReactNode {
-  if (event.source !== "coach") return null;
-  const tid = event.ref_id ? Number(event.ref_id) : null;
-  if (!tid || !Number.isInteger(tid) || tid <= 0) return null;
-  return <CoachBlockChain threadId={tid} />;
-}
 
 const ALL_SOURCES: EventSource[] = [
   "server",
@@ -31,7 +23,7 @@ const POLL_MS = 3000;
 
 export default function EventTimeline({
   initialEvents,
-  customExpand = coachCustomExpand,
+  customExpand,
 }: {
   initialEvents: EventRowData[];
   customExpand?: (event: EventRowData) => ReactNode;
