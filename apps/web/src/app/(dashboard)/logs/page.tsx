@@ -1,26 +1,53 @@
-import { getChatLogs } from "@/lib/db";
-import { getUnifiedEvents } from "@/lib/db/events";
-import EventTimeline from "./EventTimeline";
+import { getChatLogs, getChatThreadInfo, getRouteLogs, getSyncLogs } from "@/lib/db";
+import ChatLogsByThread from "./ChatLogsByThread";
+import CollapsibleCard from "./CollapsibleCard";
+import RouteLogsTable from "./RouteLogsTable";
+import SyncLogsTable from "./SyncLogsTable";
+
+function deriveThreadIdFromDetails(details?: string | null): number | null {
+  if (!details) return null;
+  try {
+    const parsed = JSON.parse(details) as { thread_id?: unknown };
+    return typeof parsed?.thread_id === "number" ? parsed.thread_id : null;
+  } catch {
+    return null;
+  }
+}
 
 export const dynamic = "force-dynamic";
 
 export default function LogsPage() {
   const logs = getChatLogs(500);
-  const initialEvents = getUnifiedEvents({
-    levels: ["info", "warn", "error", "fatal"],
-    since: new Date(Date.now() - 24 * 60 * 60 * 1000),
-    limit: 300,
-  });
+  const syncLogs = getSyncLogs(200);
+  const routeLogs = getRouteLogs(200);
+
+  // Resolve thread metadata for grouping. Pull thread_id from the column when
+  // present, fall back to the legacy details JSON for older rows.
+  const threadIdSet = new Set<number>();
+  for (const log of logs) {
+    const tid = log.thread_id ?? deriveThreadIdFromDetails(log.details);
+    if (tid != null) threadIdSet.add(tid);
+  }
+  const threadInfoMap = getChatThreadInfo(Array.from(threadIdSet));
+  const threadsObj: Record<string, { id: number; title: string | null; first_user_message: string | null }> = {};
+  for (const [id, info] of threadInfoMap) {
+    threadsObj[String(id)] = info;
+  }
+  const distinctThreads = threadIdSet.size;
 
   const okLogs = logs.filter((l) => l.status === "ok");
   const avgDur = okLogs.length
     ? okLogs.reduce((a, b) => a + b.duration_ms, 0) / okLogs.length
     : 0;
   const p50 = okLogs.length
-    ? [...okLogs].map((l) => l.duration_ms).sort((a, b) => a - b)[Math.floor(okLogs.length / 2)]
+    ? [...okLogs].map((l) => l.duration_ms).sort((a, b) => a - b)[
+        Math.floor(okLogs.length / 2)
+      ]
     : 0;
   const p95 = okLogs.length
-    ? [...okLogs].map((l) => l.duration_ms).sort((a, b) => a - b)[Math.floor(okLogs.length * 0.95)]
+    ? [...okLogs].map((l) => l.duration_ms).sort((a, b) => a - b)[
+        Math.floor(okLogs.length * 0.95)
+      ]
     : 0;
   const errorRate = logs.length
     ? (logs.filter((l) => l.status !== "ok").length / logs.length) * 100
@@ -69,7 +96,42 @@ export default function LogsPage() {
         </div>
       </div>
 
-      <EventTimeline initialEvents={initialEvents} />
+      <CollapsibleCard
+        title="Chat by thread"
+        sub={`${distinctThreads} thread${distinctThreads === 1 ? "" : "s"} · ${logs.length} call${logs.length === 1 ? "" : "s"}`}
+        defaultOpen={false}
+      >
+        {logs.length === 0 ? (
+          <div className="empty-state">
+            <div className="title">No chat requests yet</div>
+            <div className="sub">Send a message in Coach to populate this log</div>
+          </div>
+        ) : (
+          <ChatLogsByThread logs={logs} threads={threadsObj} />
+        )}
+      </CollapsibleCard>
+
+      <CollapsibleCard title="Sync history" sub={`${syncLogs.length} syncs · most recent first`} defaultOpen={false}>
+        {syncLogs.length === 0 ? (
+          <div className="empty-state">
+            <div className="title">No syncs yet</div>
+            <div className="sub">Tap the refresh icon in the top bar to pull fresh Whoop data</div>
+          </div>
+        ) : (
+          <SyncLogsTable logs={syncLogs} />
+        )}
+      </CollapsibleCard>
+
+      <CollapsibleCard title="Page render history" sub={`${routeLogs.length} renders · most recent first`} defaultOpen={false}>
+        {routeLogs.length === 0 ? (
+          <div className="empty-state">
+            <div className="title">No page renders yet</div>
+            <div className="sub">Refresh a dashboard page to populate this log</div>
+          </div>
+        ) : (
+          <RouteLogsTable logs={routeLogs} />
+        )}
+      </CollapsibleCard>
     </div>
   );
 }
