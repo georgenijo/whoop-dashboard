@@ -24,9 +24,8 @@ struct AIInsightCardView: View {
             }
 
             if let text = insight.text {
-                Text(text)
+                MarkdownView(content: text)
                     .font(Theme.FontStyle.sans(14))
-                    .lineSpacing(3)
                     .foregroundStyle(Theme.Palette.fg0)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {

@@ -19,28 +19,30 @@ struct DashboardView: View {
 
     var body: some View {
         NavigationStack {
-            content
-                .navigationTitle("Today")
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button {
-                            showSettings = true
-                        } label: {
-                            Image(systemName: "gearshape")
-                        }
+            VStack(spacing: 0) {
+                PageHeader("Today") {
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundStyle(Theme.Palette.brandStrain)
                     }
                 }
-                .sheet(isPresented: $showSettings) {
-                    NavigationStack {
-                        SettingsView(onSignOut: onSignOut)
-                            .toolbar {
-                                ToolbarItem(placement: .topBarTrailing) {
-                                    Button("Done") { showSettings = false }
-                                }
+                content
+            }
+            .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showSettings) {
+                NavigationStack {
+                    SettingsView(onSignOut: onSignOut)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button("Done") { showSettings = false }
                             }
-                    }
+                        }
                 }
-                .refreshable { await load(showSpinner: false) }
+            }
+            .refreshable { await load(showSpinner: false) }
         }
         .task { await load(showSpinner: true) }
         .onChange(of: scenePhase) { _, newPhase in

@@ -44,6 +44,7 @@ struct SettingsView: View {
             }
             .scrollContentBackground(.hidden)
             .navigationTitle("Settings")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
             .confirmationDialog(
                 "Sign out of Coach?",

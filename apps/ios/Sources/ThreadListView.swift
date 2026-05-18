@@ -12,21 +12,21 @@ struct ThreadListView: View {
     }
 
     var body: some View {
-        content
-            .toolbarBackground(.hidden, for: .navigationBar)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        ChatView(threadId: nil, initialTitle: nil)
-                    } label: {
-                        Image(systemName: "square.and.pencil")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(Theme.Palette.ai)
-                    }
+        VStack(spacing: 0) {
+            PageHeader("Coach") {
+                NavigationLink {
+                    ChatView(threadId: nil, initialTitle: nil)
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(Theme.Palette.ai)
                 }
             }
-            .task { await load() }
-            .refreshable { await load() }
+            content
+        }
+        .toolbar(.hidden, for: .navigationBar)
+        .task { await load() }
+        .refreshable { await load() }
     }
 
     @ViewBuilder

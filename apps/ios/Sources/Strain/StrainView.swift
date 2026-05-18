@@ -14,15 +14,12 @@ struct StrainView: View {
 
     var body: some View {
         NavigationStack {
-            content
-                .navigationTitle("Strain")
-                .toolbarBackground(.hidden, for: .navigationBar)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        rangeMenu
-                    }
-                }
-                .refreshable { await load(showSpinner: false) }
+            VStack(spacing: 0) {
+                PageHeader("Strain") { rangeMenu }
+                content
+            }
+            .toolbar(.hidden, for: .navigationBar)
+            .refreshable { await load(showSpinner: false) }
         }
         .task { await load(showSpinner: true) }
     }

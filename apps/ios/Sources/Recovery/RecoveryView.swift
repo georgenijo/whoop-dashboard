@@ -14,15 +14,12 @@ struct RecoveryView: View {
 
     var body: some View {
         NavigationStack {
-            content
-                .navigationTitle("Recovery")
-                .toolbarBackground(.hidden, for: .navigationBar)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        rangeMenu
-                    }
-                }
-                .refreshable { await load(showSpinner: false) }
+            VStack(spacing: 0) {
+                PageHeader("Recovery") { rangeMenu }
+                content
+            }
+            .toolbar(.hidden, for: .navigationBar)
+            .refreshable { await load(showSpinner: false) }
         }
         .task { await load(showSpinner: true) }
     }

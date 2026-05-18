@@ -15,7 +15,7 @@ struct WorkoutsView: View {
     var body: some View {
         content
             .navigationTitle("Workouts")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

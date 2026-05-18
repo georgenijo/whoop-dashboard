@@ -14,15 +14,12 @@ struct SleepView: View {
 
     var body: some View {
         NavigationStack {
-            content
-                .navigationTitle("Sleep")
-                .toolbarBackground(.hidden, for: .navigationBar)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        rangeMenu
-                    }
-                }
-                .refreshable { await load(showSpinner: false) }
+            VStack(spacing: 0) {
+                PageHeader("Sleep") { rangeMenu }
+                content
+            }
+            .toolbar(.hidden, for: .navigationBar)
+            .refreshable { await load(showSpinner: false) }
         }
         .task { await load(showSpinner: true) }
     }
