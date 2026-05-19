@@ -323,14 +323,14 @@ function persistAll(
     `);
     const sleepStmt = db.prepare(`
       INSERT OR REPLACE INTO sleep
-        (user_id, date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms, sleep_need_ms,
+        (user_id, sleep_id, date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms, sleep_need_ms,
          performance, efficiency, consistency, respiratory_rate,
          disturbances, cycles, nap,
          need_from_baseline_ms, need_from_debt_ms, need_from_strain_ms, need_from_nap_ms,
          start_local, end_local,
          raw)
       VALUES
-        (@user_id, @date, @in_bed_ms, @light_ms, @deep_ms, @rem_ms, @awake_ms, @sleep_need_ms,
+        (@user_id, @sleep_id, @date, @in_bed_ms, @light_ms, @deep_ms, @rem_ms, @awake_ms, @sleep_need_ms,
          @performance, @efficiency, @consistency, @respiratory_rate,
          @disturbances, @cycles, @nap,
          @need_from_baseline_ms, @need_from_debt_ms, @need_from_strain_ms, @need_from_nap_ms,
@@ -385,6 +385,7 @@ function persistAll(
         const sn = r.score.sleep_needed;
         sleepStmt.run({
           user_id: userId,
+          sleep_id: r.id,
           date: parseDate(r.start, tz),
           in_bed_ms: ss.total_in_bed_time_milli,
           light_ms: ss.total_light_sleep_time_milli,

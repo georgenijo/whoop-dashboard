@@ -452,6 +452,7 @@ export function openWrite(): DB | null {
     // date)` — SQLite can't ALTER a PK, so each is a table rebuild gated by
     // a "no user_id column" check.
     rebuildDomainTablesForUserId(db);
+    rebuildSleepForSleepId(db);
     return db;
   } catch (err) {
     // Surfacing the error is critical: silent null returns hide schema
@@ -738,5 +739,75 @@ function rebuildDomainTablesForUserId(db: DB): void {
         `[connection] migration failed: ${table} is missing user_id column`
       );
     }
+  }
+}
+
+// Second sleep-table rebuild — switch PK from (user_id, date) to
+// (user_id, sleep_id). Whoop returns multiple sleep records per local date
+// (night + nap), so a (user_id, date)-keyed table forced the second write to
+// clobber the first. New PK uses the Whoop sleep UUID directly so naps and
+// night sleep coexist.
+function rebuildSleepForSleepId(db: DB): void {
+  if (!hasColumn(db, "sleep", "user_id")) return;
+  if (hasColumn(db, "sleep", "sleep_id")) return;
+
+  db.pragma("foreign_keys = OFF");
+  try {
+    const tx = db.transaction(() => {
+      db.exec(`
+        CREATE TABLE sleep_new (
+          user_id INTEGER NOT NULL REFERENCES users(id) DEFAULT 1,
+          sleep_id TEXT NOT NULL,
+          date TEXT NOT NULL,
+          in_bed_ms INTEGER,
+          light_ms INTEGER,
+          deep_ms INTEGER,
+          rem_ms INTEGER,
+          awake_ms INTEGER,
+          sleep_need_ms INTEGER,
+          performance REAL,
+          efficiency REAL,
+          consistency REAL,
+          respiratory_rate REAL,
+          disturbances INTEGER,
+          cycles INTEGER,
+          nap BOOLEAN,
+          need_from_baseline_ms INTEGER,
+          need_from_debt_ms INTEGER,
+          need_from_strain_ms INTEGER,
+          need_from_nap_ms INTEGER,
+          start_local TEXT,
+          end_local TEXT,
+          raw JSON,
+          PRIMARY KEY (user_id, sleep_id)
+        )
+      `);
+      // Backfill sleep_id from raw.id; for any row where raw is null (legacy
+      // bootstrap edge-cases) we fall back to a synthetic key so the copy
+      // doesn't fail the NOT NULL constraint.
+      db.exec(`
+        INSERT INTO sleep_new
+          (user_id, sleep_id, date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms,
+           sleep_need_ms, performance, efficiency, consistency, respiratory_rate,
+           disturbances, cycles, nap,
+           need_from_baseline_ms, need_from_debt_ms, need_from_strain_ms, need_from_nap_ms,
+           start_local, end_local, raw)
+        SELECT
+          user_id,
+          COALESCE(json_extract(raw, '$.id'), user_id || ':' || date || ':' || COALESCE(nap, 0)),
+          date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms,
+          sleep_need_ms, performance, efficiency, consistency, respiratory_rate,
+          disturbances, cycles, nap,
+          need_from_baseline_ms, need_from_debt_ms, need_from_strain_ms, need_from_nap_ms,
+          start_local, end_local, raw
+        FROM sleep
+      `);
+      db.exec("DROP TABLE sleep");
+      db.exec("ALTER TABLE sleep_new RENAME TO sleep");
+      db.exec("CREATE INDEX IF NOT EXISTS idx_sleep_user_date ON sleep(user_id, date DESC)");
+    });
+    tx();
+  } finally {
+    db.pragma("foreign_keys = ON");
   }
 }
