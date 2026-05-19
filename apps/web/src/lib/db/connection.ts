@@ -785,8 +785,14 @@ function rebuildSleepForSleepId(db: DB): void {
       // Backfill sleep_id from raw.id; for any row where raw is null (legacy
       // bootstrap edge-cases) we fall back to a synthetic key so the copy
       // doesn't fail the NOT NULL constraint.
+      //
+      // OR IGNORE: a small handful of legacy rows duplicated the same Whoop
+      // sleep id across two dates (a sync run during a tz transition
+      // double-wrote the same record). Both rows describe the same record,
+      // so keeping the first encountered and dropping the dup is correct.
+      // ORDER BY date DESC keeps the most recently-dated row.
       db.exec(`
-        INSERT INTO sleep_new
+        INSERT OR IGNORE INTO sleep_new
           (user_id, sleep_id, date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms,
            sleep_need_ms, performance, efficiency, consistency, respiratory_rate,
            disturbances, cycles, nap,
@@ -801,6 +807,7 @@ function rebuildSleepForSleepId(db: DB): void {
           need_from_baseline_ms, need_from_debt_ms, need_from_strain_ms, need_from_nap_ms,
           start_local, end_local, raw
         FROM sleep
+        ORDER BY date DESC
       `);
       db.exec("DROP TABLE sleep");
       db.exec("ALTER TABLE sleep_new RENAME TO sleep");
