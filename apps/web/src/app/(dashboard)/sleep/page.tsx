@@ -7,7 +7,7 @@ import SleepNeedBreakdown from "@/components/charts/SleepNeedBreakdown";
 import SleepConsistencyCard from "@/components/charts/SleepConsistencyCard";
 import RespiratoryRateChart from "@/components/charts/RespiratoryRateChart";
 import SleepCyclesBarChart from "@/components/charts/SleepCyclesBarChart";
-import NapCalendar from "@/components/charts/NapCalendar";
+import NapsList from "@/components/charts/NapsList";
 import ApneaRiskCard from "@/components/charts/ApneaRiskCard";
 import SleepDebtChart from "@/components/charts/SleepDebtChart";
 import BedWakeTimeline from "@/components/charts/BedWakeTimeline";
@@ -134,7 +134,7 @@ export default async function SleepPage({
         </div>
       </div>
 
-      <NapCalendar naps={naps} />
+      <NapsList naps={naps} />
       <NapTrackerCard naps={napsWithHour} impact={napImpact} />
 
       <div className="grid-main">
