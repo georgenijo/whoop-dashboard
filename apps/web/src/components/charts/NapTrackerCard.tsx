@@ -85,7 +85,7 @@ export default function NapTrackerCard({ naps, impact }: Props) {
 
   if (impact.totalNaps < 2) {
     return (
-      <div className="card" style={{ marginTop: 24 }}>
+      <div className="card">
         <div className="card-head">
           <div>
             <div className="card-title">
@@ -104,7 +104,7 @@ export default function NapTrackerCard({ naps, impact }: Props) {
   }
 
   return (
-    <div className="card" style={{ marginTop: 24 }}>
+    <div className="card">
       <div className="card-head">
         <div>
           <div className="card-title">

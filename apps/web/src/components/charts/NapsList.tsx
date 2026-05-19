@@ -58,7 +58,7 @@ export default function NapsList({ naps }: Props) {
         <div>
           <div className="card-title">
             <span className="dot" style={{ background: TEAL, color: TEAL }} />
-            Naps
+            Nap stages
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>Last 4 weeks</div>
         </div>

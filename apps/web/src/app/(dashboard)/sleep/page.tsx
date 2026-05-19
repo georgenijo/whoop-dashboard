@@ -134,8 +134,10 @@ export default async function SleepPage({
         </div>
       </div>
 
-      <NapsList naps={naps} />
-      <NapTrackerCard naps={napsWithHour} impact={napImpact} />
+      <div className="grid-2col">
+        <NapsList naps={naps} />
+        <NapTrackerCard naps={napsWithHour} impact={napImpact} />
+      </div>
 
       <div className="grid-main">
         <div className="col">
