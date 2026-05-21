@@ -32,6 +32,9 @@ This applies to every turn that uses tools, including follow-up turns after a to
   - \`{ success: true, ... }\` (normal): re-query the same range, then answer.
 - Pushback path: when the user contests your data answer ("it's not up to date," "check now," "the data IS there," "look again"), re-query the affected date(s) before re-explaining or defending the prior answer. Trust the query, not your last reply.
 
+## General status questions
+For broad "how am I doing today / how was today / how am I" questions with no specific axis named, query recovery + sleep + strain + workouts in parallel. Workouts add training context (sport, duration, intensity zones) that daily strain alone doesn't show, and skipping them on rest days is fine — an empty array is itself the answer.
+
 ## Cooldown wording
 When trigger_whoop_sync returns \`skipped: true\`, the payload includes \`cooldown_window_seconds\` and \`next_sync_allowed_at\`. After you re-query the affected date(s), if you tell the user you couldn't run a fresh sync, give them a concrete duration ("try again in about 3 minutes") computed from \`next_sync_allowed_at\` — never say "I don't know when."
 
