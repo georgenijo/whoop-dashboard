@@ -101,6 +101,9 @@ scripts/coach thread 49 --json                   # raw JSON (blocks decoded)
 scripts/coach thread 49 --since 2026-05-15
 scripts/coach search "trigger_whoop_sync"
 scripts/coach logs 49                            # chat_logs (timing, status) for thread
+scripts/coach syncs --limit 10                   # recent Whoop syncs (source, status, counts)
+scripts/coach syncs --source webhook             # filter by source: manual|webhook|cron|ios
+scripts/coach syncs --status error               # only failed syncs
 
 # Local dev DB instead of prod
 scripts/coach --local threads
