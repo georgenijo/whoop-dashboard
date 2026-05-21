@@ -13,6 +13,17 @@ extension Notification.Name {
     static let apiUnauthorized = Notification.Name("com.georgenijo.coach.apiUnauthorized")
 }
 
+struct SyncResponse: Decodable {
+    let ok: Bool
+    let skipped: Bool?
+    let lastSyncAt: Date?
+    let durationMs: Int?
+    let recovery: Int?
+    let sleep: Int?
+    let workouts: Int?
+    let error: String?
+}
+
 final class APIClient {
     let baseURL: URL
     private let session: URLSession
@@ -75,6 +86,12 @@ final class APIClient {
         }
         let request = makeRequest(path: path, query: query, method: "POST", bodyData: bodyData)
         return try await execute(request, path: path)
+    }
+
+    func postSync() async throws -> SyncResponse {
+        var request = makeRequest(path: "/api/sync", query: nil, method: "POST", bodyData: nil)
+        request.timeoutInterval = 130
+        return try await execute(request, path: "/api/sync")
     }
 
     private func makeRequest(
