@@ -4,7 +4,6 @@ import { createChatThread, getChatThreadById, getChatThreadConversation } from "
 import { requireAuth } from "@/lib/auth";
 import {
   type ApiKeyOrigin,
-  BadApiKeyError,
   MissingApiKeyError,
   resolveApiKeyForUser,
 } from "@/lib/coach/api-key";
@@ -13,6 +12,7 @@ import {
   runAndPersistCoachTurn,
   titleChatThread,
 } from "@/lib/coach/persistence";
+import { classifyChatError } from "@/lib/coach/error-mapping";
 import { forModule } from "@/lib/logger";
 
 const chatLog = forModule("api.chat");
@@ -160,28 +160,24 @@ export async function POST(req: Request) {
         }
         return Response.json({ thread_id: thread.id, reply });
       } catch (err) {
-        if (err instanceof BadApiKeyError) {
-          return Response.json(
+        const classified = classifyChatError(err);
+        if (classified.kind !== "bad_api_key") {
+          chatLog.error(
             {
-              error: "Anthropic API key rejected",
-              kind: "bad_api_key",
-              origin: err.origin,
+              thread_id: thread.id,
+              user_id: user.id,
+              kind: classified.kind,
+              err: err instanceof Error ? err.message : String(err),
             },
-            { status: 401 },
+            "non-stream turn failed",
           );
         }
-        chatLog.error(
-          {
-            thread_id: thread.id,
-            user_id: user.id,
-            err: err instanceof Error ? err.message : String(err),
-          },
-          "non-stream turn failed",
-        );
-        return Response.json(
-          { error: "Coach call failed. Please try again." },
-          { status: 500 }
-        );
+        const payload: Record<string, unknown> = {
+          error: classified.message,
+          kind: classified.kind,
+        };
+        if (classified.origin) payload.origin = classified.origin;
+        return Response.json(payload, { status: classified.status });
       }
     }
 
@@ -254,23 +250,27 @@ export async function POST(req: Request) {
           close();
         } catch (err) {
           if (!abortController.signal.aborted) {
-            if (err instanceof BadApiKeyError) {
-              try {
-                send("error", {
-                  kind: "bad_api_key",
-                  origin: err.origin,
-                  message: "Anthropic API key rejected",
-                });
-              } catch {
-                // Nothing useful to send once the SSE response is gone.
-              }
-            } else {
-              const msg = err instanceof Error ? err.message : String(err);
-              try {
-                send("error", { message: msg });
-              } catch {
-                // Nothing useful to send once the SSE response is gone.
-              }
+            const classified = classifyChatError(err);
+            if (classified.kind !== "bad_api_key") {
+              chatLog.error(
+                {
+                  thread_id: thread.id,
+                  user_id: user.id,
+                  kind: classified.kind,
+                  err: err instanceof Error ? err.message : String(err),
+                },
+                "stream turn failed",
+              );
+            }
+            try {
+              const payload: Record<string, unknown> = {
+                kind: classified.kind,
+                message: classified.message,
+              };
+              if (classified.origin) payload.origin = classified.origin;
+              send("error", payload);
+            } catch {
+              // Nothing useful to send once the SSE response is gone.
             }
           }
           close();
