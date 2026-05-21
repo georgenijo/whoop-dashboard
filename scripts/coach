@@ -364,6 +364,51 @@ def cmd_logs(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_syncs(args: argparse.Namespace) -> int:
+    sql = (
+        "SELECT id, started_at, duration_ms, status, source, recovery_count, "
+        "sleep_count, workouts_count, partial, error_message, details "
+        "FROM sync_logs"
+    )
+    where: list[str] = []
+    params: tuple = ()
+    if args.source:
+        where.append("source = ?")
+        params = params + (args.source,)
+    if args.status:
+        where.append("status = ?")
+        params = params + (args.status,)
+    if where:
+        sql += " WHERE " + " AND ".join(where)
+    sql += " ORDER BY id DESC LIMIT ?"
+    params = params + (args.limit,)
+    rows = q(args, sql, params)
+
+    if args.json:
+        print(json.dumps(rows, indent=2, default=str))
+        return 0
+
+    if not rows:
+        print(DIM("(no sync_logs rows)"))
+        return 0
+
+    print(BOLD(f"{'ID':>5}  {'STARTED (UTC)':<24}  {'SOURCE':<8}  {'STATUS':<8}  {'MS':>6}  REC/SLP/WKT"))
+    for r in rows:
+        status = r.get("status") or ""
+        status_str = GREEN(status) if status == "ok" else RED(status) if status == "error" else YELLOW(status)
+        counts = (
+            f"{r.get('recovery_count') if r.get('recovery_count') is not None else '-':>3}/"
+            f"{r.get('sleep_count') if r.get('sleep_count') is not None else '-':>3}/"
+            f"{r.get('workouts_count') if r.get('workouts_count') is not None else '-':>3}"
+        )
+        partial = YELLOW("  partial") if r.get("partial") else ""
+        src = (r.get("source") or "-")[:8]
+        print(f"{r['id']:>5}  {(r['started_at'] or '')[:23]:<24}  {src:<8}  {status_str:<17}  {r['duration_ms']:>6}  {counts}{partial}")
+        if r.get("error_message"):
+            print(RED(f"       error: {r['error_message']}"))
+    return 0
+
+
 # ---------- CLI ----------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -407,6 +452,14 @@ def build_parser() -> argparse.ArgumentParser:
     lg.add_argument("thread_id", type=int)
     lg.add_argument("--json", action="store_true")
     lg.set_defaults(func=cmd_logs)
+
+    sy = sub.add_parser("syncs", help="Recent sync_logs rows (Whoop syncs)")
+    sy.add_argument("--source", help="filter by source (manual|webhook|cron|ios|...)")
+    sy.add_argument("--status", choices=["ok", "error", "skipped", "partial"],
+                    help="filter by status")
+    sy.add_argument("--limit", type=int, default=20)
+    sy.add_argument("--json", action="store_true")
+    sy.set_defaults(func=cmd_syncs)
 
     return p
 
