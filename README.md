@@ -83,6 +83,33 @@ Caps: 8 tool-use iterations, 16K output tokens. On `max_tokens` stop reason, par
 3. Whoop webhooks at `/api/whoop/webhook` resolve `evt.user_id` → local `users.id` via `lookupUserIdByProvider("whoop", …)` and upsert. Unknown Whoop user → 200 noop.
 4. Web pages and Coach tools read via `forUser(userId).all/get(...)` — tenant binding enforced; CI vitest blocks domain SQL outside the wrapper.
 
+## Coach CLI
+
+Inspect coach threads (chat_messages.blocks, chat_threads, chat_logs) on the prod VM without hand-rolled SSH+SQL round-trips. Local script, defaults to prod target.
+
+```bash
+# Once per work session — opens persistent SSH ControlMaster (4h ControlPersist)
+scripts/coach login
+
+# Inspect
+scripts/coach threads --limit 10                # list newest threads
+scripts/coach thread 49                          # full transcript
+scripts/coach thread 49 --tools                  # only tool_use + tool_result
+scripts/coach thread 49 --thinking               # only thinking blocks
+scripts/coach thread 49 --json                   # raw JSON (blocks decoded)
+scripts/coach thread 49 --since 2026-05-15
+scripts/coach search "trigger_whoop_sync"
+scripts/coach logs 49                            # chat_logs (timing, status) for thread
+
+# Local dev DB instead of prod
+scripts/coach --local threads
+
+# Close session
+scripts/coach logout
+```
+
+Login uses an OpenSSH ControlMaster socket at `~/.ssh/cm-coach-master` with `ControlPersist=4h`, so all subsequent commands skip the handshake. Read-only — no DB writes. Pairs with the `coach-debug` skill under `~/.claude/skills/coach-debug/`.
+
 ## Deploy
 
 Ubuntu VM, `whoop-web.service` (systemd) on port 8501. **Backup the DB before any schema-touching deploy** — see `CLAUDE.md` "Deploy" section for the full recipe (scp the DB locally, deploy, verify row counts, rollback path on failure).

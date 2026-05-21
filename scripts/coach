@@ -1,0 +1,413 @@
+#!/usr/bin/env python3
+"""coach — CLI for inspecting Whoop Dashboard coach threads on the prod VM.
+
+Opens a persistent SSH ControlMaster to the prod VM (`coach login`) and runs
+scoped queries against the chat_messages / chat_threads / chat_logs tables.
+Default target is prod; `--local` reads `shared/whoop_data.db` directly.
+
+See README.md "Coach CLI" section or `coach --help`.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shlex
+import shutil
+import sqlite3
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+VM_USER = "ubuntu"
+VM_HOST = "129.80.134.194"
+VM_TARGET = f"{VM_USER}@{VM_HOST}"
+SSH_KEY = str(Path.home() / ".ssh" / "id_ed25519")
+CM_SOCKET = str(Path.home() / ".ssh" / "cm-coach-master")
+CONTROL_PERSIST = "4h"
+VM_DB_PATH = "/home/george/Documents/whoop-dashboard/shared/whoop_data.db"
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+LOCAL_DB_PATH = REPO_ROOT / "shared" / "whoop_data.db"
+
+_USE_COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+
+
+def c(code: str, text: str) -> str:
+    if not _USE_COLOR:
+        return text
+    return f"\033[{code}m{text}\033[0m"
+
+
+BOLD = lambda s: c("1", s)
+DIM = lambda s: c("2", s)
+RED = lambda s: c("31", s)
+GREEN = lambda s: c("32", s)
+YELLOW = lambda s: c("33", s)
+BLUE = lambda s: c("34", s)
+MAGENTA = lambda s: c("35", s)
+CYAN = lambda s: c("36", s)
+
+
+# ---------- SSH ControlMaster ----------
+
+def ssh_base() -> list[str]:
+    return [
+        "ssh",
+        "-i", SSH_KEY,
+        "-o", f"ControlPath={CM_SOCKET}",
+        "-o", "ControlMaster=auto",
+        "-o", f"ControlPersist={CONTROL_PERSIST}",
+        "-o", "StrictHostKeyChecking=no",
+        VM_TARGET,
+    ]
+
+
+def master_alive() -> bool:
+    r = subprocess.run(
+        ["ssh", "-O", "check", "-o", f"ControlPath={CM_SOCKET}", VM_TARGET],
+        capture_output=True, text=True,
+    )
+    return r.returncode == 0
+
+
+def cmd_login(_args: argparse.Namespace) -> int:
+    if master_alive():
+        print(GREEN(f"✓ SSH master already up ({CM_SOCKET})"))
+        return 0
+    Path(CM_SOCKET).parent.mkdir(parents=True, exist_ok=True)
+    r = subprocess.run(
+        ssh_base() + ["-N", "-f"],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        print(RED(f"✗ ssh login failed: {r.stderr.strip()}"), file=sys.stderr)
+        return r.returncode
+    print(GREEN(f"✓ SSH master up — persists {CONTROL_PERSIST}"))
+    return 0
+
+
+def cmd_logout(_args: argparse.Namespace) -> int:
+    if not master_alive():
+        print(DIM("(no active master)"))
+        return 0
+    r = subprocess.run(
+        ["ssh", "-O", "exit", "-o", f"ControlPath={CM_SOCKET}", VM_TARGET],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        print(RED(f"✗ logout failed: {r.stderr.strip()}"), file=sys.stderr)
+        return r.returncode
+    print(GREEN("✓ SSH master closed"))
+    return 0
+
+
+# ---------- Query plumbing ----------
+
+def query_local(sql: str, params: tuple = ()) -> list[dict[str, Any]]:
+    if not LOCAL_DB_PATH.exists():
+        print(RED(f"✗ local DB not found: {LOCAL_DB_PATH}"), file=sys.stderr)
+        sys.exit(1)
+    conn = sqlite3.connect(str(LOCAL_DB_PATH))
+    conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute(sql, params).fetchall()
+    finally:
+        conn.close()
+    return [dict(r) for r in rows]
+
+
+def query_remote(sql: str, params: tuple = ()) -> list[dict[str, Any]]:
+    if not master_alive():
+        print(YELLOW("! SSH master not up — run `coach login` first"), file=sys.stderr)
+        sys.exit(2)
+    py = (
+        "import sqlite3, json, sys\n"
+        f"conn = sqlite3.connect({VM_DB_PATH!r})\n"
+        "conn.row_factory = sqlite3.Row\n"
+        f"sql = {sql!r}\n"
+        f"params = {list(params)!r}\n"
+        "rows = [dict(r) for r in conn.execute(sql, params).fetchall()]\n"
+        "sys.stdout.write(json.dumps(rows, default=str))\n"
+    )
+    remote_cmd = f"sudo -u george python3 -c {shlex.quote(py)}"
+    r = subprocess.run(
+        ssh_base() + [remote_cmd],
+        capture_output=True, text=True,
+    )
+    if r.returncode != 0:
+        print(RED(f"✗ remote query failed: {r.stderr.strip()}"), file=sys.stderr)
+        sys.exit(r.returncode)
+    try:
+        return json.loads(r.stdout or "[]")
+    except json.JSONDecodeError as e:
+        print(RED(f"✗ bad remote JSON: {e}\n{r.stdout[:400]}"), file=sys.stderr)
+        sys.exit(1)
+
+
+def q(args: argparse.Namespace, sql: str, params: tuple = ()) -> list[dict[str, Any]]:
+    if args.local:
+        return query_local(sql, params)
+    return query_remote(sql, params)
+
+
+# ---------- Block rendering ----------
+
+def role_color(role: str) -> str:
+    return {
+        "user": CYAN(role.upper()),
+        "assistant": MAGENTA(role.upper()),
+        "system": DIM(role.upper()),
+        "tool": YELLOW(role.upper()),
+    }.get(role, role.upper())
+
+
+def render_blocks(blocks: list[dict[str, Any]], filt: str | None) -> None:
+    for b in blocks:
+        btype = b.get("type", "unknown")
+        if filt == "tools" and btype not in ("tool_use", "tool_result"):
+            continue
+        if filt == "thinking" and btype != "thinking":
+            continue
+        if filt == "assistant" and btype != "text":
+            continue
+        if btype == "text":
+            print(b.get("text", ""))
+        elif btype == "thinking":
+            print(DIM("  [thinking]"))
+            for line in (b.get("thinking", "") or "").splitlines():
+                print(DIM(f"  │ {line}"))
+        elif btype == "tool_use":
+            name = b.get("name", "?")
+            inp = b.get("input", {})
+            print(YELLOW(f"  → tool_use: {name}"))
+            print(DIM(f"    input: {json.dumps(inp, indent=2)}"))
+        elif btype == "tool_result":
+            tid = b.get("tool_use_id", "?")
+            content = b.get("content", "")
+            if isinstance(content, list):
+                content = "\n".join(
+                    blk.get("text", "") if isinstance(blk, dict) else str(blk)
+                    for blk in content
+                )
+            print(YELLOW(f"  ← tool_result [{tid[:12]}…]"))
+            txt = str(content)
+            if len(txt) > 2000:
+                txt = txt[:2000] + DIM(f"… (+{len(str(content))-2000} chars)")
+            for line in txt.splitlines():
+                print(DIM(f"    │ {line}"))
+        else:
+            print(DIM(f"  [{btype}] {json.dumps(b)[:200]}"))
+
+
+# ---------- Subcommands ----------
+
+def cmd_thread(args: argparse.Namespace) -> int:
+    sql = "SELECT id, role, content, blocks, created_at, status FROM chat_messages WHERE thread_id = ?"
+    params: tuple = (args.id,)
+    if args.since:
+        sql += " AND created_at >= ?"
+        params = params + (args.since,)
+    sql += " ORDER BY id ASC"
+    rows = q(args, sql, params)
+
+    if args.json:
+        for r in rows:
+            if r.get("blocks"):
+                try:
+                    r["blocks"] = json.loads(r["blocks"])
+                except Exception:
+                    pass
+        print(json.dumps(rows, indent=2, default=str))
+        return 0
+
+    thread = q(args, "SELECT id, user_id, title, created_at FROM chat_threads WHERE id = ?", (args.id,))
+    if thread:
+        t = thread[0]
+        print(BOLD(f"Thread #{t['id']}: {t.get('title') or '(untitled)'}"))
+        print(DIM(f"  user_id={t['user_id']}  created_at={t['created_at']}  messages={len(rows)}"))
+        print()
+
+    filt: str | None = None
+    if args.tools:
+        filt = "tools"
+    elif args.thinking:
+        filt = "thinking"
+    elif args.assistant:
+        filt = "assistant"
+
+    for r in rows:
+        role = r["role"]
+        if args.user and role != "user":
+            continue
+        if args.assistant and role != "assistant":
+            continue
+
+        ts = r.get("created_at", "")
+        status = r.get("status") or ""
+        status_str = DIM(f" [{status}]") if status and status != "complete" else ""
+        print(f"{DIM(ts)}  {role_color(role)}{status_str}  #{r['id']}")
+
+        blocks_raw = r.get("blocks")
+        if blocks_raw:
+            try:
+                blocks = json.loads(blocks_raw)
+                if isinstance(blocks, list):
+                    render_blocks(blocks, filt)
+                    print()
+                    continue
+            except Exception:
+                pass
+
+        if not filt or filt == "assistant":
+            content = r.get("content") or ""
+            for line in content.splitlines():
+                print(f"  {line}")
+        print()
+    return 0
+
+
+def cmd_threads(args: argparse.Namespace) -> int:
+    sql = (
+        "SELECT t.id, t.user_id, t.title, t.created_at, t.updated_at, "
+        "(SELECT COUNT(*) FROM chat_messages m WHERE m.thread_id = t.id) AS msg_count "
+        "FROM chat_threads t"
+    )
+    params: tuple = ()
+    if args.user is not None:
+        sql += " WHERE t.user_id = ?"
+        params = (args.user,)
+    sql += " ORDER BY t.updated_at DESC LIMIT ?"
+    params = params + (args.limit,)
+    rows = q(args, sql, params)
+
+    if args.json:
+        print(json.dumps(rows, indent=2, default=str))
+        return 0
+
+    if not rows:
+        print(DIM("(no threads)"))
+        return 0
+
+    print(BOLD(f"{'ID':>5}  {'USER':>4}  {'MSGS':>4}  {'UPDATED':<19}  TITLE"))
+    for r in rows:
+        title = (r.get("title") or DIM("(untitled)"))[:80]
+        print(f"{r['id']:>5}  {r['user_id']:>4}  {r['msg_count']:>4}  {(r['updated_at'] or '')[:19]:<19}  {title}")
+    return 0
+
+
+def cmd_search(args: argparse.Namespace) -> int:
+    needle = f"%{args.query}%"
+    sql = (
+        "SELECT m.id, m.thread_id, m.role, m.created_at, "
+        "substr(m.content, 1, 200) AS snippet, t.title "
+        "FROM chat_messages m LEFT JOIN chat_threads t ON t.id = m.thread_id "
+        "WHERE m.content LIKE ? OR m.blocks LIKE ? "
+        "ORDER BY m.id DESC LIMIT ?"
+    )
+    rows = q(args, sql, (needle, needle, args.limit))
+
+    if args.json:
+        print(json.dumps(rows, indent=2, default=str))
+        return 0
+
+    if not rows:
+        print(DIM("(no matches)"))
+        return 0
+
+    for r in rows:
+        head = f"#{r['id']} thread={r['thread_id']} {role_color(r['role'])} {DIM(r['created_at'] or '')}"
+        print(head)
+        if r.get("title"):
+            print(DIM(f"  thread: {r['title']}"))
+        snippet = (r.get("snippet") or "").replace("\n", " ⏎ ")
+        print(f"  {snippet}")
+        print()
+    return 0
+
+
+def cmd_logs(args: argparse.Namespace) -> int:
+    sql = (
+        "SELECT id, started_at, duration_ms, status, response_length, "
+        "error_message, type, source, days_context, substr(prompt_preview, 1, 120) AS preview "
+        "FROM chat_logs WHERE thread_id = ? ORDER BY id ASC"
+    )
+    rows = q(args, sql, (args.thread_id,))
+
+    if args.json:
+        print(json.dumps(rows, indent=2, default=str))
+        return 0
+
+    if not rows:
+        print(DIM("(no chat_logs rows for that thread)"))
+        return 0
+
+    print(BOLD(f"chat_logs for thread #{args.thread_id}  ({len(rows)} rows)"))
+    print()
+    for r in rows:
+        status = r.get("status") or ""
+        status_str = GREEN(status) if status in ("ok", "success") else RED(status) if status else ""
+        print(f"  #{r['id']}  {DIM(r['started_at'] or '')}  {status_str}  {r['duration_ms']}ms  "
+              f"resp={r['response_length']}  type={r.get('type') or '-'}  src={r.get('source') or '-'}")
+        if r.get("preview"):
+            print(DIM(f"    » {r['preview']}"))
+        if r.get("error_message"):
+            print(RED(f"    error: {r['error_message']}"))
+    return 0
+
+
+# ---------- CLI ----------
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="coach",
+        description="Inspect Whoop Dashboard coach threads on the prod VM (or --local).",
+    )
+    p.add_argument("--local", action="store_true",
+                   help="Query local shared/whoop_data.db instead of prod VM")
+
+    sub = p.add_subparsers(dest="command", required=True)
+
+    sub.add_parser("login", help="Open persistent SSH ControlMaster to prod VM (4h)").set_defaults(func=cmd_login)
+    sub.add_parser("logout", help="Close the SSH ControlMaster").set_defaults(func=cmd_logout)
+
+    t = sub.add_parser("thread", help="Print full transcript for a thread")
+    t.add_argument("id", type=int, help="thread_id")
+    t.add_argument("--tools", action="store_true", help="only tool_use + tool_result blocks")
+    t.add_argument("--user", action="store_true", help="only user messages")
+    t.add_argument("--assistant", action="store_true", help="only assistant text")
+    t.add_argument("--thinking", action="store_true", help="only thinking blocks")
+    t.add_argument("--json", action="store_true", help="raw JSON dump (blocks decoded)")
+    t.add_argument("--since", help="filter messages by created_at >= TS (YYYY-MM-DD or ISO)")
+    t.set_defaults(func=cmd_thread)
+
+    ts = sub.add_parser("threads", help="List threads (newest first)")
+    ts.add_argument("--user", type=int, help="filter by user_id")
+    ts.add_argument("--limit", type=int, default=20)
+    ts.add_argument("--json", action="store_true")
+    ts.set_defaults(func=cmd_threads)
+
+    s = sub.add_parser("search", help="Grep across chat_messages content + blocks")
+    s.add_argument("query", help="substring to match")
+    s.add_argument("--limit", type=int, default=20)
+    s.add_argument("--json", action="store_true")
+    s.set_defaults(func=cmd_search)
+
+    lg = sub.add_parser("logs", help="chat_logs rows (timing/status) for a thread")
+    lg.add_argument("thread_id", type=int)
+    lg.add_argument("--json", action="store_true")
+    lg.set_defaults(func=cmd_logs)
+
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
