@@ -93,6 +93,7 @@ scripts/coach login
 
 # Inspect
 scripts/coach threads --limit 10                # list newest threads
+scripts/coach threads --source ios --limit 10    # only threads with iOS log rows
 scripts/coach thread 49                          # full transcript
 scripts/coach thread 49 --tools                  # only tool_use + tool_result
 scripts/coach thread 49 --thinking               # only thinking blocks
