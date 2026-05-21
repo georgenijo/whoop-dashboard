@@ -34,6 +34,9 @@ struct ChatView: View {
     var body: some View {
         VStack(spacing: 0) {
             messagesList
+            if let sendError {
+                sendErrorBanner(sendError)
+            }
             Rectangle()
                 .fill(Theme.Palette.borderSubtle)
                 .frame(height: 1)
@@ -48,6 +51,37 @@ struct ChatView: View {
                 await loadHistory()
             }
         }
+    }
+
+    private func sendErrorBanner(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(Theme.Palette.danger)
+                .font(.system(size: 14, weight: .semibold))
+                .padding(.top, 1)
+            Text(text)
+                .font(Theme.FontStyle.sans(12.5))
+                .foregroundStyle(Theme.Palette.fg0)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                sendError = nil
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.Palette.fg2)
+                    .padding(4)
+            }
+        }
+        .padding(.horizontal, Theme.Spacing.md)
+        .padding(.vertical, 10)
+        .background(Theme.Palette.danger.opacity(0.12))
+        .overlay(
+            Rectangle()
+                .fill(Theme.Palette.danger.opacity(0.4))
+                .frame(height: 1),
+            alignment: .top
+        )
     }
 
     @ViewBuilder
@@ -76,12 +110,6 @@ struct ChatView: View {
                         ForEach(rows) { row in
                             MessageBubble(row: row)
                                 .id(row.id)
-                        }
-                        if let sendError {
-                            Text(sendError)
-                                .font(Theme.FontStyle.sans(11))
-                                .foregroundStyle(Theme.Palette.danger)
-                                .padding(.horizontal)
                         }
                     }
                     .padding(Theme.Spacing.md)
@@ -209,11 +237,28 @@ struct ChatView: View {
             sendError = "Network error: \(err.localizedDescription)"
             rollbackOptimistic(optimisticId: optimisticId, restore: trimmed)
         } catch APIError.serverError(let code) {
-            sendError = "Server error (\(code))"
+            sendError = ChatView.friendlySendError(forStatus: code)
             rollbackOptimistic(optimisticId: optimisticId, restore: trimmed)
         } catch {
-            sendError = "Could not send"
+            sendError = "Could not send. Please try again."
             rollbackOptimistic(optimisticId: optimisticId, restore: trimmed)
+        }
+    }
+
+    private static func friendlySendError(forStatus code: Int) -> String {
+        switch code {
+        case 402:
+            return "Anthropic credits exhausted. Top up your Anthropic account, or add a personal key in Settings."
+        case 429:
+            return "Rate limited by Anthropic. Try again in a moment."
+        case 503:
+            return "Anthropic is temporarily unavailable. Try again shortly."
+        case 502:
+            return "Anthropic returned an error. Try again."
+        case 500:
+            return "Coach call failed. Please try again."
+        default:
+            return "Server error (\(code)). Try again."
         }
     }
 
