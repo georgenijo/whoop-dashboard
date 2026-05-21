@@ -104,6 +104,10 @@ scripts/coach logs 49                            # chat_logs (timing, status) fo
 scripts/coach syncs --limit 10                   # recent Whoop syncs (source, status, counts)
 scripts/coach syncs --source webhook             # filter by source: manual|webhook|cron|ios
 scripts/coach syncs --status error               # only failed syncs
+scripts/coach chat-detail 188                    # full chat_logs row + parsed details JSON
+scripts/coach settings --user 2                  # user_settings (key redacted)
+scripts/coach journal "5 min ago" --grep chat    # journalctl whoop-web window
+scripts/coach why 82                             # forensic: chat_logs + journal + user_settings delta for thread
 
 # Local dev DB instead of prod
 scripts/coach --local threads

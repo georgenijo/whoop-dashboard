@@ -153,6 +153,18 @@ def q(args: argparse.Namespace, sql: str, params: tuple = ()) -> list[dict[str, 
     return query_remote(sql, params)
 
 
+def run_remote_shell(cmd: str) -> tuple[int, str, str]:
+    """Run an arbitrary shell command on the VM via ControlMaster socket."""
+    if not master_alive():
+        print(YELLOW("! SSH master not up — run `coach login` first"), file=sys.stderr)
+        sys.exit(2)
+    r = subprocess.run(
+        ssh_base() + [cmd],
+        capture_output=True, text=True,
+    )
+    return r.returncode, r.stdout, r.stderr
+
+
 # ---------- Block rendering ----------
 
 def role_color(role: str) -> str:
@@ -364,6 +376,217 @@ def cmd_logs(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_chat_detail(args: argparse.Namespace) -> int:
+    rows = q(args,
+        "SELECT * FROM chat_logs WHERE id = ?",
+        (args.log_id,),
+    )
+    if not rows:
+        print(DIM(f"(no chat_logs row with id={args.log_id})"))
+        return 0
+    row = rows[0]
+
+    details_raw = row.get("details")
+    parsed_details: Any = None
+    if details_raw:
+        try:
+            parsed_details = json.loads(details_raw)
+        except Exception:
+            parsed_details = details_raw
+
+    if args.json:
+        out = dict(row)
+        out["details"] = parsed_details
+        print(json.dumps(out, indent=2, default=str))
+        return 0
+
+    status = row.get("status") or ""
+    status_str = GREEN(status) if status in ("ok", "success") else RED(status) if status else ""
+    print(BOLD(f"chat_logs #{row['id']}  thread={row.get('thread_id')}  {status_str}"))
+    print(DIM(f"  started_at: {row.get('started_at')}"))
+    print(DIM(f"  duration:   {row.get('duration_ms')}ms"))
+    print(DIM(f"  response:   {row.get('response_length')} chars"))
+    print(DIM(f"  type/src:   {row.get('type') or '-'} / {row.get('source') or '-'}"))
+    if row.get("prompt_preview"):
+        print(DIM(f"  preview:    {row['prompt_preview']}"))
+    if row.get("error_message"):
+        print(RED(f"  error:      {row['error_message']}"))
+    if parsed_details:
+        print(BOLD("\ndetails:"))
+        if isinstance(parsed_details, dict):
+            for k, v in parsed_details.items():
+                if isinstance(v, dict):
+                    print(f"  {k}:")
+                    for k2, v2 in v.items():
+                        print(f"    {k2}: {v2}")
+                else:
+                    print(f"  {k}: {v}")
+        else:
+            print(f"  {parsed_details}")
+    return 0
+
+
+def cmd_journal(args: argparse.Namespace) -> int:
+    if args.local:
+        print(YELLOW("! --local has no journalctl; --local ignored for `journal`"), file=sys.stderr)
+    until_clause = f" --until {shlex.quote(args.until)}" if args.until else ""
+    grep_clause = f" | grep -iE {shlex.quote(args.grep)}" if args.grep else ""
+    cmd = (
+        f"sudo journalctl -u whoop-web "
+        f"--since {shlex.quote(args.since)}{until_clause} "
+        f"--no-pager{grep_clause}"
+    )
+    rc, out, err = run_remote_shell(cmd)
+    if rc != 0 and not out:
+        print(RED(f"✗ journalctl failed: {err.strip()}"), file=sys.stderr)
+        return rc
+    sys.stdout.write(out)
+    return 0
+
+
+def cmd_settings(args: argparse.Namespace) -> int:
+    cols = (
+        "user_id, anthropic_key_version, model_pref, timezone, tz, "
+        "monthly_token_cap, coach_goals, onboarded_at, updated_at, "
+        "(CASE WHEN anthropic_key IS NULL THEN 0 ELSE 1 END) AS anthropic_key_set"
+    )
+    sql = f"SELECT {cols} FROM user_settings"
+    params: tuple = ()
+    if args.user is not None:
+        sql += " WHERE user_id = ?"
+        params = (args.user,)
+    sql += " ORDER BY user_id ASC"
+    rows = q(args, sql, params)
+
+    if args.json:
+        print(json.dumps(rows, indent=2, default=str))
+        return 0
+
+    if not rows:
+        print(DIM("(no user_settings rows)"))
+        return 0
+
+    for r in rows:
+        print(BOLD(f"user_settings #{r['user_id']}"))
+        print(f"  anthropic_key_set:     {GREEN('yes') if r.get('anthropic_key_set') else DIM('no')}")
+        print(f"  anthropic_key_version: {r.get('anthropic_key_version') if r.get('anthropic_key_version') is not None else '-'}")
+        print(f"  model_pref:            {r.get('model_pref') or '-'}")
+        print(f"  tz:                    {r.get('tz') or r.get('timezone') or '-'}")
+        print(f"  monthly_token_cap:     {r.get('monthly_token_cap') if r.get('monthly_token_cap') is not None else '-'}")
+        print(f"  coach_goals:           {r.get('coach_goals') or '-'}")
+        print(f"  onboarded_at:          {r.get('onboarded_at') or '-'}")
+        print(f"  updated_at:            {r.get('updated_at') or '-'}")
+        print()
+    return 0
+
+
+def cmd_why(args: argparse.Namespace) -> int:
+    """Forensic: cross-join chat_logs + journalctl + user_settings for a thread."""
+    logs = q(args,
+        "SELECT * FROM chat_logs WHERE thread_id = ? ORDER BY id ASC",
+        (args.thread_id,),
+    )
+    if not logs:
+        print(DIM(f"(no chat_logs rows for thread {args.thread_id})"))
+        return 0
+
+    threads = q(args,
+        "SELECT id, user_id, title, created_at FROM chat_threads WHERE id = ?",
+        (args.thread_id,),
+    )
+    thread = threads[0] if threads else None
+
+    last = logs[-1]
+    started = last.get("started_at") or ""
+    duration_ms = last.get("duration_ms") or 0
+    status = last.get("status") or ""
+
+    print(BOLD(f"Forensics — thread #{args.thread_id}"))
+    if thread:
+        print(DIM(f"  title: {thread.get('title') or '(untitled)'}"))
+        print(DIM(f"  user:  {thread.get('user_id')}  created {thread.get('created_at')}"))
+    print()
+
+    print(BOLD(f"chat_logs ({len(logs)} rows)"))
+    for r in logs:
+        s = r.get("status") or ""
+        s_str = GREEN(s) if s in ("ok", "success") else RED(s) if s else ""
+        print(f"  #{r['id']}  {DIM(r.get('started_at') or '')}  {s_str:<14}  {r.get('duration_ms')}ms  src={r.get('source') or '-'}")
+        details_raw = r.get("details")
+        if details_raw:
+            try:
+                d = json.loads(details_raw)
+                usage = d.get("usage") if isinstance(d, dict) else None
+                if usage:
+                    print(DIM(
+                        f"    iters={d.get('iterations',0)} "
+                        f"calls={usage.get('calls',0)} "
+                        f"in={usage.get('input_tokens_total',0)} "
+                        f"out={usage.get('output_tokens_total',0)} "
+                        f"cache_w={usage.get('cache_creation_input_tokens_total',0)} "
+                        f"cache_r={usage.get('cache_read_input_tokens_total',0)}"
+                    ))
+                tools = d.get("tools") if isinstance(d, dict) else None
+                if tools:
+                    print(DIM(f"    tools: {', '.join(tools)}"))
+            except Exception:
+                pass
+        if r.get("error_message"):
+            print(RED(f"    error: {r['error_message']}"))
+    print()
+
+    # user_settings updated_at delta — was a key/setting rotated near this call?
+    if thread:
+        ss = q(args,
+            "SELECT updated_at, anthropic_key_version FROM user_settings WHERE user_id = ?",
+            (thread["user_id"],),
+        )
+        if ss:
+            print(BOLD("user_settings"))
+            print(f"  updated_at:            {ss[0].get('updated_at')}")
+            print(f"  anthropic_key_version: {ss[0].get('anthropic_key_version')}")
+            try:
+                from datetime import datetime
+                def parse(ts: str) -> datetime:
+                    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                if started and ss[0].get("updated_at"):
+                    delta = (parse(started) - parse(ss[0]["updated_at"])).total_seconds()
+                    if 0 < delta < 3600:
+                        print(YELLOW(
+                            f"  ⚠ settings changed {delta:.0f}s before this turn — "
+                            "new key = cold Anthropic prompt cache (cache_w > 0, cache_r = 0)"
+                        ))
+            except Exception:
+                pass
+            print()
+
+    # Pull journalctl window around the last turn
+    if not args.local and started and duration_ms:
+        try:
+            from datetime import datetime, timedelta
+            def parse(ts: str) -> datetime:
+                return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            start_dt = parse(started) - timedelta(seconds=2)
+            end_dt = parse(started) + timedelta(milliseconds=duration_ms + 5000)
+            since = start_dt.strftime("%Y-%m-%d %H:%M:%S")
+            until = end_dt.strftime("%Y-%m-%d %H:%M:%S")
+            print(BOLD(f"journalctl whoop-web  {since} → {until}  (UTC)"))
+            cmd = (
+                f"sudo journalctl -u whoop-web --since {shlex.quote(since)} "
+                f"--until {shlex.quote(until)} --no-pager 2>&1 | "
+                f"grep -iE 'chat|thread|sonnet|anthropic|cache|stream|error' | head -40"
+            )
+            rc, out, _err = run_remote_shell(cmd)
+            if out.strip():
+                for line in out.splitlines():
+                    print(DIM(f"  {line}"))
+            else:
+                print(DIM("  (no matching lines)"))
+        except Exception as e:
+            print(DIM(f"  (journalctl skipped: {e})"))
+    return 0
+
+
 def cmd_syncs(args: argparse.Namespace) -> int:
     sql = (
         "SELECT id, started_at, duration_ms, status, source, recovery_count, "
@@ -460,6 +683,26 @@ def build_parser() -> argparse.ArgumentParser:
     sy.add_argument("--limit", type=int, default=20)
     sy.add_argument("--json", action="store_true")
     sy.set_defaults(func=cmd_syncs)
+
+    cd = sub.add_parser("chat-detail", help="Full chat_logs row + parsed details JSON")
+    cd.add_argument("log_id", type=int, help="chat_logs.id")
+    cd.add_argument("--json", action="store_true")
+    cd.set_defaults(func=cmd_chat_detail)
+
+    jr = sub.add_parser("journal", help="journalctl whoop-web on the VM (prod only)")
+    jr.add_argument("since", help="--since TS (e.g. '2026-05-21 03:35:00' or '5 min ago')")
+    jr.add_argument("--until", help="--until TS")
+    jr.add_argument("--grep", help="extended-regex filter (case-insensitive)")
+    jr.set_defaults(func=cmd_journal)
+
+    se = sub.add_parser("settings", help="user_settings row (key redacted)")
+    se.add_argument("--user", type=int, help="filter by user_id")
+    se.add_argument("--json", action="store_true")
+    se.set_defaults(func=cmd_settings)
+
+    wh = sub.add_parser("why", help="Forensic: chat_logs + journalctl + user_settings delta for a thread")
+    wh.add_argument("thread_id", type=int)
+    wh.set_defaults(func=cmd_why)
 
     return p
 
