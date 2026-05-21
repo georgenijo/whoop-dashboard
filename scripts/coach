@@ -275,10 +275,16 @@ def cmd_threads(args: argparse.Namespace) -> int:
         "(SELECT COUNT(*) FROM chat_messages m WHERE m.thread_id = t.id) AS msg_count "
         "FROM chat_threads t"
     )
+    where: list[str] = []
     params: tuple = ()
     if args.user is not None:
-        sql += " WHERE t.user_id = ?"
-        params = (args.user,)
+        where.append("t.user_id = ?")
+        params = params + (args.user,)
+    if args.source:
+        where.append("EXISTS (SELECT 1 FROM chat_logs l WHERE l.thread_id = t.id AND l.source = ?)")
+        params = params + (args.source,)
+    if where:
+        sql += " WHERE " + " AND ".join(where)
     sql += " ORDER BY t.updated_at DESC LIMIT ?"
     params = params + (args.limit,)
     rows = q(args, sql, params)
@@ -385,6 +391,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     ts = sub.add_parser("threads", help="List threads (newest first)")
     ts.add_argument("--user", type=int, help="filter by user_id")
+    ts.add_argument("--source", choices=["ios", "web", "api"],
+                    help="filter to threads with at least one chat_logs row from this source")
     ts.add_argument("--limit", type=int, default=20)
     ts.add_argument("--json", action="store_true")
     ts.set_defaults(func=cmd_threads)
