@@ -46,6 +46,14 @@ export type RunAnthropicOptions = CoachStreamHandlers & {
   signal?: AbortSignal;
 };
 
+function isRetriableApiError(err: unknown): boolean {
+  if (!(err instanceof APIError)) return false;
+  const status = err.status;
+  if (status === 529) return true;
+  if (typeof status === "number" && status >= 500 && status < 600) return true;
+  return false;
+}
+
 function isToolUseBlock(block: unknown): block is ToolUseBlock {
   return (
     typeof block === "object" &&
@@ -217,12 +225,45 @@ export async function runAnthropicSdk(
   // Wrap an Anthropic SDK call and translate a 401 into our BadApiKeyError
   // (carrying origin) so the chat route can render a "your key was
   // rejected" banner instead of a generic 500.
+  //
+  // Retries once on transient upstream failures (Anthropic 529 "overloaded"
+  // and 5xx server errors). Anthropic overload bursts are short-lived; one
+  // retry covers the common case without compounding latency on a real
+  // outage. Retry is suppressed if the stream already emitted text (so the
+  // user does not see a double reply) or if the caller aborted.
   async function callModel(params: MessageCreateParamsBase, callOptions: RunAnthropicOptions): Promise<Message> {
+    let emittedText = false;
+    const wrappedOptions: RunAnthropicOptions = {
+      ...callOptions,
+      onTextDelta: (text) => {
+        emittedText = true;
+        callOptions.onTextDelta?.(text);
+      },
+    };
     try {
-      return await streamMessage(client, params, threadId, usage, callOptions);
+      return await streamMessage(client, params, threadId, usage, wrappedOptions);
     } catch (err) {
       if (err instanceof APIError && err.status === 401) {
         throw new BadApiKeyError(apiKeyOrigin);
+      }
+      if (!emittedText && !callOptions.signal?.aborted && isRetriableApiError(err)) {
+        const status = (err as APIError).status;
+        const delayMs = 500 + Math.floor(Math.random() * 1000);
+        console.warn("[coach] retrying after transient upstream error", {
+          thread_id: threadId,
+          status,
+          delay_ms: delayMs,
+        });
+        await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+        if (callOptions.signal?.aborted) throw err;
+        try {
+          return await streamMessage(client, params, threadId, usage, wrappedOptions);
+        } catch (retryErr) {
+          if (retryErr instanceof APIError && retryErr.status === 401) {
+            throw new BadApiKeyError(apiKeyOrigin);
+          }
+          throw retryErr;
+        }
       }
       throw err;
     }
