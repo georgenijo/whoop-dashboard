@@ -512,6 +512,31 @@ export type ToolProgressHandlers = {
   }) => void;
 };
 
+// Best-effort row count for the /logs UI. Plain arrays report length;
+// query_workouts and query_daily_snapshot wrap rows in containers, so
+// peek inside instead of recording null.
+function countRows(result: unknown): number | null {
+  if (Array.isArray(result)) return result.length;
+  if (result && typeof result === "object") {
+    const obj = result as Record<string, unknown>;
+    if (Array.isArray(obj.rows)) return obj.rows.length;
+    let total = 0;
+    let saw = false;
+    for (const key of ["recovery", "sleep", "strain", "workouts"]) {
+      const value = obj[key];
+      if (Array.isArray(value)) {
+        total += value.length;
+        saw = true;
+      } else if (value && typeof value === "object" && Array.isArray((value as { rows?: unknown }).rows)) {
+        total += ((value as { rows: unknown[] }).rows).length;
+        saw = true;
+      }
+    }
+    if (saw) return total;
+  }
+  return null;
+}
+
 function toolErrorPayload(err: unknown): string {
   if (err instanceof ToolInputError) {
     return JSON.stringify({
@@ -604,7 +629,7 @@ export async function executeToolResult(
   }
 
   const durationMs = Date.now() - startMs;
-  const rows = Array.isArray(result) ? result.length : null;
+  const rows = countRows(result);
   toolDetails.push({
     name: toolUse.name,
     input: toolUse.input,
