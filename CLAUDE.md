@@ -27,6 +27,27 @@ cd apps/web && npm run build  # production build (Turbopack)
 
 Python tests live in `tests/` and run via `pytest` (covers the vault + integrations helpers used by `scripts/migrate-whoop-tokens.py`). ESLint is wired via `eslint-config-next`.
 
+### `scripts/coach` CLI (debug + inspection)
+
+Query the running web app's coach state without hand-rolled SSH+SQL. Defaults to the prod VM; pass `--local` to hit `shared/whoop_data.db` instead. Read-only.
+
+```bash
+scripts/coach login                       # opens persistent SSH ControlMaster (4h ControlPersist)
+scripts/coach threads --limit 10          # newest threads (filter with --source ios|web)
+scripts/coach thread 49                   # full transcript (--tools, --thinking, --json, --since YYYY-MM-DD)
+scripts/coach search "trigger_whoop_sync" # grep across chat_messages content + blocks
+scripts/coach logs 49                     # chat_logs (timing/status) for thread
+scripts/coach syncs --limit 10            # recent sync_logs (--source manual|webhook|cron|ios, --status error)
+scripts/coach chat-detail 188             # full chat_logs row + parsed details JSON
+scripts/coach journal "5 min ago" --grep chat   # journalctl whoop-web window (prod only)
+scripts/coach settings --user 2           # user_settings row (key redacted)
+scripts/coach why 82                      # forensic: chat_logs + journal + user_settings delta for a thread
+scripts/coach --local threads             # local dev DB instead of prod
+scripts/coach logout                      # close ControlMaster
+```
+
+Use this whenever debugging coach behavior — tool-use traces, missing replies, thinking blocks, latency outliers, sync failures. Pairs with the `coach-debug` skill at `~/.claude/skills/coach-debug/`.
+
 ## Architecture
 
 ### Repo layout
