@@ -1,0 +1,107 @@
+{
+  "component_insights": {
+    "complexity": "Improving. Score rose from 88 (Apr 22) to 92 (May 2) to 91 (May 13), net +3 over the window. The refactor that split useCoachThread into focused hooks (PR #100) and the decomposition of db.ts into domain modules (PR #98) drove measurable complexity reduction in the largest files. Current avg cyclomatic of 4.2 across 209 files is healthy. No single file is a dominant outlier — complexity is distributed across page-level aggregators (sleep/page.tsx, recovery/page.tsx) that are expected to have higher fan-out.",
+    "duplication": "Declining. Score fell from 96 (Apr 22) to 88 (May 2) to 91 (May 13), net -5 over the window with the worst point at May 2. The May 2 dip aligns with the coaching and streaming PRs (#105, coach progress streaming) adding new patterns before they were consolidated. The partial recovery to 91 by May 13 reflects some normalisation. At 4.3% duplication (77 clones) this is still within acceptable range but trending wrong. The chart/card components are the likely duplication source — many follow an identical data-fetch + render pattern.",
+    "coupling": "Sharply declining — the worst-performing component. Score dropped from 100 (Apr 22) to 93 (May 2) to 81.3 (May 13), a 19-point fall with a slope of -9.5 and near-perfect correlation (0.99). Two hub-like dependencies are driving this: streamlit/whoop/db.py (fan-in 60, well above the 20 threshold) and apps/web/src/lib/auth.ts (fan-in 31). The auth.ts hub grew rapidly as Phases B–E added Apple Sign-In, multi-user data isolation, onboarding, and the welcome wizard — each new route imported auth.ts. The streamlit/db.py hub is a legacy artifact from the pre-Next.js era; the Streamlit surface is retired but the file still counts in the graph. No cycles exist (0 cyclic count), which is the one positive. Action needed: auth.ts should be split into auth/session, auth/guard, and auth/identity modules. db.py impact should be filtered or weighted down once Streamlit retirement is formalized.",
+    "cohesion": "Strongly improving. Score rose from 93 (Apr 22) to 92 (May 2) to 100 (May 13), a +7 net gain with slope +3.5. The domain module decomposition (db.ts split into recovery, sleep, strain, workouts, integrations, etc.) directly improved cohesion by giving each class a single clear responsibility. Only 1 low-cohesion violation remains: ToolInputError in apps/web/src/lib/coach/tools.ts has LCOM 2 (threshold 1), a minor issue from the class holding a details field alongside constructor logic. All other 15 analyzed classes are clean.",
+    "smells": "Slightly declining but stable. Score fell from 100 (Apr 22) to 94 (May 2) to 95.3 (May 13). The only active smells are the two HubLikeDependency findings (streamlit/whoop/db.py and apps/web/src/lib/auth.ts) — no critical issues, no cycles, no unstable components. The May 2 dip to 94 coincided with the auth hub growing as Apple Sign-In and the Phase C/D multi-user work landed. Score is effectively bounded by whether those two hubs are addressed.",
+    "satd": "Stable and healthy. Score held at 100 across all three snapshots (slope 0.0, correlation 0.0 — no trend). 18 debt items exist with 8 high-priority, but none have crossed the threshold to affect the score. SATD is not a current concern.",
+    "tdg": "Slightly improving. Score rose from 92 (Apr 22) to 93 (May 2) to 93 (May 13), slope +0.5 with strong correlation (0.87). Current avg grade is AMinus across all 209 files. This is consistent with the complexity improvements — the same refactors that reduced cyclomatic complexity also lifted TDG grades. No action needed."
+  },
+  "component_annotations": {
+    "complexity": [
+      {
+        "date": "2026-04-22",
+        "label": "db.ts split + useCoachThread refactor",
+        "from": 88,
+        "to": 92,
+        "description": "PR #98 (split db.ts into domain modules) and PR #100 (decompose useCoachThread into useChatSend + useThreadList) reduced cyclomatic complexity in the two largest files. Score jumped 4 points in 10 days."
+      },
+      {
+        "date": "2026-05-02",
+        "label": "Phase D data isolation + multi-user routes",
+        "from": 92,
+        "to": 91,
+        "description": "Phase D (#323) added user_id scoping across all domain tables and new API routes. Minor complexity regression (-1) as new branching logic landed. Still a net improvement vs the Apr 22 baseline."
+      }
+    ],
+    "coupling": [
+      {
+        "date": "2026-04-22",
+        "label": "auth.ts hub growth begins",
+        "from": 100,
+        "to": 93,
+        "description": "Apple Sign-In (#203, #267), CF Access JWT unification (#218), and iOS APIClient (#206) all imported auth.ts, growing its fan-in from ~20 toward 31. Coupling score fell 7 points."
+      },
+      {
+        "date": "2026-05-02",
+        "label": "Phase B–E multi-user + onboarding expansion",
+        "from": 93,
+        "to": 81,
+        "description": "Phases B-cleanup (#332), C (#320), D (#323), and E.1 onboarding wizard (#336) each added new routes that import auth.ts. Fan-in reached 31. streamlit/db.py hub (fan-in 60) was always present but now dominates the smell report alongside auth.ts. Combined effect dropped coupling 12 more points."
+      }
+    ],
+    "cohesion": [
+      {
+        "date": "2026-04-22",
+        "label": "Domain module decomposition",
+        "from": 93,
+        "to": 100,
+        "description": "PR #98 split the monolithic db.ts into focused domain files (recovery.ts, sleep.ts, strain.ts, workouts.ts, integrations.ts, devices.ts, coach.ts). Each new module has a single responsibility, driving cohesion to max score by May 13."
+      }
+    ],
+    "duplication": [
+      {
+        "date": "2026-04-22",
+        "label": "Coach streaming + new chart components",
+        "from": 96,
+        "to": 88,
+        "description": "Coach progress streaming (PR #105) and the Phase D/E feature additions introduced new chart and API route components with repeated fetch-then-render patterns before consolidation. Score fell 8 points to its worst point."
+      },
+      {
+        "date": "2026-05-02",
+        "label": "Partial recovery",
+        "from": 88,
+        "to": 91,
+        "description": "Some duplication normalised as patterns stabilised. Still 3 points below the Apr 22 baseline."
+      }
+    ]
+  },
+  "component_events": [
+    {
+      "period": "Apr 22 – May 2 2026",
+      "component": "coupling",
+      "from": 100,
+      "to": 93,
+      "context": "Apple Sign-In web (#267), CF Access JWT (#218), iOS APIClient (#206), and SIWA backend (#203) all funnelled through auth.ts, growing its fan-in. The 7-point drop tracks directly with this auth expansion sprint."
+    },
+    {
+      "period": "May 2 – May 13 2026",
+      "component": "coupling",
+      "from": 93,
+      "to": 81,
+      "context": "Phases B-cleanup (#332), C multi-user OAuth (#320), D data isolation (#323), and E.1 onboarding wizard (#336) each added routes that import auth.ts. Fan-in hit 31 (threshold 20). streamlit/db.py at fan-in 60 is a persistent legacy hub. Combined: 2 high-severity HubLikeDependency smells, score fell 12 points."
+    },
+    {
+      "period": "Apr 22 – May 2 2026",
+      "component": "complexity",
+      "from": 88,
+      "to": 92,
+      "context": "PR #98 split db.ts, PR #100 decomposed useCoachThread. The two highest-complexity files were broken up, lifting the average cyclomatic score by 4 points."
+    },
+    {
+      "period": "Apr 22 – May 2 2026",
+      "component": "duplication",
+      "from": 96,
+      "to": 88,
+      "context": "Coach progress streaming PR (#105) and new Phase D routes introduced repeated patterns (auth guard + db call + JSON response) across multiple new API files before any shared abstractions were extracted."
+    },
+    {
+      "period": "Apr 22 – May 13 2026",
+      "component": "cohesion",
+      "from": 93,
+      "to": 100,
+      "context": "Domain module split (PR #98) gave each class a single clear purpose. Low-cohesion class count dropped to 1 (ToolInputError LCOM 2). Score reached maximum by May 13."
+    }
+  ]
+}

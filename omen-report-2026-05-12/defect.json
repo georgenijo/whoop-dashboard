@@ -1,0 +1,3366 @@
+{
+  "files": [
+    {
+      "confidence": 0.36125001311302185,
+      "contributing_factors": {
+        "churn": 0.0,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/ios/ci_scripts/ci_post_clone.sh",
+      "probability": 0.010986942797899246,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.032499998807907104,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/eslint.config.mjs",
+      "probability": 0.012742350809276104,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.36125001311302185,
+      "contributing_factors": {
+        "churn": 0.0,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/next.config.ts",
+      "probability": 0.010986942797899246,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.36125001311302185,
+      "contributing_factors": {
+        "churn": 0.0,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/postcss.config.mjs",
+      "probability": 0.010986942797899246,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.1066666692495346,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/scripts/backfill-whoop-provider-user-id.ts",
+      "probability": 0.026382090523838997,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.16833332180976868,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/scripts/migrate-uid1-to-uid2.ts",
+      "probability": 0.047803763300180435,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.21566666662693024,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0030456853564828634,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/scripts/smoke-phase-a.ts",
+      "probability": 0.076712466776371,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.210833340883255,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.003287671133875847,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/scripts/smoke-phase-c.ts",
+      "probability": 0.07352307438850403,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.03500000014901161,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.06190476566553116,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/(auth)/layout.tsx",
+      "probability": 0.023987269029021263,
+      "recommendations": [
+        "Significant code duplication. Extract common logic."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.13583333790302277,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/(auth)/signin/page.tsx",
+      "probability": 0.03762749582529068,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.0533333383500576,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/(dashboard)/coach/page.tsx",
+      "probability": 0.01564760133624077,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.7225000262260437,
+      "contributing_factors": {
+        "churn": 0.0,
+        "complexity": 0.07250000536441803,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/(dashboard)/layout.tsx",
+      "probability": 0.017549920827150345,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.2084999978542328,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0763532742857933,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+      "probability": 0.16431491076946259,
+      "recommendations": [
+        "Significant code duplication. Extract common logic."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.7225000262260437,
+      "contributing_factors": {
+        "churn": 0.0,
+        "complexity": 0.05666666850447655,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/(dashboard)/logs/CollapsibleCard.tsx",
+      "probability": 0.018282970413565636,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.7225000262260437,
+      "contributing_factors": {
+        "churn": 0.0,
+        "complexity": 0.20133332908153534,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.08571428805589676,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "probability": 0.15715856850147247,
+      "recommendations": [
+        "Significant code duplication. Extract common logic."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.7225000262260437,
+      "contributing_factors": {
+        "churn": 0.0,
+        "complexity": 0.22366666793823242,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.06063348799943924,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "probability": 0.15355345606803894,
+      "recommendations": [
+        "Significant code duplication. Extract common logic."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.7225000262260437,
+      "contributing_factors": {
+        "churn": 0.0,
+        "complexity": 0.09083333611488342,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/(dashboard)/logs/page.tsx",
+      "probability": 0.02100704237818718,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.030000003054738045,
+        "complexity": 0.10999999940395355,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/(dashboard)/page.tsx",
+      "probability": 0.03389516845345497,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.12666666507720947,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/(dashboard)/recovery/page.tsx",
+      "probability": 0.03444520756602287,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.7225000262260437,
+      "contributing_factors": {
+        "churn": 0.0,
+        "complexity": 0.2280000001192093,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/(dashboard)/settings/page.tsx",
+      "probability": 0.07798825204372406,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.12166666984558105,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "probability": 0.03282042220234871,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.059166666120290756,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/(dashboard)/strain/page.tsx",
+      "probability": 0.017839612439274788,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.08666667342185974,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/(dashboard)/workouts/page.tsx",
+      "probability": 0.023354515433311462,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.03750000149011612,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.057777781039476395,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/(onboarding)/layout.tsx",
+      "probability": 0.023609301075339317,
+      "recommendations": [
+        "Significant code duplication. Extract common logic."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.20499999821186066,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/(onboarding)/welcome/WelcomeClient.tsx",
+      "probability": 0.08128606528043747,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.03666666895151138,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/(onboarding)/welcome/page.tsx",
+      "probability": 0.013277297839522362,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.06000000238418579,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/admin/webhook/replay/route.test.ts",
+      "probability": 0.016708306968212128,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.10583332926034927,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/admin/webhook/replay/route.ts",
+      "probability": 0.028149649500846863,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.10333333164453506,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.07258065044879913,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/auth/apple/route.test.ts",
+      "probability": 0.05137507990002632,
+      "recommendations": [
+        "Significant code duplication. Extract common logic."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.030000003054738045,
+        "complexity": 0.038333334028720856,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/auth/apple/route.ts",
+      "probability": 0.016845766454935074,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.18944445252418518,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.04198473319411278,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/auth/apple-web/callback/route.test.ts",
+      "probability": 0.08621837943792343,
+      "recommendations": [
+        "Significant code duplication. Extract common logic."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.030000003054738045,
+        "complexity": 0.15416666865348816,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.00648648664355278,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/auth/apple-web/callback/route.ts",
+      "probability": 0.055019937455654144,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.055000003427267075,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.03333333507180214,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/auth/apple-web/start/route.ts",
+      "probability": 0.023737702518701553,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.1899999976158142,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/auth/callback/route.test.ts",
+      "probability": 0.06297336518764496,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.04500000178813934,
+        "complexity": 0.11499999463558197,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/auth/callback/route.ts",
+      "probability": 0.041091274470090866,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.04583333432674408,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/auth/login/route.ts",
+      "probability": 0.014533387497067451,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/auth/logout/route.ts",
+      "probability": 0.012742350809276104,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.046666666865348816,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/auth/whoop/disconnect/route.ts",
+      "probability": 0.01465321984142065,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.028333334252238274,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/chat/history/route.ts",
+      "probability": 0.013168565928936005,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.04500000178813934,
+        "complexity": 0.13250000774860382,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/chat/route.test.ts",
+      "probability": 0.048568159341812134,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.2955000102519989,
+        "complexity": 0.176111102104187,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/chat/route.ts",
+      "probability": 0.5414324998855591,
+      "recommendations": [
+        "High churn detected. Consider stabilizing with better test coverage."
+      ],
+      "risk_level": "medium"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.08416666835546494,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/connectors/whoop/route.ts",
+      "probability": 0.02279103547334671,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.06750000268220901,
+        "complexity": 0.20933333039283752,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.007303370628505945,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/dashboard/today/route.test.ts",
+      "probability": 0.12913449108600616,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.06750000268220901,
+        "complexity": 0.19833333790302277,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.008163264952600002,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/dashboard/today/route.ts",
+      "probability": 0.11815348267555237,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.15166667103767395,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/devices/register/route.test.ts",
+      "probability": 0.0437999926507473,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.057500001043081284,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/devices/register/route.ts",
+      "probability": 0.016302499920129776,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.11166666448116302,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/devices/test-push/route.test.ts",
+      "probability": 0.029790183529257774,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.05666666850447655,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/devices/test-push/route.ts",
+      "probability": 0.01616940088570118,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.578000009059906,
+      "contributing_factors": {
+        "churn": 0.0,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/logs/route.ts",
+      "probability": 0.010986942797899246,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.025833332911133766,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/me/coach-goals/route.ts",
+      "probability": 0.011930362321436405,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/me/onboarded/route.ts",
+      "probability": 0.011832524091005325,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/me/tz/route.ts",
+      "probability": 0.011832524091005325,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/settings/route.ts",
+      "probability": 0.011832524091005325,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.07583333551883698,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/sync/onboarding/route.ts",
+      "probability": 0.01951877772808075,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.11999999731779099,
+        "complexity": 0.0833333358168602,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/sync/route.ts",
+      "probability": 0.06199703738093376,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.046666666865348816,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/threads/[id]/route.ts",
+      "probability": 0.01577647402882576,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/threads/route.ts",
+      "probability": 0.012742350809276104,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.06750000268220901,
+        "complexity": 0.11666665971279144,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/app/api/whoop/webhook/route.ts",
+      "probability": 0.051743149757385254,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.20283333957195282,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/ApneaRiskCard.tsx",
+      "probability": 0.07968268543481827,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.19333332777023315,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/BedWakeTimeline.tsx",
+      "probability": 0.07298833876848221,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.17694443464279175,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.07373272627592087,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/BedtimePatternsCard.tsx",
+      "probability": 0.12257932126522064,
+      "recommendations": [
+        "Significant code duplication. Extract common logic."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.13250000774860382,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/BedtimeRecoveryScatter.tsx",
+      "probability": 0.041091274470090866,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.2161666601896286,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.006549118552356958,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/CardiacDriftCard.tsx",
+      "probability": 0.09553578495979309,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.1274999976158142,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/DeepSleepEfficiencyCard.tsx",
+      "probability": 0.03916572779417038,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.030000003054738045,
+        "complexity": 0.2161666601896286,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.032745592296123505,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/HRVTrend.tsx",
+      "probability": 0.14668048918247223,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.1366666704416275,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.08780487626791,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/NapCalendar.tsx",
+      "probability": 0.09706373512744904,
+      "recommendations": [
+        "Significant code duplication. Extract common logic."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.14750000834465027,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/NapRecoveryScatter.tsx",
+      "probability": 0.04742587357759476,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.1852777749300003,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.06477732956409454,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/NapTrackerCard.tsx",
+      "probability": 0.12191187590360641,
+      "recommendations": [
+        "Significant code duplication. Extract common logic."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.15000000596046448,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.08888889104127884,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/RecoveryReboundCard.tsx",
+      "probability": 0.11045407503843307,
+      "recommendations": [
+        "Significant code duplication. Extract common logic."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.1805555522441864,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/RespiratoryRateChart.tsx",
+      "probability": 0.06949681788682938,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.125,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.10266666859388351,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/SleepConsistencyCard.tsx",
+      "probability": 0.0999002605676651,
+      "recommendations": [
+        "Significant code duplication. Extract common logic."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.10333333164453506,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/SleepCyclesBarChart.tsx",
+      "probability": 0.03101835586130619,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.13083332777023315,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/SleepDebtChart.tsx",
+      "probability": 0.04043957218527794,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.14916667342185974,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/SleepNeedBreakdown.tsx",
+      "probability": 0.048184510320425034,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.13166667520999908,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/SleepQualityRadar.tsx",
+      "probability": 0.04076417535543442,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.1508333384990692,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/SleepStageDonut.tsx",
+      "probability": 0.04895468056201935,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.7225000262260437,
+      "contributing_factors": {
+        "churn": 0.0,
+        "complexity": 0.06666667014360428,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/SleepStagesChart.tsx",
+      "probability": 0.020167026668787003,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.17638888955116272,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/SportFrequencyChart.tsx",
+      "probability": 0.062320880591869354,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.1783333271741867,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/StrainRecoveryScatter.tsx",
+      "probability": 0.0634668841958046,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.18138888478279114,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/TSBCurve.tsx",
+      "probability": 0.06530746072530746,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.20933333039283752,
+        "coupling": 0.07000000029802322,
+        "duplication": 0.03651685640215874,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/TrendChart.tsx",
+      "probability": 0.17631757259368896,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.17638888955116272,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/WorkoutDistanceChart.tsx",
+      "probability": 0.062320880591869354,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.17638888955116272,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/WorkoutZoneChart.tsx",
+      "probability": 0.0668502226471901,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.18083332479000092,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/charts/Zone2Tracker.tsx",
+      "probability": 0.06496918201446533,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.7225000262260437,
+      "contributing_factors": {
+        "churn": 0.0,
+        "complexity": 0.08083333820104599,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/chrome/BottomNav.tsx",
+      "probability": 0.02316519059240818,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.7225000262260437,
+      "contributing_factors": {
+        "churn": 0.0,
+        "complexity": 0.06416666507720947,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/chrome/Sidebar.tsx",
+      "probability": 0.01967889815568924,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.14000000059604645,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/chrome/TopBar.tsx",
+      "probability": 0.04415033757686615,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.030000003054738045,
+        "complexity": 0.05249999836087227,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/coach/ChatInput.tsx",
+      "probability": 0.02354535087943077,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.06750000268220901,
+        "complexity": 0.09583333134651184,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/coach/CoachWorkspace.tsx",
+      "probability": 0.05133577808737755,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.04500000178813934,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/coach/MessageBubble.tsx",
+      "probability": 0.01889096572995186,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/coach/MessageList.tsx",
+      "probability": 0.014414512552320957,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/coach/SuggestionChips.tsx",
+      "probability": 0.014414512552320957,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.030000003054738045,
+        "complexity": 0.1805555522441864,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/coach/ThreadSidebar.tsx",
+      "probability": 0.07984578609466553,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.030000003054738045,
+        "complexity": 0.20383332669734955,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/coach/useChatSend.test.ts",
+      "probability": 0.08228739351034164,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.04500000178813934,
+        "complexity": 0.21916666626930237,
+        "coupling": 0.07000000029802322,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/coach/useChatSend.ts",
+      "probability": 0.18118587136268616,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.03916666656732559,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/coach/useCoachThread.test.ts",
+      "probability": 0.01465321984142065,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.030000003054738045,
+        "complexity": 0.07583333551883698,
+        "coupling": 0.07000000029802322,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/coach/useCoachThread.ts",
+      "probability": 0.04345230758190155,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.04583333432674408,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/coach/useThreadList.test.ts",
+      "probability": 0.014533387497067451,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.09916666895151138,
+        "coupling": 0.05000000074505806,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/coach/useThreadList.ts",
+      "probability": 0.03614740073680878,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.025833332911133766,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/onboarding/TzBackfill.tsx",
+      "probability": 0.014533387497067451,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.046666666865348816,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/overview/AIInsightCard.tsx",
+      "probability": 0.017839612439274788,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/overview/AIInsightRefreshWatcher.tsx",
+      "probability": 0.014414512552320957,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.7225000262260437,
+      "contributing_factors": {
+        "churn": 0.0,
+        "complexity": 0.08916667103767395,
+        "coupling": 0.07500000298023224,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/overview/KPIStrip.tsx",
+      "probability": 0.03885332867503166,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.07250000536441803,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/overview/PRsCard.tsx",
+      "probability": 0.022977368906140327,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.7225000262260437,
+      "contributing_factors": {
+        "churn": 0.0,
+        "complexity": 0.0833333358168602,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/overview/RecoveryHero.tsx",
+      "probability": 0.023737702518701553,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.7225000262260437,
+      "contributing_factors": {
+        "churn": 0.0,
+        "complexity": 0.08500000834465027,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0313725508749485,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/overview/RecoveryTrend.tsx",
+      "probability": 0.032727181911468506,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.12333333492279053,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/recovery/DayOfWeekRecovery.tsx",
+      "probability": 0.03762749582529068,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.203000009059906,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/recovery/IllnessSignalCard.tsx",
+      "probability": 0.07980497926473618,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.18138888478279114,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/recovery/OvertrainingCard.tsx",
+      "probability": 0.06530746072530746,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.2016666680574417,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/recovery/SkinTempDeviationCard.tsx",
+      "probability": 0.0788312703371048,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.19861111044883728,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/components/recovery/Spo2TrendCard.tsx",
+      "probability": 0.0766407698392868,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.08750000596046448,
+        "coupling": 0.07000000029802322,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/analytics/apnea.ts",
+      "probability": 0.042087726294994354,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.18333333730697632,
+        "coupling": 0.07500000298023224,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/analytics/bedtime.ts",
+      "probability": 0.10050129145383835,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.1599999964237213,
+        "coupling": 0.05000000074505806,
+        "duplication": 0.013541667722165585,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/analytics/cardiacDrift.ts",
+      "probability": 0.07312940806150436,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.038333334028720856,
+        "coupling": 0.05000000074505806,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/analytics/deepSleep.ts",
+      "probability": 0.02000301703810692,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.09583333134651184,
+        "coupling": 0.07000000029802322,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/analytics/illness.ts",
+      "probability": 0.04242497682571411,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.06916666775941849,
+        "coupling": 0.05000000074505806,
+        "duplication": 0.012048193253576756,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/analytics/naps.ts",
+      "probability": 0.030387908220291138,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.085833340883255,
+        "coupling": 0.05000000074505806,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/analytics/ots.ts",
+      "probability": 0.03177863731980324,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.038333334028720856,
+        "coupling": 0.05000000074505806,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/analytics/rebound.ts",
+      "probability": 0.02000301703810692,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.07000000029802322,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/auth/apple-state.test.ts",
+      "probability": 0.018433136865496635,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.05416667088866234,
+        "coupling": 0.07000000029802322,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/auth/apple-state.ts",
+      "probability": 0.028378533199429512,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.09750000387430191,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/auth/apple-web.test.ts",
+      "probability": 0.024127019569277763,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.14249999821186066,
+        "coupling": 0.05000000074505806,
+        "duplication": 0.02573099546134472,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/auth/apple-web.ts",
+      "probability": 0.0696103647351265,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.09333333373069763,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/auth/apple.test.ts",
+      "probability": 0.02316519059240818,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.08833333849906921,
+        "coupling": 0.05000000074505806,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/auth/apple.ts",
+      "probability": 0.03500383347272873,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.0833333358168602,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/auth/cookies.ts",
+      "probability": 0.02432401105761528,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.05249999836087227,
+        "coupling": 0.07000000029802322,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/auth/jwt.ts",
+      "probability": 0.02792256884276867,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.06000000238418579,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/auth/origin.test.ts",
+      "probability": 0.016708306968212128,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.03166666626930237,
+        "coupling": 0.08000000566244125,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/auth/origin.ts",
+      "probability": 0.027031904086470604,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.05666666850447655,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/auth.test.ts",
+      "probability": 0.01616940088570118,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.2550000250339508,
+        "complexity": 0.20483332872390747,
+        "coupling": 0.10000000149011612,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/auth.ts",
+      "probability": 0.6788154244422913,
+      "recommendations": [
+        "HIGH RISK: Schedule a code review and add comprehensive tests."
+      ],
+      "risk_level": "medium"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.07000000029802322,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/coach/goals.ts",
+      "probability": 0.021352561190724373,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.2550000250339508,
+        "complexity": 0.20499999821186066,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/coach/loop.ts",
+      "probability": 0.5124975442886353,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "medium"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.04500000178813934,
+        "complexity": 0.10083333402872086,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/coach/persistence.ts",
+      "probability": 0.04345230758190155,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.04500000178813934,
+        "complexity": 0.06833333522081375,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/coach/prompts.test.ts",
+      "probability": 0.026168884709477425,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.23250000178813934,
+        "complexity": 0.07750000059604645,
+        "coupling": 0.07500000298023224,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/coach/prompts.ts",
+      "probability": 0.26894137263298035,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.15583333373069763,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/coach/tools.test.ts",
+      "probability": 0.04557861015200615,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.2550000250339508,
+        "complexity": 0.23375000059604645,
+        "coupling": 0.07000000029802322,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/coach/tools.ts",
+      "probability": 0.6764490008354187,
+      "recommendations": [
+        "HIGH RISK: Schedule a code review and add comprehensive tests."
+      ],
+      "risk_level": "medium"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.0925000011920929,
+        "coupling": 0.05000000074505806,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/crypto/vault.ts",
+      "probability": 0.036438871175050735,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.09000000357627869,
+        "complexity": 0.176111102104187,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/auth.ts",
+      "probability": 0.11018145829439163,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/body.ts",
+      "probability": 0.012742350809276104,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.14083333313465118,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.05325443670153618,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/coach.test.ts",
+      "probability": 0.06098964810371399,
+      "recommendations": [
+        "Significant code duplication. Extract common logic."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.21266666054725647,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.024468084797263145,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/coach.ts",
+      "probability": 0.09720679372549057,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.17666666209697723,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/connection.test.ts",
+      "probability": 0.0555492639541626,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.30000001192092896,
+        "complexity": 0.23964999616146088,
+        "coupling": 0.09812500327825546,
+        "duplication": 0.006413993891328573,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/connection.ts",
+      "probability": 0.8308818340301514,
+      "recommendations": [
+        "High churn detected. Consider stabilizing with better test coverage.",
+        "High complexity. Consider refactoring into smaller functions.",
+        "CRITICAL: Very high defect probability. Prioritize review and testing."
+      ],
+      "risk_level": "high"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.125,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.01600000075995922,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/devices.test.ts",
+      "probability": 0.036791615188121796,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.09916666895151138,
+        "coupling": 0.05000000074505806,
+        "duplication": 0.021848740056157112,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/devices.ts",
+      "probability": 0.0445808507502079,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.27900001406669617,
+        "complexity": 0.11083333194255829,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/index.ts",
+      "probability": 0.342614084482193,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "medium"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.030000003054738045,
+        "complexity": 0.20666666328907013,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.008235294371843338,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/integrations.test.ts",
+      "probability": 0.09104178100824356,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.04500000178813934,
+        "complexity": 0.21649999916553497,
+        "coupling": 0.08666666597127914,
+        "duplication": 0.006516290362924337,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/integrations.ts",
+      "probability": 0.21363192796707153,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.03166666626930237,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/journal.ts",
+      "probability": 0.013608841225504875,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.09000000357627869,
+        "complexity": 0.17499999701976776,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.02857143059372902,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/logs.ts",
+      "probability": 0.14012090861797333,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.030000003054738045,
+        "complexity": 0.09416666626930237,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/prs.ts",
+      "probability": 0.029076052829623222,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.030000003054738045,
+        "complexity": 0.05833333358168602,
+        "coupling": 0.05000000074505806,
+        "duplication": 0.06000000238418579,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/recovery.ts",
+      "probability": 0.05382617190480232,
+      "recommendations": [
+        "Significant code duplication. Extract common logic."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.1783333271741867,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.04054054245352745,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/scoped.test.ts",
+      "probability": 0.07682695239782333,
+      "recommendations": [
+        "Significant code duplication. Extract common logic."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.07833334058523178,
+        "coupling": 0.08666666597127914,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/scoped.ts",
+      "probability": 0.042087726294994354,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.07500000298023224,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/settings.ts",
+      "probability": 0.019359935075044632,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.11999999731779099,
+        "complexity": 0.08916667103767395,
+        "coupling": 0.05000000074505806,
+        "duplication": 0.07850467413663864,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/sleep.ts",
+      "probability": 0.18644365668296814,
+      "recommendations": [
+        "Significant code duplication. Extract common logic."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.03916666656732559,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.08936170488595963,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/strain.ts",
+      "probability": 0.04250427708029747,
+      "recommendations": [
+        "Significant code duplication. Extract common logic."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.04500000178813934,
+        "complexity": 0.19777777791023254,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/summary.ts",
+      "probability": 0.08929918706417084,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.20633333921432495,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.008284023962914944,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/user_settings.test.ts",
+      "probability": 0.07915917783975601,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.21699999272823334,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/user_settings.ts",
+      "probability": 0.08091346174478531,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.030000003054738045,
+        "complexity": 0.16833332180976868,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.06831683218479156,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/users.test.ts",
+      "probability": 0.11071101576089859,
+      "recommendations": [
+        "Significant code duplication. Extract common logic."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.1875,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.007058823946863413,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/webhook.test.ts",
+      "probability": 0.06125999242067337,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.12833333015441895,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.17142857611179352,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/webhook.ts",
+      "probability": 0.15744252502918243,
+      "recommendations": [
+        "Significant code duplication. Extract common logic."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.030000003054738045,
+        "complexity": 0.16749998927116394,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/workouts.test.ts",
+      "probability": 0.05869017168879509,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.06750000268220901,
+        "complexity": 0.07083333283662796,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/db/workouts.ts",
+      "probability": 0.04043957218527794,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.7225000262260437,
+      "contributing_factors": {
+        "churn": 0.0,
+        "complexity": 0.06000000238418579,
+        "coupling": 0.07500000298023224,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/format.ts",
+      "probability": 0.02931223064661026,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.10583332926034927,
+        "coupling": 0.030000001192092896,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/insights.ts",
+      "probability": 0.034169118851423264,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.578000009059906,
+      "contributing_factors": {
+        "churn": 0.0,
+        "complexity": 0.03500000014901161,
+        "coupling": 0.07000000029802322,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/paths.ts",
+      "probability": 0.02188127115368843,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.19416667520999908,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/push/apns.test.ts",
+      "probability": 0.06103486195206642,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.1991666704416275,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.012121212668716908,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/push/apns.ts",
+      "probability": 0.07161638140678406,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/push/index.ts",
+      "probability": 0.011832524091005325,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.578000009059906,
+      "contributing_factors": {
+        "churn": 0.0,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.07500000298023224,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/range.ts",
+      "probability": 0.020836347714066505,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.07000000029802322,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/sport-color.ts",
+      "probability": 0.021352561190724373,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.05000000074505806,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/stats.ts",
+      "probability": 0.017549920827150345,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.42500001192092896,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.07500000298023224,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/sync-meta.ts",
+      "probability": 0.022422775626182556,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.04500000178813934,
+        "complexity": 0.2331666648387909,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.04197080433368683,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/sync.test.ts",
+      "probability": 0.17528483271598816,
+      "recommendations": [
+        "Significant code duplication. Extract common logic."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.09000000357627869,
+        "complexity": 0.23942500352859497,
+        "coupling": 0.07500000298023224,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/sync.ts",
+      "probability": 0.3087969124317169,
+      "recommendations": [
+        "High complexity. Consider refactoring into smaller functions."
+      ],
+      "risk_level": "medium"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.05000000074505806,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/tz.ts",
+      "probability": 0.017549920827150345,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.10166666656732559,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/whoop/client.test.ts",
+      "probability": 0.025127757340669632,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.09000000357627869,
+        "complexity": 0.12250000238418579,
+        "coupling": 0.08000000566244125,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/whoop/client.ts",
+      "probability": 0.1273050457239151,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.07500000298023224,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/whoop/oauth-state.test.ts",
+      "probability": 0.019359935075044632,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.10916666686534882,
+        "coupling": 0.07000000029802322,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/whoop/oauth-state.ts",
+      "probability": 0.048184510320425034,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.057500001043081284,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/whoop/signature.test.ts",
+      "probability": 0.016302499920129776,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.03999999910593033,
+        "coupling": 0.05000000074505806,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/whoop/signature.ts",
+      "probability": 0.020332353189587593,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.09000000357627869,
+        "complexity": 0.18638889491558075,
+        "coupling": 0.05000000074505806,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/whoop/token.ts",
+      "probability": 0.16993173956871033,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.03750000149011612,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/whoop/upsert.test.ts",
+      "probability": 0.013386915437877178,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.09000000357627869,
+        "complexity": 0.2293333262205124,
+        "coupling": 0.07000000029802322,
+        "duplication": 0.03187251091003418,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/whoop/upsert.ts",
+      "probability": 0.345711886882782,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "medium"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.12833333015441895,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.005194805096834898,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/whoop/webhook-handler.test.ts",
+      "probability": 0.0342334620654583,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.030000003054738045,
+        "complexity": 0.08750000596046448,
+        "coupling": 0.05000000074505806,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/lib/whoop/webhook-handler.ts",
+      "probability": 0.04011743515729904,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.04500000178813934,
+        "complexity": 0.13333334028720856,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/proxy.test.ts",
+      "probability": 0.048954691737890244,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.11999999731779099,
+        "complexity": 0.17166666686534882,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/proxy.ts",
+      "probability": 0.13784165680408478,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.42500001192092896,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/src/test/setup.ts",
+      "probability": 0.011832524091005325,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "apps/web/vitest.config.ts",
+      "probability": 0.011832524091005325,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.030833333730697632,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "infra/terraform/cloud-init.sh",
+      "probability": 0.012534375302493572,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.06499999761581421,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "scripts/backfill_sleep_local_times.py",
+      "probability": 0.017549920827150345,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.6800000071525574,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.028333334252238274,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "scripts/deploy.sh",
+      "probability": 0.012228690087795258,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.059166666120290756,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "scripts/generate-app-icon.py",
+      "probability": 0.01657194085419178,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.12833333015441895,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "scripts/migrate-bootstrap-user.ts",
+      "probability": 0.032556917518377304,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.203000009059906,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "scripts/migrate-whoop-tokens.py",
+      "probability": 0.06629785150289536,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.1066666692495346,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "scripts/wal_smoke.py",
+      "probability": 0.026382090523838997,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.1780555546283722,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "scripts/zsh-helpers.sh",
+      "probability": 0.05242887884378433,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.36125001311302185,
+      "contributing_factors": {
+        "churn": 0.0,
+        "complexity": 0.02500000037252903,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "streamlit/whoop/__init__.py",
+      "probability": 0.010986942797899246,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.20666666328907013,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "streamlit/whoop/auth.py",
+      "probability": 0.07355418056249619,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.11999999731779099,
+        "complexity": 0.05000000074505806,
+        "coupling": 0.10000000149011612,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "streamlit/whoop/db.py",
+      "probability": 0.10433126240968704,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.015000000596046448,
+        "complexity": 0.19111111760139465,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "streamlit/whoop/integrations.py",
+      "probability": 0.06363218277692795,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.07500000298023224,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.0,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "streamlit/whoop/vault.py",
+      "probability": 0.019359935075044632,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    },
+    {
+      "confidence": 0.8500000238418579,
+      "contributing_factors": {
+        "churn": 0.007500000298023224,
+        "complexity": 0.23116666078567505,
+        "coupling": 0.010000000707805157,
+        "duplication": 0.017557252198457718,
+        "ownership": 0.015000000596046448
+      },
+      "file_path": "tests/test_integrations.py",
+      "probability": 0.10085494816303253,
+      "recommendations": [
+        "No immediate concerns. Continue monitoring metrics."
+      ],
+      "risk_level": "low"
+    }
+  ],
+  "summary": {
+    "avg_probability": 0.06982582062482834,
+    "high_risk_count": 1,
+    "low_risk_count": 201,
+    "medium_risk_count": 7,
+    "p50_probability": 0.03916572779417038,
+    "p95_probability": 0.18644365668296814,
+    "total_files": 209
+  },
+  "weights": {
+    "churn": 0.30000001192092896,
+    "complexity": 0.25,
+    "coupling": 0.10000000149011612,
+    "duplication": 0.20000000298023224,
+    "ownership": 0.15000000596046448
+  }
+}

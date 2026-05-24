@@ -1,0 +1,85 @@
+{
+  "section_insight": "18 SATD markers, no genuine security bugs. The single 'SECURITY' marker is a test docstring locking a vault invariant — not a vulnerability, it's protective. Most 'BUG' markers are explanatory comments (why something was excluded, how an error is handled) rather than unfixed defects. The real debt is two phase-d-cutover TODOs in auth/token code: the tokens.json file fallback is a live legacy path still active for userId===1 that should be removed when Phase D lands. A secondary cluster exists in journal.ts where the unscoped read (no user_id column) affects any authenticated user. The oauth-state.ts REFACTOR comment is load-bearing — it documents a fragile key-ordering invariant that must not be changed; it should stay. Density (0.75 markers per KLOC) is low. No debt older than the current phase cycle is visible.",
+  "item_annotations": [
+    {
+      "file": "apps/web/src/lib/whoop/token.ts",
+      "line": 25,
+      "comment": "Phase-D-cutover cluster (1 of 2): documents that tokens.json fallback is still active for userId===1. The legacy path is live code, not dead — remove only when Phase D ships. Track against the Phase D milestone so it doesn't slip."
+    },
+    {
+      "file": "apps/web/src/lib/whoop/token.ts",
+      "line": 90,
+      "comment": "Phase-D-cutover cluster (2 of 2): same cutover, loadTokens side. Two separate callsites mean the removal needs to be coordinated; a missed half would leave the legacy path half-alive. Add a grep-guard or shared constant so the two are removed atomically."
+    },
+    {
+      "file": "apps/web/src/lib/auth.ts",
+      "line": 187,
+      "comment": "Phase-D-cutover cluster (3 of 2 — also in auth.ts): saveTokens still writes tokens.json for userId===1. All three phase-d-cutover markers should be tracked as a single task; missing any one leaves the legacy path partially alive."
+    },
+    {
+      "file": "apps/web/src/lib/db/journal.ts",
+      "line": 4,
+      "comment": "Legitimate deferred debt: journal table has no user_id column, so every authenticated user reads the maintainer's journal entries. Solo-user app today so no data leak, but this becomes a real privacy bug the moment a second user is onboarded. Explicitly deferred to Phase E per decisions log — acceptable as long as multi-user onboarding is gated behind Phase E."
+    },
+    {
+      "file": "apps/web/src/lib/whoop/oauth-state.ts",
+      "line": 60,
+      "comment": "Load-bearing comment, not debt. The REFACTOR warning is intentional: V8 key-order is relied upon for HMAC signing. Do not remove this comment — it prevents a silent security regression if the object literal is ever restructured."
+    },
+    {
+      "file": "apps/web/src/components/coach/useChatSend.ts",
+      "line": 103,
+      "comment": "Not a bug, just a comment explaining why an unreachable branch emits a console.warn instead of silently swallowing state. No action needed."
+    },
+    {
+      "file": "apps/web/src/lib/whoop/token.ts",
+      "line": 35,
+      "comment": "Not a bug — comment explains which OAuth error codes are deliberately excluded from REAUTH_ERROR_CODES and why. The exclusion logic is correct; this is documentation, not a defect."
+    },
+    {
+      "file": "apps/web/src/lib/whoop/token.ts",
+      "line": 182,
+      "comment": "Not a bug — explains why the reauth flag is only set on definitive credential-rejection codes. The non-atomic race with the Python sync process is acknowledged and accepted as P2. No action needed until the P2 keepalive work starts."
+    },
+    {
+      "file": "apps/web/src/lib/db/connection.ts",
+      "line": 242,
+      "comment": "Not a bug — SQL comment inside a migration or schema block explaining replay safety. Review the surrounding SQL to confirm; if it's just an inline explanation, remove the BUG classification."
+    },
+    {
+      "file": "apps/web/src/lib/sync.ts",
+      "line": 621,
+      "comment": "Not a bug — comment explains an error-name check that covers two branches. Explanatory only."
+    },
+    {
+      "file": "tests/test_integrations.py",
+      "line": 267,
+      "comment": "The SECURITY marker here is a test docstring asserting that save_tokens never writes plaintext credentials to the raw column. This is the correct invariant and the test enforces it. Not a vulnerability — keep the test, maybe rename the marker to INVARIANT to avoid false positives in future scans."
+    },
+    {
+      "file": "apps/web/src/app/api/devices/test-push/route.ts",
+      "line": 9,
+      "comment": "Intentional: endpoint is disabled in production unless ENABLE_PUSH_DEBUG=1. The 404 (not 403) response is deliberate to avoid leaking endpoint existence. No action needed."
+    },
+    {
+      "file": "apps/web/src/app/api/dashboard/today/route.ts",
+      "line": 71,
+      "comment": "NEED marker on a comment explaining a range-query strategy. Not a missing requirement — just inline documentation. False positive."
+    },
+    {
+      "file": "apps/web/src/lib/coach/tools.ts",
+      "line": 278,
+      "comment": "FAILING marker on a comment explaining fail-open behavior for a cooldown gate. Intentional design choice documented inline. Not a test failure."
+    },
+    {
+      "file": "apps/web/scripts/smoke-phase-a.ts",
+      "line": 50,
+      "comment": "FAILING marker on a preflight comment. Explanatory, not a broken test. False positive."
+    },
+    {
+      "file": "scripts/zsh-helpers.sh",
+      "line": 13,
+      "comment": "BUG marker in a shell alias table that lists the 'bug' subcommand for a Claude session helper. Not a code defect."
+    }
+  ]
+}

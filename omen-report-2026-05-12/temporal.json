@@ -1,0 +1,670 @@
+{
+  "couplings": [
+    {
+      "cochange_count": 5,
+      "commits_a": 5,
+      "commits_b": 5,
+      "coupling_strength": 1.0,
+      "file_a": "apps/web/package-lock.json",
+      "file_b": "apps/web/package.json"
+    },
+    {
+      "cochange_count": 6,
+      "commits_a": 6,
+      "commits_b": 8,
+      "coupling_strength": 0.75,
+      "file_a": "web/src/components/chrome/TopBar.tsx",
+      "file_b": "web/src/lib/db.ts"
+    },
+    {
+      "cochange_count": 4,
+      "commits_a": 6,
+      "commits_b": 6,
+      "coupling_strength": 0.6666666666666666,
+      "file_a": "apps/web/src/lib/whoop/client.ts",
+      "file_b": "apps/web/src/lib/whoop/token.ts"
+    },
+    {
+      "cochange_count": 4,
+      "commits_a": 6,
+      "commits_b": 6,
+      "coupling_strength": 0.6666666666666666,
+      "file_a": "apps/web/src/lib/whoop/client.ts",
+      "file_b": "apps/web/src/lib/whoop/upsert.ts"
+    },
+    {
+      "cochange_count": 4,
+      "commits_a": 6,
+      "commits_b": 6,
+      "coupling_strength": 0.6666666666666666,
+      "file_a": "apps/web/src/lib/sync.ts",
+      "file_b": "apps/web/src/lib/whoop/client.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 4,
+      "commits_b": 5,
+      "coupling_strength": 0.6,
+      "file_a": "web/src/app/layout.tsx",
+      "file_b": "web/src/components/chrome/Sidebar.tsx"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 5,
+      "commits_b": 4,
+      "coupling_strength": 0.6,
+      "file_a": "web/src/app/globals.css",
+      "file_b": "web/src/app/layout.tsx"
+    },
+    {
+      "cochange_count": 4,
+      "commits_a": 7,
+      "commits_b": 7,
+      "coupling_strength": 0.5714285714285714,
+      "file_a": "apps/web/src/lib/db/sleep.ts",
+      "file_b": "streamlit/whoop/db.py"
+    },
+    {
+      "cochange_count": 4,
+      "commits_a": 7,
+      "commits_b": 6,
+      "coupling_strength": 0.5714285714285714,
+      "file_a": "apps/web/src/app/api/sync/route.ts",
+      "file_b": "apps/web/src/lib/sync.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 3,
+      "commits_b": 6,
+      "coupling_strength": 0.5,
+      "file_a": "apps/ios/Sources/SettingsView.swift",
+      "file_b": "apps/ios/project.yml"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 4,
+      "commits_b": 6,
+      "coupling_strength": 0.5,
+      "file_a": "apps/ios/Sources/CoachApp.swift",
+      "file_b": "apps/ios/project.yml"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 5,
+      "commits_b": 6,
+      "coupling_strength": 0.5,
+      "file_a": "web/src/app/globals.css",
+      "file_b": "web/src/components/chrome/TopBar.tsx"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 5,
+      "commits_b": 6,
+      "coupling_strength": 0.5,
+      "file_a": "web/src/components/chrome/Sidebar.tsx",
+      "file_b": "web/src/components/chrome/TopBar.tsx"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 5,
+      "commits_b": 6,
+      "coupling_strength": 0.5,
+      "file_a": "apps/web/src/app/api/whoop/webhook/route.ts",
+      "file_b": "apps/web/src/lib/whoop/upsert.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 4,
+      "commits_b": 6,
+      "coupling_strength": 0.5,
+      "file_a": "web/src/app/logs/page.tsx",
+      "file_b": "web/src/components/chrome/TopBar.tsx"
+    },
+    {
+      "cochange_count": 6,
+      "commits_a": 14,
+      "commits_b": 12,
+      "coupling_strength": 0.42857142857142855,
+      "file_a": "web/src/app/api/chat/route.ts",
+      "file_b": "web/src/app/coach/page.tsx"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 7,
+      "commits_b": 3,
+      "coupling_strength": 0.42857142857142855,
+      "file_a": "apps/web/src/app/recovery/page.tsx",
+      "file_b": "apps/web/src/components/charts/HRVTrend.tsx"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 7,
+      "commits_b": 7,
+      "coupling_strength": 0.42857142857142855,
+      "file_a": "apps/web/src/app/sleep/page.tsx",
+      "file_b": "apps/web/src/lib/db/sleep.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 3,
+      "commits_b": 7,
+      "coupling_strength": 0.42857142857142855,
+      "file_a": "apps/web/src/app/logs/RouteLogsTable.tsx",
+      "file_b": "apps/web/src/proxy.ts"
+    },
+    {
+      "cochange_count": 5,
+      "commits_a": 12,
+      "commits_b": 11,
+      "coupling_strength": 0.4166666666666667,
+      "file_a": "apps/web/src/lib/coach/loop.ts",
+      "file_b": "apps/web/src/lib/coach/prompts.ts"
+    },
+    {
+      "cochange_count": 5,
+      "commits_a": 12,
+      "commits_b": 12,
+      "coupling_strength": 0.4166666666666667,
+      "file_a": "apps/web/src/lib/coach/loop.ts",
+      "file_b": "apps/web/src/lib/coach/tools.ts"
+    },
+    {
+      "cochange_count": 5,
+      "commits_a": 12,
+      "commits_b": 6,
+      "coupling_strength": 0.4166666666666667,
+      "file_a": "apps/web/src/lib/coach/tools.ts",
+      "file_b": "apps/web/src/lib/sync.ts"
+    },
+    {
+      "cochange_count": 7,
+      "commits_a": 18,
+      "commits_b": 14,
+      "coupling_strength": 0.3888888888888889,
+      "file_a": "apps/web/src/app/api/chat/route.ts",
+      "file_b": "apps/web/src/lib/db.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 3,
+      "commits_b": 8,
+      "coupling_strength": 0.375,
+      "file_a": "web/package.json",
+      "file_b": "web/src/lib/db.ts"
+    },
+    {
+      "cochange_count": 9,
+      "commits_a": 24,
+      "commits_b": 14,
+      "coupling_strength": 0.375,
+      "file_a": "apps/web/src/lib/db/connection.ts",
+      "file_b": "apps/web/src/lib/db/index.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 4,
+      "commits_b": 8,
+      "coupling_strength": 0.375,
+      "file_a": "web/src/app/logs/page.tsx",
+      "file_b": "web/src/lib/db.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 5,
+      "commits_b": 8,
+      "coupling_strength": 0.375,
+      "file_a": "web/src/app/globals.css",
+      "file_b": "web/src/lib/db.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 8,
+      "commits_b": 5,
+      "coupling_strength": 0.375,
+      "file_a": "apps/web/src/app/globals.css",
+      "file_b": "apps/web/src/components/coach/CoachWorkspace.tsx"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 8,
+      "commits_b": 3,
+      "coupling_strength": 0.375,
+      "file_a": "apps/web/src/app/globals.css",
+      "file_b": "apps/web/src/components/coach/ThreadSidebar.tsx"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 5,
+      "commits_b": 8,
+      "coupling_strength": 0.375,
+      "file_a": "web/src/components/chrome/Sidebar.tsx",
+      "file_b": "web/src/lib/db.ts"
+    },
+    {
+      "cochange_count": 5,
+      "commits_a": 14,
+      "commits_b": 8,
+      "coupling_strength": 0.35714285714285715,
+      "file_a": "web/src/app/api/chat/route.ts",
+      "file_b": "web/src/lib/db.ts"
+    },
+    {
+      "cochange_count": 4,
+      "commits_a": 7,
+      "commits_b": 12,
+      "coupling_strength": 0.3333333333333333,
+      "file_a": "apps/web/src/app/api/sync/route.ts",
+      "file_b": "apps/web/src/lib/coach/tools.ts"
+    },
+    {
+      "cochange_count": 4,
+      "commits_a": 12,
+      "commits_b": 6,
+      "coupling_strength": 0.3333333333333333,
+      "file_a": "apps/web/src/lib/auth.ts",
+      "file_b": "apps/web/src/lib/db/auth.ts"
+    },
+    {
+      "cochange_count": 4,
+      "commits_a": 12,
+      "commits_b": 8,
+      "coupling_strength": 0.3333333333333333,
+      "file_a": "web/src/app/coach/page.tsx",
+      "file_b": "web/src/lib/db.ts"
+    },
+    {
+      "cochange_count": 4,
+      "commits_a": 11,
+      "commits_b": 12,
+      "coupling_strength": 0.3333333333333333,
+      "file_a": "apps/web/src/lib/coach/prompts.ts",
+      "file_b": "apps/web/src/lib/coach/tools.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 10,
+      "commits_b": 3,
+      "coupling_strength": 0.3,
+      "file_a": "app.py",
+      "file_b": "whoop/insights.py"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 10,
+      "commits_b": 3,
+      "coupling_strength": 0.3,
+      "file_a": "CLAUDE.md",
+      "file_b": "sync/README.md"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 10,
+      "commits_b": 3,
+      "coupling_strength": 0.3,
+      "file_a": "app.py",
+      "file_b": "whoop/db.py"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 6,
+      "commits_b": 10,
+      "coupling_strength": 0.3,
+      "file_a": ".gitignore",
+      "file_b": "app.py"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 10,
+      "commits_b": 5,
+      "coupling_strength": 0.3,
+      "file_a": "CLAUDE.md",
+      "file_b": "README.md"
+    },
+    {
+      "cochange_count": 4,
+      "commits_a": 6,
+      "commits_b": 14,
+      "coupling_strength": 0.2857142857142857,
+      "file_a": "apps/web/src/lib/db/auth.ts",
+      "file_b": "apps/web/src/lib/db/index.ts"
+    },
+    {
+      "cochange_count": 4,
+      "commits_a": 8,
+      "commits_b": 14,
+      "coupling_strength": 0.2857142857142857,
+      "file_a": "apps/web/src/app/globals.css",
+      "file_b": "apps/web/src/lib/db.ts"
+    },
+    {
+      "cochange_count": 5,
+      "commits_a": 18,
+      "commits_b": 12,
+      "coupling_strength": 0.2777777777777778,
+      "file_a": "apps/web/src/app/api/chat/route.ts",
+      "file_b": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 12,
+      "commits_b": 4,
+      "coupling_strength": 0.25,
+      "file_a": "apps/web/src/lib/coach/loop.ts",
+      "file_b": "apps/web/src/lib/coach/persistence.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 12,
+      "commits_b": 7,
+      "coupling_strength": 0.25,
+      "file_a": "apps/web/src/lib/coach/tools.ts",
+      "file_b": "apps/web/src/lib/db/sleep.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 7,
+      "commits_b": 12,
+      "coupling_strength": 0.25,
+      "file_a": ".env.example",
+      "file_b": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 5,
+      "commits_b": 12,
+      "coupling_strength": 0.25,
+      "file_a": "apps/web/package-lock.json",
+      "file_b": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 5,
+      "commits_b": 12,
+      "coupling_strength": 0.25,
+      "file_a": "apps/web/package.json",
+      "file_b": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 12,
+      "commits_b": 6,
+      "coupling_strength": 0.25,
+      "file_a": "apps/web/src/lib/coach/tools.ts",
+      "file_b": "apps/web/src/lib/whoop/client.ts"
+    },
+    {
+      "cochange_count": 4,
+      "commits_a": 18,
+      "commits_b": 4,
+      "coupling_strength": 0.2222222222222222,
+      "file_a": "apps/web/src/app/api/chat/route.ts",
+      "file_b": "apps/web/src/lib/coach/persistence.ts"
+    },
+    {
+      "cochange_count": 4,
+      "commits_a": 18,
+      "commits_b": 5,
+      "coupling_strength": 0.2222222222222222,
+      "file_a": "apps/web/src/app/api/chat/route.ts",
+      "file_b": "apps/web/src/components/coach/CoachWorkspace.tsx"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 12,
+      "commits_b": 14,
+      "coupling_strength": 0.21428571428571427,
+      "file_a": "apps/web/src/lib/auth.ts",
+      "file_b": "apps/web/src/lib/db.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 5,
+      "commits_b": 14,
+      "coupling_strength": 0.21428571428571427,
+      "file_a": "apps/web/src/components/coach/CoachWorkspace.tsx",
+      "file_b": "apps/web/src/lib/db.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 14,
+      "commits_b": 4,
+      "coupling_strength": 0.21428571428571427,
+      "file_a": "web/src/app/api/chat/route.ts",
+      "file_b": "web/src/app/logs/page.tsx"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 14,
+      "commits_b": 6,
+      "coupling_strength": 0.21428571428571427,
+      "file_a": "web/src/app/api/chat/route.ts",
+      "file_b": "web/src/components/chrome/TopBar.tsx"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 14,
+      "commits_b": 6,
+      "coupling_strength": 0.21428571428571427,
+      "file_a": "apps/web/src/lib/db/index.ts",
+      "file_b": "apps/web/src/lib/db/logs.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 12,
+      "commits_b": 14,
+      "coupling_strength": 0.21428571428571427,
+      "file_a": "apps/web/src/lib/auth.ts",
+      "file_b": "apps/web/src/lib/db/index.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 14,
+      "commits_b": 7,
+      "coupling_strength": 0.21428571428571427,
+      "file_a": "apps/web/src/lib/db/index.ts",
+      "file_b": "apps/web/src/lib/db/sleep.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 14,
+      "commits_b": 5,
+      "coupling_strength": 0.21428571428571427,
+      "file_a": "apps/web/src/lib/db.ts",
+      "file_b": "sync/daily_sync.py"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 5,
+      "commits_b": 14,
+      "coupling_strength": 0.21428571428571427,
+      "file_a": "apps/web/src/app/logs/page.tsx",
+      "file_b": "apps/web/src/lib/db.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 3,
+      "commits_b": 14,
+      "coupling_strength": 0.21428571428571427,
+      "file_a": "apps/web/src/components/coach/ThreadSidebar.tsx",
+      "file_b": "apps/web/src/lib/db.ts"
+    },
+    {
+      "cochange_count": 5,
+      "commits_a": 6,
+      "commits_b": 24,
+      "coupling_strength": 0.20833333333333334,
+      "file_a": "apps/web/src/lib/db/auth.ts",
+      "file_b": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "cochange_count": 5,
+      "commits_a": 12,
+      "commits_b": 24,
+      "coupling_strength": 0.20833333333333334,
+      "file_a": "apps/web/src/lib/auth.ts",
+      "file_b": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "cochange_count": 5,
+      "commits_a": 24,
+      "commits_b": 6,
+      "coupling_strength": 0.20833333333333334,
+      "file_a": "apps/web/src/lib/db/connection.ts",
+      "file_b": "apps/web/src/lib/db/logs.ts"
+    },
+    {
+      "cochange_count": 5,
+      "commits_a": 24,
+      "commits_b": 7,
+      "coupling_strength": 0.20833333333333334,
+      "file_a": "apps/web/src/lib/db/connection.ts",
+      "file_b": "streamlit/whoop/db.py"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 18,
+      "commits_b": 12,
+      "coupling_strength": 0.16666666666666666,
+      "file_a": "apps/web/src/app/api/chat/route.ts",
+      "file_b": "apps/web/src/lib/coach/tools.ts"
+    },
+    {
+      "cochange_count": 4,
+      "commits_a": 24,
+      "commits_b": 7,
+      "coupling_strength": 0.16666666666666666,
+      "file_a": "apps/web/src/lib/db/connection.ts",
+      "file_b": "apps/web/src/lib/db/sleep.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 18,
+      "commits_b": 12,
+      "coupling_strength": 0.16666666666666666,
+      "file_a": "apps/web/src/app/api/chat/route.ts",
+      "file_b": "apps/web/src/lib/coach/loop.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 18,
+      "commits_b": 8,
+      "coupling_strength": 0.16666666666666666,
+      "file_a": "apps/web/src/app/api/chat/route.ts",
+      "file_b": "apps/web/src/app/globals.css"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 18,
+      "commits_b": 5,
+      "coupling_strength": 0.16666666666666666,
+      "file_a": "apps/web/src/app/api/chat/route.ts",
+      "file_b": "apps/web/src/app/logs/ChatLogsTable.tsx"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 5,
+      "commits_b": 24,
+      "coupling_strength": 0.125,
+      "file_a": "apps/web/package.json",
+      "file_b": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 24,
+      "commits_b": 6,
+      "coupling_strength": 0.125,
+      "file_a": "apps/web/src/lib/db/connection.ts",
+      "file_b": "apps/web/src/lib/whoop/upsert.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 10,
+      "commits_b": 24,
+      "coupling_strength": 0.125,
+      "file_a": "CLAUDE.md",
+      "file_b": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 24,
+      "commits_b": 6,
+      "coupling_strength": 0.125,
+      "file_a": "apps/web/src/lib/db/connection.ts",
+      "file_b": "apps/web/src/lib/whoop/token.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 5,
+      "commits_b": 24,
+      "coupling_strength": 0.125,
+      "file_a": "apps/web/src/app/api/whoop/webhook/route.ts",
+      "file_b": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 3,
+      "commits_b": 24,
+      "coupling_strength": 0.125,
+      "file_a": "apps/web/src/app/api/auth/apple/route.ts",
+      "file_b": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 3,
+      "commits_b": 24,
+      "coupling_strength": 0.125,
+      "file_a": "apps/web/src/app/(dashboard)/page.tsx",
+      "file_b": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 24,
+      "commits_b": 4,
+      "coupling_strength": 0.125,
+      "file_a": "apps/web/src/lib/db/connection.ts",
+      "file_b": "apps/web/src/lib/db/summary.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 7,
+      "commits_b": 24,
+      "coupling_strength": 0.125,
+      "file_a": ".env.example",
+      "file_b": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 5,
+      "commits_b": 24,
+      "coupling_strength": 0.125,
+      "file_a": "apps/web/package-lock.json",
+      "file_b": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 12,
+      "commits_b": 24,
+      "coupling_strength": 0.125,
+      "file_a": "apps/web/src/lib/coach/tools.ts",
+      "file_b": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "cochange_count": 3,
+      "commits_a": 24,
+      "commits_b": 4,
+      "coupling_strength": 0.125,
+      "file_a": "apps/web/src/lib/db/connection.ts",
+      "file_b": "apps/web/src/lib/db/integrations.ts"
+    }
+  ],
+  "generated_at": "2026-05-13T00:20:23.574308+00:00",
+  "min_cochanges": 3,
+  "period_days": 30,
+  "summary": {
+    "avg_coupling_strength": 0.3215205187766164,
+    "max_coupling_strength": 1.0,
+    "strong_couplings": 15,
+    "total_couplings": 82,
+    "total_files_analyzed": 387
+  }
+}

@@ -1,0 +1,1392 @@
+{
+  "items": [
+    {
+      "confidence": 0.9,
+      "end_line": 45,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/StrainRecoveryScatter.tsx",
+      "kind": "function",
+      "line": 41,
+      "name": "colorFor",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 74,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/analytics/naps.ts",
+      "kind": "function",
+      "line": 64,
+      "name": "side",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 73,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "kind": "function",
+      "line": 62,
+      "name": "fmtTime",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 61,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+      "kind": "function",
+      "line": 50,
+      "name": "fmtTime",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 318,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/recovery/IllnessSignalCard.tsx",
+      "kind": "function",
+      "line": 209,
+      "name": "DeviationChart",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 231,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/Zone2Tracker.tsx",
+      "kind": "function",
+      "line": 181,
+      "name": "Kpi",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 171,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "kind": "function",
+      "line": 156,
+      "name": "StatusBadge",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 233,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/recovery/OvertrainingCard.tsx",
+      "kind": "function",
+      "line": 230,
+      "name": "formatSlope",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 60,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "kind": "function",
+      "line": 53,
+      "name": "fmtDuration",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 142,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/recovery/Spo2TrendCard.tsx",
+      "kind": "function",
+      "line": 117,
+      "name": "Kpi",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 36,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/coach/ThreadSidebar.tsx",
+      "kind": "function",
+      "line": 27,
+      "name": "formatRelativeTime",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 95,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "kind": "function",
+      "line": 89,
+      "name": "navigationLabel",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 21,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/BedtimeRecoveryScatter.tsx",
+      "kind": "function",
+      "line": 19,
+      "name": "formatLongDate",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 83,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "kind": "function",
+      "line": 75,
+      "name": "statusColor",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 72,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+      "kind": "function",
+      "line": 63,
+      "name": "parseDetails",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 356,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/TrendChart.tsx",
+      "kind": "function",
+      "line": 317,
+      "name": "RollingToggle",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 17,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/chrome/TopBar.tsx",
+      "kind": "function",
+      "line": 11,
+      "name": "formatAgo",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 397,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/HRVTrend.tsx",
+      "kind": "function",
+      "line": 358,
+      "name": "RollingToggle",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 39,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/StrainRecoveryScatter.tsx",
+      "kind": "function",
+      "line": 33,
+      "name": "formatLongDate",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 31,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/overview/KPIStrip.tsx",
+      "kind": "function",
+      "line": 16,
+      "name": "KPI",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 48,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+      "kind": "function",
+      "line": 41,
+      "name": "fmtDuration",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 157,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(onboarding)/welcome/WelcomeClient.tsx",
+      "kind": "function",
+      "line": 150,
+      "name": "toggleGoal",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 115,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/recovery/Spo2TrendCard.tsx",
+      "kind": "function",
+      "line": 64,
+      "name": "CustomTooltip",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9500000000000001,
+      "end_line": 206,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/api/chat/route.ts",
+      "kind": "function",
+      "line": 203,
+      "name": "cancel",
+      "reason": "Not reachable from entry points and no references found",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 28,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/NapTrackerCard.tsx",
+      "kind": "function",
+      "line": 26,
+      "name": "formatLongDate",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 75,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/recovery/DayOfWeekRecovery.tsx",
+      "kind": "function",
+      "line": 40,
+      "name": "CustomTooltip",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 215,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/SportFrequencyChart.tsx",
+      "kind": "function",
+      "line": 172,
+      "name": "Toggle",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 87,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "kind": "function",
+      "line": 85,
+      "name": "captured",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 156,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/coach/ThreadSidebar.tsx",
+      "kind": "function",
+      "line": 120,
+      "name": "handleKeyDown",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 207,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/recovery/IllnessSignalCard.tsx",
+      "kind": "function",
+      "line": 180,
+      "name": "DayStrip",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 69,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/RespiratoryRateChart.tsx",
+      "kind": "function",
+      "line": 39,
+      "name": "RRTooltip",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 166,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "kind": "function",
+      "line": 146,
+      "name": "StatusBadge",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 170,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/settings/page.tsx",
+      "kind": "function",
+      "line": 167,
+      "name": "toggleLocal",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 38,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "kind": "function",
+      "line": 36,
+      "name": "isRecord",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 21,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/BedtimePatternsCard.tsx",
+      "kind": "function",
+      "line": 19,
+      "name": "formatTickDate",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 56,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/DeepSleepEfficiencyCard.tsx",
+      "kind": "function",
+      "line": 27,
+      "name": "EffTooltip",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 397,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/CardiacDriftCard.tsx",
+      "kind": "function",
+      "line": 389,
+      "name": "tickList",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 202,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/analytics/bedtime.ts",
+      "kind": "function",
+      "line": 189,
+      "name": "summarize",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 111,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+      "kind": "function",
+      "line": 82,
+      "name": "DetailMetric",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 155,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+      "kind": "function",
+      "line": 139,
+      "name": "Chevron",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 22,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/RespiratoryRateChart.tsx",
+      "kind": "function",
+      "line": 20,
+      "name": "formatTickDate",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 40,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/settings/page.tsx",
+      "kind": "function",
+      "line": 28,
+      "name": "formatRelative",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 25,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/coach/ThreadSidebar.tsx",
+      "kind": "function",
+      "line": 23,
+      "name": "icon",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 28,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/CardiacDriftCard.tsx",
+      "kind": "function",
+      "line": 23,
+      "name": "formatShortDate",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 324,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+      "kind": "function",
+      "line": 157,
+      "name": "LogRow",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 154,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "kind": "function",
+      "line": 127,
+      "name": "DetailLine",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 220,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/settings/page.tsx",
+      "kind": "function",
+      "line": 214,
+      "name": "handleLogoutSubmit",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 94,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/TSBCurve.tsx",
+      "kind": "function",
+      "line": 70,
+      "name": "CustomTooltip",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 20,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/SleepCyclesBarChart.tsx",
+      "kind": "function",
+      "line": 18,
+      "name": "formatTickDate",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9500000000000001,
+      "end_line": 52,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/db/user_settings.ts",
+      "kind": "function",
+      "line": 47,
+      "name": "constructor",
+      "reason": "Not reachable from entry points and no references found",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9500000000000001,
+      "end_line": 12,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/auth/apple.ts",
+      "kind": "function",
+      "line": 9,
+      "name": "constructor",
+      "reason": "Not reachable from entry points and no references found",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 94,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/BedWakeTimeline.tsx",
+      "kind": "function",
+      "line": 73,
+      "name": "TimelineTooltip",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 228,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "kind": "function",
+      "line": 168,
+      "name": "TimingBars",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 66,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/chrome/TopBar.tsx",
+      "kind": "function",
+      "line": 62,
+      "name": "flashMessage",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 72,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/db/scoped.ts",
+      "kind": "function",
+      "line": 64,
+      "name": "read",
+      "reason": "No references found in codebase",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 46,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/recovery/SkinTempDeviationCard.tsx",
+      "kind": "function",
+      "line": 40,
+      "name": "fullDate",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 84,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/settings/page.tsx",
+      "kind": "function",
+      "line": 50,
+      "name": "Toggle",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 62,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/recovery/Spo2TrendCard.tsx",
+      "kind": "function",
+      "line": 42,
+      "name": "CustomDot",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 30,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/recovery/Spo2TrendCard.tsx",
+      "kind": "function",
+      "line": 25,
+      "name": "shortDate",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 43,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/analytics/naps.ts",
+      "kind": "function",
+      "line": 39,
+      "name": "avgOrNull",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 58,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/BedWakeTimeline.tsx",
+      "kind": "function",
+      "line": 56,
+      "name": "formatShortDate",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 50,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/SleepConsistencyCard.tsx",
+      "kind": "function",
+      "line": 22,
+      "name": "ConsistencyTooltip",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 317,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/ApneaRiskCard.tsx",
+      "kind": "function",
+      "line": 269,
+      "name": "Kpi",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 38,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/recovery/SkinTempDeviationCard.tsx",
+      "kind": "function",
+      "line": 33,
+      "name": "shortDate",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 42,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "kind": "function",
+      "line": 40,
+      "name": "readNumber",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 142,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/recovery/SkinTempDeviationCard.tsx",
+      "kind": "function",
+      "line": 96,
+      "name": "CustomTooltip",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 51,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "kind": "function",
+      "line": 35,
+      "name": "parseDetails",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9500000000000001,
+      "end_line": 12,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/whoop/client.ts",
+      "kind": "function",
+      "line": 10,
+      "name": "constructor",
+      "reason": "Not reachable from entry points and no references found",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 29,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/RecoveryReboundCard.tsx",
+      "kind": "function",
+      "line": 23,
+      "name": "fullDate",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 416,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "kind": "function",
+      "line": 248,
+      "name": "LogRow",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 64,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/NapRecoveryScatter.tsx",
+      "kind": "function",
+      "line": 37,
+      "name": "PointTooltip",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 125,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "kind": "function",
+      "line": 97,
+      "name": "MetricPill",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 33,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "kind": "function",
+      "line": 31,
+      "name": "readBoolean",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 228,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/NapTrackerCard.tsx",
+      "kind": "function",
+      "line": 172,
+      "name": "ComparisonTable",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 25,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "kind": "function",
+      "line": 23,
+      "name": "isRecord",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 38,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/recovery/Spo2TrendCard.tsx",
+      "kind": "function",
+      "line": 32,
+      "name": "fullDate",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 130,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/recovery/OvertrainingCard.tsx",
+      "kind": "function",
+      "line": 109,
+      "name": "ScoreBadge",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 23,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/NapRecoveryScatter.tsx",
+      "kind": "function",
+      "line": 21,
+      "name": "formatLongDate",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 32,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/recovery/IllnessSignalCard.tsx",
+      "kind": "function",
+      "line": 22,
+      "name": "pickAxis",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9500000000000001,
+      "end_line": 58,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/db/integrations.ts",
+      "kind": "function",
+      "line": 53,
+      "name": "constructor",
+      "reason": "Not reachable from entry points and no references found",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 247,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/NapTrackerCard.tsx",
+      "kind": "function",
+      "line": 230,
+      "name": "KPI",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 387,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/CardiacDriftCard.tsx",
+      "kind": "function",
+      "line": 375,
+      "name": "daysBetween",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 169,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(onboarding)/welcome/WelcomeClient.tsx",
+      "kind": "function",
+      "line": 159,
+      "name": "handleContinueFromWelcome",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 36,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/CardiacDriftCard.tsx",
+      "kind": "function",
+      "line": 30,
+      "name": "formatDuration",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 72,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/NapTrackerCard.tsx",
+      "kind": "function",
+      "line": 46,
+      "name": "NapTooltip",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 112,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "kind": "function",
+      "line": 110,
+      "name": "labelFor",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 23,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/DeepSleepEfficiencyCard.tsx",
+      "kind": "function",
+      "line": 21,
+      "name": "formatLongDate",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 91,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/RecoveryReboundCard.tsx",
+      "kind": "function",
+      "line": 72,
+      "name": "KPI",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9500000000000001,
+      "end_line": 147,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/coach/tools.ts",
+      "kind": "function",
+      "line": 143,
+      "name": "constructor",
+      "reason": "Not reachable from entry points and no references found",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 228,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/recovery/OvertrainingCard.tsx",
+      "kind": "function",
+      "line": 142,
+      "name": "SlopeRow",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 150,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/SleepConsistencyCard.tsx",
+      "kind": "function",
+      "line": 133,
+      "name": "KPI",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 19,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/DeepSleepEfficiencyCard.tsx",
+      "kind": "function",
+      "line": 17,
+      "name": "formatTickDate",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 191,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/settings/page.tsx",
+      "kind": "function",
+      "line": 181,
+      "name": "saveSystemPrompt",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9500000000000001,
+      "end_line": 38,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/push/apns.ts",
+      "kind": "function",
+      "line": 35,
+      "name": "constructor",
+      "reason": "Not reachable from entry points and no references found",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 33,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/chrome/TopBar.tsx",
+      "kind": "function",
+      "line": 31,
+      "name": "icon",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 373,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/CardiacDriftCard.tsx",
+      "kind": "function",
+      "line": 184,
+      "name": "SportPanel",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 137,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+      "kind": "function",
+      "line": 113,
+      "name": "SourceBadge",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 25,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/BedtimePatternsCard.tsx",
+      "kind": "function",
+      "line": 23,
+      "name": "formatLongDate",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9500000000000001,
+      "end_line": 30,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/crypto/vault.ts",
+      "kind": "function",
+      "line": 27,
+      "name": "constructor",
+      "reason": "Not reachable from entry points and no references found",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 70,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/SleepDebtChart.tsx",
+      "kind": "function",
+      "line": 36,
+      "name": "CustomTooltip",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 195,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/settings/page.tsx",
+      "kind": "function",
+      "line": 193,
+      "name": "resetSystemPrompt",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 109,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/settings/page.tsx",
+      "kind": "function",
+      "line": 86,
+      "name": "Row",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 72,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/chrome/TopBar.tsx",
+      "kind": "function",
+      "line": 68,
+      "name": "setRange",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 85,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/api/chat/route.ts",
+      "kind": "function",
+      "line": 76,
+      "name": "chatStreamResponse",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 108,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "kind": "function",
+      "line": 96,
+      "name": "fmtTime",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 62,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/BedWakeTimeline.tsx",
+      "kind": "function",
+      "line": 60,
+      "name": "formatLongDate",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 91,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/RespiratoryRateChart.tsx",
+      "kind": "function",
+      "line": 77,
+      "name": "PointDot",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 63,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/SleepNeedBreakdown.tsx",
+      "kind": "function",
+      "line": 37,
+      "name": "StackTooltip",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 212,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/settings/page.tsx",
+      "kind": "function",
+      "line": 202,
+      "name": "handleDisconnectWhoop",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 58,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/SleepCyclesBarChart.tsx",
+      "kind": "function",
+      "line": 31,
+      "name": "CyclesTooltip",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 95,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/coach/ThreadSidebar.tsx",
+      "kind": "function",
+      "line": 53,
+      "name": "ThreadList",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 78,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/BedtimePatternsCard.tsx",
+      "kind": "function",
+      "line": 47,
+      "name": "PatternsTooltip",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 20,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/recovery/IllnessSignalCard.tsx",
+      "kind": "function",
+      "line": 15,
+      "name": "formatShort",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9500000000000001,
+      "end_line": 30,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/auth/apple-web.ts",
+      "kind": "function",
+      "line": 27,
+      "name": "constructor",
+      "reason": "Not reachable from entry points and no references found",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 29,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "kind": "function",
+      "line": 27,
+      "name": "readString",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.8,
+      "end_line": 474,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/sync.test.ts",
+      "kind": "function",
+      "line": 460,
+      "name": "aborted",
+      "reason": "Not reachable from entry points and no references found",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 142,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "kind": "function",
+      "line": 114,
+      "name": "MetricPill",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 285,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "kind": "function",
+      "line": 191,
+      "name": "LogRow",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 18,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/SleepConsistencyCard.tsx",
+      "kind": "function",
+      "line": 16,
+      "name": "formatTickDate",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 94,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "kind": "function",
+      "line": 87,
+      "name": "fmtDuration",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 26,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/RespiratoryRateChart.tsx",
+      "kind": "function",
+      "line": 24,
+      "name": "formatLongDate",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 175,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(onboarding)/welcome/WelcomeClient.tsx",
+      "kind": "function",
+      "line": 171,
+      "name": "handleSkipConnect",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 200,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/settings/page.tsx",
+      "kind": "function",
+      "line": 197,
+      "name": "handleConnectWhoop",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 113,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/TSBCurve.tsx",
+      "kind": "function",
+      "line": 96,
+      "name": "Row",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 196,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/BedtimePatternsCard.tsx",
+      "kind": "function",
+      "line": 179,
+      "name": "KPI",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 178,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/recovery/IllnessSignalCard.tsx",
+      "kind": "function",
+      "line": 104,
+      "name": "FlagsToday",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 179,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/settings/page.tsx",
+      "kind": "function",
+      "line": 172,
+      "name": "toggleApiMode",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 85,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "kind": "function",
+      "line": 53,
+      "name": "parseDetails",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 246,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "kind": "function",
+      "line": 230,
+      "name": "Chevron",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 164,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/NapCalendar.tsx",
+      "kind": "function",
+      "line": 147,
+      "name": "KPI",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 51,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "kind": "function",
+      "line": 44,
+      "name": "readNumberMap",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 70,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/RecoveryReboundCard.tsx",
+      "kind": "function",
+      "line": 40,
+      "name": "ReboundTooltip",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 54,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/BedtimeRecoveryScatter.tsx",
+      "kind": "function",
+      "line": 25,
+      "name": "PointTooltip",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 93,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/StrainRecoveryScatter.tsx",
+      "kind": "function",
+      "line": 49,
+      "name": "ScatterTooltip",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 217,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/BedtimePatternsCard.tsx",
+      "kind": "function",
+      "line": 198,
+      "name": "Tile",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 50,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/charts/SleepStageDonut.tsx",
+      "kind": "function",
+      "line": 26,
+      "name": "DonutTooltip",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 96,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/chrome/TopBar.tsx",
+      "kind": "function",
+      "line": 74,
+      "name": "handleSync",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    },
+    {
+      "confidence": 0.9,
+      "end_line": 189,
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "kind": "function",
+      "line": 173,
+      "name": "Chevron",
+      "reason": "Not reachable from entry points",
+      "visibility": "unknown"
+    }
+  ],
+  "summary": {
+    "by_kind": {
+      "function": 138
+    },
+    "reachable_count": 618,
+    "total_definitions": 824,
+    "total_items": 138
+  }
+}

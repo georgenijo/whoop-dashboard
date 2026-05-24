@@ -1,0 +1,48 @@
+exclude_patterns = [
+    "venv/**",
+    "node_modules/**",
+    ".next/**",
+    "**/__pycache__/**",
+    "**/*.pyc",
+    "tests/**",
+    "**/*.test.ts",
+    "**/*.test.js",
+    "**/*.spec.ts",
+    "**/*.spec.js",
+    "logs/**",
+    "shared/*.db",
+    "shared/*.db-*",
+    "tokens.json",
+    ".git/**",
+    "infra/**",
+    "prompts/**",
+]
+
+[churn]
+since = "6m"
+top = 20
+
+[hotspot]
+top = 20
+
+[duplicates]
+min_tokens = 50
+min_similarity = 0.9
+
+[satd]
+categories = ["design", "defect", "requirement", "test", "performance", "security"]
+custom_markers = []
+
+[feature_flags]
+stale_days = 90
+providers = ["generic"]
+custom_providers = []
+
+[score.thresholds]
+complexity = 85.0
+duplication = 65.0
+satd = 80.0
+tdg = 90.0
+coupling = 70.0
+smells = 90.0
+cohesion = 80.0

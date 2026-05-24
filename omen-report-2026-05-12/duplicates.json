@@ -1,0 +1,2027 @@
+{
+  "clones": [
+    {
+      "clone_type": "type1",
+      "end_line_a": 36,
+      "end_line_b": 66,
+      "file_a": "apps/web/src/lib/db/recovery.ts",
+      "file_b": "apps/web/src/lib/db/sleep.ts",
+      "group_id": 1,
+      "lines_a": 7,
+      "lines_b": 7,
+      "similarity": 1.0,
+      "start_line_a": 30,
+      "start_line_b": 60
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 36,
+      "end_line_b": 107,
+      "file_a": "apps/web/src/lib/db/recovery.ts",
+      "file_b": "apps/web/src/lib/db/sleep.ts",
+      "group_id": 1,
+      "lines_a": 7,
+      "lines_b": 7,
+      "similarity": 1.0,
+      "start_line_a": 30,
+      "start_line_b": 101
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 36,
+      "end_line_b": 35,
+      "file_a": "apps/web/src/lib/db/recovery.ts",
+      "file_b": "apps/web/src/lib/db/strain.ts",
+      "group_id": 1,
+      "lines_a": 7,
+      "lines_b": 7,
+      "similarity": 1.0,
+      "start_line_a": 30,
+      "start_line_b": 29
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 66,
+      "end_line_b": 107,
+      "file_a": "apps/web/src/lib/db/sleep.ts",
+      "file_b": "apps/web/src/lib/db/sleep.ts",
+      "group_id": 1,
+      "lines_a": 7,
+      "lines_b": 7,
+      "similarity": 1.0,
+      "start_line_a": 60,
+      "start_line_b": 101
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 66,
+      "end_line_b": 35,
+      "file_a": "apps/web/src/lib/db/sleep.ts",
+      "file_b": "apps/web/src/lib/db/strain.ts",
+      "group_id": 1,
+      "lines_a": 7,
+      "lines_b": 7,
+      "similarity": 1.0,
+      "start_line_a": 60,
+      "start_line_b": 29
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 107,
+      "end_line_b": 35,
+      "file_a": "apps/web/src/lib/db/sleep.ts",
+      "file_b": "apps/web/src/lib/db/strain.ts",
+      "group_id": 1,
+      "lines_a": 7,
+      "lines_b": 7,
+      "similarity": 1.0,
+      "start_line_a": 101,
+      "start_line_b": 29
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 37,
+      "end_line_b": 22,
+      "file_a": "apps/web/src/app/api/auth/apple-web/callback/route.ts",
+      "file_b": "apps/web/src/app/api/auth/apple-web/start/route.ts",
+      "group_id": 2,
+      "lines_a": 6,
+      "lines_b": 11,
+      "similarity": 1.0,
+      "start_line_a": 32,
+      "start_line_b": 12
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 94,
+      "end_line_b": 210,
+      "file_a": "apps/web/src/lib/db/logs.ts",
+      "file_b": "apps/web/src/lib/db/logs.ts",
+      "group_id": 3,
+      "lines_a": 15,
+      "lines_b": 15,
+      "similarity": 1.0,
+      "start_line_a": 80,
+      "start_line_b": 196
+    },
+    {
+      "clone_type": "type3",
+      "end_line_a": 387,
+      "end_line_b": 63,
+      "file_a": "apps/web/src/components/charts/CardiacDriftCard.tsx",
+      "file_b": "apps/web/src/lib/analytics/cardiacDrift.ts",
+      "group_id": 4,
+      "lines_a": 13,
+      "lines_b": 13,
+      "similarity": 0.825,
+      "start_line_a": 375,
+      "start_line_b": 51
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 119,
+      "end_line_b": 399,
+      "file_a": "apps/web/src/lib/db/devices.ts",
+      "file_b": "apps/web/src/lib/db/integrations.ts",
+      "group_id": 5,
+      "lines_a": 13,
+      "lines_b": 13,
+      "similarity": 1.0,
+      "start_line_a": 107,
+      "start_line_b": 387
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 149,
+      "end_line_b": 78,
+      "file_a": "apps/web/src/lib/db/coach.ts",
+      "file_b": "apps/web/src/lib/db/webhook.ts",
+      "group_id": 6,
+      "lines_a": 11,
+      "lines_b": 13,
+      "similarity": 0.9125,
+      "start_line_a": 139,
+      "start_line_b": 66
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 149,
+      "end_line_b": 106,
+      "file_a": "apps/web/src/lib/db/coach.ts",
+      "file_b": "apps/web/src/lib/db/webhook.ts",
+      "group_id": 6,
+      "lines_a": 11,
+      "lines_b": 13,
+      "similarity": 0.9125,
+      "start_line_a": 139,
+      "start_line_b": 94
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 149,
+      "end_line_b": 120,
+      "file_a": "apps/web/src/lib/db/coach.ts",
+      "file_b": "apps/web/src/lib/db/webhook.ts",
+      "group_id": 6,
+      "lines_a": 11,
+      "lines_b": 13,
+      "similarity": 0.9125,
+      "start_line_a": 139,
+      "start_line_b": 108
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 78,
+      "end_line_b": 106,
+      "file_a": "apps/web/src/lib/db/webhook.ts",
+      "file_b": "apps/web/src/lib/db/webhook.ts",
+      "group_id": 6,
+      "lines_a": 13,
+      "lines_b": 13,
+      "similarity": 0.9125,
+      "start_line_a": 66,
+      "start_line_b": 94
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 78,
+      "end_line_b": 120,
+      "file_a": "apps/web/src/lib/db/webhook.ts",
+      "file_b": "apps/web/src/lib/db/webhook.ts",
+      "group_id": 6,
+      "lines_a": 13,
+      "lines_b": 13,
+      "similarity": 0.9125,
+      "start_line_a": 66,
+      "start_line_b": 108
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 106,
+      "end_line_b": 120,
+      "file_a": "apps/web/src/lib/db/webhook.ts",
+      "file_b": "apps/web/src/lib/db/webhook.ts",
+      "group_id": 6,
+      "lines_a": 13,
+      "lines_b": 13,
+      "similarity": 0.9125,
+      "start_line_a": 94,
+      "start_line_b": 108
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 61,
+      "end_line_b": 73,
+      "file_a": "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+      "file_b": "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "group_id": 7,
+      "lines_a": 12,
+      "lines_b": 12,
+      "similarity": 0.875,
+      "start_line_a": 50,
+      "start_line_b": 62
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 61,
+      "end_line_b": 108,
+      "file_a": "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+      "file_b": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "group_id": 7,
+      "lines_a": 12,
+      "lines_b": 13,
+      "similarity": 0.875,
+      "start_line_a": 50,
+      "start_line_b": 96
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 73,
+      "end_line_b": 108,
+      "file_a": "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "file_b": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "group_id": 7,
+      "lines_a": 12,
+      "lines_b": 13,
+      "similarity": 0.875,
+      "start_line_a": 62,
+      "start_line_b": 96
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 47,
+      "end_line_b": 52,
+      "file_a": "apps/web/scripts/smoke-phase-a.ts",
+      "file_b": "apps/web/scripts/smoke-phase-c.ts",
+      "group_id": 8,
+      "lines_a": 6,
+      "lines_b": 6,
+      "similarity": 1.0,
+      "start_line_a": 42,
+      "start_line_b": 47
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 470,
+      "end_line_b": 482,
+      "file_a": "apps/web/src/lib/db/connection.ts",
+      "file_b": "apps/web/src/lib/db/connection.ts",
+      "group_id": 9,
+      "lines_a": 11,
+      "lines_b": 11,
+      "similarity": 1.0,
+      "start_line_a": 460,
+      "start_line_b": 472
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 157,
+      "end_line_b": 188,
+      "file_a": "apps/web/src/app/api/dashboard/today/route.test.ts",
+      "file_b": "apps/web/src/app/api/dashboard/today/route.ts",
+      "group_id": 10,
+      "lines_a": 5,
+      "lines_b": 5,
+      "similarity": 1.0,
+      "start_line_a": 153,
+      "start_line_b": 184
+    },
+    {
+      "clone_type": "type3",
+      "end_line_a": 65,
+      "end_line_b": 28,
+      "file_a": "apps/web/src/lib/sync.test.ts",
+      "file_b": "apps/web/src/lib/whoop/webhook-handler.test.ts",
+      "group_id": 11,
+      "lines_a": 6,
+      "lines_b": 4,
+      "similarity": 0.815,
+      "start_line_a": 60,
+      "start_line_b": 25
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 56,
+      "end_line_b": 43,
+      "file_a": "apps/web/src/components/charts/SleepConsistencyCard.tsx",
+      "file_b": "apps/web/src/lib/analytics/naps.ts",
+      "group_id": 12,
+      "lines_a": 5,
+      "lines_b": 5,
+      "similarity": 1.0,
+      "start_line_a": 52,
+      "start_line_b": 39
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 95,
+      "end_line_b": 59,
+      "file_a": "apps/web/src/app/api/auth/apple-web/callback/route.test.ts",
+      "file_b": "apps/web/src/app/api/auth/apple/route.test.ts",
+      "group_id": 13,
+      "lines_a": 11,
+      "lines_b": 9,
+      "similarity": 0.9033333333333334,
+      "start_line_a": 85,
+      "start_line_b": 51
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 95,
+      "end_line_b": 66,
+      "file_a": "apps/web/src/app/api/auth/apple-web/callback/route.test.ts",
+      "file_b": "apps/web/src/lib/db/coach.test.ts",
+      "group_id": 13,
+      "lines_a": 11,
+      "lines_b": 9,
+      "similarity": 0.9033333333333334,
+      "start_line_a": 85,
+      "start_line_b": 58
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 95,
+      "end_line_b": 35,
+      "file_a": "apps/web/src/app/api/auth/apple-web/callback/route.test.ts",
+      "file_b": "apps/web/src/lib/db/scoped.test.ts",
+      "group_id": 13,
+      "lines_a": 11,
+      "lines_b": 9,
+      "similarity": 0.9033333333333334,
+      "start_line_a": 85,
+      "start_line_b": 27
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 95,
+      "end_line_b": 59,
+      "file_a": "apps/web/src/app/api/auth/apple-web/callback/route.test.ts",
+      "file_b": "apps/web/src/lib/db/users.test.ts",
+      "group_id": 13,
+      "lines_a": 11,
+      "lines_b": 12,
+      "similarity": 0.9033333333333334,
+      "start_line_a": 85,
+      "start_line_b": 48
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 95,
+      "end_line_b": 173,
+      "file_a": "apps/web/src/app/api/auth/apple-web/callback/route.test.ts",
+      "file_b": "apps/web/src/lib/sync.test.ts",
+      "group_id": 13,
+      "lines_a": 11,
+      "lines_b": 16,
+      "similarity": 0.9033333333333334,
+      "start_line_a": 85,
+      "start_line_b": 158
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 59,
+      "end_line_b": 66,
+      "file_a": "apps/web/src/app/api/auth/apple/route.test.ts",
+      "file_b": "apps/web/src/lib/db/coach.test.ts",
+      "group_id": 13,
+      "lines_a": 9,
+      "lines_b": 9,
+      "similarity": 0.9033333333333334,
+      "start_line_a": 51,
+      "start_line_b": 58
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 59,
+      "end_line_b": 35,
+      "file_a": "apps/web/src/app/api/auth/apple/route.test.ts",
+      "file_b": "apps/web/src/lib/db/scoped.test.ts",
+      "group_id": 13,
+      "lines_a": 9,
+      "lines_b": 9,
+      "similarity": 0.9033333333333334,
+      "start_line_a": 51,
+      "start_line_b": 27
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 59,
+      "end_line_b": 59,
+      "file_a": "apps/web/src/app/api/auth/apple/route.test.ts",
+      "file_b": "apps/web/src/lib/db/users.test.ts",
+      "group_id": 13,
+      "lines_a": 9,
+      "lines_b": 12,
+      "similarity": 0.9033333333333334,
+      "start_line_a": 51,
+      "start_line_b": 48
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 59,
+      "end_line_b": 173,
+      "file_a": "apps/web/src/app/api/auth/apple/route.test.ts",
+      "file_b": "apps/web/src/lib/sync.test.ts",
+      "group_id": 13,
+      "lines_a": 9,
+      "lines_b": 16,
+      "similarity": 0.9033333333333334,
+      "start_line_a": 51,
+      "start_line_b": 158
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 66,
+      "end_line_b": 35,
+      "file_a": "apps/web/src/lib/db/coach.test.ts",
+      "file_b": "apps/web/src/lib/db/scoped.test.ts",
+      "group_id": 13,
+      "lines_a": 9,
+      "lines_b": 9,
+      "similarity": 0.9033333333333334,
+      "start_line_a": 58,
+      "start_line_b": 27
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 66,
+      "end_line_b": 59,
+      "file_a": "apps/web/src/lib/db/coach.test.ts",
+      "file_b": "apps/web/src/lib/db/users.test.ts",
+      "group_id": 13,
+      "lines_a": 9,
+      "lines_b": 12,
+      "similarity": 0.9033333333333334,
+      "start_line_a": 58,
+      "start_line_b": 48
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 66,
+      "end_line_b": 173,
+      "file_a": "apps/web/src/lib/db/coach.test.ts",
+      "file_b": "apps/web/src/lib/sync.test.ts",
+      "group_id": 13,
+      "lines_a": 9,
+      "lines_b": 16,
+      "similarity": 0.9033333333333334,
+      "start_line_a": 58,
+      "start_line_b": 158
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 35,
+      "end_line_b": 59,
+      "file_a": "apps/web/src/lib/db/scoped.test.ts",
+      "file_b": "apps/web/src/lib/db/users.test.ts",
+      "group_id": 13,
+      "lines_a": 9,
+      "lines_b": 12,
+      "similarity": 0.9033333333333334,
+      "start_line_a": 27,
+      "start_line_b": 48
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 35,
+      "end_line_b": 173,
+      "file_a": "apps/web/src/lib/db/scoped.test.ts",
+      "file_b": "apps/web/src/lib/sync.test.ts",
+      "group_id": 13,
+      "lines_a": 9,
+      "lines_b": 16,
+      "similarity": 0.9033333333333334,
+      "start_line_a": 27,
+      "start_line_b": 158
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 59,
+      "end_line_b": 173,
+      "file_a": "apps/web/src/lib/db/users.test.ts",
+      "file_b": "apps/web/src/lib/sync.test.ts",
+      "group_id": 13,
+      "lines_a": 12,
+      "lines_b": 16,
+      "similarity": 0.9033333333333334,
+      "start_line_a": 48,
+      "start_line_b": 158
+    },
+    {
+      "clone_type": "type3",
+      "end_line_a": 82,
+      "end_line_b": 121,
+      "file_a": "apps/web/src/lib/auth/apple-web.ts",
+      "file_b": "apps/web/src/lib/push/apns.ts",
+      "group_id": 14,
+      "lines_a": 22,
+      "lines_b": 18,
+      "similarity": 0.82,
+      "start_line_a": 61,
+      "start_line_b": 104
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 447,
+      "end_line_b": 473,
+      "file_a": "apps/web/src/lib/whoop/upsert.ts",
+      "file_b": "apps/web/src/lib/whoop/upsert.ts",
+      "group_id": 15,
+      "lines_a": 13,
+      "lines_b": 14,
+      "similarity": 0.8966666666666666,
+      "start_line_a": 435,
+      "start_line_b": 460
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 447,
+      "end_line_b": 498,
+      "file_a": "apps/web/src/lib/whoop/upsert.ts",
+      "file_b": "apps/web/src/lib/whoop/upsert.ts",
+      "group_id": 15,
+      "lines_a": 13,
+      "lines_b": 13,
+      "similarity": 0.8966666666666666,
+      "start_line_a": 435,
+      "start_line_b": 486
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 473,
+      "end_line_b": 498,
+      "file_a": "apps/web/src/lib/whoop/upsert.ts",
+      "file_b": "apps/web/src/lib/whoop/upsert.ts",
+      "group_id": 15,
+      "lines_a": 14,
+      "lines_b": 13,
+      "similarity": 0.8966666666666666,
+      "start_line_a": 460,
+      "start_line_b": 486
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 151,
+      "end_line_b": 186,
+      "file_a": "tests/test_integrations.py",
+      "file_b": "tests/test_integrations.py",
+      "group_id": 16,
+      "lines_a": 24,
+      "lines_b": 22,
+      "similarity": 0.92,
+      "start_line_a": 128,
+      "start_line_b": 165
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 96,
+      "end_line_b": 136,
+      "file_a": "apps/web/src/lib/db/coach.ts",
+      "file_b": "apps/web/src/lib/db/webhook.ts",
+      "group_id": 17,
+      "lines_a": 13,
+      "lines_b": 15,
+      "similarity": 1.0,
+      "start_line_a": 84,
+      "start_line_b": 122
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 111,
+      "end_line_b": 125,
+      "file_a": "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+      "file_b": "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "group_id": 18,
+      "lines_a": 30,
+      "lines_b": 29,
+      "similarity": 0.8733333333333334,
+      "start_line_a": 82,
+      "start_line_b": 97
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 111,
+      "end_line_b": 142,
+      "file_a": "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+      "file_b": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "group_id": 18,
+      "lines_a": 30,
+      "lines_b": 29,
+      "similarity": 0.8733333333333334,
+      "start_line_a": 82,
+      "start_line_b": 114
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 125,
+      "end_line_b": 142,
+      "file_a": "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "file_b": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "group_id": 18,
+      "lines_a": 29,
+      "lines_b": 29,
+      "similarity": 0.8733333333333334,
+      "start_line_a": 97,
+      "start_line_b": 114
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 71,
+      "end_line_b": 31,
+      "file_a": "apps/web/src/components/charts/HRVTrend.tsx",
+      "file_b": "apps/web/src/components/charts/TrendChart.tsx",
+      "group_id": 19,
+      "lines_a": 9,
+      "lines_b": 9,
+      "similarity": 1.0,
+      "start_line_a": 63,
+      "start_line_b": 23
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 397,
+      "end_line_b": 356,
+      "file_a": "apps/web/src/components/charts/HRVTrend.tsx",
+      "file_b": "apps/web/src/components/charts/TrendChart.tsx",
+      "group_id": 20,
+      "lines_a": 40,
+      "lines_b": 40,
+      "similarity": 1.0,
+      "start_line_a": 358,
+      "start_line_b": 317
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 155,
+      "end_line_b": 189,
+      "file_a": "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+      "file_b": "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "group_id": 21,
+      "lines_a": 17,
+      "lines_b": 17,
+      "similarity": 1.0,
+      "start_line_a": 139,
+      "start_line_b": 173
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 155,
+      "end_line_b": 246,
+      "file_a": "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+      "file_b": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "group_id": 21,
+      "lines_a": 17,
+      "lines_b": 17,
+      "similarity": 1.0,
+      "start_line_a": 139,
+      "start_line_b": 230
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 189,
+      "end_line_b": 246,
+      "file_a": "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "file_b": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "group_id": 21,
+      "lines_a": 17,
+      "lines_b": 17,
+      "similarity": 1.0,
+      "start_line_a": 173,
+      "start_line_b": 230
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 42,
+      "end_line_b": 45,
+      "file_a": "apps/web/src/app/(auth)/layout.tsx",
+      "file_b": "apps/web/src/app/(onboarding)/layout.tsx",
+      "group_id": 22,
+      "lines_a": 13,
+      "lines_b": 13,
+      "similarity": 1.0,
+      "start_line_a": 30,
+      "start_line_b": 33
+    },
+    {
+      "clone_type": "type2",
+      "end_line_a": 84,
+      "end_line_b": 99,
+      "file_a": "apps/web/src/lib/sync.test.ts",
+      "file_b": "apps/web/src/lib/sync.test.ts",
+      "group_id": 23,
+      "lines_a": 15,
+      "lines_b": 14,
+      "similarity": 0.89,
+      "start_line_a": 70,
+      "start_line_b": 86
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 32,
+      "end_line_b": 32,
+      "file_a": "apps/web/src/lib/db/users.test.ts",
+      "file_b": "apps/web/src/lib/db/webhook.test.ts",
+      "group_id": 24,
+      "lines_a": 9,
+      "lines_b": 9,
+      "similarity": 1.0,
+      "start_line_a": 24,
+      "start_line_b": 24
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 151,
+      "end_line_b": 176,
+      "file_a": "apps/web/src/app/api/dashboard/today/route.test.ts",
+      "file_b": "apps/web/src/app/api/dashboard/today/route.ts",
+      "group_id": 25,
+      "lines_a": 8,
+      "lines_b": 7,
+      "similarity": 1.0,
+      "start_line_a": 144,
+      "start_line_b": 170
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 196,
+      "end_line_b": 164,
+      "file_a": "apps/web/src/components/charts/BedtimePatternsCard.tsx",
+      "file_b": "apps/web/src/components/charts/NapCalendar.tsx",
+      "group_id": 26,
+      "lines_a": 18,
+      "lines_b": 18,
+      "similarity": 1.0,
+      "start_line_a": 179,
+      "start_line_b": 147
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 196,
+      "end_line_b": 247,
+      "file_a": "apps/web/src/components/charts/BedtimePatternsCard.tsx",
+      "file_b": "apps/web/src/components/charts/NapTrackerCard.tsx",
+      "group_id": 26,
+      "lines_a": 18,
+      "lines_b": 18,
+      "similarity": 1.0,
+      "start_line_a": 179,
+      "start_line_b": 230
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 196,
+      "end_line_b": 91,
+      "file_a": "apps/web/src/components/charts/BedtimePatternsCard.tsx",
+      "file_b": "apps/web/src/components/charts/RecoveryReboundCard.tsx",
+      "group_id": 26,
+      "lines_a": 18,
+      "lines_b": 20,
+      "similarity": 1.0,
+      "start_line_a": 179,
+      "start_line_b": 72
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 196,
+      "end_line_b": 150,
+      "file_a": "apps/web/src/components/charts/BedtimePatternsCard.tsx",
+      "file_b": "apps/web/src/components/charts/SleepConsistencyCard.tsx",
+      "group_id": 26,
+      "lines_a": 18,
+      "lines_b": 18,
+      "similarity": 1.0,
+      "start_line_a": 179,
+      "start_line_b": 133
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 164,
+      "end_line_b": 247,
+      "file_a": "apps/web/src/components/charts/NapCalendar.tsx",
+      "file_b": "apps/web/src/components/charts/NapTrackerCard.tsx",
+      "group_id": 26,
+      "lines_a": 18,
+      "lines_b": 18,
+      "similarity": 1.0,
+      "start_line_a": 147,
+      "start_line_b": 230
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 164,
+      "end_line_b": 91,
+      "file_a": "apps/web/src/components/charts/NapCalendar.tsx",
+      "file_b": "apps/web/src/components/charts/RecoveryReboundCard.tsx",
+      "group_id": 26,
+      "lines_a": 18,
+      "lines_b": 20,
+      "similarity": 1.0,
+      "start_line_a": 147,
+      "start_line_b": 72
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 164,
+      "end_line_b": 150,
+      "file_a": "apps/web/src/components/charts/NapCalendar.tsx",
+      "file_b": "apps/web/src/components/charts/SleepConsistencyCard.tsx",
+      "group_id": 26,
+      "lines_a": 18,
+      "lines_b": 18,
+      "similarity": 1.0,
+      "start_line_a": 147,
+      "start_line_b": 133
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 247,
+      "end_line_b": 91,
+      "file_a": "apps/web/src/components/charts/NapTrackerCard.tsx",
+      "file_b": "apps/web/src/components/charts/RecoveryReboundCard.tsx",
+      "group_id": 26,
+      "lines_a": 18,
+      "lines_b": 20,
+      "similarity": 1.0,
+      "start_line_a": 230,
+      "start_line_b": 72
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 247,
+      "end_line_b": 150,
+      "file_a": "apps/web/src/components/charts/NapTrackerCard.tsx",
+      "file_b": "apps/web/src/components/charts/SleepConsistencyCard.tsx",
+      "group_id": 26,
+      "lines_a": 18,
+      "lines_b": 18,
+      "similarity": 1.0,
+      "start_line_a": 230,
+      "start_line_b": 133
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 91,
+      "end_line_b": 150,
+      "file_a": "apps/web/src/components/charts/RecoveryReboundCard.tsx",
+      "file_b": "apps/web/src/components/charts/SleepConsistencyCard.tsx",
+      "group_id": 26,
+      "lines_a": 20,
+      "lines_b": 18,
+      "similarity": 1.0,
+      "start_line_a": 72,
+      "start_line_b": 133
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 43,
+      "end_line_b": 37,
+      "file_a": "apps/web/src/components/charts/BedtimePatternsCard.tsx",
+      "file_b": "apps/web/src/components/charts/NapTrackerCard.tsx",
+      "group_id": 27,
+      "lines_a": 8,
+      "lines_b": 8,
+      "similarity": 1.0,
+      "start_line_a": 36,
+      "start_line_b": 30
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 13,
+      "end_line_b": 20,
+      "file_a": "apps/web/src/lib/db/devices.test.ts",
+      "file_b": "apps/web/src/lib/db/integrations.test.ts",
+      "group_id": 28,
+      "lines_a": 6,
+      "lines_b": 7,
+      "similarity": 1.0,
+      "start_line_a": 8,
+      "start_line_b": 14
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 13,
+      "end_line_b": 15,
+      "file_a": "apps/web/src/lib/db/devices.test.ts",
+      "file_b": "apps/web/src/lib/db/user_settings.test.ts",
+      "group_id": 28,
+      "lines_a": 6,
+      "lines_b": 7,
+      "similarity": 1.0,
+      "start_line_a": 8,
+      "start_line_b": 9
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 20,
+      "end_line_b": 15,
+      "file_a": "apps/web/src/lib/db/integrations.test.ts",
+      "file_b": "apps/web/src/lib/db/user_settings.test.ts",
+      "group_id": 28,
+      "lines_a": 7,
+      "lines_b": 7,
+      "similarity": 1.0,
+      "start_line_a": 14,
+      "start_line_b": 9
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 55,
+      "end_line_b": 64,
+      "file_a": "apps/web/src/components/charts/HRVTrend.tsx",
+      "file_b": "apps/web/src/components/charts/TrendChart.tsx",
+      "group_id": 29,
+      "lines_a": 8,
+      "lines_b": 8,
+      "similarity": 1.0,
+      "start_line_a": 48,
+      "start_line_b": 57
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 55,
+      "end_line_b": 15,
+      "file_a": "apps/web/src/components/charts/HRVTrend.tsx",
+      "file_b": "apps/web/src/components/overview/RecoveryTrend.tsx",
+      "group_id": 29,
+      "lines_a": 8,
+      "lines_b": 8,
+      "similarity": 1.0,
+      "start_line_a": 48,
+      "start_line_b": 8
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 64,
+      "end_line_b": 15,
+      "file_a": "apps/web/src/components/charts/TrendChart.tsx",
+      "file_b": "apps/web/src/components/overview/RecoveryTrend.tsx",
+      "group_id": 29,
+      "lines_a": 8,
+      "lines_b": 8,
+      "similarity": 1.0,
+      "start_line_a": 57,
+      "start_line_b": 8
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 48,
+      "end_line_b": 60,
+      "file_a": "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+      "file_b": "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "group_id": 30,
+      "lines_a": 8,
+      "lines_b": 8,
+      "similarity": 1.0,
+      "start_line_a": 41,
+      "start_line_b": 53
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 48,
+      "end_line_b": 94,
+      "file_a": "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+      "file_b": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "group_id": 30,
+      "lines_a": 8,
+      "lines_b": 8,
+      "similarity": 1.0,
+      "start_line_a": 41,
+      "start_line_b": 87
+    },
+    {
+      "clone_type": "type1",
+      "end_line_a": 60,
+      "end_line_b": 94,
+      "file_a": "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "file_b": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "group_id": 30,
+      "lines_a": 8,
+      "lines_b": 8,
+      "similarity": 1.0,
+      "start_line_a": 53,
+      "start_line_b": 87
+    }
+  ],
+  "groups": [
+    {
+      "average_similarity": 1.0,
+      "clone_type": "type1",
+      "id": 1,
+      "instances": [
+        {
+          "end_line": 36,
+          "file": "apps/web/src/lib/db/recovery.ts",
+          "lines": 7,
+          "normalized_hash": 18410436500856670855,
+          "similarity": 1.0,
+          "start_line": 30
+        },
+        {
+          "end_line": 66,
+          "file": "apps/web/src/lib/db/sleep.ts",
+          "lines": 7,
+          "normalized_hash": 18410436500856670855,
+          "similarity": 1.0,
+          "start_line": 60
+        },
+        {
+          "end_line": 107,
+          "file": "apps/web/src/lib/db/sleep.ts",
+          "lines": 7,
+          "normalized_hash": 18410436500856670855,
+          "similarity": 1.0,
+          "start_line": 101
+        },
+        {
+          "end_line": 35,
+          "file": "apps/web/src/lib/db/strain.ts",
+          "lines": 7,
+          "normalized_hash": 18410436500856670855,
+          "similarity": 1.0,
+          "start_line": 29
+        }
+      ],
+      "total_lines": 28,
+      "total_tokens": 200
+    },
+    {
+      "average_similarity": 1.0,
+      "clone_type": "type1",
+      "id": 2,
+      "instances": [
+        {
+          "end_line": 37,
+          "file": "apps/web/src/app/api/auth/apple-web/callback/route.ts",
+          "lines": 6,
+          "normalized_hash": 243913409823201052,
+          "similarity": 1.0,
+          "start_line": 32
+        },
+        {
+          "end_line": 22,
+          "file": "apps/web/src/app/api/auth/apple-web/start/route.ts",
+          "lines": 11,
+          "normalized_hash": 243913409823201052,
+          "similarity": 1.0,
+          "start_line": 12
+        }
+      ],
+      "total_lines": 17,
+      "total_tokens": 108
+    },
+    {
+      "average_similarity": 1.0,
+      "clone_type": "type1",
+      "id": 3,
+      "instances": [
+        {
+          "end_line": 94,
+          "file": "apps/web/src/lib/db/logs.ts",
+          "lines": 15,
+          "normalized_hash": 4495395162806365395,
+          "similarity": 1.0,
+          "start_line": 80
+        },
+        {
+          "end_line": 210,
+          "file": "apps/web/src/lib/db/logs.ts",
+          "lines": 15,
+          "normalized_hash": 4495395162806365395,
+          "similarity": 1.0,
+          "start_line": 196
+        }
+      ],
+      "total_lines": 30,
+      "total_tokens": 162
+    },
+    {
+      "average_similarity": 0.825,
+      "clone_type": "type3",
+      "id": 4,
+      "instances": [
+        {
+          "end_line": 387,
+          "file": "apps/web/src/components/charts/CardiacDriftCard.tsx",
+          "lines": 13,
+          "normalized_hash": 15234583721335538300,
+          "similarity": 1.0,
+          "start_line": 375
+        },
+        {
+          "end_line": 63,
+          "file": "apps/web/src/lib/analytics/cardiacDrift.ts",
+          "lines": 13,
+          "normalized_hash": 15308343334422282804,
+          "similarity": 1.0,
+          "start_line": 51
+        }
+      ],
+      "total_lines": 26,
+      "total_tokens": 254
+    },
+    {
+      "average_similarity": 1.0,
+      "clone_type": "type1",
+      "id": 5,
+      "instances": [
+        {
+          "end_line": 119,
+          "file": "apps/web/src/lib/db/devices.ts",
+          "lines": 13,
+          "normalized_hash": 15830061709930536233,
+          "similarity": 1.0,
+          "start_line": 107
+        },
+        {
+          "end_line": 399,
+          "file": "apps/web/src/lib/db/integrations.ts",
+          "lines": 13,
+          "normalized_hash": 15830061709930536233,
+          "similarity": 1.0,
+          "start_line": 387
+        }
+      ],
+      "total_lines": 26,
+      "total_tokens": 156
+    },
+    {
+      "average_similarity": 0.9125,
+      "clone_type": "type2",
+      "id": 6,
+      "instances": [
+        {
+          "end_line": 149,
+          "file": "apps/web/src/lib/db/coach.ts",
+          "lines": 11,
+          "normalized_hash": 8443417747313807045,
+          "similarity": 1.0,
+          "start_line": 139
+        },
+        {
+          "end_line": 78,
+          "file": "apps/web/src/lib/db/webhook.ts",
+          "lines": 13,
+          "normalized_hash": 8518976397200135414,
+          "similarity": 1.0,
+          "start_line": 66
+        },
+        {
+          "end_line": 106,
+          "file": "apps/web/src/lib/db/webhook.ts",
+          "lines": 13,
+          "normalized_hash": 8518976397200135414,
+          "similarity": 1.0,
+          "start_line": 94
+        },
+        {
+          "end_line": 120,
+          "file": "apps/web/src/lib/db/webhook.ts",
+          "lines": 13,
+          "normalized_hash": 8518976397200135414,
+          "similarity": 1.0,
+          "start_line": 108
+        }
+      ],
+      "total_lines": 50,
+      "total_tokens": 226
+    },
+    {
+      "average_similarity": 0.875,
+      "clone_type": "type2",
+      "id": 7,
+      "instances": [
+        {
+          "end_line": 61,
+          "file": "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+          "lines": 12,
+          "normalized_hash": 12799990616861703588,
+          "similarity": 1.0,
+          "start_line": 50
+        },
+        {
+          "end_line": 73,
+          "file": "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+          "lines": 12,
+          "normalized_hash": 10327364536374710743,
+          "similarity": 1.0,
+          "start_line": 62
+        },
+        {
+          "end_line": 108,
+          "file": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+          "lines": 13,
+          "normalized_hash": 2668108064516866513,
+          "similarity": 1.0,
+          "start_line": 96
+        }
+      ],
+      "total_lines": 37,
+      "total_tokens": 183
+    },
+    {
+      "average_similarity": 1.0,
+      "clone_type": "type1",
+      "id": 8,
+      "instances": [
+        {
+          "end_line": 47,
+          "file": "apps/web/scripts/smoke-phase-a.ts",
+          "lines": 6,
+          "normalized_hash": 18224261607246612321,
+          "similarity": 1.0,
+          "start_line": 42
+        },
+        {
+          "end_line": 52,
+          "file": "apps/web/scripts/smoke-phase-c.ts",
+          "lines": 6,
+          "normalized_hash": 18224261607246612321,
+          "similarity": 1.0,
+          "start_line": 47
+        }
+      ],
+      "total_lines": 12,
+      "total_tokens": 116
+    },
+    {
+      "average_similarity": 1.0,
+      "clone_type": "type1",
+      "id": 9,
+      "instances": [
+        {
+          "end_line": 470,
+          "file": "apps/web/src/lib/db/connection.ts",
+          "lines": 11,
+          "normalized_hash": 10211430261316924123,
+          "similarity": 1.0,
+          "start_line": 460
+        },
+        {
+          "end_line": 482,
+          "file": "apps/web/src/lib/db/connection.ts",
+          "lines": 11,
+          "normalized_hash": 10211430261316924123,
+          "similarity": 1.0,
+          "start_line": 472
+        }
+      ],
+      "total_lines": 22,
+      "total_tokens": 124
+    },
+    {
+      "average_similarity": 1.0,
+      "clone_type": "type1",
+      "id": 10,
+      "instances": [
+        {
+          "end_line": 157,
+          "file": "apps/web/src/app/api/dashboard/today/route.test.ts",
+          "lines": 5,
+          "normalized_hash": 11978049646558624353,
+          "similarity": 1.0,
+          "start_line": 153
+        },
+        {
+          "end_line": 188,
+          "file": "apps/web/src/app/api/dashboard/today/route.ts",
+          "lines": 5,
+          "normalized_hash": 11978049646558624353,
+          "similarity": 1.0,
+          "start_line": 184
+        }
+      ],
+      "total_lines": 10,
+      "total_tokens": 102
+    },
+    {
+      "average_similarity": 0.815,
+      "clone_type": "type3",
+      "id": 11,
+      "instances": [
+        {
+          "end_line": 65,
+          "file": "apps/web/src/lib/sync.test.ts",
+          "lines": 6,
+          "normalized_hash": 8089185191200020329,
+          "similarity": 1.0,
+          "start_line": 60
+        },
+        {
+          "end_line": 28,
+          "file": "apps/web/src/lib/whoop/webhook-handler.test.ts",
+          "lines": 4,
+          "normalized_hash": 8179914946620117484,
+          "similarity": 1.0,
+          "start_line": 25
+        }
+      ],
+      "total_lines": 10,
+      "total_tokens": 111
+    },
+    {
+      "average_similarity": 1.0,
+      "clone_type": "type1",
+      "id": 12,
+      "instances": [
+        {
+          "end_line": 56,
+          "file": "apps/web/src/components/charts/SleepConsistencyCard.tsx",
+          "lines": 5,
+          "normalized_hash": 13536537809919371050,
+          "similarity": 1.0,
+          "start_line": 52
+        },
+        {
+          "end_line": 43,
+          "file": "apps/web/src/lib/analytics/naps.ts",
+          "lines": 5,
+          "normalized_hash": 13536537809919371050,
+          "similarity": 1.0,
+          "start_line": 39
+        }
+      ],
+      "total_lines": 10,
+      "total_tokens": 158
+    },
+    {
+      "average_similarity": 0.9033333333333334,
+      "clone_type": "type2",
+      "id": 13,
+      "instances": [
+        {
+          "end_line": 95,
+          "file": "apps/web/src/app/api/auth/apple-web/callback/route.test.ts",
+          "lines": 11,
+          "normalized_hash": 17676002770059808908,
+          "similarity": 1.0,
+          "start_line": 85
+        },
+        {
+          "end_line": 59,
+          "file": "apps/web/src/app/api/auth/apple/route.test.ts",
+          "lines": 9,
+          "normalized_hash": 17676002770059808908,
+          "similarity": 1.0,
+          "start_line": 51
+        },
+        {
+          "end_line": 66,
+          "file": "apps/web/src/lib/db/coach.test.ts",
+          "lines": 9,
+          "normalized_hash": 17676002770059808908,
+          "similarity": 1.0,
+          "start_line": 58
+        },
+        {
+          "end_line": 35,
+          "file": "apps/web/src/lib/db/scoped.test.ts",
+          "lines": 9,
+          "normalized_hash": 4253600977795686246,
+          "similarity": 1.0,
+          "start_line": 27
+        },
+        {
+          "end_line": 59,
+          "file": "apps/web/src/lib/db/users.test.ts",
+          "lines": 12,
+          "normalized_hash": 17676002770059808908,
+          "similarity": 1.0,
+          "start_line": 48
+        },
+        {
+          "end_line": 173,
+          "file": "apps/web/src/lib/sync.test.ts",
+          "lines": 16,
+          "normalized_hash": 10470394713668897665,
+          "similarity": 1.0,
+          "start_line": 158
+        }
+      ],
+      "total_lines": 66,
+      "total_tokens": 351
+    },
+    {
+      "average_similarity": 0.82,
+      "clone_type": "type3",
+      "id": 14,
+      "instances": [
+        {
+          "end_line": 82,
+          "file": "apps/web/src/lib/auth/apple-web.ts",
+          "lines": 22,
+          "normalized_hash": 8626462695498688769,
+          "similarity": 1.0,
+          "start_line": 61
+        },
+        {
+          "end_line": 121,
+          "file": "apps/web/src/lib/push/apns.ts",
+          "lines": 18,
+          "normalized_hash": 8012044943046515401,
+          "similarity": 1.0,
+          "start_line": 104
+        }
+      ],
+      "total_lines": 40,
+      "total_tokens": 170
+    },
+    {
+      "average_similarity": 0.8966666666666666,
+      "clone_type": "type2",
+      "id": 15,
+      "instances": [
+        {
+          "end_line": 447,
+          "file": "apps/web/src/lib/whoop/upsert.ts",
+          "lines": 13,
+          "normalized_hash": 18138884249067797933,
+          "similarity": 1.0,
+          "start_line": 435
+        },
+        {
+          "end_line": 473,
+          "file": "apps/web/src/lib/whoop/upsert.ts",
+          "lines": 14,
+          "normalized_hash": 15111689503405603026,
+          "similarity": 1.0,
+          "start_line": 460
+        },
+        {
+          "end_line": 498,
+          "file": "apps/web/src/lib/whoop/upsert.ts",
+          "lines": 13,
+          "normalized_hash": 18138884249067797933,
+          "similarity": 1.0,
+          "start_line": 486
+        }
+      ],
+      "total_lines": 40,
+      "total_tokens": 237
+    },
+    {
+      "average_similarity": 0.92,
+      "clone_type": "type2",
+      "id": 16,
+      "instances": [
+        {
+          "end_line": 151,
+          "file": "tests/test_integrations.py",
+          "lines": 24,
+          "normalized_hash": 8831809923260053584,
+          "similarity": 1.0,
+          "start_line": 128
+        },
+        {
+          "end_line": 186,
+          "file": "tests/test_integrations.py",
+          "lines": 22,
+          "normalized_hash": 11250161807955186265,
+          "similarity": 1.0,
+          "start_line": 165
+        }
+      ],
+      "total_lines": 46,
+      "total_tokens": 187
+    },
+    {
+      "average_similarity": 1.0,
+      "clone_type": "type1",
+      "id": 17,
+      "instances": [
+        {
+          "end_line": 96,
+          "file": "apps/web/src/lib/db/coach.ts",
+          "lines": 13,
+          "normalized_hash": 3946401318217016235,
+          "similarity": 1.0,
+          "start_line": 84
+        },
+        {
+          "end_line": 136,
+          "file": "apps/web/src/lib/db/webhook.ts",
+          "lines": 15,
+          "normalized_hash": 3946401318217016235,
+          "similarity": 1.0,
+          "start_line": 122
+        }
+      ],
+      "total_lines": 28,
+      "total_tokens": 132
+    },
+    {
+      "average_similarity": 0.8733333333333334,
+      "clone_type": "type2",
+      "id": 18,
+      "instances": [
+        {
+          "end_line": 111,
+          "file": "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+          "lines": 30,
+          "normalized_hash": 16578990385599679673,
+          "similarity": 1.0,
+          "start_line": 82
+        },
+        {
+          "end_line": 125,
+          "file": "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+          "lines": 29,
+          "normalized_hash": 9429644608410151372,
+          "similarity": 1.0,
+          "start_line": 97
+        },
+        {
+          "end_line": 142,
+          "file": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+          "lines": 29,
+          "normalized_hash": 9429644608410151372,
+          "similarity": 1.0,
+          "start_line": 114
+        }
+      ],
+      "total_lines": 88,
+      "total_tokens": 388
+    },
+    {
+      "average_similarity": 1.0,
+      "clone_type": "type1",
+      "id": 19,
+      "instances": [
+        {
+          "end_line": 71,
+          "file": "apps/web/src/components/charts/HRVTrend.tsx",
+          "lines": 9,
+          "normalized_hash": 5821099767533009888,
+          "similarity": 1.0,
+          "start_line": 63
+        },
+        {
+          "end_line": 31,
+          "file": "apps/web/src/components/charts/TrendChart.tsx",
+          "lines": 9,
+          "normalized_hash": 5821099767533009888,
+          "similarity": 1.0,
+          "start_line": 23
+        }
+      ],
+      "total_lines": 18,
+      "total_tokens": 248
+    },
+    {
+      "average_similarity": 1.0,
+      "clone_type": "type1",
+      "id": 20,
+      "instances": [
+        {
+          "end_line": 397,
+          "file": "apps/web/src/components/charts/HRVTrend.tsx",
+          "lines": 40,
+          "normalized_hash": 11980414033358825169,
+          "similarity": 1.0,
+          "start_line": 358
+        },
+        {
+          "end_line": 356,
+          "file": "apps/web/src/components/charts/TrendChart.tsx",
+          "lines": 40,
+          "normalized_hash": 11980414033358825169,
+          "similarity": 1.0,
+          "start_line": 317
+        }
+      ],
+      "total_lines": 80,
+      "total_tokens": 392
+    },
+    {
+      "average_similarity": 1.0,
+      "clone_type": "type1",
+      "id": 21,
+      "instances": [
+        {
+          "end_line": 155,
+          "file": "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+          "lines": 17,
+          "normalized_hash": 15194983756864692825,
+          "similarity": 1.0,
+          "start_line": 139
+        },
+        {
+          "end_line": 189,
+          "file": "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+          "lines": 17,
+          "normalized_hash": 15194983756864692825,
+          "similarity": 1.0,
+          "start_line": 173
+        },
+        {
+          "end_line": 246,
+          "file": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+          "lines": 17,
+          "normalized_hash": 15194983756864692825,
+          "similarity": 1.0,
+          "start_line": 230
+        }
+      ],
+      "total_lines": 51,
+      "total_tokens": 258
+    },
+    {
+      "average_similarity": 1.0,
+      "clone_type": "type1",
+      "id": 22,
+      "instances": [
+        {
+          "end_line": 42,
+          "file": "apps/web/src/app/(auth)/layout.tsx",
+          "lines": 13,
+          "normalized_hash": 18206170047689561444,
+          "similarity": 1.0,
+          "start_line": 30
+        },
+        {
+          "end_line": 45,
+          "file": "apps/web/src/app/(onboarding)/layout.tsx",
+          "lines": 13,
+          "normalized_hash": 18206170047689561444,
+          "similarity": 1.0,
+          "start_line": 33
+        }
+      ],
+      "total_lines": 26,
+      "total_tokens": 122
+    },
+    {
+      "average_similarity": 0.89,
+      "clone_type": "type2",
+      "id": 23,
+      "instances": [
+        {
+          "end_line": 84,
+          "file": "apps/web/src/lib/sync.test.ts",
+          "lines": 15,
+          "normalized_hash": 659778191120077489,
+          "similarity": 1.0,
+          "start_line": 70
+        },
+        {
+          "end_line": 99,
+          "file": "apps/web/src/lib/sync.test.ts",
+          "lines": 14,
+          "normalized_hash": 2687006012752795343,
+          "similarity": 1.0,
+          "start_line": 86
+        }
+      ],
+      "total_lines": 29,
+      "total_tokens": 104
+    },
+    {
+      "average_similarity": 1.0,
+      "clone_type": "type1",
+      "id": 24,
+      "instances": [
+        {
+          "end_line": 32,
+          "file": "apps/web/src/lib/db/users.test.ts",
+          "lines": 9,
+          "normalized_hash": 18213482073411885392,
+          "similarity": 1.0,
+          "start_line": 24
+        },
+        {
+          "end_line": 32,
+          "file": "apps/web/src/lib/db/webhook.test.ts",
+          "lines": 9,
+          "normalized_hash": 18213482073411885392,
+          "similarity": 1.0,
+          "start_line": 24
+        }
+      ],
+      "total_lines": 18,
+      "total_tokens": 134
+    },
+    {
+      "average_similarity": 1.0,
+      "clone_type": "type1",
+      "id": 25,
+      "instances": [
+        {
+          "end_line": 151,
+          "file": "apps/web/src/app/api/dashboard/today/route.test.ts",
+          "lines": 8,
+          "normalized_hash": 14751363435037218381,
+          "similarity": 1.0,
+          "start_line": 144
+        },
+        {
+          "end_line": 176,
+          "file": "apps/web/src/app/api/dashboard/today/route.ts",
+          "lines": 7,
+          "normalized_hash": 14751363435037218381,
+          "similarity": 1.0,
+          "start_line": 170
+        }
+      ],
+      "total_lines": 15,
+      "total_tokens": 136
+    },
+    {
+      "average_similarity": 1.0,
+      "clone_type": "type1",
+      "id": 26,
+      "instances": [
+        {
+          "end_line": 196,
+          "file": "apps/web/src/components/charts/BedtimePatternsCard.tsx",
+          "lines": 18,
+          "normalized_hash": 3500104901088161705,
+          "similarity": 1.0,
+          "start_line": 179
+        },
+        {
+          "end_line": 164,
+          "file": "apps/web/src/components/charts/NapCalendar.tsx",
+          "lines": 18,
+          "normalized_hash": 3500104901088161705,
+          "similarity": 1.0,
+          "start_line": 147
+        },
+        {
+          "end_line": 247,
+          "file": "apps/web/src/components/charts/NapTrackerCard.tsx",
+          "lines": 18,
+          "normalized_hash": 3500104901088161705,
+          "similarity": 1.0,
+          "start_line": 230
+        },
+        {
+          "end_line": 91,
+          "file": "apps/web/src/components/charts/RecoveryReboundCard.tsx",
+          "lines": 20,
+          "normalized_hash": 3500104901088161705,
+          "similarity": 1.0,
+          "start_line": 72
+        },
+        {
+          "end_line": 150,
+          "file": "apps/web/src/components/charts/SleepConsistencyCard.tsx",
+          "lines": 18,
+          "normalized_hash": 3500104901088161705,
+          "similarity": 1.0,
+          "start_line": 133
+        }
+      ],
+      "total_lines": 92,
+      "total_tokens": 560
+    },
+    {
+      "average_similarity": 1.0,
+      "clone_type": "type1",
+      "id": 27,
+      "instances": [
+        {
+          "end_line": 43,
+          "file": "apps/web/src/components/charts/BedtimePatternsCard.tsx",
+          "lines": 8,
+          "normalized_hash": 6295468033266275353,
+          "similarity": 1.0,
+          "start_line": 36
+        },
+        {
+          "end_line": 37,
+          "file": "apps/web/src/components/charts/NapTrackerCard.tsx",
+          "lines": 8,
+          "normalized_hash": 6295468033266275353,
+          "similarity": 1.0,
+          "start_line": 30
+        }
+      ],
+      "total_lines": 16,
+      "total_tokens": 170
+    },
+    {
+      "average_similarity": 1.0,
+      "clone_type": "type1",
+      "id": 28,
+      "instances": [
+        {
+          "end_line": 13,
+          "file": "apps/web/src/lib/db/devices.test.ts",
+          "lines": 6,
+          "normalized_hash": 6938879179493649717,
+          "similarity": 1.0,
+          "start_line": 8
+        },
+        {
+          "end_line": 20,
+          "file": "apps/web/src/lib/db/integrations.test.ts",
+          "lines": 7,
+          "normalized_hash": 6938879179493649717,
+          "similarity": 1.0,
+          "start_line": 14
+        },
+        {
+          "end_line": 15,
+          "file": "apps/web/src/lib/db/user_settings.test.ts",
+          "lines": 7,
+          "normalized_hash": 6938879179493649717,
+          "similarity": 1.0,
+          "start_line": 9
+        }
+      ],
+      "total_lines": 20,
+      "total_tokens": 159
+    },
+    {
+      "average_similarity": 1.0,
+      "clone_type": "type1",
+      "id": 29,
+      "instances": [
+        {
+          "end_line": 55,
+          "file": "apps/web/src/components/charts/HRVTrend.tsx",
+          "lines": 8,
+          "normalized_hash": 3650138965052506817,
+          "similarity": 1.0,
+          "start_line": 48
+        },
+        {
+          "end_line": 64,
+          "file": "apps/web/src/components/charts/TrendChart.tsx",
+          "lines": 8,
+          "normalized_hash": 3650138965052506817,
+          "similarity": 1.0,
+          "start_line": 57
+        },
+        {
+          "end_line": 15,
+          "file": "apps/web/src/components/overview/RecoveryTrend.tsx",
+          "lines": 8,
+          "normalized_hash": 3650138965052506817,
+          "similarity": 1.0,
+          "start_line": 8
+        }
+      ],
+      "total_lines": 24,
+      "total_tokens": 399
+    },
+    {
+      "average_similarity": 1.0,
+      "clone_type": "type1",
+      "id": 30,
+      "instances": [
+        {
+          "end_line": 48,
+          "file": "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+          "lines": 8,
+          "normalized_hash": 7603168151007600736,
+          "similarity": 1.0,
+          "start_line": 41
+        },
+        {
+          "end_line": 60,
+          "file": "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+          "lines": 8,
+          "normalized_hash": 7603168151007600736,
+          "similarity": 1.0,
+          "start_line": 53
+        },
+        {
+          "end_line": 94,
+          "file": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+          "lines": 8,
+          "normalized_hash": 7603168151007600736,
+          "similarity": 1.0,
+          "start_line": 87
+        }
+      ],
+      "total_lines": 24,
+      "total_tokens": 216
+    }
+  ],
+  "min_lines": 6,
+  "summary": {
+    "avg_similarity": 0.9510389610389612,
+    "duplicated_lines": 999,
+    "duplication_ratio": 0.04317013093643317,
+    "file_occurrences": {
+      "apps/web/scripts/smoke-phase-a.ts": 1,
+      "apps/web/scripts/smoke-phase-c.ts": 1,
+      "apps/web/src/app/(auth)/layout.tsx": 1,
+      "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx": 8,
+      "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx": 8,
+      "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx": 8,
+      "apps/web/src/app/(onboarding)/layout.tsx": 1,
+      "apps/web/src/app/api/auth/apple-web/callback/route.test.ts": 5,
+      "apps/web/src/app/api/auth/apple-web/callback/route.ts": 1,
+      "apps/web/src/app/api/auth/apple-web/start/route.ts": 1,
+      "apps/web/src/app/api/auth/apple/route.test.ts": 5,
+      "apps/web/src/app/api/dashboard/today/route.test.ts": 2,
+      "apps/web/src/app/api/dashboard/today/route.ts": 2,
+      "apps/web/src/components/charts/BedtimePatternsCard.tsx": 5,
+      "apps/web/src/components/charts/CardiacDriftCard.tsx": 1,
+      "apps/web/src/components/charts/HRVTrend.tsx": 4,
+      "apps/web/src/components/charts/NapCalendar.tsx": 4,
+      "apps/web/src/components/charts/NapTrackerCard.tsx": 5,
+      "apps/web/src/components/charts/RecoveryReboundCard.tsx": 4,
+      "apps/web/src/components/charts/SleepConsistencyCard.tsx": 5,
+      "apps/web/src/components/charts/TrendChart.tsx": 4,
+      "apps/web/src/components/overview/RecoveryTrend.tsx": 2,
+      "apps/web/src/lib/analytics/cardiacDrift.ts": 1,
+      "apps/web/src/lib/analytics/naps.ts": 1,
+      "apps/web/src/lib/auth/apple-web.ts": 1,
+      "apps/web/src/lib/db/coach.test.ts": 5,
+      "apps/web/src/lib/db/coach.ts": 4,
+      "apps/web/src/lib/db/connection.ts": 1,
+      "apps/web/src/lib/db/devices.test.ts": 2,
+      "apps/web/src/lib/db/devices.ts": 1,
+      "apps/web/src/lib/db/integrations.test.ts": 2,
+      "apps/web/src/lib/db/integrations.ts": 1,
+      "apps/web/src/lib/db/logs.ts": 1,
+      "apps/web/src/lib/db/recovery.ts": 3,
+      "apps/web/src/lib/db/scoped.test.ts": 5,
+      "apps/web/src/lib/db/sleep.ts": 5,
+      "apps/web/src/lib/db/strain.ts": 3,
+      "apps/web/src/lib/db/user_settings.test.ts": 2,
+      "apps/web/src/lib/db/users.test.ts": 6,
+      "apps/web/src/lib/db/webhook.test.ts": 1,
+      "apps/web/src/lib/db/webhook.ts": 7,
+      "apps/web/src/lib/push/apns.ts": 1,
+      "apps/web/src/lib/sync.test.ts": 7,
+      "apps/web/src/lib/whoop/upsert.ts": 3,
+      "apps/web/src/lib/whoop/webhook-handler.test.ts": 1,
+      "tests/test_integrations.py": 1
+    },
+    "hotspots": [
+      {
+        "clone_group_count": 4,
+        "duplicate_lines": 67,
+        "file": "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+        "severity": 8.439015410352214
+      },
+      {
+        "clone_group_count": 4,
+        "duplicate_lines": 67,
+        "file": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+        "severity": 8.439015410352214
+      },
+      {
+        "clone_group_count": 4,
+        "duplicate_lines": 66,
+        "file": "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+        "severity": 8.409385238781931
+      },
+      {
+        "clone_group_count": 3,
+        "duplicate_lines": 57,
+        "file": "apps/web/src/components/charts/TrendChart.tsx",
+        "severity": 7.032893595504328
+      },
+      {
+        "clone_group_count": 3,
+        "duplicate_lines": 57,
+        "file": "apps/web/src/components/charts/HRVTrend.tsx",
+        "severity": 7.032893595504328
+      },
+      {
+        "clone_group_count": 3,
+        "duplicate_lines": 51,
+        "file": "apps/web/src/lib/sync.test.ts",
+        "severity": 6.843754873670415
+      },
+      {
+        "clone_group_count": 2,
+        "duplicate_lines": 54,
+        "file": "apps/web/src/lib/db/webhook.ts",
+        "severity": 5.6672249395035355
+      },
+      {
+        "clone_group_count": 2,
+        "duplicate_lines": 26,
+        "file": "apps/web/src/components/charts/NapTrackerCard.tsx",
+        "severity": 4.66101719527256
+      },
+      {
+        "clone_group_count": 2,
+        "duplicate_lines": 26,
+        "file": "apps/web/src/components/charts/BedtimePatternsCard.tsx",
+        "severity": 4.66101719527256
+      },
+      {
+        "clone_group_count": 2,
+        "duplicate_lines": 24,
+        "file": "apps/web/src/lib/db/coach.ts",
+        "severity": 4.552177847123493
+      }
+    ],
+    "p50_similarity": 1.0,
+    "p95_similarity": 1.0,
+    "total_clones": 77,
+    "total_groups": 30,
+    "total_lines": 23141,
+    "type1_count": 42,
+    "type2_count": 32,
+    "type3_count": 3
+  },
+  "threshold": 0.7,
+  "total_files_scanned": 209
+}

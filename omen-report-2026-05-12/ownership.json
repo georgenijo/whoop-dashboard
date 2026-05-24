@@ -1,0 +1,3555 @@
+{
+  "files": [
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 7,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/ios/ci_scripts/ci_post_clone.sh",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 7
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 39,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/eslint.config.mjs",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 39
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 7,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/next.config.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 7
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 7,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/postcss.config.mjs",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 7
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 128,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/scripts/backfill-whoop-provider-user-id.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 128
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 202,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/scripts/migrate-uid1-to-uid2.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 202
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 394,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/scripts/smoke-phase-a.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 394
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 365,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/scripts/smoke-phase-c.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 365
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 42,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/(auth)/layout.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 42
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 163,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/(auth)/signin/page.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 163
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 64,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/(dashboard)/coach/page.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 64
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 87,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/(dashboard)/layout.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 87
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 351,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 351
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 68,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/(dashboard)/logs/CollapsibleCard.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 68
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 308,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 308
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 442,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 442
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 109,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/(dashboard)/logs/page.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 109
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 132,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/(dashboard)/page.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 132
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 152,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/(dashboard)/recovery/page.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 152
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 486,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/(dashboard)/settings/page.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 486
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 146,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 146
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 71,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/(dashboard)/strain/page.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 71
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 104,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/(dashboard)/workouts/page.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 104
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 45,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/(onboarding)/layout.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 45
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 330,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/(onboarding)/welcome/WelcomeClient.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 330
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 44,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/(onboarding)/welcome/page.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 44
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 72,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/admin/webhook/replay/route.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 72
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 127,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/admin/webhook/replay/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 127
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 124,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/auth/apple/route.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 124
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 46,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/auth/apple/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 46
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 262,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/auth/apple-web/callback/route.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 262
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 185,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/auth/apple-web/callback/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 185
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 66,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/auth/apple-web/start/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 66
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 264,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/auth/callback/route.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 264
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 138,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/auth/callback/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 138
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 55,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/auth/login/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 55
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 30,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/auth/logout/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 30
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 56,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/auth/whoop/disconnect/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 56
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 34,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/chat/history/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 34
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 159,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/chat/route.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 159
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 214,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/chat/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 214
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 101,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/connectors/whoop/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 101
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 356,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/dashboard/today/route.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 356
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 294,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/dashboard/today/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 294
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 182,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/devices/register/route.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 182
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 69,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/devices/register/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 69
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 134,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/devices/test-push/route.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 134
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 68,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/devices/test-push/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 68
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 10,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/logs/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 10
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 31,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/me/coach-goals/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 31
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 16,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/me/onboarded/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 16
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 27,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/me/tz/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 27
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 30,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/settings/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 30
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 91,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/sync/onboarding/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 91
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 100,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/sync/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 100
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 56,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/threads/[id]/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 56
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 28,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/threads/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 28
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 140,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/app/api/whoop/webhook/route.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 140
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 317,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/ApneaRiskCard.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 317
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 276,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/BedWakeTimeline.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 276
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 217,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/BedtimePatternsCard.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 217
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 159,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/BedtimeRecoveryScatter.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 159
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 397,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/CardiacDriftCard.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 397
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 153,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/DeepSleepEfficiencyCard.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 153
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 397,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/HRVTrend.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 397
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 164,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/NapCalendar.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 164
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 177,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/NapRecoveryScatter.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 177
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 247,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/NapTrackerCard.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 247
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 180,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/RecoveryReboundCard.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 180
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 230,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/RespiratoryRateChart.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 230
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 150,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/SleepConsistencyCard.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 150
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 124,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/SleepCyclesBarChart.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 124
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 157,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/SleepDebtChart.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 157
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 179,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/SleepNeedBreakdown.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 179
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 158,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/SleepQualityRadar.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 158
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 181,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/SleepStageDonut.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 181
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 80,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/SleepStagesChart.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 80
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 215,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/SportFrequencyChart.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 215
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 222,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/StrainRecoveryScatter.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 222
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 233,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/TSBCurve.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 233
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 356,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/TrendChart.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 356
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 215,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/WorkoutDistanceChart.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 215
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 215,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/WorkoutZoneChart.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 215
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 231,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/charts/Zone2Tracker.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 231
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 97,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/chrome/BottomNav.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 97
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 77,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/chrome/Sidebar.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 77
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 168,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/chrome/TopBar.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 168
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 63,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/coach/ChatInput.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 63
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 115,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/coach/CoachWorkspace.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 115
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 54,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/coach/MessageBubble.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 54
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 14,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/coach/MessageList.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 14
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 25,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/coach/SuggestionChips.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 25
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 230,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/coach/ThreadSidebar.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 230
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 323,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/coach/useChatSend.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 323
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 415,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/coach/useChatSend.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 415
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 47,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/coach/useCoachThread.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 47
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 91,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/coach/useCoachThread.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 91
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 55,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/coach/useThreadList.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 55
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 119,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/coach/useThreadList.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 119
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 31,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/onboarding/TzBackfill.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 31
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 56,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/overview/AIInsightCard.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 56
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 25,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/overview/AIInsightRefreshWatcher.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 25
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 107,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/overview/KPIStrip.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 107
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 87,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/overview/PRsCard.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 87
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 100,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/overview/RecoveryHero.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 100
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 102,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/overview/RecoveryTrend.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 102
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 148,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/recovery/DayOfWeekRecovery.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 148
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 318,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/recovery/IllnessSignalCard.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 318
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 233,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/recovery/OvertrainingCard.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 233
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 310,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/recovery/SkinTempDeviationCard.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 310
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 295,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/components/recovery/Spo2TrendCard.tsx",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 295
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 105,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/analytics/apnea.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 105
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 240,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/analytics/bedtime.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 240
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 192,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/analytics/cardiacDrift.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 192
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 46,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/analytics/deepSleep.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 46
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 115,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/analytics/illness.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 115
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 83,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/analytics/naps.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 83
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 103,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/analytics/ots.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 103
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 46,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/analytics/rebound.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 46
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 84,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/auth/apple-state.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 84
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 65,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/auth/apple-state.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 65
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 117,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/auth/apple-web.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 117
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 171,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/auth/apple-web.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 171
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 112,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/auth/apple.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 112
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 106,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/auth/apple.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 106
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 30,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/auth/cookies.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 30
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 63,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/auth/jwt.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 63
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 72,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/auth/origin.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 72
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 38,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/auth/origin.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 38
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 68,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/auth.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 68
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 329,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/auth.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 329
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 24,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/coach/goals.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 24
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 330,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/coach/loop.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 330
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 121,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/coach/persistence.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 121
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 82,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/coach/prompts.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 82
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 93,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/coach/prompts.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 93
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 187,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/coach/tools.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 187
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 555,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/coach/tools.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 555
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 111,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/crypto/vault.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 111
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 214,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/auth.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 214
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 18,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/body.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 18
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 169,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/coach.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 169
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 376,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/coach.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 376
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 216,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/connection.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 216
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 686,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/connection.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 686
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 150,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/devices.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 150
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 119,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/devices.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 119
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 133,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/index.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 133
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 340,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/integrations.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 340
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 399,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/integrations.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 399
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 38,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/journal.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 38
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 210,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/logs.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 210
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 113,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/prs.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 113
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 70,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/recovery.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 70
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 222,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/scoped.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 222
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 94,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/scoped.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 94
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 90,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/settings.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 90
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 107,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/sleep.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 107
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 47,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/strain.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 47
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 292,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/summary.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 292
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 338,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/user_settings.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 338
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 402,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/user_settings.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 402
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 202,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/users.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 202
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 255,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/webhook.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 255
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 154,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/webhook.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 154
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 201,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/workouts.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 201
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 85,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/db/workouts.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 85
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 72,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/format.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 72
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 127,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/insights.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 127
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 42,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/paths.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 42
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 279,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/push/apns.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 279
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 297,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/push/apns.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 297
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 13,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/push/index.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 13
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 10,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/range.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 10
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 22,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/sport-color.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 22
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 14,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/stats.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 14
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 8,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/sync-meta.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 8
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 548,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/sync.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 548
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 677,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/sync.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 677
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 21,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/tz.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 21
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 122,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/whoop/client.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 122
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 147,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/whoop/client.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 147
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 90,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/whoop/oauth-state.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 90
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 131,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/whoop/oauth-state.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 131
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 69,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/whoop/signature.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 69
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 48,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/whoop/signature.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 48
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 251,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/whoop/token.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 251
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 45,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/whoop/upsert.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 45
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 502,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/whoop/upsert.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 502
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 154,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/whoop/webhook-handler.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 154
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 105,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/lib/whoop/webhook-handler.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 105
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 160,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/proxy.test.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 160
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 206,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/proxy.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 206
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 1,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/src/test/setup.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 1
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 16,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "apps/web/vitest.config.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 16
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 37,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "infra/terraform/cloud-init.sh",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 37
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 78,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "scripts/backfill_sleep_local_times.py",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 78
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 34,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "scripts/deploy.sh",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 34
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 71,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "scripts/generate-app-icon.py",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 71
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 154,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "scripts/migrate-bootstrap-user.ts",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 154
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 318,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "scripts/migrate-whoop-tokens.py",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 318
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 128,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "scripts/wal_smoke.py",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 128
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 221,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "scripts/zsh-helpers.sh",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 221
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 340,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "streamlit/whoop/auth.py",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 340
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 60,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "streamlit/whoop/db.py",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 60
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 268,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "streamlit/whoop/integrations.py",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 268
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 90,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "streamlit/whoop/vault.py",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 90
+    },
+    {
+      "concentration": 1.0,
+      "contributors": [
+        {
+          "email": "",
+          "lines_owned": 524,
+          "name": "George Nijo",
+          "percentage": 100.0
+        }
+      ],
+      "is_silo": true,
+      "ownership_percent": 100.0,
+      "path": "tests/test_integrations.py",
+      "primary_owner": "George Nijo",
+      "risk_level": "High",
+      "total_lines": 524
+    }
+  ],
+  "generated_at": "2026-05-13T00:20:23.382644+00:00",
+  "summary": {
+    "avg_contributors": 1.0,
+    "bus_factor": 1,
+    "high_risk_count": 208,
+    "max_concentration": 1.0,
+    "silo_count": 208,
+    "top_contributors": [
+      {
+        "files_owned": 208,
+        "name": "George Nijo"
+      }
+    ],
+    "total_files": 208
+  }
+}

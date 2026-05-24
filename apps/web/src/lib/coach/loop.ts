@@ -107,6 +107,8 @@ export function synthesizePreamble(toolUses: ToolUseBlock[]): string {
       return "Checking your naps.";
     case "query_journal":
       return "Checking your journal entries.";
+    case "query_daily_snapshot":
+      return "Pulling your data.";
     default:
       return "Looking into that.";
   }

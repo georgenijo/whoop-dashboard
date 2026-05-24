@@ -13,6 +13,7 @@ __pycache__/
 .streamlit/
 venv/
 /logs/
+.claude/worktrees/
 
 # Terraform
 infra/terraform/.terraform/

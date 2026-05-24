@@ -1,0 +1,46 @@
+{
+  "components": {
+    "cohesion": {
+      "details": "Analyzed 16 classes, avg LCOM: 0.8",
+      "score": 100.0,
+      "weight": 0.6
+    },
+    "complexity": {
+      "details": "Analyzed 209 files, avg cyclomatic: 4.2",
+      "score": 91.0,
+      "weight": 1.0
+    },
+    "coupling": {
+      "details": "209 nodes, 0 cycles, avg degree: 2.8",
+      "score": 81.31004784688994,
+      "weight": 0.4
+    },
+    "duplication": {
+      "details": "Found 77 clones, 4.3% duplication",
+      "score": 91.36597381271336,
+      "weight": 0.8
+    },
+    "satd": {
+      "details": "Found 18 debt items (8 high priority)",
+      "score": 91.38755980861244,
+      "weight": 0.4
+    },
+    "smells": {
+      "details": "2 smells (0 critical, 2 high)",
+      "score": 95.32797326098273,
+      "weight": 0.2
+    },
+    "tdg": {
+      "details": "Analyzed 209 files, avg grade: AMinus",
+      "score": 91.26972961425781,
+      "weight": 0.6
+    }
+  },
+  "grade": "A",
+  "overall_score": 91.74981363328072,
+  "summary": {
+    "analyzers_run": 7,
+    "critical_issues": 0,
+    "files_analyzed": 209
+  }
+}

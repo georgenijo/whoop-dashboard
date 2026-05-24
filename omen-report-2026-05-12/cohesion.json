@@ -1,0 +1,450 @@
+{
+  "classes": [
+    {
+      "cbo": 1,
+      "class_name": "ToolInputError",
+      "coupled_classes": [
+        "ToolInputError"
+      ],
+      "dit": 1,
+      "end_line": 148,
+      "fields": [
+        "details"
+      ],
+      "language": "TypeScript",
+      "lcom": 2,
+      "loc": 9,
+      "methods": [
+        "details",
+        "constructor"
+      ],
+      "noc": 0,
+      "nof": 1,
+      "nom": 2,
+      "parent_class": "Error",
+      "path": "apps/web/src/lib/coach/tools.ts",
+      "rfc": 3,
+      "start_line": 140,
+      "violations": [
+        "LCOM 2 exceeds threshold 1"
+      ],
+      "wmc": 2
+    },
+    {
+      "cbo": 1,
+      "class_name": "AppleWebConfigError",
+      "coupled_classes": [
+        "AppleWebConfigError"
+      ],
+      "dit": 1,
+      "end_line": 31,
+      "fields": [],
+      "language": "TypeScript",
+      "lcom": 1,
+      "loc": 6,
+      "methods": [
+        "constructor"
+      ],
+      "noc": 0,
+      "nof": 0,
+      "nom": 1,
+      "parent_class": "Error",
+      "path": "apps/web/src/lib/auth/apple-web.ts",
+      "rfc": 2,
+      "start_line": 26,
+      "violations": [],
+      "wmc": 1
+    },
+    {
+      "cbo": 1,
+      "class_name": "AppleAuthError",
+      "coupled_classes": [
+        "AppleAuthError"
+      ],
+      "dit": 1,
+      "end_line": 13,
+      "fields": [],
+      "language": "TypeScript",
+      "lcom": 1,
+      "loc": 6,
+      "methods": [
+        "constructor"
+      ],
+      "noc": 0,
+      "nof": 0,
+      "nom": 1,
+      "parent_class": "Error",
+      "path": "apps/web/src/lib/auth/apple.ts",
+      "rfc": 2,
+      "start_line": 8,
+      "violations": [],
+      "wmc": 1
+    },
+    {
+      "cbo": 1,
+      "class_name": "VaultMissingKeyError",
+      "coupled_classes": [
+        "VaultMissingKeyError"
+      ],
+      "dit": 1,
+      "end_line": 24,
+      "fields": [],
+      "language": "TypeScript",
+      "lcom": 1,
+      "loc": 6,
+      "methods": [
+        "constructor"
+      ],
+      "noc": 0,
+      "nof": 0,
+      "nom": 1,
+      "parent_class": "Error",
+      "path": "apps/web/src/lib/crypto/vault.ts",
+      "rfc": 2,
+      "start_line": 19,
+      "violations": [],
+      "wmc": 1
+    },
+    {
+      "cbo": 1,
+      "class_name": "VaultDecryptError",
+      "coupled_classes": [
+        "VaultDecryptError"
+      ],
+      "dit": 1,
+      "end_line": 31,
+      "fields": [],
+      "language": "TypeScript",
+      "lcom": 1,
+      "loc": 6,
+      "methods": [
+        "constructor"
+      ],
+      "noc": 0,
+      "nof": 0,
+      "nom": 1,
+      "parent_class": "Error",
+      "path": "apps/web/src/lib/crypto/vault.ts",
+      "rfc": 2,
+      "start_line": 26,
+      "violations": [],
+      "wmc": 1
+    },
+    {
+      "cbo": 1,
+      "class_name": "IntegrationUserMissingError",
+      "coupled_classes": [
+        "IntegrationUserMissingError"
+      ],
+      "dit": 1,
+      "end_line": 59,
+      "fields": [],
+      "language": "TypeScript",
+      "lcom": 1,
+      "loc": 8,
+      "methods": [
+        "constructor"
+      ],
+      "noc": 0,
+      "nof": 0,
+      "nom": 1,
+      "parent_class": "Error",
+      "path": "apps/web/src/lib/db/integrations.ts",
+      "rfc": 2,
+      "start_line": 52,
+      "violations": [],
+      "wmc": 1
+    },
+    {
+      "cbo": 1,
+      "class_name": "UserSettingsUserMissingError",
+      "coupled_classes": [
+        "UserSettingsUserMissingError"
+      ],
+      "dit": 1,
+      "end_line": 53,
+      "fields": [],
+      "language": "TypeScript",
+      "lcom": 1,
+      "loc": 8,
+      "methods": [
+        "constructor"
+      ],
+      "noc": 0,
+      "nof": 0,
+      "nom": 1,
+      "parent_class": "Error",
+      "path": "apps/web/src/lib/db/user_settings.ts",
+      "rfc": 2,
+      "start_line": 46,
+      "violations": [],
+      "wmc": 1
+    },
+    {
+      "cbo": 1,
+      "class_name": "ApnsConfigError",
+      "coupled_classes": [
+        "ApnsConfigError"
+      ],
+      "dit": 1,
+      "end_line": 39,
+      "fields": [],
+      "language": "TypeScript",
+      "lcom": 1,
+      "loc": 6,
+      "methods": [
+        "constructor"
+      ],
+      "noc": 0,
+      "nof": 0,
+      "nom": 1,
+      "parent_class": "Error",
+      "path": "apps/web/src/lib/push/apns.ts",
+      "rfc": 2,
+      "start_line": 34,
+      "violations": [],
+      "wmc": 1
+    },
+    {
+      "cbo": 1,
+      "class_name": "WhoopUpstreamError",
+      "coupled_classes": [
+        "WhoopUpstreamError"
+      ],
+      "dit": 1,
+      "end_line": 13,
+      "fields": [],
+      "language": "TypeScript",
+      "lcom": 1,
+      "loc": 5,
+      "methods": [
+        "constructor"
+      ],
+      "noc": 0,
+      "nof": 0,
+      "nom": 1,
+      "parent_class": "Error",
+      "path": "apps/web/src/lib/whoop/client.ts",
+      "rfc": 2,
+      "start_line": 9,
+      "violations": [],
+      "wmc": 1
+    },
+    {
+      "cbo": 19,
+      "class_name": "Stats",
+      "coupled_classes": [
+        "Stats",
+        "reads",
+        "self.lock",
+        "lock_errors",
+        "incr",
+        "self.writes",
+        "threading.Lock",
+        "self.lock_errors",
+        "setattr",
+        "Lock",
+        "getattr",
+        "lock",
+        "writes",
+        "self.other_errors",
+        "self.reads",
+        "__init__",
+        "other_errors",
+        "field",
+        "threading"
+      ],
+      "dit": 0,
+      "end_line": 37,
+      "fields": [
+        "writes",
+        "reads",
+        "lock_errors",
+        "other_errors",
+        "lock"
+      ],
+      "language": "Python",
+      "lcom": 1,
+      "loc": 11,
+      "methods": [
+        "__init__",
+        "incr"
+      ],
+      "noc": 0,
+      "nof": 5,
+      "nom": 2,
+      "path": "scripts/wal_smoke.py",
+      "rfc": 2,
+      "start_line": 27,
+      "violations": [
+        "CBO 19 exceeds threshold 14"
+      ],
+      "wmc": 2
+    },
+    {
+      "cbo": 6,
+      "class_name": "IntegrationUserMissingError",
+      "coupled_classes": [
+        "self.user_id",
+        "IntegrationUserMissingError",
+        "__init__",
+        "super().__init__",
+        "RuntimeError",
+        "user_id"
+      ],
+      "dit": 1,
+      "end_line": 43,
+      "fields": [
+        "user_id"
+      ],
+      "language": "Python",
+      "lcom": 1,
+      "loc": 8,
+      "methods": [
+        "__init__"
+      ],
+      "noc": 0,
+      "nof": 1,
+      "nom": 1,
+      "parent_class": "RuntimeError",
+      "path": "streamlit/whoop/integrations.py",
+      "rfc": 1,
+      "start_line": 36,
+      "violations": [],
+      "wmc": 1
+    },
+    {
+      "cbo": 1,
+      "class_name": "WhoopAuthError",
+      "coupled_classes": [
+        "WhoopAuthError"
+      ],
+      "dit": 1,
+      "end_line": 8,
+      "fields": [],
+      "language": "TypeScript",
+      "lcom": 0,
+      "loc": 1,
+      "methods": [],
+      "noc": 0,
+      "nof": 0,
+      "nom": 0,
+      "parent_class": "Error",
+      "path": "apps/web/src/lib/whoop/client.ts",
+      "rfc": 0,
+      "start_line": 8,
+      "violations": [],
+      "wmc": 0
+    },
+    {
+      "cbo": 1,
+      "class_name": "WhoopNotFoundError",
+      "coupled_classes": [
+        "WhoopNotFoundError"
+      ],
+      "dit": 1,
+      "end_line": 14,
+      "fields": [],
+      "language": "TypeScript",
+      "lcom": 0,
+      "loc": 1,
+      "methods": [],
+      "noc": 0,
+      "nof": 0,
+      "nom": 0,
+      "parent_class": "Error",
+      "path": "apps/web/src/lib/whoop/client.ts",
+      "rfc": 0,
+      "start_line": 14,
+      "violations": [],
+      "wmc": 0
+    },
+    {
+      "cbo": 1,
+      "class_name": "WhoopRecoveryListMissError",
+      "coupled_classes": [
+        "WhoopRecoveryListMissError"
+      ],
+      "dit": 1,
+      "end_line": 17,
+      "fields": [],
+      "language": "TypeScript",
+      "lcom": 0,
+      "loc": 1,
+      "methods": [],
+      "noc": 0,
+      "nof": 0,
+      "nom": 0,
+      "parent_class": "Error",
+      "path": "apps/web/src/lib/whoop/client.ts",
+      "rfc": 0,
+      "start_line": 17,
+      "violations": [],
+      "wmc": 0
+    },
+    {
+      "cbo": 2,
+      "class_name": "VaultMissingKeyError",
+      "coupled_classes": [
+        "VaultMissingKeyError",
+        "RuntimeError"
+      ],
+      "dit": 1,
+      "end_line": 31,
+      "fields": [],
+      "language": "Python",
+      "lcom": 0,
+      "loc": 2,
+      "methods": [],
+      "noc": 0,
+      "nof": 0,
+      "nom": 0,
+      "parent_class": "RuntimeError",
+      "path": "streamlit/whoop/vault.py",
+      "rfc": 0,
+      "start_line": 30,
+      "violations": [],
+      "wmc": 0
+    },
+    {
+      "cbo": 2,
+      "class_name": "VaultDecryptError",
+      "coupled_classes": [
+        "VaultDecryptError",
+        "RuntimeError"
+      ],
+      "dit": 1,
+      "end_line": 35,
+      "fields": [],
+      "language": "Python",
+      "lcom": 0,
+      "loc": 2,
+      "methods": [],
+      "noc": 0,
+      "nof": 0,
+      "nom": 0,
+      "parent_class": "RuntimeError",
+      "path": "streamlit/whoop/vault.py",
+      "rfc": 0,
+      "start_line": 34,
+      "violations": [],
+      "wmc": 0
+    }
+  ],
+  "generated_at": "2026-05-13T00:20:23.508625+00:00",
+  "summary": {
+    "avg_cbo": 2.5625,
+    "avg_lcom": 0.75,
+    "avg_rfc": 1.375,
+    "avg_wmc": 0.8125,
+    "low_cohesion_count": 1,
+    "max_cbo": 19,
+    "max_dit": 1,
+    "max_lcom": 2,
+    "max_rfc": 3,
+    "max_wmc": 2,
+    "total_classes": 16,
+    "total_files": 11,
+    "violation_count": 2
+  }
+}

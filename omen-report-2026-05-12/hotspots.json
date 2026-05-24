@@ -1,0 +1,558 @@
+{
+  "hotspots": [
+    {
+      "avg_complexity": 10.125,
+      "churn_percentile": 99.73544973544973,
+      "commits": 18,
+      "complexity_percentile": 98.80382775119617,
+      "file": "apps/web/src/app/api/chat/route.ts",
+      "score": 0.9854244196349459,
+      "severity": "Critical"
+    },
+    {
+      "avg_complexity": 5.3,
+      "churn_percentile": 99.2063492063492,
+      "commits": 24,
+      "complexity_percentile": 96.17224880382776,
+      "file": "apps/web/src/lib/db/connection.ts",
+      "score": 0.9540897698792435,
+      "severity": "Critical"
+    },
+    {
+      "avg_complexity": 3.25,
+      "churn_percentile": 97.08994708994709,
+      "commits": 6,
+      "complexity_percentile": 95.2153110047847,
+      "file": "apps/web/src/lib/whoop/upsert.ts",
+      "score": 0.9244449507607403,
+      "severity": "Critical"
+    },
+    {
+      "avg_complexity": 3.6923076923076925,
+      "churn_percentile": 98.14814814814815,
+      "commits": 12,
+      "complexity_percentile": 92.82296650717703,
+      "file": "apps/web/src/lib/auth.ts",
+      "score": 0.9110402268297005,
+      "severity": "Critical"
+    },
+    {
+      "avg_complexity": 6.5,
+      "churn_percentile": 95.5026455026455,
+      "commits": 6,
+      "complexity_percentile": 95.2153110047847,
+      "file": "apps/web/src/lib/sync.ts",
+      "score": 0.9093314093314095,
+      "severity": "Critical"
+    },
+    {
+      "avg_complexity": 4.8,
+      "churn_percentile": 90.21164021164022,
+      "commits": 4,
+      "complexity_percentile": 99.2822966507177,
+      "file": "apps/web/src/components/coach/useChatSend.ts",
+      "score": 0.8956418824839878,
+      "severity": "Critical"
+    },
+    {
+      "avg_complexity": 4.6,
+      "churn_percentile": 97.61904761904762,
+      "commits": 12,
+      "complexity_percentile": 90.9090909090909,
+      "file": "apps/web/src/lib/coach/tools.ts",
+      "score": 0.8874458874458874,
+      "severity": "Critical"
+    },
+    {
+      "avg_complexity": 6.8,
+      "churn_percentile": 89.15343915343915,
+      "commits": 4,
+      "complexity_percentile": 97.36842105263158,
+      "file": "apps/web/src/lib/db/summary.ts",
+      "score": 0.8680729601782232,
+      "severity": "Critical"
+    },
+    {
+      "avg_complexity": 3.736842105263158,
+      "churn_percentile": 88.62433862433862,
+      "commits": 5,
+      "complexity_percentile": 97.8468899521531,
+      "file": "apps/web/src/app/api/dashboard/today/route.ts",
+      "score": 0.8671615908458012,
+      "severity": "Critical"
+    },
+    {
+      "avg_complexity": 5.0,
+      "churn_percentile": 98.67724867724868,
+      "commits": 12,
+      "complexity_percentile": 84.92822966507177,
+      "file": "apps/web/src/lib/coach/loop.ts",
+      "score": 0.8380484038378775,
+      "severity": "Critical"
+    },
+    {
+      "avg_complexity": 5.222222222222222,
+      "churn_percentile": 90.74074074074075,
+      "commits": 7,
+      "complexity_percentile": 91.62679425837321,
+      "file": "apps/web/src/proxy.ts",
+      "score": 0.8314283182704236,
+      "severity": "Critical"
+    },
+    {
+      "avg_complexity": 8.5,
+      "churn_percentile": 85.97883597883597,
+      "commits": 3,
+      "complexity_percentile": 94.49760765550239,
+      "file": "apps/web/src/components/charts/HRVTrend.tsx",
+      "score": 0.8124794309004835,
+      "severity": "Critical"
+    },
+    {
+      "avg_complexity": 7.8,
+      "churn_percentile": 91.7989417989418,
+      "commits": 6,
+      "complexity_percentile": 86.36363636363636,
+      "file": "apps/web/src/lib/whoop/token.ts",
+      "score": 0.7928090428090429,
+      "severity": "High"
+    },
+    {
+      "avg_complexity": 2.409090909090909,
+      "churn_percentile": 82.27513227513228,
+      "commits": 2,
+      "complexity_percentile": 96.17224880382776,
+      "file": "apps/web/src/lib/db/coach.ts",
+      "score": 0.7912584491531861,
+      "severity": "High"
+    },
+    {
+      "avg_complexity": 3.5454545454545454,
+      "churn_percentile": 87.56613756613757,
+      "commits": 4,
+      "complexity_percentile": 86.36363636363636,
+      "file": "apps/web/src/lib/db/integrations.ts",
+      "score": 0.7562530062530063,
+      "severity": "High"
+    },
+    {
+      "avg_complexity": 1.6296296296296295,
+      "churn_percentile": 83.33333333333333,
+      "commits": 1,
+      "complexity_percentile": 90.19138755980862,
+      "file": "tests/test_integrations.py",
+      "score": 0.7515948963317385,
+      "severity": "High"
+    },
+    {
+      "avg_complexity": 2.888888888888889,
+      "churn_percentile": 93.3862433862434,
+      "commits": 6,
+      "complexity_percentile": 78.94736842105263,
+      "file": "apps/web/src/lib/db/auth.ts",
+      "score": 0.7372598162071847,
+      "severity": "High"
+    },
+    {
+      "avg_complexity": 3.111111111111111,
+      "churn_percentile": 88.0952380952381,
+      "commits": 6,
+      "complexity_percentile": 81.57894736842105,
+      "file": "apps/web/src/lib/db/logs.ts",
+      "score": 0.718671679197995,
+      "severity": "High"
+    },
+    {
+      "avg_complexity": 4.222222222222222,
+      "churn_percentile": 82.80423280423281,
+      "commits": 2,
+      "complexity_percentile": 85.4066985645933,
+      "file": "apps/web/src/lib/db/user_settings.ts",
+      "score": 0.707203615098352,
+      "severity": "High"
+    },
+    {
+      "avg_complexity": 6.666666666666667,
+      "churn_percentile": 79.62962962962963,
+      "commits": 3,
+      "complexity_percentile": 87.5598086124402,
+      "file": "apps/web/src/components/coach/ThreadSidebar.tsx",
+      "score": 0.6972355130249867,
+      "severity": "High"
+    },
+    {
+      "avg_complexity": 23.0,
+      "churn_percentile": 75.92592592592592,
+      "commits": 1,
+      "complexity_percentile": 90.9090909090909,
+      "file": "apps/web/scripts/smoke-phase-a.ts",
+      "score": 0.6902356902356902,
+      "severity": "High"
+    },
+    {
+      "avg_complexity": 2.3333333333333335,
+      "churn_percentile": 92.32804232804233,
+      "commits": 4,
+      "complexity_percentile": 74.40191387559808,
+      "file": "apps/web/src/lib/sync.test.ts",
+      "score": 0.686938305359358,
+      "severity": "High"
+    },
+    {
+      "avg_complexity": 4.8,
+      "churn_percentile": 73.28042328042328,
+      "commits": 2,
+      "complexity_percentile": 92.82296650717703,
+      "file": "streamlit/whoop/auth.py",
+      "score": 0.6802106275790486,
+      "severity": "High"
+    },
+    {
+      "avg_complexity": 24.0,
+      "churn_percentile": 72.75132275132275,
+      "commits": 1,
+      "complexity_percentile": 92.82296650717703,
+      "file": "apps/web/scripts/smoke-phase-c.ts",
+      "score": 0.6752993595098857,
+      "severity": "High"
+    },
+    {
+      "avg_complexity": 12.0,
+      "churn_percentile": 71.16402116402116,
+      "commits": 1,
+      "complexity_percentile": 92.82296650717703,
+      "file": "apps/web/src/app/(onboarding)/welcome/WelcomeClient.tsx",
+      "score": 0.6605655553023974,
+      "severity": "High"
+    },
+    {
+      "avg_complexity": 4.285714285714286,
+      "churn_percentile": 76.45502645502646,
+      "commits": 1,
+      "complexity_percentile": 83.49282296650718,
+      "file": "apps/web/src/components/charts/CardiacDriftCard.tsx",
+      "score": 0.6383445988709147,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 6.142857142857143,
+      "churn_percentile": 69.84126984126983,
+      "commits": 1,
+      "complexity_percentile": 89.71291866028709,
+      "file": "scripts/migrate-whoop-tokens.py",
+      "score": 0.6265664160401002,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 5.4,
+      "churn_percentile": 76.98412698412699,
+      "commits": 2,
+      "complexity_percentile": 80.38277511961722,
+      "file": "apps/web/src/components/charts/RespiratoryRateChart.tsx",
+      "score": 0.6188197767145136,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 6.5,
+      "churn_percentile": 77.51322751322752,
+      "commits": 3,
+      "complexity_percentile": 78.94736842105263,
+      "file": "apps/web/src/app/api/auth/apple-web/callback/route.ts",
+      "score": 0.6119465329991647,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 5.714285714285714,
+      "churn_percentile": 69.84126984126983,
+      "commits": 1,
+      "complexity_percentile": 87.5598086124402,
+      "file": "apps/web/src/components/recovery/IllnessSignalCard.tsx",
+      "score": 0.6115288220551378,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 3.2222222222222223,
+      "churn_percentile": 73.80952380952381,
+      "commits": 2,
+      "complexity_percentile": 82.77511961722487,
+      "file": "streamlit/whoop/integrations.py",
+      "score": 0.6109592162223741,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 3.6,
+      "churn_percentile": 86.5079365079365,
+      "commits": 6,
+      "complexity_percentile": 69.377990430622,
+      "file": "apps/web/src/lib/whoop/client.ts",
+      "score": 0.6001746791220476,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 2.625,
+      "churn_percentile": 66.93121693121694,
+      "commits": 1,
+      "complexity_percentile": 88.99521531100478,
+      "file": "apps/web/src/lib/push/apns.ts",
+      "score": 0.595655806182122,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 5.4,
+      "churn_percentile": 61.111111111111114,
+      "commits": 1,
+      "complexity_percentile": 96.88995215311004,
+      "file": "apps/web/src/lib/analytics/bedtime.ts",
+      "score": 0.5921052631578948,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 5.166666666666667,
+      "churn_percentile": 67.98941798941799,
+      "commits": 1,
+      "complexity_percentile": 84.21052631578948,
+      "file": "apps/web/src/components/recovery/SkinTempDeviationCard.tsx",
+      "score": 0.5725424672793095,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 6.833333333333333,
+      "churn_percentile": 64.55026455026454,
+      "commits": 2,
+      "complexity_percentile": 88.27751196172248,
+      "file": "apps/web/src/components/charts/TrendChart.tsx",
+      "score": 0.5698336750968329,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 4.75,
+      "churn_percentile": 78.57142857142857,
+      "commits": 4,
+      "complexity_percentile": 71.05263157894737,
+      "file": "apps/web/src/app/api/auth/callback/route.ts",
+      "score": 0.5582706766917293,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 6.5,
+      "churn_percentile": 91.26984126984127,
+      "commits": 5,
+      "complexity_percentile": 59.569377990430624,
+      "file": "apps/web/src/app/api/whoop/webhook/route.ts",
+      "score": 0.5436887673729779,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 3.8333333333333335,
+      "churn_percentile": 66.4021164021164,
+      "commits": 1,
+      "complexity_percentile": 75.59808612440192,
+      "file": "apps/web/src/components/recovery/Spo2TrendCard.tsx",
+      "score": 0.5019872914609758,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 3.4285714285714284,
+      "churn_percentile": 64.55026455026454,
+      "commits": 1,
+      "complexity_percentile": 76.79425837320574,
+      "file": "apps/web/src/components/charts/BedWakeTimeline.tsx",
+      "score": 0.4957089693931799,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 3.7142857142857144,
+      "churn_percentile": 62.16931216931217,
+      "commits": 1,
+      "complexity_percentile": 78.94736842105263,
+      "file": "apps/web/src/components/charts/NapTrackerCard.tsx",
+      "score": 0.4908103592314119,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 6.75,
+      "churn_percentile": 58.99470899470899,
+      "commits": 1,
+      "complexity_percentile": 80.38277511961722,
+      "file": "apps/web/src/components/charts/TSBCurve.tsx",
+      "score": 0.4742158426368952,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 14.0,
+      "churn_percentile": 72.22222222222223,
+      "commits": 3,
+      "complexity_percentile": 63.1578947368421,
+      "file": "apps/web/src/lib/whoop/webhook-handler.ts",
+      "score": 0.456140350877193,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 3.5,
+      "churn_percentile": 60.58201058201058,
+      "commits": 2,
+      "complexity_percentile": 74.40191387559808,
+      "file": "apps/web/src/lib/insights.ts",
+      "score": 0.4507417533733323,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 7.75,
+      "churn_percentile": 52.38095238095238,
+      "commits": 2,
+      "complexity_percentile": 84.21052631578948,
+      "file": "apps/web/src/lib/analytics/apnea.ts",
+      "score": 0.4411027568922306,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 3.25,
+      "churn_percentile": 55.82010582010582,
+      "commits": 1,
+      "complexity_percentile": 78.94736842105263,
+      "file": "scripts/zsh-helpers.sh",
+      "score": 0.4406850459482039,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 7.666666666666667,
+      "churn_percentile": 57.93650793650794,
+      "commits": 2,
+      "complexity_percentile": 75.59808612440192,
+      "file": "apps/web/src/app/api/admin/webhook/replay/route.ts",
+      "score": 0.43798891167312226,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 4.333333333333333,
+      "churn_percentile": 71.6931216931217,
+      "commits": 2,
+      "complexity_percentile": 59.569377990430624,
+      "file": "apps/web/src/components/charts/WorkoutZoneChart.tsx",
+      "score": 0.4270714665451508,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 1.6666666666666667,
+      "churn_percentile": 81.21693121693121,
+      "commits": 3,
+      "complexity_percentile": 50.95693779904306,
+      "file": "apps/web/src/lib/db/prs.ts",
+      "score": 0.4138566112250322,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 4.75,
+      "churn_percentile": 56.613756613756614,
+      "commits": 1,
+      "complexity_percentile": 71.05263157894737,
+      "file": "apps/web/src/components/charts/StrainRecoveryScatter.tsx",
+      "score": 0.40225563909774437,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 4.25,
+      "churn_percentile": 58.99470899470899,
+      "commits": 1,
+      "complexity_percentile": 68.18181818181819,
+      "file": "apps/web/src/components/recovery/OvertrainingCard.tsx",
+      "score": 0.4022366522366522,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 8.333333333333334,
+      "churn_percentile": 51.05820105820106,
+      "commits": 1,
+      "complexity_percentile": 77.7511961722488,
+      "file": "apps/web/src/lib/analytics/cardiacDrift.ts",
+      "score": 0.39698362066783116,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 4.0,
+      "churn_percentile": 53.96825396825397,
+      "commits": 1,
+      "complexity_percentile": 72.96650717703349,
+      "file": "apps/web/src/components/charts/SportFrequencyChart.tsx",
+      "score": 0.3937874990506569,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 2.375,
+      "churn_percentile": 55.29100529100529,
+      "commits": 1,
+      "complexity_percentile": 71.05263157894737,
+      "file": "apps/web/src/components/charts/BedtimePatternsCard.tsx",
+      "score": 0.39285714285714285,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 7.5,
+      "churn_percentile": 60.05291005291005,
+      "commits": 3,
+      "complexity_percentile": 65.07177033492823,
+      "file": "apps/web/src/app/(dashboard)/page.tsx",
+      "score": 0.39077491709070655,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 3.2,
+      "churn_percentile": 57.407407407407405,
+      "commits": 1,
+      "complexity_percentile": 66.50717703349282,
+      "file": "apps/web/src/components/charts/Zone2Tracker.tsx",
+      "score": 0.3818004607478292,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 3.2,
+      "churn_percentile": 54.76190476190476,
+      "commits": 2,
+      "complexity_percentile": 66.50717703349282,
+      "file": "apps/web/src/lib/auth/apple.ts",
+      "score": 0.36420596946912737,
+      "severity": "Moderate"
+    },
+    {
+      "avg_complexity": 17.0,
+      "churn_percentile": 51.58730158730159,
+      "commits": 1,
+      "complexity_percentile": 68.18181818181819,
+      "file": "apps/web/scripts/migrate-uid1-to-uid2.ts",
+      "score": 0.3517316017316018,
+      "severity": "Low"
+    },
+    {
+      "avg_complexity": 1.875,
+      "churn_percentile": 53.17460317460318,
+      "commits": 2,
+      "complexity_percentile": 65.07177033492823,
+      "file": "apps/web/src/lib/crypto/vault.ts",
+      "score": 0.3460165565428724,
+      "severity": "Low"
+    },
+    {
+      "avg_complexity": 6.0,
+      "churn_percentile": 53.96825396825397,
+      "commits": 1,
+      "complexity_percentile": 56.2200956937799,
+      "file": "apps/web/src/components/charts/WorkoutDistanceChart.tsx",
+      "score": 0.3034100402521455,
+      "severity": "Low"
+    },
+    {
+      "avg_complexity": 3.6666666666666665,
+      "churn_percentile": 52.38095238095238,
+      "commits": 2,
+      "complexity_percentile": 53.588516746411486,
+      "file": "apps/web/src/app/api/connectors/whoop/route.ts",
+      "score": 0.28070175438596495,
+      "severity": "Low"
+    }
+  ],
+  "summary": {
+    "critical_count": 12,
+    "high_count": 13,
+    "total_hotspots": 61
+  }
+}

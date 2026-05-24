@@ -1,0 +1,161 @@
+{
+  "by_category": {
+    "defect": 7,
+    "design": 1,
+    "requirement": 5,
+    "security": 1,
+    "test": 4
+  },
+  "density": 0.7540809084457062,
+  "items": [
+    {
+      "category": "test",
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/scripts/smoke-phase-a.ts",
+      "line": 50,
+      "marker": "FAILING",
+      "severity": "low",
+      "text": "// Friendly preflight before any imports — failing fast here is clearer"
+    },
+    {
+      "category": "requirement",
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/api/dashboard/today/route.ts",
+      "line": 71,
+      "marker": "NEED",
+      "severity": "low",
+      "text": "// One range query per table over the widest window we may need:"
+    },
+    {
+      "category": "test",
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/api/devices/test-push/route.ts",
+      "line": 9,
+      "marker": "DISABLED",
+      "severity": "low",
+      "text": "* registered under the authenticated user. Disabled in production unless"
+    },
+    {
+      "category": "test",
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/app/api/devices/test-push/route.ts",
+      "line": 10,
+      "marker": "DISABLED",
+      "severity": "low",
+      "text": "* `ENABLE_PUSH_DEBUG=1` — when disabled, returns 404 (not 403) so the"
+    },
+    {
+      "category": "defect",
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/components/coach/useChatSend.ts",
+      "line": 103,
+      "marker": "BUG",
+      "severity": "high",
+      "text": "//    bug surfaces instead of silently re-mounting state."
+    },
+    {
+      "category": "requirement",
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/auth.ts",
+      "line": 187,
+      "marker": "TODO",
+      "severity": "low",
+      "text": "// TODO(phase-d-cutover): drop this branch entirely once the file"
+    },
+    {
+      "category": "test",
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/coach/tools.ts",
+      "line": 278,
+      "marker": "FAILING",
+      "severity": "low",
+      "text": "// model is a worse outcome than failing the cooldown gate open on the"
+    },
+    {
+      "category": "defect",
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/db/connection.ts",
+      "line": 242,
+      "marker": "BUG",
+      "severity": "high",
+      "text": "-- /api/admin/webhook/replay so a transient handler bug isn't a silent"
+    },
+    {
+      "category": "requirement",
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/db/journal.ts",
+      "line": 4,
+      "marker": "TODO",
+      "severity": "low",
+      "text": "// TODO(phase-e): the `journal` table has no `user_id` column. This read is"
+    },
+    {
+      "category": "defect",
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/sync.ts",
+      "line": 621,
+      "marker": "ERROR",
+      "severity": "high",
+      "text": "// single Error-name check covers both branches."
+    },
+    {
+      "category": "design",
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/whoop/oauth-state.ts",
+      "line": 60,
+      "marker": "REFACTOR",
+      "severity": "medium",
+      "text": "// deterministically. Do not refactor into a spread or a Map without"
+    },
+    {
+      "category": "requirement",
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/whoop/token.ts",
+      "line": 25,
+      "marker": "TODO",
+      "severity": "low",
+      "text": "//      userId === 1 with a TODO marker for Phase D cutover."
+    },
+    {
+      "category": "defect",
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/whoop/token.ts",
+      "line": 35,
+      "marker": "BUG",
+      "severity": "high",
+      "text": "//   - invalid_request → our client bug (malformed body, missing param)."
+    },
+    {
+      "category": "requirement",
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/whoop/token.ts",
+      "line": 90,
+      "marker": "TODO",
+      "severity": "low",
+      "text": "// TODO(phase-d-cutover): remove file fallback. tokens.json is the legacy"
+    },
+    {
+      "category": "defect",
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/lib/whoop/token.ts",
+      "line": 182,
+      "marker": "BUG",
+      "severity": "high",
+      "text": "// bug or upstream config issue doesn't train the user to reconnect."
+    },
+    {
+      "category": "defect",
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/apps/web/src/proxy.test.ts",
+      "line": 140,
+      "marker": "BUG",
+      "severity": "high",
+      "text": "// Simulate the live bug: req comes in on the upstream listener but"
+    },
+    {
+      "category": "defect",
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/scripts/zsh-helpers.sh",
+      "line": 13,
+      "marker": "BUG",
+      "severity": "high",
+      "text": "#   bug                        — Claude session primed with prompts/PROMPT_BUG.md"
+    },
+    {
+      "category": "security",
+      "file": "/Users/george-mac-mini/Documents/code/whoop-dashboard/tests/test_integrations.py",
+      "line": 267,
+      "marker": "SECURITY",
+      "severity": "critical",
+      "text": "\"\"\"Lock the security invariant: after save_tokens, the on-disk `raw`"
+    }
+  ],
+  "summary": {
+    "density": 0.7540809084457062,
+    "total_items": 18,
+    "weighted_count": 21.25
+  }
+}
