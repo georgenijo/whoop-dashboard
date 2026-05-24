@@ -1,0 +1,4798 @@
+{
+  "average_grade": "A-",
+  "average_score": 91.26972961425781,
+  "files": [
+    {
+      "confidence": 0.5,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/ios/ci_scripts/ci_post_clone.sh",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "unknown",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.5,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 1.1538461446762085,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/eslint.config.mjs",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "unknown",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 96.15384674072266
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/next.config.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.5,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/postcss.config.mjs",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "unknown",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/scripts/backfill-whoop-provider-user-id.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 94.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/scripts/migrate-uid1-to-uid2.ts",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 6.482684135437012,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 4.0,
+          "issue": "Deep nesting: 8 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 11.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 87.48268127441406
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 11.768293380737305,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/scripts/smoke-phase-a.ts",
+      "grade": "B-",
+      "has_critical_defects": false,
+      "hotspot_score": 3.0976433753967285,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 3.2317070960998535,
+          "issue": "Code duplication: 16.2%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 82.86593627929688
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.071428298950195,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/scripts/smoke-phase-c.ts",
+      "grade": "B",
+      "has_critical_defects": false,
+      "hotspot_score": 3.247006416320801,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 2.9285714626312256,
+          "issue": "Code duplication: 14.6%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 83.31843566894531
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/(auth)/layout.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.33742332458496094,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/(auth)/signin/page.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.3374252319336
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/(dashboard)/coach/page.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/(dashboard)/layout.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 94.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.964072227478027,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 4.0,
+          "issue": "Deep nesting: 8 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 2.0359280109405518,
+          "issue": "Code duplication: 10.2%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 11.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 88.96407318115234
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/(dashboard)/logs/CollapsibleCard.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 93.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 4.0,
+          "issue": "Deep nesting: 8 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 11.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 91.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.450980186462402,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/(dashboard)/logs/page.tsx",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.5490198135375977,
+          "issue": "Code duplication: 12.7%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.45098114013672
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/(dashboard)/page.tsx",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 6.092250823974609,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 9.44444465637207,
+      "total": 90.53669738769531
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/(dashboard)/recovery/page.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.516630172729492,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/(dashboard)/settings/page.tsx",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 2.483370304107666,
+          "issue": "Code duplication: 12.4%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 90.51663208007812
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 13.600000381469727,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 93.5999984741211
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/(dashboard)/strain/page.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/(dashboard)/workouts/page.tsx",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 3.0,
+          "issue": "Deep nesting: 7 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 12.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/(onboarding)/layout.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/(onboarding)/welcome/WelcomeClient.tsx",
+      "grade": "B",
+      "has_critical_defects": false,
+      "hotspot_score": 3.3943443298339844,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 86.39434814453125
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.7954545021057129,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/(onboarding)/welcome/page.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.79545593261719
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/admin/webhook/replay/route.test.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/admin/webhook/replay/route.ts",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 5.620111465454102,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 89.62010955810547
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/auth/apple/route.test.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/auth/apple/route.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 9.44444465637207,
+      "total": 93.44444274902344
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.129186630249023,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/auth/apple-web/callback/route.test.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 2.8708133697509766,
+          "issue": "Code duplication: 14.4%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 91.12918853759766
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.13513514399528503,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/auth/apple-web/callback/route.ts",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 3.8805346488952637,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 89.01566314697266
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/auth/apple-web/start/route.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 10.612245559692383,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/auth/callback/route.test.ts",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 4.387754917144775,
+          "issue": "Code duplication: 21.9%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 88.61224365234375
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.32608693838119507,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/auth/callback/route.ts",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 4.417293071746826,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 89.74337768554688
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.6363636255264282,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/auth/login/route.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.63636016845703
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 1.3333333730697632,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/auth/logout/route.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 96.33333587646484
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.625,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/auth/whoop/disconnect/route.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.625
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.419355392456055,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/chat/history/route.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.5806450843811035,
+          "issue": "Code duplication: 12.9%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.41935729980469
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/chat/route.test.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/chat/route.ts",
+      "grade": "C",
+      "has_critical_defects": false,
+      "hotspot_score": 0.14575600624084473,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 5.0,
+          "issue": "Deep nesting: 9 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 10.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 5.555555820465088,
+      "total": 75.7013168334961
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.7425742745399475,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/connectors/whoop/route.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 7.1929826736450195,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.93556213378906
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 11.588628768920898,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/dashboard/today/route.test.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 3.4113712310791016,
+          "issue": "Code duplication: 17.1%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 91.58863067626953
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.08503401279449463,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/dashboard/today/route.ts",
+      "grade": "C+",
+      "has_critical_defects": false,
+      "hotspot_score": 1.328384280204773,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 6.5,
+          "issue": "High cyclomatic complexity: 43",
+          "source_metric": "structural_complexity"
+        },
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 13.5,
+      "temporal_coupling_score": 10.0,
+      "total": 78.91342163085938
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 11.707317352294922,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/devices/register/route.test.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 3.2926831245422363,
+          "issue": "Code duplication: 16.5%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 91.70732116699219
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/devices/register/route.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.586206436157227,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/devices/test-push/route.test.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.4137930870056152,
+          "issue": "Code duplication: 12.1%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.5862045288086
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.7352941632270813,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/devices/test-push/route.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.73529052734375
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/logs/route.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/me/coach-goals/route.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 1.5625,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/me/onboarded/route.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 96.5625
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 1.296296238899231,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/me/tz/route.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 96.29629516601562
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 11.428571701049805,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/settings/route.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 3.5714287757873535,
+          "issue": "Code duplication: 17.9%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 91.42857360839844
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.066666603088379,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/sync/onboarding/route.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.933333158493042,
+          "issue": "Code duplication: 14.7%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.06666564941406
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.14285659790039,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/sync/route.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.857142925262451,
+          "issue": "Code duplication: 14.3%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 8.88888931274414,
+      "total": 91.03173828125
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 11.15384578704834,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/threads/[id]/route.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 3.846153974533081,
+          "issue": "Code duplication: 19.2%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 91.15384674072266
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.600000381469727,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/threads/route.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.3999998569488525,
+          "issue": "Code duplication: 12.0%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.5999984741211
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.377049446105957,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/app/api/whoop/webhook/route.ts",
+      "grade": "B",
+      "has_critical_defects": false,
+      "hotspot_score": 4.563112258911133,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 2.622950553894043,
+          "issue": "Code duplication: 13.1%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 8.88888931274414,
+      "total": 84.82904052734375
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.919463157653809,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/ApneaRiskCard.tsx",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 2.0805368423461914,
+          "issue": "Code duplication: 10.4%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 90.91946411132812
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/BedWakeTimeline.tsx",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 5.042910575866699,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 3.0,
+          "issue": "Deep nesting: 7 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 12.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 87.04290771484375
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/BedtimePatternsCard.tsx",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 6.0714287757873535,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 91.07142639160156
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/BedtimeRecoveryScatter.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/CardiacDriftCard.tsx",
+      "grade": "B",
+      "has_critical_defects": false,
+      "hotspot_score": 3.6165542602539062,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 86.6165542602539
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/DeepSleepEfficiencyCard.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/HRVTrend.tsx",
+      "grade": "B-",
+      "has_critical_defects": false,
+      "hotspot_score": 1.875205636024475,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.0,
+          "issue": "High cyclomatic complexity: 34",
+          "source_metric": "structural_complexity"
+        },
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 18.0,
+      "temporal_coupling_score": 9.44444465637207,
+      "total": 82.31964874267578
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/NapCalendar.tsx",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 4.0,
+          "issue": "Deep nesting: 8 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 11.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 91.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/NapRecoveryScatter.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 94.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/NapTrackerCard.tsx",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 5.091896057128906,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 89.0918960571289
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/RecoveryReboundCard.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.674418449401855,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/RespiratoryRateChart.tsx",
+      "grade": "C+",
+      "has_critical_defects": false,
+      "hotspot_score": 3.811802387237549,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 7.0,
+          "issue": "Deep nesting: 11 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 2.3255815505981445,
+          "issue": "Code duplication: 11.6%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 8.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 79.4862289428711
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/SleepConsistencyCard.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/SleepCyclesBarChart.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 94.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/SleepDebtChart.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/SleepNeedBreakdown.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 94.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/SleepQualityRadar.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/SleepStageDonut.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 93.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/SleepStagesChart.tsx",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 4.0,
+          "issue": "Deep nesting: 8 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 11.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 91.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/SportFrequencyChart.tsx",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 6.062125205993652,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 3.0,
+          "issue": "Deep nesting: 7 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 12.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 88.06212615966797
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/StrainRecoveryScatter.tsx",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 5.977443695068359,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 90.97744750976562
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/TSBCurve.tsx",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 5.257841110229492,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 89.25784301757812
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/TrendChart.tsx",
+      "grade": "B",
+      "has_critical_defects": false,
+      "hotspot_score": 4.301662921905518,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 3.0,
+          "issue": "Deep nesting: 7 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 12.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 86.30166625976562
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.941176414489746,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/WorkoutDistanceChart.tsx",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 6.965899467468262,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 2.058823585510254,
+          "issue": "Code duplication: 10.3%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 88.90707397460938
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/WorkoutZoneChart.tsx",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 5.72928524017334,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 88.72928619384766
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/charts/Zone2Tracker.tsx",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 6.181995391845703,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 90.18199157714844
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/chrome/BottomNav.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 94.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/chrome/Sidebar.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/chrome/TopBar.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 94.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/coach/ChatInput.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/coach/CoachWorkspace.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 8.333333015441895,
+      "total": 93.33333587646484
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/coach/MessageBubble.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 93.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/coach/MessageList.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/coach/SuggestionChips.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.971014022827148,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/coach/ThreadSidebar.tsx",
+      "grade": "B",
+      "has_critical_defects": false,
+      "hotspot_score": 3.027644634246826,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 2.0289855003356934,
+          "issue": "Code duplication: 10.1%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 8.88888931274414,
+      "total": 83.88754272460938
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 10.64912223815918,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/coach/useChatSend.test.ts",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 4.350877285003662,
+          "issue": "Code duplication: 21.8%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 89.64912414550781
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.012048193253576756,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/coach/useChatSend.ts",
+      "grade": "C+",
+      "has_critical_defects": false,
+      "hotspot_score": 1.0435813665390015,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 7.5,
+          "issue": "High cyclomatic complexity: 61",
+          "source_metric": "structural_complexity"
+        },
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 12.5,
+      "temporal_coupling_score": 10.0,
+      "total": 77.55562591552734
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/coach/useCoachThread.test.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/coach/useCoachThread.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/coach/useThreadList.test.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/coach/useThreadList.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 1.4516128301620483,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/onboarding/TzBackfill.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.45161437988281
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/overview/AIInsightCard.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/overview/AIInsightRefreshWatcher.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/overview/KPIStrip.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/overview/PRsCard.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 94.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/overview/RecoveryHero.tsx",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 4.0,
+          "issue": "Deep nesting: 8 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 11.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 91.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/overview/RecoveryTrend.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 93.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/recovery/DayOfWeekRecovery.tsx",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/recovery/IllnessSignalCard.tsx",
+      "grade": "B",
+      "has_critical_defects": false,
+      "hotspot_score": 3.884711742401123,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 3.0,
+          "issue": "Deep nesting: 7 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 12.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 85.88471221923828
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/recovery/OvertrainingCard.tsx",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 5.977633476257324,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 90.97763061523438
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/recovery/SkinTempDeviationCard.tsx",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 4.274575233459473,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 88.27457427978516
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/components/recovery/Spo2TrendCard.tsx",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 4.980127334594727,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 89.9801254272461
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/analytics/apnea.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 5.588972568511963,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 90.58897399902344
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/analytics/bedtime.ts",
+      "grade": "B",
+      "has_critical_defects": false,
+      "hotspot_score": 4.078947067260742,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 3.0,
+          "issue": "Deep nesting: 7 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 12.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 86.07894897460938
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/analytics/cardiacDrift.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 6.030163764953613,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 91.03016662597656
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/analytics/deepSleep.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/analytics/illness.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/analytics/naps.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 3.0,
+          "issue": "Deep nesting: 7 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 12.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/analytics/ots.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/analytics/rebound.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 94.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/auth/apple-state.test.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 1.692307710647583,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/auth/apple-state.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 96.69230651855469
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.821782112121582,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/auth/apple-web.test.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.178217887878418,
+          "issue": "Code duplication: 10.9%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.82177734375
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.7309941053390503,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/auth/apple-web.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.73099517822266
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/auth/apple.test.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.8962264060974121,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/auth/apple.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 6.357940673828125,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.25416564941406
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 4.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/auth/cookies.ts",
+      "grade": "A+",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 99.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0793650820851326,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/auth/jwt.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0793685913086
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.931034088134766,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/auth/origin.test.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.0689656734466553,
+          "issue": "Code duplication: 10.3%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.9310302734375
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 1.8421052694320679,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/auth/origin.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.84210205078125
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.735849380493164,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/auth.test.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.264151096343994,
+          "issue": "Code duplication: 11.3%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.73584747314453
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 1.0030394792556763,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/auth.ts",
+      "grade": "C+",
+      "has_critical_defects": false,
+      "hotspot_score": 0.8895975351333618,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 3.0,
+          "issue": "High cyclomatic complexity: 36",
+          "source_metric": "structural_complexity"
+        },
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 17.0,
+      "temporal_coupling_score": 5.555555820465088,
+      "total": 77.44818878173828
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/coach/goals.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/coach/loop.ts",
+      "grade": "B",
+      "has_critical_defects": false,
+      "hotspot_score": 1.6195160150527954,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 7.777777671813965,
+      "total": 84.39729309082031
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/coach/persistence.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 8.88888931274414,
+      "total": 92.88888549804688
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.428571701049805,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/coach/prompts.test.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.5714287757873535,
+          "issue": "Code duplication: 12.9%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.42857360839844
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.4838709533214569,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/coach/prompts.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 8.88888931274414,
+      "total": 93.37275695800781
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 11.94267463684082,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/coach/tools.test.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 3.0573248863220215,
+          "issue": "Code duplication: 15.3%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 91.94267272949219
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.22522522509098053,
+      "duplication_ratio": 11.848484992980957,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/coach/tools.ts",
+      "grade": "C-",
+      "has_critical_defects": false,
+      "hotspot_score": 1.12554132938385,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 4.0,
+          "issue": "High cyclomatic complexity: 38",
+          "source_metric": "structural_complexity"
+        },
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 3.151515007019043,
+          "issue": "Code duplication: 15.8%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 16.0,
+      "temporal_coupling_score": 5.555555820465088,
+      "total": 72.75480651855469
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.630630612373352,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/crypto/vault.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 6.539834976196289,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.17046356201172
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.3504672944545746,
+      "duplication_ratio": 12.59562873840332,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/auth.ts",
+      "grade": "B-",
+      "has_critical_defects": false,
+      "hotspot_score": 2.627401828765869,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 2.404371738433838,
+          "issue": "Code duplication: 12.0%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 8.333333015441895,
+      "total": 81.90682983398438
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/body.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.313432693481445,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/coach.test.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.6865673065185547,
+          "issue": "Code duplication: 13.4%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.31343078613281
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 11.38484001159668,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/coach.ts",
+      "grade": "B-",
+      "has_critical_defects": false,
+      "hotspot_score": 2.0874154567718506,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 3.6151602268218994,
+          "issue": "Code duplication: 18.1%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 81.47225952148438
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 11.315789222717285,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/connection.test.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 3.6842105388641357,
+          "issue": "Code duplication: 18.4%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 90.31578826904297
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.08746355772018433,
+      "duplication_ratio": 11.65573787689209,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/connection.ts",
+      "grade": "D",
+      "has_critical_defects": false,
+      "hotspot_score": 0.4591023921966553,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 7.5,
+          "issue": "High cyclomatic complexity: 46",
+          "source_metric": "structural_complexity"
+        },
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 3.34426212310791,
+          "issue": "Code duplication: 16.7%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 12.5,
+      "temporal_coupling_score": 0.0,
+      "total": 62.70230484008789
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 10.223880767822266,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/devices.test.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 4.776119232177734,
+          "issue": "Code duplication: 23.9%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 90.223876953125
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.8823529481887817,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/devices.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.88235473632812
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/index.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 7.222222328186035,
+      "total": 92.22222137451172
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 8.614034652709961,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/integrations.test.ts",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 6.385964870452881,
+          "issue": "Code duplication: 31.9%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 87.6140365600586
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.7894736528396606,
+      "duplication_ratio": 12.159090995788574,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/integrations.ts",
+      "grade": "C+",
+      "has_critical_defects": false,
+      "hotspot_score": 2.437469959259033,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 3.0,
+          "issue": "High cyclomatic complexity: 36",
+          "source_metric": "structural_complexity"
+        },
+        {
+          "amount": 3.0,
+          "issue": "Deep nesting: 7 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 2.840909004211426,
+          "issue": "Code duplication: 14.2%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 12.0,
+      "structural_complexity": 17.0,
+      "temporal_coupling_score": 9.44444465637207,
+      "total": 78.83047485351562
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/journal.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 3.0,
+          "issue": "Deep nesting: 7 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 12.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 11.64974594116211,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/logs.ts",
+      "grade": "B-",
+      "has_critical_defects": false,
+      "hotspot_score": 2.8132832050323486,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 3.3502535820007324,
+          "issue": "Code duplication: 16.8%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 8.88888931274414,
+      "total": 82.3519287109375
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.731958389282227,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/prs.ts",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 5.861433982849121,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.2680411338806152,
+          "issue": "Code duplication: 11.3%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 88.59339141845703
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/recovery.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/scoped.test.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 93.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.5319148898124695,
+      "duplication_ratio": 12.777777671813965,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/scoped.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 2.222222328186035,
+          "issue": "Code duplication: 11.1%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.3096923828125
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.83132553100586,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/settings.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.1686747074127197,
+          "issue": "Code duplication: 10.8%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.83132934570312
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 10.833333969116211,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/sleep.ts",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 4.166666507720947,
+          "issue": "Code duplication: 20.8%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 7.222222328186035,
+      "total": 88.05555725097656
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/strain.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.017123287543654442,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/summary.ts",
+      "grade": "C",
+      "has_critical_defects": false,
+      "hotspot_score": 1.319270133972168,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.0,
+          "issue": "High cyclomatic complexity: 34",
+          "source_metric": "structural_complexity"
+        },
+        {
+          "amount": 8.0,
+          "issue": "Deep nesting: 12 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 7.0,
+      "structural_complexity": 18.0,
+      "temporal_coupling_score": 9.44444465637207,
+      "total": 75.78083038330078
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 9.413793563842773,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/user_settings.test.ts",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 5.586206912994385,
+          "issue": "Code duplication: 27.9%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 88.4137954711914
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.5970149040222168,
+      "duplication_ratio": 12.435897827148438,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/user_settings.ts",
+      "grade": "B-",
+      "has_critical_defects": false,
+      "hotspot_score": 2.9279637336730957,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 3.0,
+          "issue": "Deep nesting: 7 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 2.5641026496887207,
+          "issue": "Code duplication: 12.8%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 12.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 82.96087646484375
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.763157844543457,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/users.test.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.236842155456543,
+          "issue": "Code duplication: 11.2%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.76315307617188
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 10.929203033447266,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/webhook.test.ts",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 4.070796489715576,
+          "issue": "Code duplication: 20.4%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 89.92919921875
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.06493506580591202,
+      "duplication_ratio": 9.962963104248047,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/webhook.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 5.037036895751953,
+          "issue": "Code duplication: 25.2%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 90.02789306640625
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/workouts.test.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 94.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/db/workouts.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.1388888955116272,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/format.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 94.13888549804688
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/insights.ts",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 5.492582321166992,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 89.49258422851562
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.7142857313156128,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/paths.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 4.0,
+          "issue": "Deep nesting: 8 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 11.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 91.71428680419922
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 11.507936477661133,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/push/apns.test.ts",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 3.492063522338867,
+          "issue": "Code duplication: 17.5%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 89.5079345703125
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.9090909361839294,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/push/apns.ts",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 4.0434417724609375,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 88.95252990722656
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/push/index.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/range.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/sport-color.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/stats.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 3.75,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/sync-meta.ts",
+      "grade": "A+",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 98.75
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 11.19489574432373,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/sync.test.ts",
+      "grade": "B-",
+      "has_critical_defects": false,
+      "hotspot_score": 3.130617141723633,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 3.0,
+          "issue": "Deep nesting: 7 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 3.8051044940948486,
+          "issue": "Code duplication: 19.0%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 12.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 81.32551574707031
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.22895126044750214,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/sync.ts",
+      "grade": "C+",
+      "has_critical_defects": false,
+      "hotspot_score": 0.9066861867904663,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 6.0,
+          "issue": "High cyclomatic complexity: 42",
+          "source_metric": "structural_complexity"
+        },
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 14.0,
+      "temporal_coupling_score": 8.333333015441895,
+      "total": 77.4689712524414
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/tz.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/whoop/client.test.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.5782312750816345,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/whoop/client.ts",
+      "grade": "B",
+      "has_critical_defects": false,
+      "hotspot_score": 3.998253345489502,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 7.777777671813965,
+      "total": 86.35426330566406
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/whoop/oauth-state.test.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 94.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 1.2213740348815918,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/whoop/oauth-state.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 96.22137451171875
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 12.894737243652344,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/whoop/signature.test.ts",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.1052632331848145,
+          "issue": "Code duplication: 10.5%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.89473724365234
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/whoop/signature.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.2788844704627991,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/whoop/token.ts",
+      "grade": "B",
+      "has_critical_defects": false,
+      "hotspot_score": 2.0719094276428223,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 0.5,
+          "issue": "High cyclomatic complexity: 31",
+          "source_metric": "structural_complexity"
+        },
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 19.5,
+      "temporal_coupling_score": 8.88888931274414,
+      "total": 84.73968505859375
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/whoop/upsert.test.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 11.026785850524902,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/whoop/upsert.ts",
+      "grade": "C",
+      "has_critical_defects": false,
+      "hotspot_score": 0.7555502653121948,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 3.0,
+          "issue": "High cyclomatic complexity: 36",
+          "source_metric": "structural_complexity"
+        },
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        },
+        {
+          "amount": 3.9732143878936768,
+          "issue": "Code duplication: 19.9%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 17.0,
+      "temporal_coupling_score": 8.333333015441895,
+      "total": 76.11566925048828
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/whoop/webhook-handler.test.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 94.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.3333333432674408,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/lib/whoop/webhook-handler.ts",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 5.438596725463867,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 1.0,
+          "issue": "Deep nesting: 5 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 14.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 89.77193450927734
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 9.333333969116211,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/proxy.test.ts",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 5.666666507720947,
+          "issue": "Code duplication: 28.3%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 89.33333587646484
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.6067960858345032,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/proxy.ts",
+      "grade": "B",
+      "has_critical_defects": false,
+      "hotspot_score": 1.6857171058654785,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 0.5,
+          "issue": "High cyclomatic complexity: 31",
+          "source_metric": "structural_complexity"
+        },
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 19.5,
+      "temporal_coupling_score": 9.44444465637207,
+      "total": 84.23695373535156
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/src/test/setup.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "apps/web/vitest.config.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.5,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "infra/terraform/cloud-init.sh",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "unknown",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.12820513546466827,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "scripts/backfill_sleep_local_times.py",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "python",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.12820434570312
+    },
+    {
+      "confidence": 0.5,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "scripts/deploy.sh",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "unknown",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.14084506034851074,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "scripts/generate-app-icon.py",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "python",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.1408462524414
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.551948070526123,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "scripts/migrate-bootstrap-user.ts",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "typescript",
+      "penalties_applied": [
+        {
+          "amount": 2.0,
+          "issue": "Deep nesting: 6 levels",
+          "source_metric": "semantic_complexity"
+        }
+      ],
+      "semantic_complexity": 13.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 93.55194854736328
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.12578615546226501,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "scripts/migrate-whoop-tokens.py",
+      "grade": "B+",
+      "has_critical_defects": false,
+      "hotspot_score": 3.7343358993530273,
+      "language": "python",
+      "penalties_applied": [
+        {
+          "amount": 0.5,
+          "issue": "High cyclomatic complexity: 31",
+          "source_metric": "structural_complexity"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 19.5,
+      "temporal_coupling_score": 10.0,
+      "total": 88.36012268066406
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.078125,
+      "duplication_ratio": 12.570093154907227,
+      "entropy_score": 0.0,
+      "file_path": "scripts/wal_smoke.py",
+      "grade": "A-",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "python",
+      "penalties_applied": [
+        {
+          "amount": 2.4299066066741943,
+          "issue": "Code duplication: 12.1%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 92.6482162475586
+    },
+    {
+      "confidence": 0.5,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.0,
+      "duplication_ratio": 10.771429061889648,
+      "entropy_score": 0.0,
+      "file_path": "scripts/zsh-helpers.sh",
+      "grade": "B-",
+      "has_critical_defects": false,
+      "hotspot_score": 5.593149662017822,
+      "language": "unknown",
+      "penalties_applied": [
+        {
+          "amount": 5.0,
+          "issue": "High cyclomatic complexity: 40",
+          "source_metric": "structural_complexity"
+        },
+        {
+          "amount": 4.22857141494751,
+          "issue": "Code duplication: 21.1%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 15.0,
+      "temporal_coupling_score": 10.0,
+      "total": 81.36457824707031
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 5.0,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "streamlit/whoop/__init__.py",
+      "grade": "A+",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "python",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 100.0
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.1764705926179886,
+      "duplication_ratio": 12.800687789916992,
+      "entropy_score": 0.0,
+      "file_path": "streamlit/whoop/auth.py",
+      "grade": "B",
+      "has_critical_defects": false,
+      "hotspot_score": 3.1978936195373535,
+      "language": "python",
+      "penalties_applied": [
+        {
+          "amount": 2.199312686920166,
+          "issue": "Code duplication: 11.0%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 86.175048828125
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.5,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "streamlit/whoop/db.py",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "python",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 8.88888931274414,
+      "total": 94.38888549804688
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.2985074520111084,
+      "duplication_ratio": 12.593360900878906,
+      "entropy_score": 0.0,
+      "file_path": "streamlit/whoop/integrations.py",
+      "grade": "B",
+      "has_critical_defects": false,
+      "hotspot_score": 3.8904075622558594,
+      "language": "python",
+      "penalties_applied": [
+        {
+          "amount": 2.4066390991210938,
+          "issue": "Code duplication: 12.0%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 86.78227233886719
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.4444444477558136,
+      "duplication_ratio": 15.0,
+      "entropy_score": 0.0,
+      "file_path": "streamlit/whoop/vault.py",
+      "grade": "A",
+      "has_critical_defects": false,
+      "hotspot_score": 10.0,
+      "language": "python",
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 95.44444274902344
+    },
+    {
+      "confidence": 0.949999988079071,
+      "consistency_score": 10.0,
+      "coupling_score": 15.0,
+      "critical_defects_count": 0,
+      "doc_coverage": 0.1335877776145935,
+      "duplication_ratio": 9.965675354003906,
+      "entropy_score": 0.0,
+      "file_path": "tests/test_integrations.py",
+      "grade": "B-",
+      "has_critical_defects": false,
+      "hotspot_score": 2.484050989151001,
+      "language": "python",
+      "penalties_applied": [
+        {
+          "amount": 5.034325122833252,
+          "issue": "Code duplication: 25.2%",
+          "source_metric": "duplication"
+        }
+      ],
+      "semantic_complexity": 15.0,
+      "structural_complexity": 20.0,
+      "temporal_coupling_score": 10.0,
+      "total": 82.58331298828125
+    }
+  ],
+  "grade_distribution": {
+    "A": 99,
+    "AMinus": 47,
+    "APlus": 3,
+    "B": 14,
+    "BMinus": 9,
+    "BPlus": 26,
+    "C": 3,
+    "CMinus": 1,
+    "CPlus": 6,
+    "D": 1
+  },
+  "language_distribution": {
+    "python": 10,
+    "typescript": 193,
+    "unknown": 6
+  },
+  "total_files": 209
+}

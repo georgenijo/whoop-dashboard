@@ -1,0 +1,46 @@
+{
+  "section_insight": "Overall health score is stable-to-slightly-declining (94 → 92, slope -1.0/period, R²=0.75). No single period crossed the 5-point inflection threshold at the overall level, but coupling collapsed 19 points (100 → 81) between the May 2 and May 13 snapshots — the dominant driver of any future risk. The drop is strongly correlated (r=0.99) and coincides with the multi-phase foundation build (Phases A–D: user_settings, per-user OAuth, data isolation, webhook mapping) that significantly expanded inter-module dependencies. Cohesion improved markedly (+7 pts, 93 → 100) over the same period, reflecting the deliberate decomposition work (db.ts split into domain modules, useCoachThread refactor, CoachWorkspace sub-components). Smells and duplication drifted downward by ~5 pts each, consistent with rapid feature accumulation outpacing cleanup. The codebase is healthy overall (grade A) but coupling is the single metric to watch.",
+  "score_annotations": [
+    {
+      "date": "2026-04-22",
+      "label": "Feature sprint peak",
+      "change": 0,
+      "description": "Baseline snapshot during high-output feature period: 7 health signals, Chat tab, nap tracker, illness early-warning. Score 94 reflects clean state before multi-user foundation work began."
+    },
+    {
+      "date": "2026-05-02",
+      "label": "Coach streaming / cache work",
+      "change": -2,
+      "description": "Score slips to 92. Smells drop 6 pts (100→94), duplication drops 8 pts (96→88), coupling drops 7 pts (100→93). Pattern matches rapid feature iteration without refactor passes. Coach streaming PR (#105) and prompt-caching work added new code paths."
+    },
+    {
+      "date": "2026-05-13",
+      "label": "Multi-user foundation (Phases A–D) — coupling inflection",
+      "change": 0,
+      "description": "Overall score holds at 92 but coupling falls a further 12 pts to 81 (19-pt total drop from baseline — above the 5-pt inflection threshold). Cohesion recovers strongly to 100 from 92. Coupling regression driven by Phases A–D: user_settings vault helpers, per-user OAuth (HMAC state), data isolation (user_id on all domain tables, forUser wrapper), webhook mapping, and encrypted integrations vault — each added cross-module wiring. Commits 01640af, c97ede3, d5a5623, 9ef72ca are primary contributors."
+    }
+  ],
+  "historical_events": [
+    {
+      "period": "Apr 22 2026",
+      "change": 0,
+      "primary_driver": "baseline",
+      "releases": ["health-signals-sprint", "chat-tab", "illness-signal"],
+      "notes": "Score 94. Clean baseline after completing 7 health signals and Chat feature. Coupling and smells both at 100 — no technical debt visible yet."
+    },
+    {
+      "period": "May 2 2026",
+      "change": -2,
+      "primary_driver": "duplication",
+      "releases": ["coach-streaming-#105", "prompt-caching-#101", "db-split-#98", "useCoachThread-refactor-#100"],
+      "notes": "Score 92. Duplication and smells drive the drop. Despite db.ts and useCoachThread refactors improving cohesion, new coach/streaming code paths introduced clones and smells faster than cleanup could keep up."
+    },
+    {
+      "period": "May 2–13 2026",
+      "change": -19,
+      "primary_driver": "coupling",
+      "releases": ["Phase-A-#317", "Phase-C-minimum-#320", "Phase-D-#323", "Phase-B-cleanup-#332", "onboarding-welcome-#336"],
+      "notes": "INFLECTION: Coupling 100→81 (-19 pts, exceeds 5-pt threshold). Multi-user foundation Phases A–D wired user_id across all domain tables, added forUser wrappers, HMAC OAuth state, webhook-to-user mapping, and encrypted vault — all legitimately increasing import/call graph density. Cohesion counterintuitively improved (93→100) because the same work forced cleaner module boundaries. Overall score masked by cohesion gain holding total at 92."
+    }
+  ]
+}

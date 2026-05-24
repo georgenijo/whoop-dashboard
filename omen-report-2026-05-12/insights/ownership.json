@@ -1,0 +1,137 @@
+{
+  "section_insight": "Every file in the codebase (208/208) is owned 100% by a single contributor. Bus factor is 1 across the entire project. This is consistent with a solo personal project, so the risk framing shifts: the concern is not team knowledge transfer, but self-continuity — if George loses context (long absence, memory, tooling gap), the most complex files will be the hardest to re-enter. No fragmented-ownership (many minors, no clear owner) pattern exists anywhere; all files have a single clear owner. The highest-priority resilience action is inline documentation on the largest and most stateful files, particularly in auth, db, sync, and the AI coach subsystem.",
+  "item_annotations": [
+    {
+      "file": "apps/web/src/lib/db/connection.ts",
+      "comment": "Largest single file at 686 lines. Central DB layer — connection pooling, WAL mode, schema migrations. Sole owner, no comments from other eyes ever. A regression here is hard to debug cold. Highest documentation priority in the codebase."
+    },
+    {
+      "file": "apps/web/src/lib/sync.ts",
+      "comment": "677 lines, sole owner. Orchestrates the full WHOOP sync pipeline — the most operationally critical path. Any breakage here stops all data ingestion. Should have inline comments explaining the retry/upsert flow."
+    },
+    {
+      "file": "apps/web/src/lib/coach/tools.ts",
+      "comment": "555 lines, sole owner. All AI coach tool definitions live here — query shapes, data assembly, context injection. This is the most complex business logic in the project and the hardest to reconstruct from scratch."
+    },
+    {
+      "file": "apps/web/src/lib/whoop/upsert.ts",
+      "comment": "502 lines, sole owner. Handles all entity upsert logic from WHOOP API responses. Bugs here silently corrupt stored health data. Needs documented invariants for each entity type."
+    },
+    {
+      "file": "apps/web/src/lib/db/user_settings.ts",
+      "comment": "402 lines, sole owner. User preference and settings storage. Heavily stateful — any schema drift breaks personalization silently."
+    },
+    {
+      "file": "apps/web/src/lib/db/integrations.ts",
+      "comment": "399 lines, sole owner. OAuth token storage and integration state. Corruption here locks users out of WHOOP sync entirely."
+    },
+    {
+      "file": "apps/web/src/lib/coach/loop.ts",
+      "comment": "330 lines, sole owner. AI coach inference loop — streaming, tool calls, message assembly. Complex async state; no second reviewer has ever read this code."
+    },
+    {
+      "file": "apps/web/src/lib/auth.ts",
+      "comment": "329 lines, sole owner. Core auth middleware — session validation, JWT verification, route protection. Auth bugs have the widest blast radius. Document the session/cookie/JWT contract explicitly."
+    },
+    {
+      "file": "apps/web/src/lib/whoop/token.ts",
+      "comment": "251 lines, sole owner. OAuth token refresh logic for WHOOP API access. Silent token expiry bugs would stop syncing with no obvious error."
+    },
+    {
+      "file": "apps/web/src/lib/db/summary.ts",
+      "comment": "292 lines, sole owner. Aggregates cross-table health summary data used by multiple dashboard pages. Logic errors here ripple into every chart on the site."
+    },
+    {
+      "file": "apps/web/src/app/api/auth/apple-web/callback/route.test.ts",
+      "comment": "262-line test for Apple OAuth web callback — sole owner. Tests are the secondary documentation. Keep these current as auth flows evolve."
+    },
+    {
+      "file": "apps/web/src/lib/auth/apple-web.ts",
+      "comment": "171 lines, sole owner. Apple Sign-In web flow implementation. Apple's nonce/state requirements are non-obvious; document the protocol assumptions."
+    },
+    {
+      "file": "apps/web/src/lib/crypto/vault.ts",
+      "comment": "111 lines, sole owner. Encryption for stored secrets (WHOOP tokens, etc.). Sole owner of the encryption key derivation and vault format. Any format change without migration logic would corrupt all stored credentials."
+    },
+    {
+      "file": "apps/web/src/app/api/dashboard/today/route.ts",
+      "comment": "294 lines, sole owner. Main data endpoint consumed by the dashboard home page. Aggregates multiple DB queries into the daily summary payload — schema contract must be stable."
+    },
+    {
+      "file": "apps/web/src/app/(dashboard)/settings/page.tsx",
+      "comment": "486 lines, sole owner. Settings page is the largest UI file. Heavy local state and form logic; document which settings require re-sync or session refresh to take effect."
+    },
+    {
+      "file": "apps/web/src/components/charts/TrendChart.tsx",
+      "comment": "356 lines, sole owner. Core reusable chart component used across multiple dashboard views. Refactoring risk is high — any prop or data-shape change breaks multiple consumers."
+    },
+    {
+      "file": "apps/web/src/components/charts/HRVTrend.tsx",
+      "comment": "397 lines, sole owner. One of the most complex chart components. HRV calculation assumptions (rolling window, outlier handling) are encoded here with no external review."
+    },
+    {
+      "file": "apps/web/src/components/charts/CardiacDriftCard.tsx",
+      "comment": "397 lines, sole owner. Custom cardiac drift metric — non-standard calculation. The algorithm is entirely undocumented outside this file."
+    },
+    {
+      "file": "apps/web/src/lib/analytics/bedtime.ts",
+      "comment": "240 lines, sole owner. Bedtime pattern analytics — statistical logic that feeds multiple chart components. Incorrect windowing or outlier handling here would silently skew displayed trends."
+    },
+    {
+      "file": "apps/web/src/lib/analytics/illness.ts",
+      "comment": "115 lines, sole owner. Illness signal detection logic using HRV/SpO2 deviation. The detection thresholds and heuristics are implicit knowledge — should be documented in code."
+    },
+    {
+      "file": "apps/web/src/lib/push/apns.ts",
+      "comment": "297 lines, sole owner. Apple Push Notification Service integration. APNs JWT signing and certificate handling have expiry edge cases that are silent until push delivery fails."
+    },
+    {
+      "file": "apps/web/src/lib/whoop/webhook-handler.ts",
+      "comment": "105 lines, sole owner. Entry point for all WHOOP webhook events. Routing logic here determines which data types get processed — errors here silently drop incoming updates."
+    },
+    {
+      "file": "apps/web/src/app/api/whoop/webhook/route.ts",
+      "comment": "140 lines, sole owner. Webhook route handler including HMAC signature verification. Security-critical; document the expected WHOOP signature scheme."
+    },
+    {
+      "file": "apps/web/src/lib/whoop/oauth-state.ts",
+      "comment": "131 lines, sole owner. WHOOP OAuth PKCE state management. State/nonce handling is subtle — document the lifecycle and expiry assumptions."
+    },
+    {
+      "file": "apps/web/src/proxy.ts",
+      "comment": "206 lines, sole owner. Reverse proxy layer (likely for local dev or API forwarding). Its role in the request chain should be documented — easy to forget it exists when debugging prod issues."
+    },
+    {
+      "file": "apps/web/src/lib/db/auth.ts",
+      "comment": "214 lines, sole owner. DB-layer auth queries — session creation, lookup, invalidation. Used by all auth routes. Schema changes here require coordinated migration."
+    },
+    {
+      "file": "apps/web/src/app/(onboarding)/welcome/WelcomeClient.tsx",
+      "comment": "330 lines, sole owner. Onboarding flow entry point. Complex step logic and WHOOP OAuth initiation — easy to break silently if auth redirect URLs or session state changes."
+    },
+    {
+      "file": "apps/web/src/components/coach/useChatSend.ts",
+      "comment": "415 lines, sole owner. Core hook for AI coach message send flow — streaming, retry, optimistic UI. Most complex front-end hook in the codebase."
+    },
+    {
+      "file": "apps/web/src/app/api/chat/route.ts",
+      "comment": "214 lines, sole owner. AI chat API route — orchestrates tool use, streaming response, and DB persistence in one handler. High coupling; document the response stream format."
+    },
+    {
+      "file": "infra/terraform/cloud-init.sh",
+      "comment": "37 lines, sole owner. Server bootstrap script. If this is wrong, a fresh deployment will not come up correctly. Small file but high operational consequence — worth a one-time review."
+    },
+    {
+      "file": "scripts/deploy.sh",
+      "comment": "34 lines, sole owner. Deployment script. Sole owner of the release procedure. Document any manual pre/post steps that are not encoded in the script itself."
+    },
+    {
+      "file": "apps/web/src/lib/coach/persistence.ts",
+      "comment": "121 lines, sole owner. Chat thread and message persistence layer. The DB schema contract for conversations is only documented here — keep it current as the coach feature evolves."
+    },
+    {
+      "file": "apps/web/src/lib/db/logs.ts",
+      "comment": "210 lines, sole owner. Observability/audit log storage. The log schema and query patterns are implicit — useful for debugging but only if you remember the field names."
+    }
+  ]
+}

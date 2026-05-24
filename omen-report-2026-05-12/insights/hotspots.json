@@ -1,0 +1,81 @@
+{
+  "section_insight": "The hotspot map reveals three structural problems. First, the coach subsystem is fracturing across too many files (route.ts, tools.ts, loop.ts, useChatSend.ts) — all four are Critical, and the route has churned 18 times at near-maximum complexity. The agentic loop logic is split across the network boundary (route.ts handles SSE, loop.ts owns the turn cycle, tools.ts owns tool definitions) with no clean seam; every coach feature forces edits in all three. Second, the database layer is a chronic churn zone: connection.ts has 24 commits at Critical severity, and five additional db/* files (summary.ts, coach.ts, integrations.ts, auth.ts, logs.ts) all land High or Critical — the schema migration pattern is driving repeated file rewrites. Third, auth is cross-cutting without a single owner: auth.ts (Critical, 12 commits), lib/auth/apple.ts, lib/db/auth.ts, and the Apple callback route are all separate hotspots, indicating auth logic is scattered rather than owned by one module. The single mega-hotspot is apps/web/src/app/api/chat/route.ts — score 0.985, 18 commits, complexity 98th percentile — it is simultaneously the entry point, SSE transport, and coordination layer for the coach, which is a god-route pattern. Priority refactors: (1) extract an AgenticLoop class or module from route.ts so that transport, loop orchestration, and tool dispatch are separate concerns; (2) create a DbConnection singleton or pool abstraction to stop connection.ts absorbing every schema change; (3) consolidate auth identity resolution into one lib/auth/index.ts that the Apple, Whoop OAuth, and CF Access paths all delegate to.",
+  "item_annotations": [
+    {
+      "file": "apps/web/src/app/api/chat/route.ts",
+      "comment": "God-route: score 0.985, 18 commits, 98th-percentile complexity. Handles SSE keepalive, agentic loop orchestration, tool dispatch, and chat persistence in one file. Split into route.ts (transport + SSE), loop.ts (already exists — push more logic there), and a new persistence.ts. The refactor PR #675e0d4 already started this split but stalled; finish it."
+    },
+    {
+      "file": "apps/web/src/lib/db/connection.ts",
+      "comment": "Highest-churn file in the repo (24 commits, Critical). Absorbs every schema migration, WAL config change, and forUser wrapper addition. Extract a migrations runner and a connection factory separately so schema changes don't touch the live connection code."
+    },
+    {
+      "file": "apps/web/src/lib/whoop/upsert.ts",
+      "comment": "Critical score (0.924) despite only 6 commits — complexity is 95th percentile. The upsert logic handles multiple resource types (workouts, sleep, recovery, cycles) in one file. Split into per-resource upsert modules (upsertSleep.ts, upsertWorkout.ts, etc.) and a shared upsertHelpers.ts."
+    },
+    {
+      "file": "apps/web/src/lib/auth.ts",
+      "comment": "Critical score (0.911), 12 commits. Auth identity resolution is duplicated across auth.ts, lib/auth/apple.ts, lib/db/auth.ts, and the Apple callback route — four separate hotspots. Consolidate into lib/auth/index.ts with sub-modules for each provider (apple.ts, whoop.ts, session.ts)."
+    },
+    {
+      "file": "apps/web/src/lib/sync.ts",
+      "comment": "Critical score (0.909), complexity 95th percentile. The sync orchestrator grew through multiple phases (port from Python, webhook integration, coach trigger). Separate the sync scheduler from the per-resource sync logic to reduce blast radius per change."
+    },
+    {
+      "file": "apps/web/src/components/coach/useChatSend.ts",
+      "comment": "Critical score (0.896), highest complexity percentile of any component (99.3). The hook is doing too much — optimistic UI, SSE stream parsing, and retry logic. Extract stream parsing into a useSSEStream hook and retry into a separate utility."
+    },
+    {
+      "file": "apps/web/src/lib/coach/tools.ts",
+      "comment": "Critical score (0.887), 12 commits. Tool definitions keep growing as new coach capabilities are added (zones, sleep, naps, sync trigger). Group tools by domain into toolsSleep.ts, toolsWorkout.ts, toolsRecovery.ts and re-export from tools.ts as an index."
+    },
+    {
+      "file": "apps/web/src/lib/db/summary.ts",
+      "comment": "Critical score (0.868), highest avg_complexity among db modules (6.8). The aggregate query logic for dashboard/today routes lives here and grows with every new metric. Split into domain-specific summary modules matching the data model (sleepSummary.ts, workoutSummary.ts, recoverySummary.ts)."
+    },
+    {
+      "file": "apps/web/src/app/api/dashboard/today/route.ts",
+      "comment": "Critical score (0.867), 5 commits. This route is a coordination point that calls into summary.ts and multiple db modules. If summary.ts is split, this route's complexity should drop naturally. No standalone refactor needed — fix summary.ts first."
+    },
+    {
+      "file": "apps/web/src/lib/coach/loop.ts",
+      "comment": "Critical score (0.838), 12 commits. The agentic turn loop grew incrementally (prompt caching, progress events, tool-use preservation across turns). It's close to the right abstraction but is still coupled to the route via SSE callbacks. Define a clean LoopContext interface to decouple it fully from the transport layer."
+    },
+    {
+      "file": "apps/web/src/proxy.ts",
+      "comment": "Critical score (0.831), 7 commits. The proxy has accumulated auth gate logic (401 JSON for unauthed API calls, Bearer token support, publicOrigin helper). These concerns should live in middleware or auth.ts, not the proxy. Strip the proxy back to pure routing."
+    },
+    {
+      "file": "apps/web/src/components/charts/HRVTrend.tsx",
+      "comment": "Critical score (0.812), highest avg_complexity among chart components (8.5). Only 3 commits — complexity is intrinsic, not churn-driven. Likely mixing data fetching, transformation, and rendering. Extract the HRV trend calculation into a lib/analytics/ function and keep the component as a pure renderer."
+    },
+    {
+      "file": "apps/web/src/lib/whoop/token.ts",
+      "comment": "High score (0.793), avg_complexity 7.8. Token refresh chain logic is complex and has broken before (refresh-chain death detection was a fix commit). Add unit tests and consider extracting the retry/backoff logic into a shared withRetry utility."
+    },
+    {
+      "file": "apps/web/src/lib/db/coach.ts",
+      "comment": "High score (0.791). High complexity percentile (96th) relative to only 2 commits means the file was born complex. Likely storing large JSON blobs or doing multi-step thread queries. Review whether thread storage belongs in coach.ts or should be split into threads.ts and messages.ts."
+    },
+    {
+      "file": "tests/test_integrations.py",
+      "comment": "High score (0.752) for a test file. Test files shouldn't be hotspots — indicates the integration surface it's testing is unstable. As the integrations module stabilizes post-Phase D, this should naturally cool down. No immediate refactor needed, but watch it."
+    },
+    {
+      "file": "apps/web/scripts/smoke-phase-a.ts",
+      "comment": "High score (0.690), avg_complexity 23.0 — the highest raw complexity of any file in the list. One-commit smoke test scripts shouldn't have complexity this high; this suggests the script is doing real business logic rather than just exercising endpoints. Extract shared helpers if this pattern continues into future phase scripts."
+    },
+    {
+      "file": "apps/web/scripts/smoke-phase-c.ts",
+      "comment": "High score (0.675), avg_complexity 24.0 — highest raw complexity in the entire dataset. Same pattern as smoke-phase-a.ts. Both smoke scripts are outliers: they look like integration tests masquerading as scripts. Consider converting them to a proper test suite."
+    },
+    {
+      "file": "apps/web/src/lib/whoop/webhook-handler.ts",
+      "comment": "Moderate score (0.456) but avg_complexity 14.0 — second-highest raw complexity after the smoke scripts among production files. Only 3 commits so it's not churning yet, but the complexity is a latent risk. The handler dispatches across multiple resource types; split into per-resource handlers matching the upsert refactor."
+    },
+    {
+      "file": "apps/web/src/lib/analytics/cardiacDrift.ts",
+      "comment": "Moderate score (0.397) but avg_complexity 8.3. Analytics files are uniformly high complexity, low churn — they're correct for now but will become hotspots if the analytics layer keeps growing. Low priority, but mark for review when adding new metrics."
+    }
+  ]
+}

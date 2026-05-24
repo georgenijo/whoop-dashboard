@@ -1,0 +1,1936 @@
+{
+  "components": [
+    {
+      "fan_in": 0,
+      "fan_out": 5,
+      "id": "apps/web/src/app/api/dashboard/today/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/dashboard/today/route.ts"
+    },
+    {
+      "fan_in": 2,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/analytics/deepSleep.ts",
+      "instability": 0.3333333333333333,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/analytics/deepSleep.ts"
+    },
+    {
+      "fan_in": 2,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/analytics/naps.ts",
+      "instability": 0.3333333333333333,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/analytics/naps.ts"
+    },
+    {
+      "fan_in": 3,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/paths.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/paths.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 0,
+      "id": "apps/web/src/components/chrome/Sidebar.tsx",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/chrome/Sidebar.tsx"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/charts/BedWakeTimeline.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/BedWakeTimeline.tsx"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/charts/SleepDebtChart.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/SleepDebtChart.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 26,
+      "id": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/(dashboard)/sleep/page.tsx"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 0,
+      "id": "apps/web/src/components/coach/ChatInput.tsx",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/coach/ChatInput.tsx"
+    },
+    {
+      "fan_in": 6,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/auth/cookies.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/auth/cookies.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "infra/terraform/cloud-init.sh",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "infra/terraform/cloud-init.sh"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "scripts/backfill_sleep_local_times.py",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "scripts/backfill_sleep_local_times.py"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "scripts/migrate-whoop-tokens.py",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "scripts/migrate-whoop-tokens.py"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/db/scoped.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/scoped.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/app/api/admin/webhook/replay/route.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/admin/webhook/replay/route.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/scripts/backfill-whoop-provider-user-id.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/scripts/backfill-whoop-provider-user-id.ts"
+    },
+    {
+      "fan_in": 3,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/whoop/oauth-state.ts",
+      "instability": 0.25,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/whoop/oauth-state.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/overview/PRsCard.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/overview/PRsCard.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/app/(dashboard)/settings/page.tsx",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/(dashboard)/settings/page.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/vitest.config.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/vitest.config.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/db/workouts.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/workouts.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 3,
+      "id": "apps/web/src/app/(dashboard)/coach/page.tsx",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/(dashboard)/coach/page.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 2,
+      "id": "apps/web/src/app/api/threads/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/threads/route.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/charts/WorkoutZoneChart.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/WorkoutZoneChart.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 2,
+      "id": "apps/web/src/app/api/auth/logout/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/auth/logout/route.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 3,
+      "id": "apps/web/src/lib/coach/loop.ts",
+      "instability": 0.75,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/coach/loop.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/db/settings.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/settings.ts"
+    },
+    {
+      "fan_in": 2,
+      "fan_out": 2,
+      "id": "apps/web/src/lib/db/sleep.ts",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/sleep.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "scripts/deploy.sh",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "scripts/deploy.sh"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 4,
+      "id": "apps/web/src/app/api/sync/onboarding/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/sync/onboarding/route.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/charts/TSBCurve.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/TSBCurve.tsx"
+    },
+    {
+      "fan_in": 3,
+      "fan_out": 3,
+      "id": "apps/web/src/lib/coach/tools.ts",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/coach/tools.ts"
+    },
+    {
+      "fan_in": 2,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/analytics/rebound.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/analytics/rebound.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/proxy.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/proxy.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/db/integrations.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/integrations.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 1,
+      "id": "apps/web/src/components/coach/useCoachThread.test.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/coach/useCoachThread.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/push/apns.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/push/apns.test.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 0,
+      "id": "apps/web/src/components/onboarding/TzBackfill.tsx",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/onboarding/TzBackfill.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/coach/prompts.test.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/coach/prompts.test.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/charts/HRVTrend.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/HRVTrend.tsx"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 0,
+      "id": "apps/web/src/components/chrome/TopBar.tsx",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/chrome/TopBar.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 2,
+      "id": "apps/web/src/app/api/threads/[id]/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/threads/[id]/route.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 2,
+      "id": "apps/web/src/components/overview/RecoveryTrend.tsx",
+      "instability": 0.6666666666666666,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/overview/RecoveryTrend.tsx"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 0,
+      "id": "apps/web/src/components/recovery/SkinTempDeviationCard.tsx",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/recovery/SkinTempDeviationCard.tsx"
+    },
+    {
+      "fan_in": 2,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/analytics/ots.ts",
+      "instability": 0.3333333333333333,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/analytics/ots.ts"
+    },
+    {
+      "fan_in": 3,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/auth/apple-state.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/auth/apple-state.ts"
+    },
+    {
+      "fan_in": 2,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/auth/apple-web.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/auth/apple-web.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/db/coach.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/coach.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/db/journal.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/journal.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/coach/MessageBubble.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/coach/MessageBubble.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 6,
+      "id": "apps/web/src/lib/db/summary.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/summary.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 2,
+      "id": "apps/web/src/lib/db/workouts.ts",
+      "instability": 0.6666666666666666,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/workouts.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/push/apns.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/push/apns.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/sync.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/sync.test.ts"
+    },
+    {
+      "fan_in": 2,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/tz.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/tz.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 2,
+      "id": "apps/web/src/proxy.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/proxy.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 3,
+      "id": "apps/web/src/app/api/auth/apple-web/start/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/auth/apple-web/start/route.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 0,
+      "id": "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 7,
+      "id": "apps/web/src/app/api/auth/apple-web/callback/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/auth/apple-web/callback/route.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 2,
+      "id": "apps/web/src/app/api/auth/login/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/auth/login/route.ts"
+    },
+    {
+      "fan_in": 2,
+      "fan_out": 0,
+      "id": "apps/web/src/components/coach/useThreadList.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/coach/useThreadList.ts"
+    },
+    {
+      "fan_in": 4,
+      "fan_out": 2,
+      "id": "apps/web/src/components/overview/KPIStrip.tsx",
+      "instability": 0.3333333333333333,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/overview/KPIStrip.tsx"
+    },
+    {
+      "fan_in": 3,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/auth/jwt.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/auth/jwt.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 5,
+      "id": "apps/web/src/lib/coach/persistence.ts",
+      "instability": 0.8333333333333334,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/coach/persistence.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "scripts/generate-app-icon.py",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "scripts/generate-app-icon.py"
+    },
+    {
+      "fan_in": 3,
+      "fan_out": 2,
+      "id": "apps/web/src/components/charts/TrendChart.tsx",
+      "instability": 0.4,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/TrendChart.tsx"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/charts/SleepStageDonut.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/SleepStageDonut.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/db/body.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/body.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/postcss.config.mjs",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/postcss.config.mjs"
+    },
+    {
+      "fan_in": 3,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/analytics/apnea.ts",
+      "instability": 0.25,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/analytics/apnea.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/charts/SleepNeedBreakdown.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/SleepNeedBreakdown.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 1,
+      "id": "apps/web/src/components/coach/useThreadList.test.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/coach/useThreadList.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 4,
+      "id": "apps/web/src/lib/coach/tools.test.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/coach/tools.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 2,
+      "id": "apps/web/src/lib/db/user_settings.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/user_settings.ts"
+    },
+    {
+      "fan_in": 4,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/format.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/format.ts"
+    },
+    {
+      "fan_in": 3,
+      "fan_out": 0,
+      "id": "apps/web/src/components/coach/useChatSend.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/coach/useChatSend.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 2,
+      "id": "apps/web/src/components/charts/WorkoutDistanceChart.tsx",
+      "instability": 0.6666666666666666,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/WorkoutDistanceChart.tsx"
+    },
+    {
+      "fan_in": 3,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/whoop/upsert.ts",
+      "instability": 0.25,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/whoop/upsert.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/auth/origin.test.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/auth/origin.test.ts"
+    },
+    {
+      "fan_in": 7,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/db/scoped.ts",
+      "instability": 0.125,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/scoped.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 2,
+      "id": "apps/web/src/components/charts/SleepStagesChart.tsx",
+      "instability": 0.6666666666666666,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/SleepStagesChart.tsx"
+    },
+    {
+      "fan_in": 4,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/coach/prompts.ts",
+      "instability": 0.2,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/coach/prompts.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/app/api/dashboard/today/route.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/dashboard/today/route.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/db/webhook.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/webhook.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 3,
+      "id": "apps/web/src/app/(onboarding)/welcome/page.tsx",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/(onboarding)/welcome/page.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 2,
+      "id": "apps/web/src/app/api/chat/history/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/chat/history/route.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/db/auth.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/auth.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/db/user_settings.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/user_settings.test.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 0,
+      "id": "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/insights.ts",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/insights.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 1,
+      "id": "apps/web/src/app/api/chat/route.test.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/chat/route.test.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 2,
+      "id": "apps/web/src/components/charts/CardiacDriftCard.tsx",
+      "instability": 0.6666666666666666,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/CardiacDriftCard.tsx"
+    },
+    {
+      "fan_in": 60,
+      "fan_out": 0,
+      "id": "streamlit/whoop/db.py",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": true,
+      "name": "streamlit/whoop/db.py"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 2,
+      "id": "apps/web/src/app/(auth)/signin/page.tsx",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/(auth)/signin/page.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "streamlit/whoop/vault.py",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "streamlit/whoop/vault.py"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 4,
+      "id": "apps/web/src/app/api/sync/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/sync/route.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 0,
+      "id": "apps/web/src/components/chrome/BottomNav.tsx",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/chrome/BottomNav.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 1,
+      "id": "apps/web/src/components/coach/useChatSend.test.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/coach/useChatSend.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 3,
+      "id": "apps/web/src/app/api/me/tz/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/me/tz/route.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/charts/RecoveryReboundCard.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/RecoveryReboundCard.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/db/connection.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/connection.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/db/index.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/index.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 5,
+      "id": "apps/web/src/app/api/whoop/webhook/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/whoop/webhook/route.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 0,
+      "id": "apps/web/src/components/overview/AIInsightRefreshWatcher.tsx",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/overview/AIInsightRefreshWatcher.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/whoop/oauth-state.test.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/whoop/oauth-state.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "streamlit/whoop/__init__.py",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "streamlit/whoop/__init__.py"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 6,
+      "id": "apps/web/src/app/api/auth/callback/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/auth/callback/route.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/app/api/devices/register/route.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/devices/register/route.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/ios/ci_scripts/ci_post_clone.sh",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/ios/ci_scripts/ci_post_clone.sh"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/db/devices.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/devices.test.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 2,
+      "id": "apps/web/src/components/recovery/OvertrainingCard.tsx",
+      "instability": 0.6666666666666666,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/recovery/OvertrainingCard.tsx"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 2,
+      "id": "apps/web/src/components/charts/BedtimePatternsCard.tsx",
+      "instability": 0.6666666666666666,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/BedtimePatternsCard.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/auth.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/auth.test.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 0,
+      "id": "apps/web/src/app/(dashboard)/logs/CollapsibleCard.tsx",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/(dashboard)/logs/CollapsibleCard.tsx"
+    },
+    {
+      "fan_in": 2,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/crypto/vault.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/crypto/vault.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 2,
+      "id": "apps/web/src/app/api/devices/register/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/devices/register/route.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/charts/DeepSleepEfficiencyCard.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/DeepSleepEfficiencyCard.tsx"
+    },
+    {
+      "fan_in": 2,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/auth/apple.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/auth/apple.ts"
+    },
+    {
+      "fan_in": 5,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/auth/origin.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/auth/origin.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/app/(auth)/layout.tsx",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/(auth)/layout.tsx"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 2,
+      "id": "apps/web/src/components/charts/SportFrequencyChart.tsx",
+      "instability": 0.6666666666666666,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/SportFrequencyChart.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/db/logs.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/logs.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 2,
+      "id": "apps/web/src/lib/db/strain.ts",
+      "instability": 0.6666666666666666,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/strain.ts"
+    },
+    {
+      "fan_in": 2,
+      "fan_out": 2,
+      "id": "apps/web/src/lib/whoop/token.ts",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/whoop/token.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 0,
+      "id": "apps/web/src/components/charts/StrainRecoveryScatter.tsx",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/StrainRecoveryScatter.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "scripts/wal_smoke.py",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "scripts/wal_smoke.py"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "tests/test_integrations.py",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "tests/test_integrations.py"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 4,
+      "id": "apps/web/src/app/(dashboard)/layout.tsx",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/(dashboard)/layout.tsx"
+    },
+    {
+      "fan_in": 2,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/db/devices.ts",
+      "instability": 0.3333333333333333,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/devices.ts"
+    },
+    {
+      "fan_in": 3,
+      "fan_out": 2,
+      "id": "apps/web/src/components/coach/useCoachThread.ts",
+      "instability": 0.4,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/coach/useCoachThread.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/whoop/webhook-handler.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/whoop/webhook-handler.test.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 0,
+      "id": "apps/web/src/components/coach/ThreadSidebar.tsx",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/coach/ThreadSidebar.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/app/(onboarding)/layout.tsx",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/(onboarding)/layout.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 6,
+      "id": "apps/web/src/app/(dashboard)/strain/page.tsx",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/(dashboard)/strain/page.tsx"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/overview/RecoveryHero.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/overview/RecoveryHero.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/next.config.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/next.config.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 0,
+      "id": "apps/web/src/components/coach/SuggestionChips.tsx",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/coach/SuggestionChips.tsx"
+    },
+    {
+      "fan_in": 3,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/sport-color.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/sport-color.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 3,
+      "id": "apps/web/src/app/api/me/coach-goals/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/me/coach-goals/route.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 5,
+      "id": "apps/web/src/components/coach/CoachWorkspace.tsx",
+      "instability": 0.8333333333333334,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/coach/CoachWorkspace.tsx"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/app/(onboarding)/welcome/WelcomeClient.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/(onboarding)/welcome/WelcomeClient.tsx"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/overview/AIInsightCard.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/overview/AIInsightCard.tsx"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/charts/RespiratoryRateChart.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/RespiratoryRateChart.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/db/users.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/users.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 8,
+      "id": "apps/web/src/app/(dashboard)/workouts/page.tsx",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/(dashboard)/workouts/page.tsx"
+    },
+    {
+      "fan_in": 5,
+      "fan_out": 5,
+      "id": "apps/web/src/lib/sync.ts",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/sync.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 4,
+      "id": "apps/web/src/app/api/admin/webhook/replay/route.ts",
+      "instability": 0.8,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/admin/webhook/replay/route.ts"
+    },
+    {
+      "fan_in": 2,
+      "fan_out": 2,
+      "id": "apps/web/src/lib/db/recovery.ts",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/recovery.ts"
+    },
+    {
+      "fan_in": 2,
+      "fan_out": 3,
+      "id": "apps/web/src/lib/whoop/webhook-handler.ts",
+      "instability": 0.6,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/whoop/webhook-handler.ts"
+    },
+    {
+      "fan_in": 5,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/whoop/client.ts",
+      "instability": 0.16666666666666666,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/whoop/client.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/whoop/signature.test.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/whoop/signature.test.ts"
+    },
+    {
+      "fan_in": 2,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/stats.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/stats.ts"
+    },
+    {
+      "fan_in": 2,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/whoop/signature.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/whoop/signature.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/whoop/client.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/whoop/client.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "scripts/migrate-bootstrap-user.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "scripts/migrate-bootstrap-user.ts"
+    },
+    {
+      "fan_in": 31,
+      "fan_out": 4,
+      "id": "apps/web/src/lib/auth.ts",
+      "instability": 0.11428571428571428,
+      "is_central_connector": false,
+      "is_hub": true,
+      "name": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 1,
+      "id": "apps/web/src/app/api/logs/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/logs/route.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 2,
+      "id": "apps/web/src/components/coach/MessageList.tsx",
+      "instability": 0.6666666666666666,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/coach/MessageList.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/app/api/auth/callback/route.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/auth/callback/route.test.ts"
+    },
+    {
+      "fan_in": 3,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/coach/goals.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/coach/goals.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/db/webhook.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/webhook.ts"
+    },
+    {
+      "fan_in": 4,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/range.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/range.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 2,
+      "id": "apps/web/src/app/api/devices/test-push/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/devices/test-push/route.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/db/prs.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/prs.ts"
+    },
+    {
+      "fan_in": 17,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/db/connection.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 3,
+      "id": "apps/web/src/app/api/auth/whoop/disconnect/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/auth/whoop/disconnect/route.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/recovery/IllnessSignalCard.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/recovery/IllnessSignalCard.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "streamlit/whoop/integrations.py",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "streamlit/whoop/integrations.py"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 4,
+      "id": "apps/web/src/app/api/auth/apple/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/auth/apple/route.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/charts/Zone2Tracker.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/Zone2Tracker.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/whoop/upsert.test.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/whoop/upsert.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/scripts/migrate-uid1-to-uid2.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/scripts/migrate-uid1-to-uid2.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/scripts/smoke-phase-c.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/scripts/smoke-phase-c.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/app/api/devices/test-push/route.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/devices/test-push/route.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 4,
+      "id": "apps/web/src/app/api/connectors/whoop/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/connectors/whoop/route.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/app/api/auth/apple-web/callback/route.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/auth/apple-web/callback/route.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 2,
+      "id": "apps/web/src/app/api/me/onboarded/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/me/onboarded/route.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 3,
+      "id": "apps/web/src/app/api/chat/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/chat/route.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/charts/ApneaRiskCard.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/ApneaRiskCard.tsx"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/charts/BedtimeRecoveryScatter.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/BedtimeRecoveryScatter.tsx"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/charts/SleepCyclesBarChart.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/SleepCyclesBarChart.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/app/api/auth/apple/route.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/auth/apple/route.test.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/recovery/DayOfWeekRecovery.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/recovery/DayOfWeekRecovery.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/auth/apple-web.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/auth/apple-web.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/auth/apple.test.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/auth/apple.test.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/db/coach.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/coach.ts"
+    },
+    {
+      "fan_in": 7,
+      "fan_out": 2,
+      "id": "apps/web/src/lib/db/integrations.ts",
+      "instability": 0.2222222222222222,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/db/integrations.ts"
+    },
+    {
+      "fan_in": 4,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/sync-meta.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/sync-meta.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "streamlit/whoop/auth.py",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "streamlit/whoop/auth.py"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/charts/SleepQualityRadar.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/SleepQualityRadar.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/eslint.config.mjs",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/eslint.config.mjs"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/scripts/smoke-phase-a.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/scripts/smoke-phase-a.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 2,
+      "id": "apps/web/src/app/api/settings/route.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/api/settings/route.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 5,
+      "id": "apps/web/src/app/(dashboard)/logs/page.tsx",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/(dashboard)/logs/page.tsx"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/charts/NapTrackerCard.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/NapTrackerCard.tsx"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 0,
+      "id": "apps/web/src/components/recovery/Spo2TrendCard.tsx",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/recovery/Spo2TrendCard.tsx"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/charts/NapCalendar.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/NapCalendar.tsx"
+    },
+    {
+      "fan_in": 2,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/analytics/cardiacDrift.ts",
+      "instability": 0.3333333333333333,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/analytics/cardiacDrift.ts"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 2,
+      "id": "apps/web/src/components/charts/NapRecoveryScatter.tsx",
+      "instability": 0.6666666666666666,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/NapRecoveryScatter.tsx"
+    },
+    {
+      "fan_in": 3,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/analytics/illness.ts",
+      "instability": 0.25,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/analytics/illness.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 1,
+      "id": "apps/web/src/lib/auth/apple-state.test.ts",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/auth/apple-state.test.ts"
+    },
+    {
+      "fan_in": 5,
+      "fan_out": 2,
+      "id": "apps/web/src/lib/analytics/bedtime.ts",
+      "instability": 0.2857142857142857,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/analytics/bedtime.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 15,
+      "id": "apps/web/src/app/(dashboard)/recovery/page.tsx",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/(dashboard)/recovery/page.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/lib/push/index.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/lib/push/index.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 11,
+      "id": "apps/web/src/app/(dashboard)/page.tsx",
+      "instability": 1.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/app/(dashboard)/page.tsx"
+    },
+    {
+      "fan_in": 1,
+      "fan_out": 1,
+      "id": "apps/web/src/components/charts/SleepConsistencyCard.tsx",
+      "instability": 0.5,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/components/charts/SleepConsistencyCard.tsx"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "apps/web/src/test/setup.ts",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "apps/web/src/test/setup.ts"
+    },
+    {
+      "fan_in": 0,
+      "fan_out": 0,
+      "id": "scripts/zsh-helpers.sh",
+      "instability": 0.0,
+      "is_central_connector": false,
+      "is_hub": false,
+      "name": "scripts/zsh-helpers.sh"
+    }
+  ],
+  "generated_at": "2026-05-13T00:20:23.382933+00:00",
+  "smells": [
+    {
+      "components": [
+        "streamlit/whoop/db.py"
+      ],
+      "description": "Hub-like component \"streamlit/whoop/db.py\" has 60 connections (fan-in=60, fan-out=0, threshold=20)",
+      "metrics": {
+        "fan_in": 60,
+        "fan_out": 0,
+        "instability": 0.0
+      },
+      "severity": "High",
+      "smell_type": "HubLikeDependency",
+      "suggestion": "Consider splitting this component into smaller, more focused modules"
+    },
+    {
+      "components": [
+        "apps/web/src/lib/auth.ts"
+      ],
+      "description": "Hub-like component \"apps/web/src/lib/auth.ts\" has 35 connections (fan-in=31, fan-out=4, threshold=20)",
+      "metrics": {
+        "fan_in": 31,
+        "fan_out": 4,
+        "instability": 0.11428571428571428
+      },
+      "severity": "High",
+      "smell_type": "HubLikeDependency",
+      "suggestion": "Consider splitting this component into smaller, more focused modules"
+    }
+  ],
+  "summary": {
+    "average_instability": 0.4165736310473153,
+    "central_connector_count": 0,
+    "critical_count": 0,
+    "cyclic_count": 0,
+    "high_count": 2,
+    "hub_count": 2,
+    "medium_count": 0,
+    "total_components": 209,
+    "total_smells": 2,
+    "unstable_count": 0
+  },
+  "thresholds": {
+    "central_connector_fan_in_threshold": 10,
+    "central_connector_fan_out_threshold": 10,
+    "hub_threshold": 20,
+    "instability_difference": 0.4,
+    "stable_threshold": 0.3,
+    "unstable_threshold": 0.7
+  }
+}

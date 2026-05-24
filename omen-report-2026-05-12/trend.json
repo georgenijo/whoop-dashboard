@@ -1,0 +1,99 @@
+{
+  "points": [
+    {
+      "date": "2026-04-22",
+      "score": 94,
+      "components": {
+        "tdg": 92,
+        "smells": 100,
+        "complexity": 88,
+        "cohesion": 93,
+        "satd": 100,
+        "duplication": 96,
+        "coupling": 100
+      },
+      "notable_commits": [
+        "refactor: reorganize dashboard with collapsible expander sections (#40)",
+        "Add Chat tab, nap tracker, bedtime/wake patterns via st.tabs layout (#39)",
+        "feat: add Chat tab with conversational Whoop data analysis (#33)",
+        "Implement 7 health signals: ANS index, OTS detection, resp rate anomaly, rebound rate, strain-recovery balance, cardiac drift, deep sleep efficiency (#18, #19, #20, #23, #24, #25, #26) (#37)",
+        "Add illness early-warning signal with 14-day rolling baselines (#36)"
+      ]
+    },
+    {
+      "date": "2026-05-02",
+      "score": 92,
+      "components": {
+        "smells": 94,
+        "satd": 100,
+        "complexity": 92,
+        "tdg": 93,
+        "duplication": 88,
+        "cohesion": 92,
+        "coupling": 93
+      },
+      "notable_commits": [
+        "chore(coach): drop temporary stream cache debug log",
+        "debug(coach): tighten stream params log to count cache markers\n",
+        "debug(coach): one-shot log of cache_control presence in stream params\n",
+        "fix(coach): pass anthropic-beta header on streaming requests",
+        "Merge pull request #105 from georgenijo/issue/92-coach-progress-streaming-show-tool-calls-live-like-claude-code"
+      ]
+    },
+    {
+      "date": "2026-05-13",
+      "score": 92,
+      "components": {
+        "cohesion": 100,
+        "tdg": 93,
+        "satd": 100,
+        "coupling": 81,
+        "smells": 95,
+        "complexity": 91,
+        "duplication": 91
+      },
+      "notable_commits": [
+        "docs(agent-context): E.2 orchestrator handoff for issue #334",
+        "docs: swap Chrome MCP references for agent-browser CLI",
+        "feat(onboarding): /welcome 3-screen wizard + first-time redirect (Phase E.1) (#336)",
+        "fix(prompts): rewrite PROMPT.md for Next.js surface (Streamlit retired Phase D)",
+        "fix(prompts): drop hardcoded /Users/george-mac-mini paths from PROMPT_SWARM"
+      ]
+    }
+  ],
+  "slope": -1.0,
+  "intercept": 93.66666666666667,
+  "r_squared": 0.75,
+  "start_score": 94,
+  "end_score": 92,
+  "component_trends": {
+    "smells": {
+      "Slope": -2.5,
+      "Correlation": 0.7777137710478189
+    },
+    "duplication": {
+      "Slope": -2.5,
+      "Correlation": 0.6185895741317419
+    },
+    "tdg": {
+      "Slope": 0.5,
+      "Correlation": 0.8660254037844386
+    },
+    "cohesion": {
+      "Slope": 3.5,
+      "Correlation": 0.8029550685469662
+    },
+    "coupling": {
+      "Slope": -9.5,
+      "Correlation": 0.9886540462187434
+    },
+    "satd": {
+      "Slope": 0.0,
+      "Correlation": 0.0
+    },
+    "complexity": {
+      "Slope": 1.5,
+      "Correlation": 0.7205766921228921
+    }
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "executive_summary": "The codebase scores **A (91.7/100)** across 209 files — no critical defects, zero import cycles, and average cyclomatic complexity of 4.2. That headline is accurate but incomplete. Underneath it, **coupling collapsed 19 points** (100 → 81) between Apr 22 and May 13, the single largest metric movement in the observation window and the only reading that crossed the 5-point inflection threshold. This happened for a legitimate reason — Phases A–D wired `user_id` isolation across every domain table, added `forUser` wrappers, HMAC OAuth state, encrypted vault helpers, and webhook-to-user mapping — but the structural cost is now visible: `auth.ts` has 31 fan-in callers, `connection.ts` has 17, and both have become de facto chokepoints that every new route touches by default.\n\nTrajectory is mixed. Complexity is improving (+3 pts net), cohesion hit a perfect 100 after the db.ts domain-module split, and TDG is marginally up. Duplication is the one dimension actively trending the wrong direction: it fell 5 points from baseline (96 → 91) and has not recovered, with 77 clone groups and 999 duplicate lines spread across chart cards, the three `LogsTable` variants, and self-clones inside `connection.ts`, `logs.ts`, and `upsert.ts`. Self-clones — where the same block is duplicated within a single file — are the most urgent duplication risk because both copies must be updated simultaneously on the next edit.\n\nThe three concrete risks are: (1) **auth.ts as a single structural chokepoint** — 31 dependents, highest betweenness in the graph, and a breaking change here disconnects more module pairs than any other file; (2) **the coach subsystem god-route** — `api/chat/route.ts` scores 0.985 on the hotspot index (18 commits, 98th-percentile complexity) while still owning SSE transport, agentic loop orchestration, tool dispatch, and persistence in one handler; (3) **`connection.ts` absorbing every schema change** — 24 commits, the single D-grade file in the repo (TDG 62.7), cyclomatic complexity 46, and 16.7% internal duplication.\n\nThe path forward is three targeted refactors, not a broad cleanup. Split `auth.ts` into session/guard/identity submodules to reduce its blast radius. Finish the coach route split that PR #675e0d4 started — push loop orchestration into `loop.ts` and persistence into `persistence.ts`, leaving `route.ts` as pure SSE transport. Extract a migration runner from `connection.ts` so schema changes stop touching live connection code. Beyond those three, the highest-value quick wins are extracting a `LogsTable` base component (eliminates ~150 lines), a shared `useChartDateRange()` hook (eliminates ~74 lines), and a `signAppleJWT()` helper from the auth/push duplication (eliminates ~18 lines but closes a security-relevant divergence risk).",
+
+  "key_findings": [
+    "**Coupling (score 81, -19 pts from baseline)** — Only metric that crossed the inflection threshold. `auth.ts` fan-in reached 31 (threshold 20), `connection.ts` fan-in is 17. Driven by Phases A–D adding cross-module wiring. No cycles exist (cycle_count: 0), which is the one bright spot. See `components.json` coupling section.",
+    "**God-route hotspot** — `apps/web/src/app/api/chat/route.ts` scores 0.985 (max is 1.0), churned 18 times in 12 days, sits at 98th-percentile complexity. Handles SSE keepalive, agentic loop, tool dispatch, and chat persistence in one file. PR #675e0d4 started a split that stalled. Finish it. See `hotspots.json`.",
+    "**`connection.ts` is the only D-grade file** — TDG score 62.7, cyclomatic complexity 46, nesting 6 levels, 16.7% internal duplication, 24 commits. It is simultaneously the worst-structured and most-churned file in the repo. Extract a migrations runner; freeze the connection interface. See `tdg.json` and `hotspots.json`.",
+    "**Self-clones inside single files** — `logs.ts` has an identical 15-line block at lines 80–94 and 196–210. `connection.ts` has an exact 11-line block at lines 460–470 and 472–482. `upsert.ts` has 3 near-identical 13–14 line blocks. These will silently diverge on the next edit because only one copy gets updated. Fix these before any other duplication work. See `duplication.json`.",
+    "**Apple JWT clone is a security-relevant divergence** — `apple-web.ts` (auth) and `apns.ts` (push) share an 82%-similar 18–22 line JWT signing block (group 14 in duplication report). Any key rotation or algorithm fix applied to one will be missed in the other. Extract `signAppleJWT()` to `src/lib/apple/jwt.ts`. See `duplication.json`.",
+    "**Phase D cutover debt still live** — Three coordinated TODOs across `token.ts` (lines 25, 90) and `auth.ts` (line 187) mark a `tokens.json` fallback that is still active for `userId===1`. Missing any one of the three on removal leaves the legacy path half-alive. Track as a single atomic task. See `satd.json`.",
+    "**`sync.test.ts` appears as an isolated node** — The test file exists but has no outgoing imports, suggesting it is empty or a stub. `sync.ts` is 677 lines, the most operationally critical path (all data ingestion), and currently has no effective test coverage. See `graph.json`.",
+    "**`useChatSend.ts` has the highest raw cyclomatic complexity in the codebase** — Score 61 (C+ grade), 415 lines, sole owner. Handles optimistic UI, SSE stream parsing, and retry logic in one hook. Extract `useSSEStream` and a retry utility. See `tdg.json` and `ownership.json`.",
+    "**`TopBar.tsx` ↔ `db.ts` co-change strength 0.75** — A UI chrome component co-changes with the DB layer on 6 of 8 commits. There is no valid import reason for this coupling. A shared data-shape or auth assumption is leaking into presentation. Identify the implicit dependency and make it explicit. See `temporal.json`."
+  ],
+
+  "recommendations": {
+    "high_priority": [
+      {
+        "title": "Split auth.ts to reduce 31-dependent blast radius",
+        "description": "Extract `getCurrentUser()` (session token → user ID) into `lib/auth/session.ts`. Push cookie manipulation into `lib/auth/cookies.ts` (already exists at fan-in 6). Leave only orchestration glue in `auth.ts`. This is the file with the highest betweenness in the entire graph — a breaking change here disconnects more module pairs than any other single edit. Target: fan-in below 20, matching the hub threshold."
+      },
+      {
+        "title": "Finish the coach route split (api/chat/route.ts, hotspot score 0.985)",
+        "description": "PR #675e0d4 started this but stalled. `route.ts` should own only SSE transport and request parsing. Move loop orchestration fully into `loop.ts` (define a `LoopContext` interface to decouple it from the transport). Move persistence calls into `persistence.ts`. `tools.ts` should be split by domain: `toolsSleep.ts`, `toolsWorkout.ts`, `toolsRecovery.ts`, re-exported from an index. This directly addresses the highest-scoring hotspot and the most churn-concentrated subsystem."
+      },
+      {
+        "title": "Extract migration runner from connection.ts (only D-grade file, TDG 62.7)",
+        "description": "`connection.ts` is 686 lines with complexity 46 and absorbs every schema change across 24 commits. Split into: `connection.ts` (connection factory + pool only, frozen interface), `migrations.ts` (schema initialization and migration runner), and `wal.ts` (WAL/pragma config). After the split, freeze `connection.ts` as a no-logic boundary — no new code should ever be added here beyond connection setup."
+      },
+      {
+        "title": "Fix self-clones in logs.ts, connection.ts, and upsert.ts before next edit",
+        "description": "Three files have exact duplicates within themselves. `logs.ts` lines 80–94 and 196–210 are identical (15 lines). `connection.ts` lines 460–470 and 472–482 are identical (11 lines). `upsert.ts` has three near-identical 13–14 line upsert blocks. These will silently diverge on the next edit because only the visible copy gets updated. Fix as local helper functions before any other duplication work."
+      },
+      {
+        "title": "Consolidate Apple JWT signing (auth/push divergence risk)",
+        "description": "`apps/web/src/lib/auth/apple-web.ts` and `apps/web/src/lib/push/apns.ts` share an 82%-similar JWT signing block. Any key rotation or signing algorithm fix applied to one file will be missed in the other. Extract `signAppleJWT(privateKey, teamId, keyId)` to `src/lib/apple/jwt.ts` and import from both callsites. Small change, high-consequence risk if left."
+      },
+      {
+        "title": "Write real tests for sync.ts — sync.test.ts is currently a stub",
+        "description": "`sync.ts` is 677 lines, the most operationally critical path in the codebase (all WHOOP data ingestion), and `sync.test.ts` appears as an isolated node in the dependency graph with no outgoing imports — meaning it imports nothing and tests nothing. Any breakage in `sync.ts` silently stops all data ingestion. Add at minimum: happy-path upsert test, cooldown logic test, abort-after-commit test."
+      },
+      {
+        "title": "Remove Phase D cutover debt atomically (three locations)",
+        "description": "The `tokens.json` fallback for `userId===1` is still live code across three coordinated points: `token.ts` line 25 (saveTokens), `token.ts` line 90 (loadTokens), and `auth.ts` line 187. Missing any one leaves the legacy path half-alive. Add a grep guard or shared `PHASE_D_COMPLETE` constant so removal is atomic. Track as a single issue tied to the Phase D milestone."
+      }
+    ],
+    "medium_priority": [
+      {
+        "title": "Extract LogsTable base component (~150 lines eliminated)",
+        "description": "`ChatLogsTable`, `RouteLogsTable`, and `SyncLogsTable` are the same table rendered with different columns — 67 duplicate lines each across groups 7, 18, 21, and 30 in the duplication report. Extract a `LogsTable` base component to `src/app/(dashboard)/logs/LogsTable.tsx` parameterized by column config. Biggest single duplication win in the codebase by lines saved."
+      },
+      {
+        "title": "Extract shared chart card hook (~74 lines eliminated)",
+        "description": "`BedtimePatternsCard`, `NapCalendar`, `NapTrackerCard`, `RecoveryReboundCard`, and `SleepConsistencyCard` all contain identical 18–20 line date-range boilerplate (group 26). Extract `useChartDateRange()` to `src/components/charts/shared/`. Also address `HRVTrend.tsx` ↔ `TrendChart.tsx` which share 57 duplicate lines across three groups — merge the 40-line core chart rendering logic into a single parameterized component."
+      },
+      {
+        "title": "Consolidate whoop/ module shared assumptions into WhoopSession struct",
+        "description": "`client.ts` ↔ `token.ts` ↔ `upsert.ts` form a tight co-change group (temporal coupling strength 0.67) because they share implicit assumptions about token shape and refresh behavior. Extract a `WhoopSession` or `WhoopConfig` type (token, expiry, userId) passed explicitly so a token-format change touches one definition. This directly addresses the strongest temporal coupling cluster outside the DB layer."
+      },
+      {
+        "title": "Extract shared DB query helpers (~71 lines eliminated)",
+        "description": "Groups 1, 5, 6, and 17 in the duplication report show repeated query patterns across `recovery.ts`, `sleep.ts`, `strain.ts`, `devices.ts`, `integrations.ts`, `coach.ts`, and `webhook.ts`. Extract `fetchDomainRows()` and owner-scoped query helpers to `src/lib/db/shared.ts`. Also extract the internal webhook handler pattern — `webhook.ts` clones the same block 3 times internally (group 6), which is the highest fix-one-miss-others risk."
+      },
+      {
+        "title": "Investigate TopBar.tsx ↔ db.ts temporal coupling (strength 0.75)",
+        "description": "A UI chrome component co-changes with the database layer on 6 of 8 commits. There is no valid import relationship. Identify what implicit data-shape or auth assumption TopBar is reacting to and make it explicit — either a dedicated query hook or a server component prop. Left unaddressed, every DB schema change will continue to pull TopBar into the same PR."
+      },
+      {
+        "title": "Split upsert.ts into per-resource modules",
+        "description": "`upsert.ts` is 502 lines at 95th-percentile complexity (hotspot score 0.924) handling workouts, sleep, recovery, and cycles in one file. Split into `upsertSleep.ts`, `upsertWorkout.ts`, `upsertRecovery.ts`, and `upsertHelpers.ts`. This also fixes the three near-identical internal clone blocks (group 15 in duplication report) naturally."
+      },
+      {
+        "title": "Document crypto/vault.ts encryption format and key derivation",
+        "description": "`vault.ts` is 111 lines, sole owner. It holds the encryption key derivation and vault format for all stored WHOOP tokens and credentials. Any format change without a documented migration path would corrupt all stored credentials silently. Add inline comments defining the vault wire format, key derivation inputs, and migration procedure."
+      }
+    ],
+    "ongoing": [
+      {
+        "title": "Protect auth.ts as a frozen interface during Phase E+",
+        "description": "auth.ts has the highest betweenness of any non-sink node in the graph. Until the split is complete, treat it as a protected file: any PR touching auth.ts should explicitly verify the existing auth.test.ts suite passes and document which of the 31 dependents were tested."
+      },
+      {
+        "title": "Keep connection.ts as a no-logic boundary post-refactor",
+        "description": "After extracting the migration runner, enforce that no new logic is added to connection.ts. It should contain only: connection factory, pool config, and WAL pragma setup. Any schema-related change goes into migrations.ts. This is the only way to stop it re-accumulating the 24-commit churn pattern."
+      },
+      {
+        "title": "Add inline documentation to high-context files before starting Phase E",
+        "description": "Bus factor is 1 across all 208 files. The highest re-entry risk files (those that are large, complex, and stateful) need inline documentation before extending them further. Priority order: `connection.ts` (686 lines, schema migration assumptions), `sync.ts` (677 lines, retry/upsert flow), `coach/tools.ts` (555 lines, AI tool definitions and query shapes), `upsert.ts` (502 lines, entity upsert invariants), `crypto/vault.ts` (encryption format), `lib/illness.ts` (detection thresholds and heuristics)."
+      },
+      {
+        "title": "Watch coupling score — halt new cross-module wiring if it falls below 75",
+        "description": "Coupling dropped from 100 to 81 in three weeks of foundation work. The Phase D build was legitimate, but the trajectory (slope -9.5/period, r=0.99) means two more similar sprints would push it below 60. Before starting any Phase E feature that adds new API routes or auth flows, check whether it can reuse an existing import path rather than adding a new one."
+      },
+      {
+        "title": "Extract test DB mock fixture to src/test-utils/dbMocks.ts",
+        "description": "Six test files share a 9–16 line mock/setup block at 90% similarity (group 13 in duplication report). Without a shared fixture, every new test file will copy this block again. Low-effort extraction, but without it the pattern compounds with every new test added."
+      },
+      {
+        "title": "Convert smoke-phase-a.ts and smoke-phase-c.ts to proper test suite",
+        "description": "Both scripts have the highest raw cyclomatic complexity in the entire codebase (23.0 and 24.0 respectively) for what are ostensibly one-off smoke scripts. They contain real business logic and integration coverage that is currently invisible to the test runner. Convert to `tests/integration/` and add to CI."
+      },
+      {
+        "title": "Rename SECURITY marker in tests/test_integrations.py line 267 to INVARIANT",
+        "description": "The marker is a test docstring asserting that save_tokens never writes plaintext credentials. It is correct and protective, not a vulnerability. Renaming it prevents false positives in any future automated SATD/security scans that treat all SECURITY markers as issues."
+      }
+    ]
+  }
+}

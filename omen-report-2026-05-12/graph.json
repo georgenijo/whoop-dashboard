@@ -1,0 +1,2857 @@
+{
+  "cycles": [],
+  "edges": [
+    {
+      "from": "apps/web/src/app/(auth)/signin/page.tsx",
+      "to": "apps/web/src/lib/auth/cookies.ts"
+    },
+    {
+      "from": "apps/web/src/app/(auth)/signin/page.tsx",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/coach/page.tsx",
+      "to": "apps/web/src/components/coach/CoachWorkspace.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/coach/page.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/coach/page.tsx",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/layout.tsx",
+      "to": "apps/web/src/components/chrome/Sidebar.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/layout.tsx",
+      "to": "apps/web/src/components/chrome/TopBar.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/layout.tsx",
+      "to": "apps/web/src/components/chrome/BottomNav.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/layout.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx",
+      "to": "apps/web/src/lib/sync-meta.ts"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/logs/page.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/logs/page.tsx",
+      "to": "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/logs/page.tsx",
+      "to": "apps/web/src/app/(dashboard)/logs/CollapsibleCard.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/logs/page.tsx",
+      "to": "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/logs/page.tsx",
+      "to": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/page.tsx",
+      "to": "apps/web/src/components/overview/RecoveryHero.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/page.tsx",
+      "to": "apps/web/src/components/overview/KPIStrip.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/page.tsx",
+      "to": "apps/web/src/components/overview/RecoveryTrend.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/page.tsx",
+      "to": "apps/web/src/components/overview/AIInsightCard.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/page.tsx",
+      "to": "apps/web/src/components/overview/AIInsightRefreshWatcher.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/page.tsx",
+      "to": "apps/web/src/components/overview/PRsCard.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/page.tsx",
+      "to": "apps/web/src/components/onboarding/TzBackfill.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/page.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/page.tsx",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/page.tsx",
+      "to": "apps/web/src/lib/insights.ts"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/page.tsx",
+      "to": "apps/web/src/lib/range.ts"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/recovery/page.tsx",
+      "to": "apps/web/src/components/overview/KPIStrip.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/recovery/page.tsx",
+      "to": "apps/web/src/components/charts/TrendChart.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/recovery/page.tsx",
+      "to": "apps/web/src/components/charts/HRVTrend.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/recovery/page.tsx",
+      "to": "apps/web/src/components/charts/StrainRecoveryScatter.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/recovery/page.tsx",
+      "to": "apps/web/src/components/charts/RecoveryReboundCard.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/recovery/page.tsx",
+      "to": "apps/web/src/components/recovery/DayOfWeekRecovery.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/recovery/page.tsx",
+      "to": "apps/web/src/components/recovery/OvertrainingCard.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/recovery/page.tsx",
+      "to": "apps/web/src/components/recovery/IllnessSignalCard.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/recovery/page.tsx",
+      "to": "apps/web/src/components/recovery/SkinTempDeviationCard.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/recovery/page.tsx",
+      "to": "apps/web/src/components/recovery/Spo2TrendCard.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/recovery/page.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/recovery/page.tsx",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/recovery/page.tsx",
+      "to": "apps/web/src/lib/analytics/illness.ts"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/recovery/page.tsx",
+      "to": "apps/web/src/lib/analytics/rebound.ts"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/recovery/page.tsx",
+      "to": "apps/web/src/lib/range.ts"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/components/overview/KPIStrip.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/components/charts/TrendChart.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/components/charts/SleepStagesChart.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/components/charts/SleepStageDonut.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/components/charts/SleepQualityRadar.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/components/charts/SleepNeedBreakdown.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/components/charts/SleepConsistencyCard.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/components/charts/RespiratoryRateChart.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/components/charts/SleepCyclesBarChart.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/components/charts/NapCalendar.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/components/charts/ApneaRiskCard.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/components/charts/SleepDebtChart.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/components/charts/BedWakeTimeline.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/components/charts/BedtimeRecoveryScatter.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/components/charts/BedtimePatternsCard.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/components/charts/NapTrackerCard.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/components/charts/NapRecoveryScatter.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/components/charts/DeepSleepEfficiencyCard.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/lib/analytics/apnea.ts"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/lib/analytics/bedtime.ts"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/lib/analytics/naps.ts"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/lib/analytics/deepSleep.ts"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/lib/format.ts"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/sleep/page.tsx",
+      "to": "apps/web/src/lib/range.ts"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/strain/page.tsx",
+      "to": "apps/web/src/components/overview/KPIStrip.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/strain/page.tsx",
+      "to": "apps/web/src/components/charts/TrendChart.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/strain/page.tsx",
+      "to": "apps/web/src/components/charts/TSBCurve.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/strain/page.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/strain/page.tsx",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/strain/page.tsx",
+      "to": "apps/web/src/lib/range.ts"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/workouts/page.tsx",
+      "to": "apps/web/src/components/charts/SportFrequencyChart.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/workouts/page.tsx",
+      "to": "apps/web/src/components/charts/WorkoutZoneChart.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/workouts/page.tsx",
+      "to": "apps/web/src/components/charts/WorkoutDistanceChart.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/workouts/page.tsx",
+      "to": "apps/web/src/components/charts/Zone2Tracker.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/workouts/page.tsx",
+      "to": "apps/web/src/components/charts/CardiacDriftCard.tsx"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/workouts/page.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/workouts/page.tsx",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/(dashboard)/workouts/page.tsx",
+      "to": "apps/web/src/lib/analytics/cardiacDrift.ts"
+    },
+    {
+      "from": "apps/web/src/app/(onboarding)/welcome/WelcomeClient.tsx",
+      "to": "apps/web/src/lib/coach/goals.ts"
+    },
+    {
+      "from": "apps/web/src/app/(onboarding)/welcome/page.tsx",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/(onboarding)/welcome/page.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/(onboarding)/welcome/page.tsx",
+      "to": "apps/web/src/app/(onboarding)/welcome/WelcomeClient.tsx"
+    },
+    {
+      "from": "apps/web/src/app/api/admin/webhook/replay/route.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/admin/webhook/replay/route.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/api/admin/webhook/replay/route.ts",
+      "to": "apps/web/src/lib/whoop/client.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/admin/webhook/replay/route.ts",
+      "to": "apps/web/src/lib/whoop/webhook-handler.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/apple/route.ts",
+      "to": "apps/web/src/lib/auth/apple.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/apple/route.ts",
+      "to": "apps/web/src/lib/auth/jwt.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/apple/route.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/apple/route.ts",
+      "to": "apps/web/src/lib/tz.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/apple-web/callback/route.ts",
+      "to": "apps/web/src/lib/auth/apple.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/apple-web/callback/route.ts",
+      "to": "apps/web/src/lib/auth/apple-web.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/apple-web/callback/route.ts",
+      "to": "apps/web/src/lib/auth/jwt.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/apple-web/callback/route.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/apple-web/callback/route.ts",
+      "to": "apps/web/src/lib/auth/cookies.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/apple-web/callback/route.ts",
+      "to": "apps/web/src/lib/auth/apple-state.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/apple-web/callback/route.ts",
+      "to": "apps/web/src/lib/auth/origin.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/apple-web/start/route.ts",
+      "to": "apps/web/src/lib/auth/apple-web.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/apple-web/start/route.ts",
+      "to": "apps/web/src/lib/auth/cookies.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/apple-web/start/route.ts",
+      "to": "apps/web/src/lib/auth/apple-state.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/callback/route.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/callback/route.ts",
+      "to": "apps/web/src/lib/auth/origin.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/callback/route.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/callback/route.ts",
+      "to": "apps/web/src/lib/db/integrations.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/callback/route.ts",
+      "to": "apps/web/src/lib/whoop/client.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/callback/route.ts",
+      "to": "apps/web/src/lib/whoop/oauth-state.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/login/route.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/login/route.ts",
+      "to": "apps/web/src/lib/whoop/oauth-state.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/logout/route.ts",
+      "to": "apps/web/src/lib/auth/cookies.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/logout/route.ts",
+      "to": "apps/web/src/lib/auth/origin.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/whoop/disconnect/route.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/auth/whoop/disconnect/route.ts",
+      "to": "apps/web/src/lib/db/integrations.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/chat/history/route.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/api/chat/history/route.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/chat/route.test.ts",
+      "to": "apps/web/src/app/api/chat/route.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/chat/route.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/api/chat/route.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/chat/route.ts",
+      "to": "apps/web/src/lib/coach/persistence.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/connectors/whoop/route.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/connectors/whoop/route.ts",
+      "to": "apps/web/src/lib/db/integrations.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/connectors/whoop/route.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/api/dashboard/today/route.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/dashboard/today/route.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/api/dashboard/today/route.ts",
+      "to": "apps/web/src/lib/analytics/apnea.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/dashboard/today/route.ts",
+      "to": "apps/web/src/lib/analytics/illness.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/dashboard/today/route.ts",
+      "to": "apps/web/src/lib/analytics/ots.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/devices/register/route.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/devices/register/route.ts",
+      "to": "apps/web/src/lib/db/devices.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/devices/test-push/route.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/devices/test-push/route.ts",
+      "to": "apps/web/src/lib/db/devices.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/logs/route.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/api/me/coach-goals/route.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/me/coach-goals/route.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/api/me/coach-goals/route.ts",
+      "to": "apps/web/src/lib/coach/goals.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/me/onboarded/route.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/me/onboarded/route.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/api/me/tz/route.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/me/tz/route.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/api/me/tz/route.ts",
+      "to": "apps/web/src/lib/tz.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/settings/route.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/api/settings/route.ts",
+      "to": "apps/web/src/lib/coach/prompts.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/sync/onboarding/route.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/sync/onboarding/route.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/api/sync/onboarding/route.ts",
+      "to": "apps/web/src/lib/sync.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/sync/onboarding/route.ts",
+      "to": "apps/web/src/lib/sync-meta.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/sync/route.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/sync/route.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/api/sync/route.ts",
+      "to": "apps/web/src/lib/sync.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/sync/route.ts",
+      "to": "apps/web/src/lib/sync-meta.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/threads/[id]/route.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/api/threads/[id]/route.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/threads/route.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/api/threads/route.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/whoop/webhook/route.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/whoop/webhook/route.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/app/api/whoop/webhook/route.ts",
+      "to": "apps/web/src/lib/whoop/client.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/whoop/webhook/route.ts",
+      "to": "apps/web/src/lib/whoop/signature.ts"
+    },
+    {
+      "from": "apps/web/src/app/api/whoop/webhook/route.ts",
+      "to": "apps/web/src/lib/whoop/webhook-handler.ts"
+    },
+    {
+      "from": "apps/web/src/components/charts/ApneaRiskCard.tsx",
+      "to": "apps/web/src/lib/analytics/apnea.ts"
+    },
+    {
+      "from": "apps/web/src/components/charts/BedWakeTimeline.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/charts/BedtimePatternsCard.tsx",
+      "to": "apps/web/src/lib/analytics/bedtime.ts"
+    },
+    {
+      "from": "apps/web/src/components/charts/BedtimeRecoveryScatter.tsx",
+      "to": "apps/web/src/lib/analytics/bedtime.ts"
+    },
+    {
+      "from": "apps/web/src/components/charts/CardiacDriftCard.tsx",
+      "to": "apps/web/src/lib/analytics/cardiacDrift.ts"
+    },
+    {
+      "from": "apps/web/src/components/charts/CardiacDriftCard.tsx",
+      "to": "apps/web/src/lib/sport-color.ts"
+    },
+    {
+      "from": "apps/web/src/components/charts/DeepSleepEfficiencyCard.tsx",
+      "to": "apps/web/src/lib/analytics/deepSleep.ts"
+    },
+    {
+      "from": "apps/web/src/components/charts/HRVTrend.tsx",
+      "to": "apps/web/src/lib/paths.ts"
+    },
+    {
+      "from": "apps/web/src/components/charts/NapCalendar.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/charts/NapRecoveryScatter.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/charts/NapRecoveryScatter.tsx",
+      "to": "apps/web/src/lib/analytics/bedtime.ts"
+    },
+    {
+      "from": "apps/web/src/components/charts/NapTrackerCard.tsx",
+      "to": "apps/web/src/lib/analytics/naps.ts"
+    },
+    {
+      "from": "apps/web/src/components/charts/RecoveryReboundCard.tsx",
+      "to": "apps/web/src/lib/analytics/rebound.ts"
+    },
+    {
+      "from": "apps/web/src/components/charts/RespiratoryRateChart.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/charts/SleepConsistencyCard.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/charts/SleepCyclesBarChart.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/charts/SleepDebtChart.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/charts/SleepNeedBreakdown.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/charts/SleepQualityRadar.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/charts/SleepStageDonut.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/charts/SleepStagesChart.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/charts/SleepStagesChart.tsx",
+      "to": "apps/web/src/lib/format.ts"
+    },
+    {
+      "from": "apps/web/src/components/charts/SportFrequencyChart.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/charts/SportFrequencyChart.tsx",
+      "to": "apps/web/src/lib/sport-color.ts"
+    },
+    {
+      "from": "apps/web/src/components/charts/TSBCurve.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/charts/TrendChart.tsx",
+      "to": "apps/web/src/lib/paths.ts"
+    },
+    {
+      "from": "apps/web/src/components/charts/TrendChart.tsx",
+      "to": "apps/web/src/lib/stats.ts"
+    },
+    {
+      "from": "apps/web/src/components/charts/WorkoutDistanceChart.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/charts/WorkoutDistanceChart.tsx",
+      "to": "apps/web/src/lib/sport-color.ts"
+    },
+    {
+      "from": "apps/web/src/components/charts/WorkoutZoneChart.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/charts/Zone2Tracker.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/coach/CoachWorkspace.tsx",
+      "to": "apps/web/src/components/coach/ChatInput.tsx"
+    },
+    {
+      "from": "apps/web/src/components/coach/CoachWorkspace.tsx",
+      "to": "apps/web/src/components/coach/MessageList.tsx"
+    },
+    {
+      "from": "apps/web/src/components/coach/CoachWorkspace.tsx",
+      "to": "apps/web/src/components/coach/SuggestionChips.tsx"
+    },
+    {
+      "from": "apps/web/src/components/coach/CoachWorkspace.tsx",
+      "to": "apps/web/src/components/coach/ThreadSidebar.tsx"
+    },
+    {
+      "from": "apps/web/src/components/coach/CoachWorkspace.tsx",
+      "to": "apps/web/src/components/coach/useCoachThread.ts"
+    },
+    {
+      "from": "apps/web/src/components/coach/MessageBubble.tsx",
+      "to": "apps/web/src/components/coach/useChatSend.ts"
+    },
+    {
+      "from": "apps/web/src/components/coach/MessageList.tsx",
+      "to": "apps/web/src/components/coach/MessageBubble.tsx"
+    },
+    {
+      "from": "apps/web/src/components/coach/MessageList.tsx",
+      "to": "apps/web/src/components/coach/useCoachThread.ts"
+    },
+    {
+      "from": "apps/web/src/components/coach/useChatSend.test.ts",
+      "to": "apps/web/src/components/coach/useChatSend.ts"
+    },
+    {
+      "from": "apps/web/src/components/coach/useCoachThread.test.ts",
+      "to": "apps/web/src/components/coach/useCoachThread.ts"
+    },
+    {
+      "from": "apps/web/src/components/coach/useCoachThread.ts",
+      "to": "apps/web/src/components/coach/useChatSend.ts"
+    },
+    {
+      "from": "apps/web/src/components/coach/useCoachThread.ts",
+      "to": "apps/web/src/components/coach/useThreadList.ts"
+    },
+    {
+      "from": "apps/web/src/components/coach/useThreadList.test.ts",
+      "to": "apps/web/src/components/coach/useThreadList.ts"
+    },
+    {
+      "from": "apps/web/src/components/overview/AIInsightCard.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/overview/KPIStrip.tsx",
+      "to": "apps/web/src/lib/format.ts"
+    },
+    {
+      "from": "apps/web/src/components/overview/KPIStrip.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/overview/PRsCard.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/overview/RecoveryHero.tsx",
+      "to": "apps/web/src/lib/format.ts"
+    },
+    {
+      "from": "apps/web/src/components/overview/RecoveryTrend.tsx",
+      "to": "apps/web/src/lib/paths.ts"
+    },
+    {
+      "from": "apps/web/src/components/overview/RecoveryTrend.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/recovery/DayOfWeekRecovery.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/components/recovery/IllnessSignalCard.tsx",
+      "to": "apps/web/src/lib/analytics/illness.ts"
+    },
+    {
+      "from": "apps/web/src/components/recovery/OvertrainingCard.tsx",
+      "to": "apps/web/src/lib/analytics/ots.ts"
+    },
+    {
+      "from": "apps/web/src/components/recovery/OvertrainingCard.tsx",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/lib/analytics/apnea.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/lib/analytics/bedtime.ts",
+      "to": "apps/web/src/lib/db/recovery.ts"
+    },
+    {
+      "from": "apps/web/src/lib/analytics/bedtime.ts",
+      "to": "apps/web/src/lib/db/sleep.ts"
+    },
+    {
+      "from": "apps/web/src/lib/analytics/cardiacDrift.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/lib/analytics/deepSleep.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/lib/analytics/illness.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/lib/analytics/naps.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/lib/analytics/ots.ts",
+      "to": "apps/web/src/lib/stats.ts"
+    },
+    {
+      "from": "apps/web/src/lib/auth/apple-state.test.ts",
+      "to": "apps/web/src/lib/auth/apple-state.ts"
+    },
+    {
+      "from": "apps/web/src/lib/auth/origin.test.ts",
+      "to": "apps/web/src/lib/auth/origin.ts"
+    },
+    {
+      "from": "apps/web/src/lib/auth.ts",
+      "to": "apps/web/src/lib/db/index.ts"
+    },
+    {
+      "from": "apps/web/src/lib/auth.ts",
+      "to": "apps/web/src/lib/db/integrations.ts"
+    },
+    {
+      "from": "apps/web/src/lib/auth.ts",
+      "to": "apps/web/src/lib/auth/jwt.ts"
+    },
+    {
+      "from": "apps/web/src/lib/auth.ts",
+      "to": "apps/web/src/lib/auth/cookies.ts"
+    },
+    {
+      "from": "apps/web/src/lib/coach/loop.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/lib/coach/loop.ts",
+      "to": "apps/web/src/lib/coach/prompts.ts"
+    },
+    {
+      "from": "apps/web/src/lib/coach/loop.ts",
+      "to": "apps/web/src/lib/coach/tools.ts"
+    },
+    {
+      "from": "apps/web/src/lib/coach/persistence.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/lib/coach/persistence.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/lib/coach/persistence.ts",
+      "to": "apps/web/src/lib/coach/loop.ts"
+    },
+    {
+      "from": "apps/web/src/lib/coach/persistence.ts",
+      "to": "apps/web/src/lib/coach/prompts.ts"
+    },
+    {
+      "from": "apps/web/src/lib/coach/persistence.ts",
+      "to": "apps/web/src/lib/coach/tools.ts"
+    },
+    {
+      "from": "apps/web/src/lib/coach/prompts.test.ts",
+      "to": "apps/web/src/lib/coach/prompts.ts"
+    },
+    {
+      "from": "apps/web/src/lib/coach/prompts.ts",
+      "to": "apps/web/src/lib/coach/goals.ts"
+    },
+    {
+      "from": "apps/web/src/lib/coach/tools.test.ts",
+      "to": "apps/web/src/lib/sync.ts"
+    },
+    {
+      "from": "apps/web/src/lib/coach/tools.test.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/lib/coach/tools.test.ts",
+      "to": "apps/web/src/lib/coach/tools.ts"
+    },
+    {
+      "from": "apps/web/src/lib/coach/tools.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/lib/coach/tools.ts",
+      "to": "apps/web/src/lib/sync.ts"
+    },
+    {
+      "from": "apps/web/src/lib/coach/tools.ts",
+      "to": "apps/web/src/lib/sync-meta.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/auth.ts",
+      "to": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/body.ts",
+      "to": "apps/web/src/lib/db/scoped.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/coach.ts",
+      "to": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/devices.ts",
+      "to": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/integrations.ts",
+      "to": "apps/web/src/lib/crypto/vault.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/integrations.ts",
+      "to": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/journal.ts",
+      "to": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/logs.ts",
+      "to": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/prs.ts",
+      "to": "apps/web/src/lib/db/scoped.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/recovery.ts",
+      "to": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/recovery.ts",
+      "to": "apps/web/src/lib/db/scoped.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/scoped.ts",
+      "to": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/settings.ts",
+      "to": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/sleep.ts",
+      "to": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/sleep.ts",
+      "to": "apps/web/src/lib/db/scoped.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/strain.ts",
+      "to": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/strain.ts",
+      "to": "apps/web/src/lib/db/scoped.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/summary.ts",
+      "to": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/summary.ts",
+      "to": "apps/web/src/lib/db/scoped.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/summary.ts",
+      "to": "apps/web/src/lib/db/recovery.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/summary.ts",
+      "to": "apps/web/src/lib/db/strain.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/summary.ts",
+      "to": "apps/web/src/lib/db/sleep.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/summary.ts",
+      "to": "apps/web/src/lib/db/workouts.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/user_settings.ts",
+      "to": "apps/web/src/lib/crypto/vault.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/user_settings.ts",
+      "to": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/webhook.ts",
+      "to": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/workouts.ts",
+      "to": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "from": "apps/web/src/lib/db/workouts.ts",
+      "to": "apps/web/src/lib/db/scoped.ts"
+    },
+    {
+      "from": "apps/web/src/lib/insights.ts",
+      "to": "streamlit/whoop/db.py"
+    },
+    {
+      "from": "apps/web/src/lib/sync.ts",
+      "to": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "from": "apps/web/src/lib/sync.ts",
+      "to": "apps/web/src/lib/db/integrations.ts"
+    },
+    {
+      "from": "apps/web/src/lib/sync.ts",
+      "to": "apps/web/src/lib/whoop/client.ts"
+    },
+    {
+      "from": "apps/web/src/lib/sync.ts",
+      "to": "apps/web/src/lib/whoop/token.ts"
+    },
+    {
+      "from": "apps/web/src/lib/sync.ts",
+      "to": "apps/web/src/lib/whoop/upsert.ts"
+    },
+    {
+      "from": "apps/web/src/lib/whoop/client.ts",
+      "to": "apps/web/src/lib/whoop/token.ts"
+    },
+    {
+      "from": "apps/web/src/lib/whoop/oauth-state.test.ts",
+      "to": "apps/web/src/lib/whoop/oauth-state.ts"
+    },
+    {
+      "from": "apps/web/src/lib/whoop/oauth-state.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/lib/whoop/signature.test.ts",
+      "to": "apps/web/src/lib/whoop/signature.ts"
+    },
+    {
+      "from": "apps/web/src/lib/whoop/token.ts",
+      "to": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "from": "apps/web/src/lib/whoop/token.ts",
+      "to": "apps/web/src/lib/db/integrations.ts"
+    },
+    {
+      "from": "apps/web/src/lib/whoop/upsert.test.ts",
+      "to": "apps/web/src/lib/whoop/upsert.ts"
+    },
+    {
+      "from": "apps/web/src/lib/whoop/upsert.ts",
+      "to": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "from": "apps/web/src/lib/whoop/webhook-handler.ts",
+      "to": "apps/web/src/lib/db/integrations.ts"
+    },
+    {
+      "from": "apps/web/src/lib/whoop/webhook-handler.ts",
+      "to": "apps/web/src/lib/whoop/client.ts"
+    },
+    {
+      "from": "apps/web/src/lib/whoop/webhook-handler.ts",
+      "to": "apps/web/src/lib/whoop/upsert.ts"
+    },
+    {
+      "from": "apps/web/src/proxy.ts",
+      "to": "apps/web/src/lib/auth/cookies.ts"
+    },
+    {
+      "from": "apps/web/src/proxy.ts",
+      "to": "apps/web/src/lib/auth/origin.ts"
+    }
+  ],
+  "nodes": [
+    {
+      "betweenness": 0.0,
+      "in_degree": 59,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.025437524702125357,
+      "path": "streamlit/whoop/db.py"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 17,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.015658656124905555,
+      "path": "apps/web/src/lib/db/connection.ts"
+    },
+    {
+      "betweenness": 0.004192214790040877,
+      "in_degree": 29,
+      "instability": 0.12121212121212122,
+      "out_degree": 4,
+      "pagerank": 0.008634113097860444,
+      "path": "apps/web/src/lib/auth.ts"
+    },
+    {
+      "betweenness": 0.0015251455468846772,
+      "in_degree": 7,
+      "instability": 0.2222222222222222,
+      "out_degree": 2,
+      "pagerank": 0.004734971631064587,
+      "path": "apps/web/src/lib/db/integrations.ts"
+    },
+    {
+      "betweenness": 0.00004645113340765515,
+      "in_degree": 7,
+      "instability": 0.125,
+      "out_degree": 1,
+      "pagerank": 0.004269124019483806,
+      "path": "apps/web/src/lib/db/scoped.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 6,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0037580231276220706,
+      "path": "apps/web/src/lib/auth/cookies.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 3,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0034675076604864436,
+      "path": "apps/web/src/lib/coach/goals.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 3,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0030423910735645934,
+      "path": "apps/web/src/components/coach/useChatSend.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 2,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0030350902159297223,
+      "path": "apps/web/src/lib/crypto/vault.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 3,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.002792114036712979,
+      "path": "apps/web/src/lib/auth/jwt.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.002552452382577641,
+      "path": "apps/web/src/lib/db/index.ts"
+    },
+    {
+      "betweenness": 0.0006270903010033445,
+      "in_degree": 2,
+      "instability": 0.5,
+      "out_degree": 2,
+      "pagerank": 0.002393539343744185,
+      "path": "apps/web/src/lib/whoop/token.ts"
+    },
+    {
+      "betweenness": 0.00036386721169329866,
+      "in_degree": 4,
+      "instability": 0.3333333333333333,
+      "out_degree": 2,
+      "pagerank": 0.002316146025027604,
+      "path": "apps/web/src/lib/analytics/bedtime.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 5,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.002126623376623377,
+      "path": "apps/web/src/lib/auth/origin.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 4,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.002122681979332802,
+      "path": "apps/web/src/lib/sync-meta.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 2,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0021165087470095692,
+      "path": "apps/web/src/components/coach/useThreadList.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 4,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.00211241279653361,
+      "path": "apps/web/src/lib/format.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 2,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.002080913921604711,
+      "path": "apps/web/src/lib/stats.ts"
+    },
+    {
+      "betweenness": 0.00013935340022296544,
+      "in_degree": 4,
+      "instability": 0.2,
+      "out_degree": 1,
+      "pagerank": 0.0020747768141945776,
+      "path": "apps/web/src/lib/coach/prompts.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 3,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0020664067989426844,
+      "path": "apps/web/src/lib/paths.ts"
+    },
+    {
+      "betweenness": 0.00005032206119162641,
+      "in_degree": 3,
+      "instability": 0.25,
+      "out_degree": 1,
+      "pagerank": 0.001882968376677964,
+      "path": "apps/web/src/lib/whoop/upsert.ts"
+    },
+    {
+      "betweenness": 0.0001741917502787068,
+      "in_degree": 3,
+      "instability": 0.4,
+      "out_degree": 2,
+      "pagerank": 0.001855900119617225,
+      "path": "apps/web/src/components/coach/useCoachThread.ts"
+    },
+    {
+      "betweenness": 0.0001122569057351666,
+      "in_degree": 2,
+      "instability": 0.5,
+      "out_degree": 2,
+      "pagerank": 0.0018037400510673538,
+      "path": "apps/web/src/lib/db/sleep.ts"
+    },
+    {
+      "betweenness": 0.0001122569057351666,
+      "in_degree": 2,
+      "instability": 0.5,
+      "out_degree": 2,
+      "pagerank": 0.0018037400510673538,
+      "path": "apps/web/src/lib/db/recovery.ts"
+    },
+    {
+      "betweenness": 0.00016257896692679303,
+      "in_degree": 3,
+      "instability": 0.25,
+      "out_degree": 1,
+      "pagerank": 0.0017344497607655505,
+      "path": "apps/web/src/lib/whoop/oauth-state.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 3,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0017300014952153111,
+      "path": "apps/web/src/lib/sport-color.ts"
+    },
+    {
+      "betweenness": 0.0001858045336306206,
+      "in_degree": 5,
+      "instability": 0.16666666666666666,
+      "out_degree": 1,
+      "pagerank": 0.0016491167020368156,
+      "path": "apps/web/src/lib/whoop/client.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 3,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.00161825017088175,
+      "path": "apps/web/src/lib/auth/apple-state.ts"
+    },
+    {
+      "betweenness": 0.001149665551839465,
+      "in_degree": 4,
+      "instability": 0.5555555555555556,
+      "out_degree": 5,
+      "pagerank": 0.0016122752807682084,
+      "path": "apps/web/src/lib/sync.ts"
+    },
+    {
+      "betweenness": 0.000023225566703827574,
+      "in_degree": 3,
+      "instability": 0.25,
+      "out_degree": 1,
+      "pagerank": 0.0015250000000000003,
+      "path": "apps/web/src/lib/analytics/illness.ts"
+    },
+    {
+      "betweenness": 0.000023225566703827574,
+      "in_degree": 3,
+      "instability": 0.25,
+      "out_degree": 1,
+      "pagerank": 0.0014931680161943323,
+      "path": "apps/web/src/lib/analytics/apnea.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 2,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0014497607655502395,
+      "path": "apps/web/src/lib/whoop/signature.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 2,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0014029904306220096,
+      "path": "apps/web/src/lib/analytics/rebound.ts"
+    },
+    {
+      "betweenness": 0.000023225566703827574,
+      "in_degree": 2,
+      "instability": 0.3333333333333333,
+      "out_degree": 1,
+      "pagerank": 0.0013711584468163417,
+      "path": "apps/web/src/lib/analytics/naps.ts"
+    },
+    {
+      "betweenness": 0.000023225566703827574,
+      "in_degree": 2,
+      "instability": 0.3333333333333333,
+      "out_degree": 1,
+      "pagerank": 0.0013711584468163417,
+      "path": "apps/web/src/lib/analytics/deepSleep.ts"
+    },
+    {
+      "betweenness": 0.0006619286510590859,
+      "in_degree": 3,
+      "instability": 0.5,
+      "out_degree": 3,
+      "pagerank": 0.0013630543261563001,
+      "path": "apps/web/src/lib/coach/tools.ts"
+    },
+    {
+      "betweenness": 0.00004645113340765515,
+      "in_degree": 2,
+      "instability": 0.3333333333333333,
+      "out_degree": 1,
+      "pagerank": 0.0013277511961722489,
+      "path": "apps/web/src/lib/db/devices.ts"
+    },
+    {
+      "betweenness": 0.0004180602006688963,
+      "in_degree": 1,
+      "instability": 0.75,
+      "out_degree": 3,
+      "pagerank": 0.0013277511961722489,
+      "path": "apps/web/src/app/api/chat/route.ts"
+    },
+    {
+      "betweenness": 0.00004645113340765515,
+      "in_degree": 2,
+      "instability": 0.3333333333333333,
+      "out_degree": 1,
+      "pagerank": 0.0011620215311004785,
+      "path": "apps/web/src/lib/analytics/ots.ts"
+    },
+    {
+      "betweenness": 0.000023225566703827574,
+      "in_degree": 2,
+      "instability": 0.3333333333333333,
+      "out_degree": 1,
+      "pagerank": 0.0011313920454545457,
+      "path": "apps/web/src/lib/analytics/cardiacDrift.ts"
+    },
+    {
+      "betweenness": 0.0004180602006688963,
+      "in_degree": 1,
+      "instability": 0.8333333333333334,
+      "out_degree": 5,
+      "pagerank": 0.0010938995215311006,
+      "path": "apps/web/src/lib/coach/persistence.ts"
+    },
+    {
+      "betweenness": 0.000011612783351913787,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0010892733253588518,
+      "path": "apps/web/src/components/coach/MessageBubble.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 2,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0010735645933014355,
+      "path": "apps/web/src/lib/tz.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 2,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.001008202323991798,
+      "path": "apps/web/src/lib/auth/apple-web.ts"
+    },
+    {
+      "betweenness": 0.0001238696890870804,
+      "in_degree": 2,
+      "instability": 0.6,
+      "out_degree": 3,
+      "pagerank": 0.0009922248803827752,
+      "path": "apps/web/src/lib/whoop/webhook-handler.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 2,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0009573650034176352,
+      "path": "apps/web/src/lib/auth/apple.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 4,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0009389701207883027,
+      "path": "apps/web/src/lib/range.ts"
+    },
+    {
+      "betweenness": 0.00005806391675956894,
+      "in_degree": 4,
+      "instability": 0.3333333333333333,
+      "out_degree": 2,
+      "pagerank": 0.0009389701207883027,
+      "path": "apps/web/src/components/overview/KPIStrip.tsx"
+    },
+    {
+      "betweenness": 0.0001858045336306206,
+      "in_degree": 1,
+      "instability": 0.8333333333333334,
+      "out_degree": 5,
+      "pagerank": 0.0009210526315789475,
+      "path": "apps/web/src/components/coach/CoachWorkspace.tsx"
+    },
+    {
+      "betweenness": 0.000023225566703827574,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0009210526315789475,
+      "path": "apps/web/src/app/(onboarding)/welcome/WelcomeClient.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.75,
+      "out_degree": 3,
+      "pagerank": 0.0009036662679425838,
+      "path": "apps/web/src/lib/coach/loop.ts"
+    },
+    {
+      "betweenness": 0.00012774061687105166,
+      "in_degree": 3,
+      "instability": 0.4,
+      "out_degree": 2,
+      "pagerank": 0.0008835112256164888,
+      "path": "apps/web/src/components/charts/TrendChart.tsx"
+    },
+    {
+      "betweenness": 0.00004645113340765515,
+      "in_degree": 1,
+      "instability": 0.6666666666666666,
+      "out_degree": 2,
+      "pagerank": 0.0008742822966507178,
+      "path": "apps/web/src/components/coach/MessageList.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0008742822966507178,
+      "path": "apps/web/src/components/coach/ChatInput.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0008742822966507178,
+      "path": "apps/web/src/components/coach/ThreadSidebar.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0008742822966507178,
+      "path": "apps/web/src/components/coach/SuggestionChips.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0008702153110047848,
+      "path": "apps/web/src/components/chrome/BottomNav.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0008702153110047848,
+      "path": "apps/web/src/components/chrome/Sidebar.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0008702153110047848,
+      "path": "apps/web/src/components/chrome/TopBar.tsx"
+    },
+    {
+      "betweenness": 0.000023225566703827574,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0008397129186602872,
+      "path": "apps/web/src/app/(dashboard)/logs/SyncLogsTable.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0008397129186602872,
+      "path": "apps/web/src/app/(dashboard)/logs/ChatLogsTable.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0008397129186602872,
+      "path": "apps/web/src/app/(dashboard)/logs/CollapsibleCard.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0008397129186602872,
+      "path": "apps/web/src/app/(dashboard)/logs/RouteLogsTable.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.6666666666666666,
+      "out_degree": 2,
+      "pagerank": 0.0008193779904306221,
+      "path": "apps/web/src/lib/db/workouts.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.6666666666666666,
+      "out_degree": 2,
+      "pagerank": 0.0008193779904306221,
+      "path": "apps/web/src/lib/db/strain.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0008193779904306221,
+      "path": "apps/web/src/components/charts/TSBCurve.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007939593301435408,
+      "path": "apps/web/src/components/charts/Zone2Tracker.tsx"
+    },
+    {
+      "betweenness": 7.741855567942525e-6,
+      "in_degree": 1,
+      "instability": 0.6666666666666666,
+      "out_degree": 2,
+      "pagerank": 0.0007939593301435408,
+      "path": "apps/web/src/components/charts/WorkoutDistanceChart.tsx"
+    },
+    {
+      "betweenness": 7.741855567942525e-6,
+      "in_degree": 1,
+      "instability": 0.6666666666666666,
+      "out_degree": 2,
+      "pagerank": 0.0007939593301435408,
+      "path": "apps/web/src/components/charts/CardiacDriftCard.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007939593301435408,
+      "path": "apps/web/src/components/charts/WorkoutZoneChart.tsx"
+    },
+    {
+      "betweenness": 7.741855567942525e-6,
+      "in_degree": 1,
+      "instability": 0.6666666666666666,
+      "out_degree": 2,
+      "pagerank": 0.0007939593301435408,
+      "path": "apps/web/src/components/charts/SportFrequencyChart.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007731622444541106,
+      "path": "apps/web/src/lib/insights.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007731622444541106,
+      "path": "apps/web/src/components/onboarding/TzBackfill.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007731622444541106,
+      "path": "apps/web/src/components/overview/PRsCard.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007731622444541106,
+      "path": "apps/web/src/components/overview/AIInsightRefreshWatcher.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007731622444541106,
+      "path": "apps/web/src/components/overview/AIInsightCard.tsx"
+    },
+    {
+      "betweenness": 0.000011612783351913787,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007731622444541106,
+      "path": "apps/web/src/components/overview/RecoveryHero.tsx"
+    },
+    {
+      "betweenness": 0.000023225566703827574,
+      "in_degree": 1,
+      "instability": 0.6666666666666666,
+      "out_degree": 2,
+      "pagerank": 0.0007731622444541106,
+      "path": "apps/web/src/components/overview/RecoveryTrend.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007583732057416269,
+      "path": "apps/web/src/components/recovery/SkinTempDeviationCard.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007583732057416269,
+      "path": "apps/web/src/components/charts/StrainRecoveryScatter.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007583732057416269,
+      "path": "apps/web/src/components/charts/RecoveryReboundCard.tsx"
+    },
+    {
+      "betweenness": 0.000011612783351913787,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007583732057416269,
+      "path": "apps/web/src/components/charts/HRVTrend.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007583732057416269,
+      "path": "apps/web/src/components/recovery/IllnessSignalCard.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007583732057416269,
+      "path": "apps/web/src/components/recovery/DayOfWeekRecovery.tsx"
+    },
+    {
+      "betweenness": 0.000023225566703827574,
+      "in_degree": 1,
+      "instability": 0.6666666666666666,
+      "out_degree": 2,
+      "pagerank": 0.0007583732057416269,
+      "path": "apps/web/src/components/recovery/OvertrainingCard.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007583732057416269,
+      "path": "apps/web/src/components/recovery/Spo2TrendCard.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007411667280088334,
+      "path": "apps/web/src/components/charts/SleepNeedBreakdown.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.6666666666666666,
+      "out_degree": 2,
+      "pagerank": 0.0007411667280088334,
+      "path": "apps/web/src/components/charts/NapRecoveryScatter.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.6666666666666666,
+      "out_degree": 2,
+      "pagerank": 0.0007411667280088334,
+      "path": "apps/web/src/components/charts/SleepStagesChart.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007411667280088334,
+      "path": "apps/web/src/components/charts/BedtimePatternsCard.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007411667280088334,
+      "path": "apps/web/src/components/charts/SleepStageDonut.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007411667280088334,
+      "path": "apps/web/src/components/charts/NapCalendar.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007411667280088334,
+      "path": "apps/web/src/components/charts/BedWakeTimeline.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007411667280088334,
+      "path": "apps/web/src/components/charts/SleepConsistencyCard.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007411667280088334,
+      "path": "apps/web/src/components/charts/ApneaRiskCard.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007411667280088334,
+      "path": "apps/web/src/components/charts/RespiratoryRateChart.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007411667280088334,
+      "path": "apps/web/src/components/charts/SleepCyclesBarChart.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007411667280088334,
+      "path": "apps/web/src/components/charts/DeepSleepEfficiencyCard.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007411667280088334,
+      "path": "apps/web/src/components/charts/NapTrackerCard.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007411667280088334,
+      "path": "apps/web/src/components/charts/SleepDebtChart.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007411667280088334,
+      "path": "apps/web/src/components/charts/BedtimeRecoveryScatter.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 1,
+      "instability": 0.5,
+      "out_degree": 1,
+      "pagerank": 0.0007411667280088334,
+      "path": "apps/web/src/components/charts/SleepQualityRadar.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/auth/apple.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/devices/test-push/route.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 1,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/db/body.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/db/integrations.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 2,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/auth/whoop/disconnect/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/db/scoped.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 4,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/admin/webhook/replay/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 2,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/db/user_settings.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 1,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/whoop/signature.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/db/devices.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/push/index.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/db/users.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 2,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/devices/register/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 1,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/whoop/oauth-state.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 2,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/chat/history/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/(dashboard)/settings/page.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 5,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/(dashboard)/logs/page.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/dashboard/today/route.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 3,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/coach/tools.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 1,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/components/coach/useThreadList.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 6,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/db/summary.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "scripts/backfill_sleep_local_times.py"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 2,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/(auth)/signin/page.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/auth/callback/route.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/auth/apple/route.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/(auth)/layout.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/whoop/client.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 1,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/db/auth.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 6,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/auth/callback/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/vitest.config.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 1,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/db/prs.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "streamlit/whoop/__init__.py"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 2,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/devices/test-push/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 1,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/auth/apple-state.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/proxy.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "streamlit/whoop/vault.py"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "infra/terraform/cloud-init.sh"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 2,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/threads/[id]/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 1,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/db/webhook.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 1,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/logs/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/db/workouts.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/sync.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/(onboarding)/layout.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "scripts/migrate-bootstrap-user.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 1,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/components/coach/useCoachThread.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 1,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/db/journal.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "scripts/wal_smoke.py"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/db/coach.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "streamlit/whoop/auth.py"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 3,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/(onboarding)/welcome/page.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 5,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/whoop/webhook/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/scripts/migrate-uid1-to-uid2.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 2,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/me/onboarded/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 2,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/auth/logout/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 3,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/(dashboard)/coach/page.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 4,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/sync/onboarding/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 1,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/db/coach.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 1,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/db/settings.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/test/setup.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 2,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/settings/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "tests/test_integrations.py"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 1,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/whoop/upsert.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "scripts/generate-app-icon.py"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/db/webhook.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/postcss.config.mjs"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "streamlit/whoop/integrations.py"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 1,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/db/logs.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 1,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/components/coach/useChatSend.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 6,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/(dashboard)/strain/page.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 1,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/chat/route.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/auth.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 2,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/proxy.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 5,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/dashboard/today/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/next.config.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "scripts/deploy.sh"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 11,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/(dashboard)/page.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/auth/apple-web/callback/route.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 4,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/auth/apple/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/scripts/backfill-whoop-provider-user-id.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/scripts/smoke-phase-a.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 3,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/connectors/whoop/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/push/apns.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/whoop/webhook-handler.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/auth/apple-web.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 3,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/me/tz/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 1,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/coach/prompts.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/admin/webhook/replay/route.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 3,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/me/coach-goals/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 15,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/(dashboard)/recovery/page.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 4,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/sync/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/scripts/smoke-phase-c.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 1,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/auth/origin.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/db/user_settings.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "scripts/migrate-whoop-tokens.py"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "scripts/zsh-helpers.sh"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/push/apns.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 3,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/auth/apple-web/start/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/lib/db/connection.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/ios/ci_scripts/ci_post_clone.sh"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 2,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/auth/login/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 8,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/(dashboard)/workouts/page.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 7,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/auth/apple-web/callback/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/devices/register/route.test.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 26,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/(dashboard)/sleep/page.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 4,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/(dashboard)/layout.tsx"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 1.0,
+      "out_degree": 2,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/src/app/api/threads/route.ts"
+    },
+    {
+      "betweenness": 0.0,
+      "in_degree": 0,
+      "instability": 0.0,
+      "out_degree": 0,
+      "pagerank": 0.0007177033492822968,
+      "path": "apps/web/eslint.config.mjs"
+    }
+  ],
+  "summary": {
+    "avg_degree": 2.8038277511961724,
+    "cycle_count": 0,
+    "total_edges": 293,
+    "total_nodes": 209
+  }
+}
