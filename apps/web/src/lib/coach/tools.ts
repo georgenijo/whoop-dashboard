@@ -27,6 +27,7 @@ export type CoachToolName =
   | "query_workouts"
   | "query_journal"
   | "query_naps"
+  | "query_daily_snapshot"
   | "trigger_whoop_sync";
 
 type DateRangeInput = {
@@ -128,6 +129,13 @@ export const TOOLS: ToolSchema[] = [
       "Query journal rows for a date range when journal data exists. Returns an empty array when no journal table is available.",
     input_schema: DATE_RANGE_SCHEMA,
     strict: true,
+  },
+  {
+    name: "query_daily_snapshot",
+    description:
+      "Bundled fetch of recovery + sleep + strain + workouts for a date range, in one tool call. Returns the same row shapes as the individual query_* tools under the keys recovery, sleep, strain, workouts (workouts is { rows, _meta } matching query_workouts). Naps and journal are NOT included — use query_naps / query_journal directly when those are the question. Use this for broad 'how am I doing' / daily-status questions to avoid 4 round-trips; use the single-domain tools when the user asks about exactly one area.",
+    input_schema: DATE_RANGE_SCHEMA,
+    strict: true,
     cache_control: { type: "ephemeral", ttl: "1h" },
   },
   {
@@ -205,6 +213,41 @@ function parseDateRangeInput(input: unknown): DateRangeInput {
   }
 
   return { start_date: startDate, end_date: endDate };
+}
+
+// Bundle the workouts payload (rows with local-time fields + _meta) so
+// query_workouts and query_daily_snapshot return byte-identical shapes
+// for that key. Pulled out of the executeTool switch so the snapshot
+// branch doesn't duplicate the tz lookup + row mapping inline.
+function buildWorkoutsPayload(
+  userId: number,
+  startDate: string,
+  endDate: string,
+): { rows: WorkoutRow[]; _meta: { truncated: boolean; total_count: number; returned: number; note?: string } } {
+  const result = getWorkoutsRange(userId, startDate, endDate);
+  // Resolve the user's IANA tz once per call; fall back to UTC if unset
+  // (new users pre-/welcome haven't captured a tz). UTC keeps the field
+  // populated and parseable instead of silently dropping it.
+  const tz = getUserSettings(userId)?.tz ?? "UTC";
+  const rows: WorkoutRow[] = result.rows.map((r) => ({
+    ...r,
+    start_local: formatLocalIso(r.start_utc, tz),
+    end_local: formatLocalIso(r.end_utc, tz),
+  }));
+  const _meta: {
+    truncated: boolean;
+    total_count: number;
+    returned: number;
+    note?: string;
+  } = {
+    truncated: result.truncated,
+    total_count: result.total_count,
+    returned: rows.length,
+  };
+  if (result.truncated) {
+    _meta.note = `Showing the ${rows.length} most recent workouts in this range. Total in range: ${result.total_count}.`;
+  }
+  return { rows, _meta };
 }
 
 // Format a UTC ISO timestamp as a naive local ISO (YYYY-MM-DDTHH:MM:SS) in the
@@ -410,38 +453,21 @@ export async function executeTool(
       return getSleepRange(options.userId, startDate, endDate);
     case "query_strain":
       return getStrainRange(options.userId, startDate, endDate);
-    case "query_workouts": {
-      const result = getWorkoutsRange(options.userId, startDate, endDate);
-      // Resolve the user's IANA tz once per call; fall back to UTC if unset
-      // (new users pre-/welcome haven't captured a tz). UTC keeps the field
-      // populated and parseable instead of silently dropping it.
-      const tz = getUserSettings(options.userId)?.tz ?? "UTC";
-      const rows: WorkoutRow[] = result.rows.map((r) => ({
-        ...r,
-        start_local: formatLocalIso(r.start_utc, tz),
-        end_local: formatLocalIso(r.end_utc, tz),
-      }));
-      const _meta: {
-        truncated: boolean;
-        total_count: number;
-        returned: number;
-        note?: string;
-      } = {
-        truncated: result.truncated,
-        total_count: result.total_count,
-        returned: rows.length,
-      };
-      if (result.truncated) {
-        _meta.note = `Showing the ${rows.length} most recent workouts in this range. Total in range: ${result.total_count}.`;
-      }
-      return { rows, _meta };
-    }
+    case "query_workouts":
+      return buildWorkoutsPayload(options.userId, startDate, endDate);
     case "query_naps":
       return getNaps(options.userId, startDate, endDate);
     case "query_journal":
       // journal has no user_id today — out of scope for Phase D, addressed
       // in Phase E follow-up. Reads remain unscoped.
       return getJournalRange(startDate, endDate);
+    case "query_daily_snapshot":
+      return {
+        recovery: getRecoveryRange(options.userId, startDate, endDate),
+        sleep: getSleepRange(options.userId, startDate, endDate),
+        strain: getStrainRange(options.userId, startDate, endDate),
+        workouts: buildWorkoutsPayload(options.userId, startDate, endDate),
+      };
     default:
       throw new ToolInputError(`Unknown tool: ${name}`, {
         code: "unknown_tool",
