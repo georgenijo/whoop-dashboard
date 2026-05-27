@@ -280,9 +280,9 @@ struct ChatView: View {
             streamingAssistant = nil
         }
 
-        // Captured weakly via the store reference held by the environment; the
-        // thread stays marked in-flight until a `done`/`error` resolves it so a
-        // backgrounded turn is recoverable on foreground.
+        // Strong local handle to the app-scoped store (a class held by the
+        // environment). The thread stays marked in-flight until a `done`/`error`
+        // resolves it, so a backgrounded turn is recoverable on foreground.
         let inFlight = chatInFlight
         var markedThreadId: Int?
         var sawDone = false
@@ -338,10 +338,17 @@ struct ChatView: View {
                     clearInFlight()
                 }
             }
-            // Stream ended without `done` and without an SSE `error`: a transport
-            // drop. Leave the turn in-flight so foreground refresh recovers it;
-            // no banner, no rollback.
-            if !sawDone && !sawError {
+            if sawDone {
+                // Replace the optimistic user row + streamed assistant row with
+                // the persisted transcript, so the user's bubble stops rendering
+                // as pending (dimmed). `done.reply` already showed the final text,
+                // and a failed reload leaves those rows in place (rows non-empty,
+                // so loadError stays hidden) — no worse than before.
+                await loadHistory()
+            } else if !sawError {
+                // Stream ended without `done` or an SSE `error`: a transport drop.
+                // Leave the turn in-flight so foreground refresh recovers it; no
+                // banner, no rollback. Just clear the typing row.
                 rows.removeAll { if case .typing = $0 { return true }; return false }
             }
         } catch APIError.unauthorized {
