@@ -110,8 +110,11 @@ struct SSEError: Decodable {
 @MainActor
 @Observable
 final class ChatInFlightStore {
+    /// Thread ids with a coach turn in progress. A turn is marked when the
+    /// `x-thread-id` header lands and cleared only when the turn is terminal
+    /// (live `done`/`error`, or `CoachApp.reconcileInFlight` after a recovered
+    /// backgrounded turn). Never cleared by a plain history reload.
     var inFlight: Set<Int> = []
-    var pendingNewChat: Bool = false
 
     nonisolated init() {}
 }

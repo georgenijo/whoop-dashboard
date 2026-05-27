@@ -55,12 +55,9 @@ struct CoachApp: App {
                         ClientLogger.shared.lifecycle("foreground")
                         if wasBackgrounded {
                             wasBackgrounded = false
-                            for id in chatInFlight.inFlight {
-                                NotificationCenter.default.post(
-                                    name: .chatThreadNeedsRefresh,
-                                    object: id
-                                )
-                            }
+                            let store = chatInFlight
+                            let client = api
+                            Task { await Self.reconcileInFlight(store: store, api: client) }
                         }
                     case .background:
                         wasBackgrounded = true
@@ -84,6 +81,31 @@ struct CoachApp: App {
                 ClientLogger.shared.lifecycle("signin")
                 PushService.shared.requestAuthorizationIfNeeded()
             })
+        }
+    }
+
+    /// On foreground, reconcile every thread left mid-turn by a backgrounded or
+    /// dropped send. A turn is terminal once the server has persisted an
+    /// assistant reply as the last message; only then do we clear the in-flight
+    /// marker and tell any live ChatView to refresh. Threads still running
+    /// server-side stay marked and are retried on the next foreground, so a
+    /// reply that lands while we were backgrounded is never lost. Owned here at
+    /// app scope so recovery works regardless of which screen is mounted.
+    @MainActor
+    private static func reconcileInFlight(store: ChatInFlightStore, api: APIClient) async {
+        let ids = store.inFlight
+        for id in ids {
+            do {
+                let detail = try await ChatService(api: api).threadDetail(id: id)
+                if detail.messages.last?.role == .assistant {
+                    store.inFlight.remove(id)
+                    NotificationCenter.default.post(name: .chatThreadNeedsRefresh, object: id)
+                }
+                // Else: turn still running server-side. Keep the marker; the
+                // next foreground retries.
+            } catch {
+                // Transient (offline / 5xx). Keep the marker; retry next foreground.
+            }
         }
     }
 }

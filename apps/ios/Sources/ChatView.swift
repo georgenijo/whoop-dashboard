@@ -245,9 +245,11 @@ struct ChatView: View {
         do {
             let detail = try await ChatService(api: api).threadDetail(id: threadId)
             rows = detail.messages.map { .persisted($0) }
-            if !isSending {
-                chatInFlight.inFlight.remove(threadId)
-            }
+            // In-flight removal is NOT owned here. The live turn clears it in
+            // send() on done/error; a turn recovered after backgrounding is
+            // cleared by CoachApp.reconcileInFlight once it is terminal. A bare
+            // history fetch must not drop the marker — the turn may still be
+            // running server-side, and clearing early would lose the reply.
         } catch APIError.unauthorized {
             loadError = "Session expired. Sign in again."
         } catch APIError.network(let err) {
