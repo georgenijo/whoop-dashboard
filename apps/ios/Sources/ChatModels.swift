@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 struct ChatThread: Decodable, Identifiable, Hashable {
     let id: Int
@@ -56,5 +57,76 @@ struct ChatSendResponse: Decodable {
     enum CodingKeys: String, CodingKey {
         case threadId = "thread_id"
         case reply
+    }
+}
+
+enum ChatStreamEvent {
+    case threadId(Int)
+    case textDelta(String)
+    case toolUseStart(name: String)
+    case toolUseEnd(name: String, status: String, rows: Int?, durationMs: Int, error: String?)
+    case toolProgress(tool: String, stage: String, message: String?)
+    case done(reply: String)
+    case error(kind: String, message: String, origin: String?)
+}
+
+struct SSETextDelta: Decodable {
+    let text: String
+}
+
+struct SSEToolUseStart: Decodable {
+    let name: String
+}
+
+struct SSEToolUseEnd: Decodable {
+    let name: String
+    let durationMs: Int
+    let rows: Int?
+    let status: String
+    let error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case name, rows, status, error
+        case durationMs = "duration_ms"
+    }
+}
+
+struct SSEToolProgress: Decodable {
+    let tool: String
+    let stage: String
+    let message: String?
+}
+
+struct SSEDone: Decodable {
+    let reply: String
+}
+
+struct SSEError: Decodable {
+    let kind: String
+    let message: String
+    let origin: String?
+}
+
+@MainActor
+@Observable
+final class ChatInFlightStore {
+    var inFlight: Set<Int> = []
+    var pendingNewChat: Bool = false
+
+    nonisolated init() {}
+}
+
+extension Notification.Name {
+    static let chatThreadNeedsRefresh = Notification.Name("com.georgenijo.coach.chatThreadNeedsRefresh")
+}
+
+private struct ChatInFlightKey: EnvironmentKey {
+    static let defaultValue = ChatInFlightStore()
+}
+
+extension EnvironmentValues {
+    var chatInFlight: ChatInFlightStore {
+        get { self[ChatInFlightKey.self] }
+        set { self[ChatInFlightKey.self] = newValue }
     }
 }

@@ -94,6 +94,73 @@ final class APIClient {
         return try await execute(request, path: "/api/sync")
     }
 
+    func openSSE<U: Encodable>(
+        _ path: String,
+        query: [URLQueryItem]? = nil,
+        body: U
+    ) async throws -> (headers: HTTPURLResponse, lines: AsyncLineSequence<URLSession.AsyncBytes>) {
+        let bodyData: Data
+        do {
+            bodyData = try encoder.encode(body)
+        } catch {
+            ClientLogger.shared.error(
+                "api_failure",
+                details: ["endpoint": path, "stage": "encode", "error": String(describing: error)]
+            )
+            throw APIError.decode(error)
+        }
+        var request = makeRequest(path: path, query: query, method: "POST", bodyData: bodyData)
+        request.timeoutInterval = 130
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+
+        let bytes: URLSession.AsyncBytes
+        let response: URLResponse
+        do {
+            (bytes, response) = try await session.bytes(for: request)
+        } catch {
+            ClientLogger.shared.error(
+                "api_failure",
+                details: ["endpoint": path, "error": String(describing: error)]
+            )
+            throw APIError.network(error)
+        }
+
+        guard let http = response as? HTTPURLResponse else {
+            ClientLogger.shared.error(
+                "api_failure",
+                details: ["endpoint": path, "error": "non-http response"]
+            )
+            throw APIError.badResponse
+        }
+
+        switch http.statusCode {
+        case 200..<300:
+            return (http, bytes.lines)
+        case 401:
+            if request.value(forHTTPHeaderField: "Authorization") != nil {
+                await handleUnauthorized()
+            }
+            throw APIError.unauthorized
+        default:
+            var preview = ""
+            var count = 0
+            for try await line in bytes.lines {
+                preview += line + "\n"
+                count += 1
+                if preview.count > 500 || count > 20 { break }
+            }
+            ClientLogger.shared.warn(
+                "api_non2xx",
+                details: [
+                    "endpoint": path,
+                    "status": http.statusCode,
+                    "body_preview": String(preview.prefix(500)),
+                ]
+            )
+            throw APIError.serverError(http.statusCode)
+        }
+    }
+
     private func makeRequest(
         path: String,
         query: [URLQueryItem]?,

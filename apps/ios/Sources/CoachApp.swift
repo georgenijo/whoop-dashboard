@@ -19,6 +19,8 @@ struct CoachApp: App {
     }()
 
     private let api = APIClient()
+    @State private var chatInFlight = ChatInFlightStore()
+    @State private var wasBackgrounded = false
 
     init() {
         NSSetUncaughtExceptionHandler { exception in
@@ -37,6 +39,7 @@ struct CoachApp: App {
         WindowGroup {
             content
                 .environment(\.api, api)
+                .environment(\.chatInFlight, chatInFlight)
                 .preferredColorScheme(.dark)
                 .onReceive(NotificationCenter.default.publisher(for: .apiUnauthorized)) { _ in
                     isSignedIn = false
@@ -50,7 +53,17 @@ struct CoachApp: App {
                     switch newPhase {
                     case .active:
                         ClientLogger.shared.lifecycle("foreground")
+                        if wasBackgrounded {
+                            wasBackgrounded = false
+                            for id in chatInFlight.inFlight {
+                                NotificationCenter.default.post(
+                                    name: .chatThreadNeedsRefresh,
+                                    object: id
+                                )
+                            }
+                        }
                     case .background:
+                        wasBackgrounded = true
                         ClientLogger.shared.lifecycle("background")
                     default:
                         break
