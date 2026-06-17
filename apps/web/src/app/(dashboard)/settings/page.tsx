@@ -127,6 +127,9 @@ export default function SettingsPage() {
   const [byokSaving, setByokSaving] = useState(false);
   const [byokClearing, setByokClearing] = useState(false);
   const [byokError, setByokError] = useState<ByokError | null>(null);
+  const [modelPref, setModelPref] = useState<string>("anthropic:claude-sonnet-4-6");
+  const [cursorAvailable, setCursorAvailable] = useState(false);
+  const [modelSaving, setModelSaving] = useState(false);
 
   const refreshWhoop = useCallback(() => {
     // Promise chain (not async/await) so the function returns synchronously
@@ -159,10 +162,14 @@ export default function SettingsPage() {
       .then((d: {
         system_prompt: string;
         default_system_prompt: string;
+        model_pref?: string;
+        cursor_available?: boolean;
       }) => {
         setSystemPrompt(d.system_prompt);
         setSavedSystemPrompt(d.system_prompt);
         setDefaultSystemPrompt(d.default_system_prompt);
+        if (d.model_pref) setModelPref(d.model_pref);
+        setCursorAvailable(Boolean(d.cursor_available));
       })
       .catch(() => {});
 
@@ -262,6 +269,30 @@ export default function SettingsPage() {
         return "Couldn't reach Anthropic to verify the key. Try again in a moment.";
       case "request_failed":
         return `Request failed: ${err.message}`;
+    }
+  }
+
+  async function saveModelPref(next: string) {
+    if (next === modelPref) return;
+    const prev = modelPref;
+    setModelPref(next); // optimistic
+    setModelSaving(true);
+    try {
+      const r = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model_pref: next }),
+      });
+      if (!r.ok) {
+        setModelPref(prev);
+      } else {
+        const d = (await r.json()) as { model_pref?: string };
+        if (d.model_pref) setModelPref(d.model_pref);
+      }
+    } catch {
+      setModelPref(prev);
+    } finally {
+      setModelSaving(false);
     }
   }
 
@@ -615,6 +646,48 @@ export default function SettingsPage() {
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="card">
+        <div className="card-head">
+          <div className="card-title">Coach model</div>
+          <span className="card-sub">Which model answers in the coach</span>
+        </div>
+        <Row
+          isFirst
+          label="Model"
+          description={
+            cursorAvailable
+              ? "Claude is the default. Cursor Composer is experimental."
+              : "Cursor Composer is unavailable on this server."
+          }
+        >
+          <select
+            value={modelPref}
+            disabled={modelSaving}
+            onChange={(e) => saveModelPref(e.target.value)}
+            style={{
+              background: "rgba(0,0,0,0.25)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 6,
+              color: "var(--fg-0)",
+              padding: "6px 10px",
+              fontSize: 12,
+              fontFamily: "var(--font-sans)",
+              cursor: modelSaving ? "default" : "pointer",
+              outline: "none",
+            }}
+          >
+            <option value="anthropic:claude-sonnet-4-6">
+              Claude Sonnet 4.6 (default)
+            </option>
+            {cursorAvailable && (
+              <option value="cursor:composer-2.5">
+                Cursor Composer 2.5 (experimental)
+              </option>
+            )}
+          </select>
+        </Row>
       </div>
 
       <div className="card">

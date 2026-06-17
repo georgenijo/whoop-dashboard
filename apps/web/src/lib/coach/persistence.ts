@@ -18,6 +18,8 @@ import {
 } from "./loop";
 import { TITLE_MODEL, TITLE_SYSTEM_PROMPT } from "./prompts";
 import { type ToolDetail, chatLogToolSummaries } from "./tools";
+import { resolveCoachProvider } from "./provider";
+import { runCursorTurn } from "./cursor-loop";
 import { forModule } from "@/lib/logger";
 
 const log = forModule("coach.persistence");
@@ -70,6 +72,7 @@ export async function runAndPersistCoachTurn(
   };
   const detailState: DetailState = { iterations: 0 };
   const accumulator = handle?.accumulator;
+  const selection = resolveCoachProvider(userId);
 
   const buildDetails = () =>
     JSON.stringify({
@@ -79,22 +82,37 @@ export async function runAndPersistCoachTurn(
       tools: chatLogToolSummaries(toolDetails),
       usage,
       thread_id: thread.id,
+      provider: selection.provider,
+      model: selection.model,
     });
 
   try {
-    const result = await runAnthropicSdk(
-      userId,
-      thread.id,
-      lastUser,
-      conversation,
-      toolDetails,
-      usage,
-      detailState,
-      apiKey,
-      apiKeyOrigin,
-      options,
-      accumulator
-    );
+    const result =
+      selection.provider === "cursor"
+        ? await runCursorTurn({
+            userId,
+            threadId: thread.id,
+            newUserText: lastUser,
+            conversation,
+            toolDetails,
+            usage,
+            detailState,
+            options,
+            accumulator,
+          })
+        : await runAnthropicSdk(
+            userId,
+            thread.id,
+            lastUser,
+            conversation,
+            toolDetails,
+            usage,
+            detailState,
+            apiKey,
+            apiKeyOrigin,
+            options,
+            accumulator
+          );
     detailState.iterations = result.iterations;
     addChatMessages(thread.id, result.messages);
     handle?.markCommitted();

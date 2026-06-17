@@ -1,5 +1,6 @@
 import { APIError, APIConnectionError } from "@anthropic-ai/sdk";
 import { BadApiKeyError } from "./api-key";
+import { CursorAgentError, MissingCursorKeyError } from "./cursor-key";
 
 export type ChatErrorKind =
   | "bad_api_key"
@@ -25,6 +26,37 @@ function isCreditBalanceError(err: APIError): boolean {
 }
 
 export function classifyChatError(err: unknown): ClassifiedChatError {
+  if (err instanceof MissingCursorKeyError) {
+    return {
+      status: 503,
+      kind: "server_error",
+      message:
+        "The Cursor coach isn't configured. Switch to Claude in Settings, or contact the operator.",
+    };
+  }
+
+  if (err instanceof CursorAgentError) {
+    if (err.reason === "auth") {
+      return {
+        status: 502,
+        kind: "upstream_error",
+        message: "The Cursor coach key was rejected. Contact the operator.",
+      };
+    }
+    if (err.reason === "timeout") {
+      return {
+        status: 504,
+        kind: "upstream_error",
+        message: "The Cursor coach took too long. Try again.",
+      };
+    }
+    return {
+      status: 502,
+      kind: "upstream_error",
+      message: "The Cursor coach hit an error. Try again.",
+    };
+  }
+
   if (err instanceof BadApiKeyError) {
     return {
       status: 401,

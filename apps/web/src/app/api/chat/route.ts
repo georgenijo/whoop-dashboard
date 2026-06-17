@@ -12,6 +12,7 @@ import {
   runAndPersistCoachTurn,
   titleChatThread,
 } from "@/lib/coach/persistence";
+import { resolveCoachProvider } from "@/lib/coach/provider";
 import { classifyChatError } from "@/lib/coach/error-mapping";
 import { forModule } from "@/lib/logger";
 
@@ -101,27 +102,34 @@ export async function POST(req: Request) {
   try {
     const { user, source } = await requireAuth(req);
 
-    // Resolve the Anthropic API key BEFORE parsing the request body or
-    // creating a thread — a missing key is a configuration failure, not a
-    // chat error, and surfacing it as a 503 keeps the chat_threads table
-    // free of empty "ghost" threads created right before a 503.
-    let apiKey: string;
-    let apiKeyOrigin: ApiKeyOrigin;
+    // Provider selection drives which key is mandatory. Anthropic (the
+    // default) requires its key up front — a missing key is a configuration
+    // failure surfaced as 503, which also keeps the chat_threads table free of
+    // empty "ghost" threads. The Cursor provider uses the shared
+    // CURSOR_API_KEY (already validated inside resolveCoachProvider) and only
+    // needs an Anthropic key opportunistically, for auto-titling.
+    const selection = resolveCoachProvider(user.id);
+    let apiKey: string | null = null;
+    let apiKeyOrigin: ApiKeyOrigin = "env";
     try {
       const resolved = resolveApiKeyForUser(user.id);
       apiKey = resolved.key;
       apiKeyOrigin = resolved.origin;
     } catch (err) {
       if (err instanceof MissingApiKeyError) {
-        return Response.json(
-          {
-            error:
-              "No Anthropic API key configured. Add a personal key in Settings or set ANTHROPIC_API_KEY on the server.",
-          },
-          { status: 503 },
-        );
+        if (selection.provider === "anthropic") {
+          return Response.json(
+            {
+              error:
+                "No Anthropic API key configured. Add a personal key in Settings or set ANTHROPIC_API_KEY on the server.",
+            },
+            { status: 503 },
+          );
+        }
+        // Cursor provider: Anthropic key is optional (used only for auto-title).
+      } else {
+        throw err;
       }
-      throw err;
     }
 
     const { lastUser, requestedThreadId, days } = await parseChatRequest(req);
@@ -149,13 +157,14 @@ export async function POST(req: Request) {
           conversation,
           days,
           source,
-          apiKey,
+          apiKey ?? "",
           apiKeyOrigin,
           { signal: req.signal },
         );
-        if (shouldAutoTitle) {
+        if (shouldAutoTitle && apiKey) {
+          const titleKey = apiKey;
           after(() => {
-            void titleChatThread(thread.id, lastUser, apiKey);
+            void titleChatThread(thread.id, lastUser, titleKey);
           });
         }
         return Response.json({ thread_id: thread.id, reply });
@@ -212,7 +221,7 @@ export async function POST(req: Request) {
             conversation,
             days,
             source,
-            apiKey,
+            apiKey ?? "",
             apiKeyOrigin,
             {
               signal: abortController.signal,
@@ -242,9 +251,10 @@ export async function POST(req: Request) {
           }
 
           send("done", { reply });
-          if (shouldAutoTitle) {
+          if (shouldAutoTitle && apiKey) {
+            const titleKey = apiKey;
             after(() => {
-              void titleChatThread(thread.id, lastUser, apiKey);
+              void titleChatThread(thread.id, lastUser, titleKey);
             });
           }
           close();
