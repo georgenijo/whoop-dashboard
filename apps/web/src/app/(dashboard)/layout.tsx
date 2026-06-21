@@ -7,6 +7,7 @@ import Sidebar from "@/components/chrome/Sidebar";
 import TopBar from "@/components/chrome/TopBar";
 import BottomNav from "@/components/chrome/BottomNav";
 import ClientLogBootstrap from "@/components/ClientLogBootstrap";
+import WebVitalsReporter from "@/components/WebVitalsReporter";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { addRouteLog } from "@/lib/db";
 import "../globals.css";
@@ -79,6 +80,7 @@ export default async function RootLayout({
     >
       <body>
         <ClientLogBootstrap />
+        <WebVitalsReporter />
         <div className="aurora" aria-hidden />
         <div className="app">
           <Suspense fallback={null}>

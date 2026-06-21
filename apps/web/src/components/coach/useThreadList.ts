@@ -46,18 +46,22 @@ async function pollThreads(setThreads: SetThreads, isActive: () => boolean) {
   }
 }
 
+// Event-driven thread-list refresh. Replaces a 5s interval poll that hit
+// /api/threads forever while /coach was open. The list only changes on events
+// we already observe: sends (useChatSend calls refreshThreads on completion,
+// which also picks up the auto-title now delivered on-stream), create/delete
+// (local), and returning to the tab. So refresh on mount + focus/visibility,
+// and let those other paths cover the rest — no standing interval.
 function watchThreads(setThreads: SetThreads) {
   let cancelled = false;
   const isActive = () => !cancelled;
   const refreshWhenVisible = () => void pollThreads(setThreads, isActive);
 
   void pollThreads(setThreads, isActive);
-  const timer = window.setInterval(() => void pollThreads(setThreads, isActive), 5000);
   document.addEventListener("visibilitychange", refreshWhenVisible);
   window.addEventListener("focus", refreshWhenVisible);
   return () => {
     cancelled = true;
-    window.clearInterval(timer);
     document.removeEventListener("visibilitychange", refreshWhenVisible);
     window.removeEventListener("focus", refreshWhenVisible);
   };

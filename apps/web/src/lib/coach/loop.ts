@@ -26,6 +26,13 @@ const CACHE_EPHEMERAL = { type: "ephemeral", ttl: "1h" } as const;
 export const MAX_TOOL_ITERATIONS = 8;
 export const MAX_OUTPUT_TOKENS = 16384;
 
+// Throttle for keep-alive heartbeats during silent model phases (extended
+// thinking, tool-input JSON streaming). Those deltas are intentionally not
+// forwarded as text, so they emit zero SSE bytes — long enough and the proxy
+// (Cloudflare ~100s) or the iOS 130s request timeout drops the connection
+// before `done`. A 10s heartbeat keeps the wire warm at a cost of a few bytes.
+const HEARTBEAT_THROTTLE_MS = 10_000;
+
 export type Usage = {
   input_tokens_total: number;
   output_tokens_total: number;
@@ -40,6 +47,13 @@ export type DetailState = {
 
 export type CoachStreamHandlers = ToolProgressHandlers & {
   onTextDelta?: (text: string) => void;
+  /**
+   * Fired on a throttled cadence while the model emits non-text deltas
+   * (thinking, tool-input JSON) that produce no SSE bytes of their own. Lets
+   * the route push a keep-alive so the streaming connection does not idle long
+   * enough for Cloudflare or the iOS request timeout to drop it before `done`.
+   */
+  onHeartbeat?: () => void;
 };
 
 export type RunAnthropicOptions = CoachStreamHandlers & {
@@ -185,8 +199,23 @@ async function streamMessage(
     signal: options.signal,
     headers: { "anthropic-beta": "extended-cache-ttl-2025-04-11" },
   });
+  let lastHeartbeat = 0;
   for await (const event of stream) {
     emitStreamProgress(event, options);
+    // Thinking + tool-input deltas stream continuously but emit no SSE bytes
+    // (we only forward text_delta). Relay a throttled heartbeat on those so a
+    // long silent thinking window can't idle the connection to death.
+    if (
+      options.onHeartbeat &&
+      event.type === "content_block_delta" &&
+      event.delta.type !== "text_delta"
+    ) {
+      const now = Date.now();
+      if (now - lastHeartbeat >= HEARTBEAT_THROTTLE_MS) {
+        lastHeartbeat = now;
+        options.onHeartbeat();
+      }
+    }
   }
 
   const response = await stream.finalMessage();
