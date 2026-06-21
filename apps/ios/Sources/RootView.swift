@@ -5,35 +5,30 @@ struct RootView: View {
 
     var body: some View {
         ZStack {
-            AmbientAurora()
+            AmbientAurora(intensity: .stealth)
 
             TabView {
-                DashboardView(onSignOut: onSignOut)
+                DashboardView()
                     .tabItem {
-                        Label("Dashboard", systemImage: "square.grid.2x2.fill")
-                    }
-
-                RecoveryView()
-                    .tabItem {
-                        Label("Recovery", systemImage: "waveform.path.ecg")
-                    }
-
-                SleepView()
-                    .tabItem {
-                        Label("Sleep", systemImage: "moon.fill")
-                    }
-
-                StrainView()
-                    .tabItem {
-                        Label("Strain", systemImage: "flame.fill")
+                        Label("Home", systemImage: "house.fill")
                     }
 
                 CoachView()
                     .tabItem {
                         Label("Coach", systemImage: "sparkles")
                     }
+
+                PlansView()
+                    .tabItem {
+                        Label("Plans", systemImage: "figure.strengthtraining.traditional")
+                    }
+
+                SettingsView(onSignOut: onSignOut)
+                    .tabItem {
+                        Label("Settings", systemImage: "gearshape.fill")
+                    }
             }
-            .tint(Theme.Palette.brandStrain)
+            .tint(Theme.Palette.recovery)
         }
         .preferredColorScheme(.dark)
     }

@@ -4,52 +4,38 @@ struct AIInsightCardView: View {
     let insight: DashboardPayload.AIInsight
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            HStack(spacing: 8) {
-                PulsingDot()
-                Text("COACH")
-                    .font(Theme.FontStyle.sans(10, weight: .semibold))
-                    .tracking(1.4)
-                    .foregroundStyle(Theme.Palette.ai)
-                Spacer()
-                if insight.isStale {
-                    Text("STALE")
-                        .font(Theme.FontStyle.sans(9, weight: .bold))
-                        .tracking(1.0)
-                        .foregroundStyle(Theme.Palette.warning)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Theme.Palette.warning.opacity(0.18), in: Capsule())
-                }
-            }
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "sparkle")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.Palette.ai)
+                .padding(.top, 2)
 
             if let text = insight.text {
                 MarkdownView(content: text)
-                    .font(Theme.FontStyle.sans(14))
-                    .foregroundStyle(Theme.Palette.fg0)
+                    .font(Theme.FontStyle.sans(12.5))
+                    .foregroundStyle(Theme.Palette.fg2)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                Text("Not yet generated")
-                    .font(Theme.FontStyle.sans(13))
-                    .foregroundStyle(Theme.Palette.fg2)
+                Text("No insight yet")
+                    .font(Theme.FontStyle.sans(12.5))
+                    .foregroundStyle(Theme.Palette.fg3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if insight.isStale {
+                Text("stale")
+                    .font(Theme.FontStyle.mono(9))
+                    .foregroundStyle(Theme.Palette.fg4)
+                    .padding(.top, 2)
             }
         }
-        .glassCard(tint: .ai, padding: Theme.Spacing.md)
-    }
-}
-
-private struct PulsingDot: View {
-    @State private var pulse = false
-
-    var body: some View {
-        Circle()
-            .fill(Theme.Palette.ai)
-            .frame(width: 7, height: 7)
-            .shadow(color: Theme.Palette.ai, radius: 6)
-            .shadow(color: Theme.Palette.ai.opacity(0.4), radius: 12)
-            .scaleEffect(pulse ? 0.8 : 1.0)
-            .opacity(pulse ? 0.55 : 1.0)
-            .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true), value: pulse)
-            .onAppear { pulse = true }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(Color.white.opacity(0.025))
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.lg)
+                .strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
     }
 }

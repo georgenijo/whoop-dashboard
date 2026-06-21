@@ -78,24 +78,25 @@ struct ChatView: View {
 
     private var toolChipsBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 ForEach(activeTools) { chip in
                     HStack(spacing: 6) {
-                        ProgressView()
-                            .controlSize(.mini)
-                            .tint(Theme.Palette.ai)
+                        Circle()
+                            .fill(Theme.Palette.recovery)
+                            .frame(width: 5, height: 5)
+                            .shadow(color: Theme.Palette.recovery.opacity(0.7), radius: 3)
                         Text(chip.stage.map { "\(chip.name) · \($0)" } ?? chip.name)
-                            .font(Theme.FontStyle.mono(10.5))
+                            .font(Theme.FontStyle.mono(10))
                             .foregroundStyle(Theme.Palette.fg2)
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Theme.Palette.ai.opacity(0.1), in: Capsule())
-                    .overlay(Capsule().strokeBorder(Theme.Palette.ai.opacity(0.22), lineWidth: 1))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 3)
+                    .background(Theme.Palette.ai.opacity(0.07), in: Capsule())
+                    .overlay(Capsule().strokeBorder(Theme.Palette.ai.opacity(0.18), lineWidth: 1))
                 }
             }
             .padding(.horizontal, Theme.Spacing.md)
-            .padding(.vertical, 8)
+            .padding(.vertical, 6)
         }
     }
 
@@ -152,13 +153,14 @@ struct ChatView: View {
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(spacing: 10) {
+                    LazyVStack(spacing: 14) {
                         ForEach(rows) { row in
                             MessageBubble(row: row)
                                 .id(row.id)
                         }
                     }
-                    .padding(Theme.Spacing.md)
+                    .padding(.horizontal, Theme.Spacing.md)
+                    .padding(.vertical, Theme.Spacing.lg)
                 }
                 .scrollContentBackground(.hidden)
                 .onChange(of: rows.last?.id) { _, newLastId in
@@ -470,15 +472,14 @@ private struct MessageBubble: View {
             bubble(role: .assistant, content: content, dimmed: false)
         case .typing:
             HStack(spacing: 8) {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(Theme.Palette.ai)
-                Text("Thinking…")
+                ThinkingDots()
+                Text("thinking…")
                     .font(Theme.FontStyle.sans(11))
-                    .foregroundStyle(Theme.Palette.fg2)
+                    .foregroundStyle(Theme.Palette.fg3)
                 Spacer()
             }
             .padding(.horizontal, 6)
+            .padding(.vertical, 2)
         }
     }
 
@@ -487,8 +488,8 @@ private struct MessageBubble: View {
         HStack {
             if role == .user { Spacer(minLength: 40) }
             bubbleContent(role: role, content: content)
-                .padding(.horizontal, 13)
-                .padding(.vertical, 10)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
                 .background(bubbleBackground(role: role, dimmed: dimmed))
                 .overlay(bubbleBorder(role: role))
                 .foregroundStyle(role == .user ? Theme.Palette.fg0 : Theme.Palette.fg1)
@@ -534,6 +535,29 @@ private struct MessageBubble: View {
         } else {
             UnevenRoundedRectangle(cornerRadii: .init(topLeading: 14, bottomLeading: 4, bottomTrailing: 14, topTrailing: 14))
         }
+    }
+}
+
+private struct ThinkingDots: View {
+    @State private var animating = false
+
+    var body: some View {
+        HStack(spacing: 3) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle()
+                    .fill(Theme.Palette.ai)
+                    .frame(width: 5, height: 5)
+                    .opacity(animating ? 1 : 0.3)
+                    .offset(y: animating ? -2 : 0)
+                    .animation(
+                        .easeInOut(duration: 0.6)
+                            .repeatForever()
+                            .delay(Double(i) * 0.18),
+                        value: animating
+                    )
+            }
+        }
+        .onAppear { animating = true }
     }
 }
 
