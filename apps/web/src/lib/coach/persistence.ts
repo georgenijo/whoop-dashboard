@@ -17,6 +17,7 @@ import {
   textFromContent,
 } from "./loop";
 import { TITLE_MODEL, TITLE_SYSTEM_PROMPT } from "./prompts";
+import { deriveTitleFromText } from "./title";
 import { type ToolDetail, chatLogToolSummaries } from "./tools";
 import { resolveCoachProvider } from "./provider";
 import { runCursorTurn } from "./cursor-loop";
@@ -154,6 +155,9 @@ export async function titleChatThread(
   firstUserText: string,
   apiKey: string,
 ): Promise<void> {
+  // Prefer an LLM-generated title; fall back to a derived one so a thread is
+  // always named even when Anthropic is unavailable. Never throws.
+  let title = "";
   try {
     const client = new Anthropic({ apiKey });
     const response = await client.messages.create({
@@ -167,13 +171,10 @@ export async function titleChatThread(
         },
       ],
     });
-    const title = textFromContent(response.content)
+    title = textFromContent(response.content)
       .replace(/^['"`]+|['"`]+$/g, "")
       .trim()
       .slice(0, 80);
-    if (title) {
-      setChatThreadTitle(threadId, title);
-    }
   } catch (err) {
     log.warn(
       {
@@ -182,5 +183,9 @@ export async function titleChatThread(
       },
       "title_failed",
     );
+  }
+  if (!title) title = deriveTitleFromText(firstUserText);
+  if (title) {
+    setChatThreadTitle(threadId, title);
   }
 }
