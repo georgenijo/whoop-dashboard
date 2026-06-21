@@ -26,9 +26,17 @@ type Bucket = { tokens: number; lastRefill: number };
 const buckets = new Map<number, Bucket>();
 const REFILL_PER_MS = 20 / 1000;
 const MAX_TOKENS = 20;
+const BUCKET_TTL_MS = 60_000;
 
 function takeToken(userId: number): boolean {
   const now = Date.now();
+  // Lazy eviction so the per-user bucket map can't grow unbounded across many
+  // tenants. Only sweeps once the map is non-trivially large.
+  if (buckets.size > 1000) {
+    for (const [id, bucket] of buckets) {
+      if (now - bucket.lastRefill > BUCKET_TTL_MS) buckets.delete(id);
+    }
+  }
   const b = buckets.get(userId) ?? { tokens: MAX_TOKENS, lastRefill: now };
   const elapsed = now - b.lastRefill;
   b.tokens = Math.min(MAX_TOKENS, b.tokens + elapsed * REFILL_PER_MS);
