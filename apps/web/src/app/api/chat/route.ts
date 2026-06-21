@@ -20,8 +20,19 @@ const chatLog = forModule("api.chat");
 
 // Bare SSE comment line. Ignored by both the web (`readChatStream`) and iOS
 // (`ChatService`) parsers, but the bytes keep the streaming connection from
-// idling out during silent model-thinking windows. See loop.ts onHeartbeat.
+// idling out during silent windows — model thinking (Anthropic OR Cursor
+// Composer, which streams via a subprocess and goes quiet during startup +
+// thinking) and tool execution. Provider-agnostic because it lives here, above
+// the provider dispatch, rather than inside a single provider's loop.
 const SSE_HEARTBEAT = new TextEncoder().encode(": hb\n\n");
+
+// Silence watchdog. If no real SSE bytes have gone out for HEARTBEAT_IDLE_MS,
+// emit a heartbeat. Reset by every send, so a chatty stream never sees one —
+// this is event-driven on the *absence* of activity, not a blind periodic
+// timer. 8s gives wide margin under Cloudflare's ~100s idle window and the iOS
+// 130s request timeout.
+const HEARTBEAT_IDLE_MS = 8000;
+const HEARTBEAT_CHECK_MS = 4000;
 
 // How long the stream will wait on the parallel auto-title before closing. The
 // reply is already sent (`done`) by this point; the wait only delays close so
@@ -209,25 +220,44 @@ export async function POST(req: Request) {
     };
     req.signal.addEventListener("abort", relayAbort, { once: true });
 
+    // Hoisted so cancel() (a sibling of start(), not in its scope) can tear the
+    // watchdog down too.
+    let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+    let streamClosed = false;
+
     const stream = new ReadableStream<Uint8Array>({
       async start(controller) {
+        let lastActivityMs = Date.now();
         const send = (event: ChatSseEvent, data: unknown) => {
-          if (!abortController.signal.aborted) {
+          if (!abortController.signal.aborted && !streamClosed) {
             controller.enqueue(encodeSse(event, data));
+            lastActivityMs = Date.now();
           }
         };
         const sendHeartbeat = () => {
-          if (!abortController.signal.aborted) {
+          if (!abortController.signal.aborted && !streamClosed) {
             controller.enqueue(SSE_HEARTBEAT);
+            lastActivityMs = Date.now();
           }
         };
         const close = () => {
+          streamClosed = true;
+          if (heartbeatTimer) clearInterval(heartbeatTimer);
           try {
             controller.close();
           } catch {
             // The client may have already closed the connection.
           }
         };
+
+        // Silence watchdog: emit a heartbeat only after the wire has been quiet
+        // for HEARTBEAT_IDLE_MS. Every send() resets the clock, so an actively
+        // streaming turn never triggers it. Covers whichever provider this turn
+        // dispatches to (Anthropic SDK loop or the Cursor subprocess loop).
+        heartbeatTimer = setInterval(() => {
+          if (streamClosed || abortController.signal.aborted) return;
+          if (Date.now() - lastActivityMs >= HEARTBEAT_IDLE_MS) sendHeartbeat();
+        }, HEARTBEAT_CHECK_MS);
 
         try {
           const reply = await runAndPersistCoachTurn(
@@ -257,7 +287,6 @@ export async function POST(req: Request) {
                   stage,
                   ...(message ? { message } : {}),
                 }),
-              onHeartbeat: sendHeartbeat,
             },
             turnHandle
           );
@@ -319,6 +348,8 @@ export async function POST(req: Request) {
         }
       },
       cancel() {
+        streamClosed = true;
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
         turnHandle.flushAborted();
         abortController.abort();
         req.signal.removeEventListener("abort", relayAbort);
