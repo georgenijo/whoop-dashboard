@@ -3,6 +3,7 @@ import {
   Bell,
   Dumbbell,
   Flame,
+  Gauge,
   LayoutDashboard,
   List,
   Menu,
@@ -25,4 +26,5 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   "refresh-cw": RefreshCw,
   bell: Bell,
   menu: Menu,
+  gauge: Gauge,
 };

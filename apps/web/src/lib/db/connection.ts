@@ -296,6 +296,23 @@ export function openWrite(): DB | null {
       CREATE INDEX IF NOT EXISTS idx_client_logs_kind ON client_logs(kind);
       CREATE INDEX IF NOT EXISTS idx_client_logs_user_created
         ON client_logs(user_id, created_at DESC);
+      CREATE TABLE IF NOT EXISTS perf_metrics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        created_at TEXT NOT NULL,
+        source TEXT NOT NULL,
+        metric TEXT NOT NULL,
+        value REAL NOT NULL,
+        rating TEXT,
+        path TEXT,
+        navigation_type TEXT,
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        user_agent TEXT,
+        app_version TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_perf_metrics_created ON perf_metrics(created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_perf_metrics_metric ON perf_metrics(metric);
+      CREATE INDEX IF NOT EXISTS idx_perf_metrics_user_created
+        ON perf_metrics(user_id, created_at DESC);
     `);
     db.prepare("INSERT OR IGNORE INTO users (id) VALUES (1)").run();
     const cols = db.prepare("PRAGMA table_info(chat_logs)").all() as { name: string }[];

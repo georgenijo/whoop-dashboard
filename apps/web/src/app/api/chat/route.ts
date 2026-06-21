@@ -18,6 +18,17 @@ import { forModule } from "@/lib/logger";
 
 const chatLog = forModule("api.chat");
 
+// Bare SSE comment line. Ignored by both the web (`readChatStream`) and iOS
+// (`ChatService`) parsers, but the bytes keep the streaming connection from
+// idling out during silent model-thinking windows. See loop.ts onHeartbeat.
+const SSE_HEARTBEAT = new TextEncoder().encode(": hb\n\n");
+
+// How long the stream will wait on the parallel auto-title before closing. The
+// reply is already sent (`done`) by this point; the wait only delays close so
+// the client's post-stream thread refresh sees the new title. A slow title
+// call is handed to after() instead of holding the connection open.
+const TITLE_STREAM_WAIT_MS = 4000;
+
 type ChatMessageInput = { role: "user" | "assistant"; content: string };
 type ChatSseEvent =
   | "tool_use_start"
@@ -205,6 +216,11 @@ export async function POST(req: Request) {
             controller.enqueue(encodeSse(event, data));
           }
         };
+        const sendHeartbeat = () => {
+          if (!abortController.signal.aborted) {
+            controller.enqueue(SSE_HEARTBEAT);
+          }
+        };
         const close = () => {
           try {
             controller.close();
@@ -241,6 +257,7 @@ export async function POST(req: Request) {
                   stage,
                   ...(message ? { message } : {}),
                 }),
+              onHeartbeat: sendHeartbeat,
             },
             turnHandle
           );
@@ -251,11 +268,24 @@ export async function POST(req: Request) {
           }
 
           send("done", { reply });
+          // Auto-title on the same stream instead of a fire-and-forget after()
+          // hook: keep the connection open (briefly) until the title is
+          // persisted so the client's post-stream thread refresh picks it up.
+          // This removes the client's 5s /api/threads poll, whose only job was
+          // to discover the title landing late. titleChatThread swallows its
+          // own errors. A slow title is handed to after() so it still lands.
           if (shouldAutoTitle && apiKey) {
-            const titleKey = apiKey;
-            after(() => {
-              void titleChatThread(thread.id, lastUser, titleKey);
-            });
+            const titlePromise = titleChatThread(thread.id, lastUser, apiKey);
+            let titled = false;
+            await Promise.race([
+              titlePromise.then(() => {
+                titled = true;
+              }),
+              new Promise<void>((resolve) =>
+                setTimeout(resolve, TITLE_STREAM_WAIT_MS),
+              ),
+            ]);
+            if (!titled) after(() => titlePromise);
           }
           close();
         } catch (err) {
