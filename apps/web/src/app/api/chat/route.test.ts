@@ -49,7 +49,6 @@ type RunOpts = {
     error?: string;
   }) => void;
   onToolProgress?: (event: { tool: string; stage: string; message?: string }) => void;
-  onHeartbeat?: () => void;
 };
 
 let runAndPersistImpl: (
@@ -154,13 +153,12 @@ describe("POST /api/chat — SSE wiring", () => {
     expect(text).toMatch(/event: done\ndata: \{"reply":"final reply"\}\n\n/);
   });
 
-  it("emits no heartbeat frames when the loop never signals one (no blind timer)", async () => {
-    // Regression guard against a *bespoke time-based* keepalive (reverted in
-    // PR #249): a turn that emits no silent deltas must produce zero comment
-    // frames. The heartbeat is event-gated (loop.ts only signals it on
-    // thinking / tool-input deltas), not a standing timer.
+  it("emits no heartbeat frames for a fast turn (watchdog stays armed, never fires)", async () => {
+    // A turn that completes well under the idle window must produce zero comment
+    // frames — the silence watchdog is reset by real sends and only fires after
+    // genuine quiet (not a blind periodic timer; cf. the PR #249 revert).
     runAndPersistImpl = async () => {
-      await new Promise((r) => setTimeout(r, 250));
+      await new Promise((r) => setTimeout(r, 50));
       return "ok";
     };
 
@@ -175,23 +173,38 @@ describe("POST /api/chat — SSE wiring", () => {
     }
   });
 
-  it("relays an SSE comment heartbeat when the loop signals onHeartbeat", async () => {
-    // The loop signals onHeartbeat during silent thinking windows so the
-    // streaming connection does not idle out before `done`. It must reach the
-    // wire as a bare comment frame (ignored by web + iOS parsers).
-    runAndPersistImpl = async (_uid, _t, _u, _c, _d, _s, _k, _ko, options) => {
-      options.onHeartbeat?.();
-      options.onHeartbeat?.();
-      return "final reply";
-    };
+  it("emits a heartbeat after the wire goes idle (silence watchdog)", async () => {
+    // Provider-agnostic keep-alive: when the turn produces no bytes for the idle
+    // window (e.g. Cursor Composer warming its subprocess, or model thinking),
+    // the route emits a bare ": hb" comment so Cloudflare / the iOS request
+    // timeout can't drop the connection before `done`.
+    vi.useFakeTimers();
+    try {
+      let release!: () => void;
+      const gate = new Promise<void>((r) => {
+        release = r;
+      });
+      runAndPersistImpl = async () => {
+        await gate;
+        return "ok";
+      };
 
-    const res = await POST(
-      makeRequest({ messages: [{ role: "user", content: "hi" }], thread_id: 42 }),
-    );
-    const text = await readEntireStream(res.body as ReadableStream<Uint8Array>);
+      const res = await POST(
+        makeRequest({ messages: [{ role: "user", content: "hi" }], thread_id: 42 }),
+      );
+      const reader = (res.body as ReadableStream<Uint8Array>).getReader();
 
-    expect(text).toContain(": hb\n\n");
-    expect(text).toMatch(/event: done\ndata: \{"reply":"final reply"\}\n\n/);
+      // Wire is silent; advance past the idle threshold → watchdog fires.
+      await vi.advanceTimersByTimeAsync(9000);
+
+      const { value } = await reader.read();
+      expect(new TextDecoder().decode(value)).toContain(": hb");
+
+      release();
+      await reader.cancel();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("returns JSON on the ?stream=false path with no SSE bytes (iOS regression guard)", async () => {
