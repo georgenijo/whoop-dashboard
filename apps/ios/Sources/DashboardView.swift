@@ -6,8 +6,7 @@ struct DashboardView: View {
     @State private var phase: Phase = .loading
     @State private var lastFetched: Date?
     @State private var isLoading = false
-    @State private var showSettings = false
-    var onSignOut: () -> Void
+    @State private var detail: KPITile.Href?
 
     private static let staleInterval: TimeInterval = 300
 
@@ -21,28 +20,22 @@ struct DashboardView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 PageHeader("Today") {
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundStyle(Theme.Palette.brandStrain)
-                    }
+                    Circle()
+                        .fill(Theme.Palette.recovery)
+                        .frame(width: 8, height: 8)
+                        .shadow(color: Theme.Palette.recovery.opacity(0.7), radius: 5)
                 }
                 content
             }
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $showSettings) {
-                NavigationStack {
-                    SettingsView(onSignOut: onSignOut)
-                        .toolbar {
-                            ToolbarItem(placement: .topBarTrailing) {
-                                Button("Done") { showSettings = false }
-                            }
-                        }
+            .refreshable { await load(showSpinner: false) }
+            .navigationDestination(item: $detail) { href in
+                switch href {
+                case .recovery: RecoveryView()
+                case .sleep: SleepView()
+                case .strain: StrainView()
                 }
             }
-            .refreshable { await load(showSpinner: false) }
         }
         .task { await load(showSpinner: true) }
         .onChange(of: scenePhase) { _, newPhase in
@@ -63,13 +56,14 @@ struct DashboardView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .loaded(let payload):
             ScrollView {
-                VStack(spacing: 16) {
+                VStack(spacing: Theme.Spacing.sm) {
                     RecoveryHeroView(hero: payload.recoveryHero)
+                    KPIStripView(tiles: payload.kpi) { tile in
+                        detail = tile.href
+                    }
                     if let insight = payload.aiInsight {
                         AIInsightCardView(insight: insight)
                     }
-                    KPIStripView(tiles: payload.kpi)
-                    PRsCardView(prs: payload.prs)
                     RecoveryTrendCardView(points: payload.recoveryTrend)
                 }
                 .padding()
@@ -85,6 +79,7 @@ struct DashboardView: View {
                     Task { await load(showSpinner: true) }
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(Theme.Palette.recovery)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -123,5 +118,5 @@ struct DashboardView: View {
 }
 
 #Preview {
-    DashboardView(onSignOut: {})
+    DashboardView()
 }
