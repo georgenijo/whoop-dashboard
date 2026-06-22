@@ -177,9 +177,20 @@ final class APIClient {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        #if DEBUG
+        // Local-test bypass: prefer the launch-injected token so a fresh-sim
+        // Keychain (AfterFirstUnlock refuses writes pre-unlock) doesn't leave
+        // requests unauthenticated. DEBUG-only; never shipped.
+        if let dbg = ProcessInfo.processInfo.environment["COACH_DEBUG_TOKEN"], !dbg.isEmpty {
+            request.setValue("Bearer \(dbg)", forHTTPHeaderField: "Authorization")
+        } else if let token = KeychainStore.loadSessionToken() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        #else
         if let token = KeychainStore.loadSessionToken() {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
+        #endif
         request.httpBody = bodyData
         return request
     }

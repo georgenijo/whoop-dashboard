@@ -44,13 +44,26 @@ struct HRVTrendCardView: View {
         .glassCard(padding: Theme.Spacing.md)
     }
 
-    private struct PlotPoint { let date: String; let value: Double? }
+    private struct PlotPoint { let date: Date; let value: Double? }
+    private struct AnomalyPoint { let date: Date; let baselineMs: Double }
 
     private var plottable: [PlotPoint] {
+        let selected: (TrendPoint) -> Double?
         switch mode {
-        case .raw: return trend.points.map { PlotPoint(date: $0.date, value: $0.raw) }
-        case .ma7: return trend.points.map { PlotPoint(date: $0.date, value: $0.ma7) }
-        case .ma30: return trend.points.map { PlotPoint(date: $0.date, value: $0.ma30) }
+        case .raw: selected = { $0.raw }
+        case .ma7: selected = { $0.ma7 }
+        case .ma30: selected = { $0.ma30 }
+        }
+        return trend.points.compactMap { p in
+            guard let date = ChartDate.parse(p.date) else { return nil }
+            return PlotPoint(date: date, value: selected(p))
+        }
+    }
+
+    private var anomalyPoints: [AnomalyPoint] {
+        trend.anomalies.compactMap { a in
+            guard let date = ChartDate.parse(a.date) else { return nil }
+            return AnomalyPoint(date: date, baselineMs: a.baselineMs)
         }
     }
 
@@ -84,7 +97,7 @@ struct HRVTrendCardView: View {
                             .lineStyle(StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
                     }
                 }
-                ForEach(trend.anomalies, id: \.date) { a in
+                ForEach(anomalyPoints, id: \.date) { a in
                     PointMark(x: .value("Date", a.date),
                               y: .value("HRV", a.baselineMs))
                         .symbol(.circle)
@@ -94,8 +107,8 @@ struct HRVTrendCardView: View {
             }
             .frame(height: 180)
             .chartXAxis {
-                AxisMarks(preset: .aligned, values: .automatic(desiredCount: 4)) { _ in
-                    AxisValueLabel()
+                AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+                    AxisValueLabel(format: .dateTime.month(.abbreviated).day())
                         .foregroundStyle(Theme.Palette.fg3)
                         .font(Theme.FontStyle.mono(9.5))
                     AxisGridLine()

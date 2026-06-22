@@ -88,8 +88,8 @@ struct TrendChartView: View {
             }
             .frame(height: 180)
             .chartXAxis {
-                AxisMarks(preset: .aligned, values: .automatic(desiredCount: 4)) { _ in
-                    AxisValueLabel()
+                AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+                    AxisValueLabel(format: .dateTime.month(.abbreviated).day())
                         .foregroundStyle(Theme.Palette.fg3)
                         .font(Theme.FontStyle.mono(9.5))
                     AxisGridLine()
@@ -108,13 +108,18 @@ struct TrendChartView: View {
         }
     }
 
-    private struct PlotPoint { let date: String; let value: Double? }
+    private struct PlotPoint { let date: Date; let value: Double? }
 
     private var plottable: [PlotPoint] {
+        let selected: (TrendPoint) -> Double?
         switch mode {
-        case .raw: return points.map { PlotPoint(date: $0.date, value: $0.raw) }
-        case .ma7: return points.map { PlotPoint(date: $0.date, value: $0.ma7) }
-        case .ma30: return points.map { PlotPoint(date: $0.date, value: $0.ma30) }
+        case .raw: selected = { $0.raw }
+        case .ma7: selected = { $0.ma7 }
+        case .ma30: selected = { $0.ma30 }
+        }
+        return points.compactMap { p in
+            guard let date = ChartDate.parse(p.date) else { return nil }
+            return PlotPoint(date: date, value: selected(p))
         }
     }
 }

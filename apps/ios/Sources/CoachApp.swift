@@ -7,6 +7,15 @@ struct CoachApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var isSignedIn: Bool = {
+        #if DEBUG
+        // Local-test bypass: launch with SIMCTL_CHILD_COACH_DEBUG_TOKEN=<jwt> to
+        // skip Sign in with Apple in the simulator. DEBUG-only; never shipped.
+        if let dbg = ProcessInfo.processInfo.environment["COACH_DEBUG_TOKEN"], !dbg.isEmpty {
+            _ = KeychainStore.saveSessionToken(dbg)
+            _ = KeychainStore.saveSessionExpiresAt(Date().addingTimeInterval(60 * 60 * 24 * 30))
+            return true
+        }
+        #endif
         guard
             KeychainStore.loadSessionToken() != nil,
             let expiresAt = KeychainStore.loadSessionExpiresAt(),

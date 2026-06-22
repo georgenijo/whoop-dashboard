@@ -13,6 +13,11 @@ struct RootView: View {
                         Label("Home", systemImage: "house.fill")
                     }
 
+                TrendsView()
+                    .tabItem {
+                        Label("Trends", systemImage: "chart.xyaxis.line")
+                    }
+
                 CoachView()
                     .tabItem {
                         Label("Coach", systemImage: "sparkles")

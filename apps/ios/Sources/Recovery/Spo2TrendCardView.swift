@@ -6,6 +6,15 @@ struct Spo2TrendCardView: View {
 
     private var accent: Color { Theme.Palette.spo2 }
 
+    private struct PlotPoint { let date: Date; let value: Double? }
+
+    private var plottable: [PlotPoint] {
+        trend.points.compactMap { p in
+            guard let date = ChartDate.parse(p.date) else { return nil }
+            return PlotPoint(date: date, value: p.value)
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             HStack(alignment: .top) {
@@ -51,7 +60,7 @@ struct Spo2TrendCardView: View {
             .frame(maxWidth: .infinity, minHeight: 140)
         } else {
             Chart {
-                ForEach(trend.points, id: \.date) { p in
+                ForEach(plottable, id: \.date) { p in
                     if let v = p.value {
                         LineMark(x: .value("Date", p.date),
                                  y: .value("SpO₂", v))
@@ -64,8 +73,8 @@ struct Spo2TrendCardView: View {
             .frame(height: 160)
             .chartYScale(domain: trend.yMin ... trend.yMax)
             .chartXAxis {
-                AxisMarks(preset: .aligned, values: .automatic(desiredCount: 4)) { _ in
-                    AxisValueLabel()
+                AxisMarks(values: .automatic(desiredCount: 4)) { _ in
+                    AxisValueLabel(format: .dateTime.month(.abbreviated).day())
                         .foregroundStyle(Theme.Palette.fg3)
                         .font(Theme.FontStyle.mono(9.5))
                     AxisGridLine()
