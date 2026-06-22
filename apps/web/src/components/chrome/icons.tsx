@@ -1,6 +1,7 @@
 import {
   Activity,
   Bell,
+  ClipboardList,
   Dumbbell,
   Flame,
   Gauge,
@@ -22,6 +23,7 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   dumbbell: Dumbbell,
   sparkles: Sparkles,
   list: List,
+  "clipboard-list": ClipboardList,
   settings: Settings,
   "refresh-cw": RefreshCw,
   bell: Bell,

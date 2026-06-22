@@ -15,13 +15,25 @@
 // Protocol: newline-delimited JSON-RPC 2.0 over stdio (the transport
 // cursor-agent speaks). stdout carries ONLY protocol frames — all diagnostics
 // go to stderr, or cursor-agent will fail to parse the stream.
-import { TOOLS, executeTool, newToolTurnState } from "@/lib/coach/tools";
+import {
+  TOOLS,
+  executeTool,
+  newToolTurnState,
+  type ToolTurnState,
+} from "@/lib/coach/tools";
 
-// Read-only subset surfaced to Composer. `trigger_whoop_sync` is intentionally
-// omitted in v1: it mutates (network + DB write), which doesn't belong in a
-// read-only `--mode ask` turn. The manual Sync button / Anthropic coach still
-// cover syncing.
-const READ_TOOL_NAMES = new Set([
+// Tools surfaced to Composer. CROSS-PROVIDER NOTE (issue #421): prod runs the
+// Cursor (Composer) coach, not Anthropic, so a tool registered ONLY in the
+// Anthropic `TOOLS` array would be dead on prod — it MUST also be listed here.
+//
+// `trigger_whoop_sync` stays omitted (network + sync-cooldown semantics don't
+// belong in a `--mode ask` turn — the manual Sync button / Anthropic coach
+// cover it). `save_workout_plan` IS exposed despite being a write: the Plans
+// feature is the point, and the cli.json `permissions.allow: ["Mcp(whoop:*)"]`
+// already permits our MCP tools (the `--mode ask` read-only restriction applies
+// to Cursor's BUILT-IN Shell/Write/WebFetch tools, not to allowlisted MCP
+// tools). All writes still go through the same user-scoped executeTool path.
+const EXPOSED_TOOL_NAMES = new Set([
   "query_recovery",
   "query_sleep",
   "query_strain",
@@ -29,9 +41,16 @@ const READ_TOOL_NAMES = new Set([
   "query_naps",
   "query_journal",
   "query_daily_snapshot",
+  "query_workout_plans",
+  "save_workout_plan",
 ]);
 
 const USER_ID = Number(process.env.COACH_MCP_USER_ID);
+
+// One process == one coach turn (cursor-loop.ts spawns a fresh MCP server per
+// turn), so a single turn state shared across all tool calls gives
+// save_workout_plan its within-turn dedup across calls in this turn.
+const TURN_STATE: ToolTurnState = newToolTurnState();
 
 function log(msg: string, extra?: unknown) {
   process.stderr.write(
@@ -51,7 +70,7 @@ function replyError(id: JsonRpcId, code: number, message: string) {
 }
 
 function listTools() {
-  return TOOLS.filter((t) => READ_TOOL_NAMES.has(t.name)).map((t) => ({
+  return TOOLS.filter((t) => EXPOSED_TOOL_NAMES.has(t.name)).map((t) => ({
     name: t.name,
     description: t.description,
     inputSchema: t.input_schema,
@@ -61,13 +80,13 @@ function listTools() {
 async function callTool(id: JsonRpcId, params: unknown) {
   const p = (params ?? {}) as { name?: string; arguments?: unknown };
   const name = p.name;
-  if (!name || !READ_TOOL_NAMES.has(name)) {
+  if (!name || !EXPOSED_TOOL_NAMES.has(name)) {
     return replyError(id, -32601, `Unknown or unavailable tool: ${name}`);
   }
   try {
     const result = await executeTool(name, p.arguments ?? {}, {
       userId: USER_ID,
-      turnState: newToolTurnState(),
+      turnState: TURN_STATE,
     });
     reply(id, {
       content: [{ type: "text", text: JSON.stringify(result) }],

@@ -137,6 +137,26 @@ export function openWrite(): DB | null {
         thread_id INTEGER REFERENCES chat_threads(id)
       );
       CREATE INDEX IF NOT EXISTS idx_chat_logs_started ON chat_logs(started_at DESC);
+      -- Issue #421 — Coach-authored, recovery-tuned workout plans. Tenant data
+      -- (user_id scoped) but NOT a Phase-D domain table (no composite-PK
+      -- rebuild, no scoped.test.ts DOMAIN_TABLES guard). All reads still route
+      -- through forUser(userId) with a trailing user_id placeholder; writes
+      -- stamp user_id. plan_json holds the PlanStructure JSON, recovery_context
+      -- an optional JSON snapshot.
+      CREATE TABLE IF NOT EXISTS workout_plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        title TEXT NOT NULL,
+        tag TEXT,
+        description TEXT,
+        created_by TEXT NOT NULL DEFAULT 'coach',
+        is_active INTEGER NOT NULL DEFAULT 0,
+        plan_json TEXT NOT NULL,
+        recovery_context TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_workout_plans_user ON workout_plans(user_id, updated_at DESC);
       CREATE TABLE IF NOT EXISTS app_settings (
         key TEXT PRIMARY KEY,
         value TEXT

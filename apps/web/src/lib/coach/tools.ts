@@ -9,9 +9,20 @@ import {
   getSleepRange,
   getStrainRange,
   getUserSettings,
+  getWorkoutPlans,
   getWorkoutsRange,
+  saveWorkoutPlan,
 } from "@/lib/db";
-import type { WorkoutRow } from "@/lib/db";
+import type {
+  Intensity,
+  PlanDay,
+  PlanExercise,
+  PlanStructure,
+  SaveWorkoutPlanInput,
+  WorkoutPlan,
+  WorkoutRow,
+} from "@/lib/db";
+import { createHash } from "node:crypto";
 import {
   runWhoopSync,
   SYNC_COOLDOWN_MS,
@@ -28,6 +39,8 @@ export type CoachToolName =
   | "query_journal"
   | "query_naps"
   | "query_daily_snapshot"
+  | "query_workout_plans"
+  | "save_workout_plan"
   | "trigger_whoop_sync";
 
 type DateRangeInput = {
@@ -62,7 +75,104 @@ type EmptyInputToolSchema = Tool & {
   strict: true;
 };
 
-type ToolSchema = DateRangeToolSchema | EmptyInputToolSchema;
+// `save_workout_plan` is the FIRST write tool. Its input_schema is structured
+// (nested arrays/objects), unlike the date-range / empty-input read tools.
+// Anthropic strict tools support nested `array` + `object` with their own
+// `required` / `additionalProperties:false`, so we type the schema loosely as
+// a Tool and rely on `validateSavePlanInput` for runtime enforcement.
+type StructuredToolSchema = Tool & {
+  name: CoachToolName;
+  description: string;
+  strict: true;
+};
+
+type ToolSchema =
+  | DateRangeToolSchema
+  | EmptyInputToolSchema
+  | StructuredToolSchema;
+
+const INTENSITY_VALUES = ["hard", "moderate", "reduced", "rest"] as const;
+
+const SAVE_WORKOUT_PLAN_SCHEMA: StructuredToolSchema["input_schema"] = {
+  type: "object",
+  properties: {
+    title: {
+      type: "string",
+      description: "Short plan name, e.g. 'Push / Pull / Legs'.",
+    },
+    tag: {
+      type: "string",
+      description:
+        "Optional one-word category shown as a chip, e.g. 'Recovery-tuned', 'Strength', 'Aerobic'.",
+    },
+    description: {
+      type: "string",
+      description: "Optional one-line summary of the plan.",
+    },
+    why: {
+      type: "string",
+      description:
+        "Optional rationale tying the prescription to the user's recovery / HRV trend. Surfaced as a 'Why this prescription' note on the Plans page.",
+    },
+    make_active: {
+      type: "boolean",
+      description:
+        "When true, this plan becomes the user's single active plan and any other active plan is deactivated. Default false.",
+    },
+    days: {
+      type: "array",
+      description: "Ordered training days. At least one day is required.",
+      items: {
+        type: "object",
+        properties: {
+          name: {
+            type: "string",
+            description: "Day name, e.g. 'Push', 'Pull', 'Legs', 'Rest'.",
+          },
+          focus: {
+            type: "string",
+            description:
+              "Optional muscle-group focus, e.g. 'Chest · Shoulders · Triceps'.",
+          },
+          intensity: {
+            type: "string",
+            enum: INTENSITY_VALUES as unknown as string[],
+            description:
+              "Recovery-scaled intensity for the day. One of: hard, moderate, reduced, rest.",
+          },
+          exercises: {
+            type: "array",
+            description:
+              "Exercises for the day. Required and non-empty for non-rest days; may be empty for a pure rest day.",
+            items: {
+              type: "object",
+              properties: {
+                name: {
+                  type: "string",
+                  description: "Exercise name, e.g. 'Barbell Bench Press'.",
+                },
+                scheme: {
+                  type: "string",
+                  description: "Sets × reps scheme, e.g. '4 × 5' or '3 × 12'.",
+                },
+                note: {
+                  type: "string",
+                  description: "Optional cue, e.g. '↓load' or 'tempo 3-1-1'.",
+                },
+              },
+              required: ["name", "scheme"],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ["name", "intensity", "exercises"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["title", "days"],
+  additionalProperties: false,
+};
 
 const DATE_RANGE_SCHEMA: DateRangeToolSchema["input_schema"] = {
   type: "object",
@@ -137,6 +247,34 @@ export const TOOLS: ToolSchema[] = [
     input_schema: DATE_RANGE_SCHEMA,
     strict: true,
     cache_control: { type: "ephemeral", ttl: "1h" },
+  },
+  {
+    name: "query_workout_plans",
+    description:
+      "List the user's saved workout plans (Coach-authored, recovery-tuned). " +
+      "Returns each plan's id, title, tag, description, created_by, is_active, " +
+      "the structured plan (days -> exercises with scheme + intensity, plus an " +
+      "optional 'why' rationale), an optional recovery_context snapshot, and " +
+      "ISO-8601 timestamps. Use before save_workout_plan to reference or update " +
+      "an existing plan instead of creating a duplicate.",
+    input_schema: EMPTY_INPUT_SCHEMA,
+    strict: true,
+  },
+  {
+    name: "save_workout_plan",
+    description:
+      "Author and persist a structured, recovery-tuned workout plan for the " +
+      "user. This is a WRITE — it saves immediately (no confirmation step) and " +
+      "the new plan appears on the user's Plans page. Provide a title, an " +
+      "ordered list of training days (each with an intensity scaled to the " +
+      "user's recovery: hard / moderate / reduced / rest, and a list of " +
+      "exercises with set x rep schemes), and optionally a tag, description, " +
+      "and a 'why' note explaining how the prescription maps to their recovery " +
+      "/ HRV trend. Set make_active:true to make this the user's active plan " +
+      "(deactivates any other active plan). Returns the saved plan. Re-submitting " +
+      "an identical plan in the same turn is a no-op (returns the already-saved id).",
+    input_schema: SAVE_WORKOUT_PLAN_SCHEMA,
+    strict: true,
   },
   {
     name: "trigger_whoop_sync",
@@ -287,16 +425,21 @@ function formatLocalIso(utcIso: string | null, tz: string): string | null {
 }
 
 /**
- * Per-turn state shared across `executeTool` calls. Tracks how many times
- * `trigger_whoop_sync` has been invoked so we can hard-cap it at one
- * actual sync attempt per chat turn (cooldown skips don't count).
+ * Per-turn state shared across `executeTool` calls.
+ *   - `syncAttempts`: hard-caps `trigger_whoop_sync` at one actual sync attempt
+ *     per chat turn (cooldown skips don't count).
+ *   - `savedPlanHashes`: within-turn idempotency for `save_workout_plan`. Maps
+ *     a normalized-plan content hash -> the plan id that was written for it, so
+ *     a model re-submitting an identical plan in the same turn gets the
+ *     existing id back with `{ deduped: true }` instead of a duplicate row.
  */
 export type ToolTurnState = {
   syncAttempts: number;
+  savedPlanHashes: Map<string, number>;
 };
 
 export function newToolTurnState(): ToolTurnState {
-  return { syncAttempts: 0 };
+  return { syncAttempts: 0, savedPlanHashes: new Map() };
 }
 
 /**
@@ -420,6 +563,195 @@ async function handleTriggerWhoopSync(
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// save_workout_plan — the coach's first WRITE tool.
+//
+// SEMANTICS (locked, issue #421):
+//   - Immediate write: no pre-write confirmation gate. The "Saved" chip in the
+//     UI is post-hoc, driven by the existing tool_use_end SSE event — there is
+//     no separate confirm round-trip.
+//   - Counts as a normal tool round-trip against MAX_TOOL_ITERATIONS (no
+//     exemption — unlike the sync cap, which is a separate per-turn counter).
+//   - Within-turn idempotency: the normalized plan is content-hashed; a
+//     re-submission of the same plan in the same turn returns the already-saved
+//     id with `{ deduped: true }` instead of inserting a duplicate.
+//   - Input is validated thoroughly here and `ToolInputError` is thrown on a
+//     bad shape so the model gets a structured error it can correct.
+// ---------------------------------------------------------------------------
+
+function asTrimmedString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed === "" ? undefined : trimmed;
+}
+
+function validateExercise(value: unknown, dayIdx: number, exIdx: number): PlanExercise {
+  if (!isRecord(value)) {
+    throw new ToolInputError("Each exercise must be an object.", {
+      code: "invalid_exercise",
+      day_index: dayIdx,
+      exercise_index: exIdx,
+      received: value,
+    });
+  }
+  const name = asTrimmedString(value.name);
+  const scheme = asTrimmedString(value.scheme);
+  if (!name) {
+    throw new ToolInputError("exercise.name is required and must be a non-empty string.", {
+      code: "invalid_exercise_name",
+      day_index: dayIdx,
+      exercise_index: exIdx,
+    });
+  }
+  if (!scheme) {
+    throw new ToolInputError("exercise.scheme is required and must be a non-empty string.", {
+      code: "invalid_exercise_scheme",
+      day_index: dayIdx,
+      exercise_index: exIdx,
+    });
+  }
+  const note = asTrimmedString(value.note);
+  return { name, scheme, ...(note ? { note } : {}) };
+}
+
+function validateDay(value: unknown, dayIdx: number): PlanDay {
+  if (!isRecord(value)) {
+    throw new ToolInputError("Each day must be an object.", {
+      code: "invalid_day",
+      day_index: dayIdx,
+      received: value,
+    });
+  }
+  const name = asTrimmedString(value.name);
+  if (!name) {
+    throw new ToolInputError("day.name is required and must be a non-empty string.", {
+      code: "invalid_day_name",
+      day_index: dayIdx,
+    });
+  }
+  const intensity = value.intensity;
+  if (
+    typeof intensity !== "string" ||
+    !(INTENSITY_VALUES as readonly string[]).includes(intensity)
+  ) {
+    throw new ToolInputError("day.intensity must be one of: hard, moderate, reduced, rest.", {
+      code: "invalid_day_intensity",
+      day_index: dayIdx,
+      allowed: INTENSITY_VALUES,
+      received: intensity,
+    });
+  }
+  if (!Array.isArray(value.exercises)) {
+    throw new ToolInputError("day.exercises must be an array.", {
+      code: "invalid_day_exercises",
+      day_index: dayIdx,
+      received: value.exercises,
+    });
+  }
+  // Non-rest days must have at least one exercise; a pure rest day may be empty.
+  if (intensity !== "rest" && value.exercises.length === 0) {
+    throw new ToolInputError("A non-rest day must have at least one exercise.", {
+      code: "empty_day_exercises",
+      day_index: dayIdx,
+      intensity,
+    });
+  }
+  const exercises = value.exercises.map((ex, i) => validateExercise(ex, dayIdx, i));
+  const focus = asTrimmedString(value.focus);
+  return {
+    name,
+    ...(focus ? { focus } : {}),
+    intensity: intensity as Intensity,
+    exercises,
+  };
+}
+
+function validateSavePlanInput(input: unknown): SaveWorkoutPlanInput {
+  if (!isRecord(input)) {
+    throw new ToolInputError("save_workout_plan input must be an object.", {
+      code: "invalid_input",
+      received: input,
+    });
+  }
+  const title = asTrimmedString(input.title);
+  if (!title) {
+    throw new ToolInputError("title is required and must be a non-empty string.", {
+      code: "invalid_title",
+      received: input.title,
+    });
+  }
+  if (!Array.isArray(input.days) || input.days.length === 0) {
+    throw new ToolInputError("days is required and must be a non-empty array.", {
+      code: "invalid_days",
+      received: input.days,
+    });
+  }
+  const days = input.days.map((d, i) => validateDay(d, i));
+  const why = asTrimmedString(input.why);
+  const plan: PlanStructure = { days, ...(why ? { why } : {}) };
+
+  if (input.make_active !== undefined && typeof input.make_active !== "boolean") {
+    throw new ToolInputError("make_active must be a boolean when provided.", {
+      code: "invalid_make_active",
+      received: input.make_active,
+    });
+  }
+
+  return {
+    title,
+    ...(asTrimmedString(input.tag) ? { tag: asTrimmedString(input.tag) } : {}),
+    ...(asTrimmedString(input.description)
+      ? { description: asTrimmedString(input.description) }
+      : {}),
+    plan,
+    make_active: input.make_active === true,
+    created_by: "coach",
+  };
+}
+
+/** Stable content hash of the normalized plan for within-turn dedup. Key off
+ *  the fields that define plan identity — title + structure + active intent —
+ *  so byte-identical re-submissions collide but genuinely different plans don't. */
+function hashPlanInput(parsed: SaveWorkoutPlanInput): string {
+  const canonical = JSON.stringify({
+    title: parsed.title,
+    tag: parsed.tag ?? null,
+    description: parsed.description ?? null,
+    plan: parsed.plan,
+    make_active: parsed.make_active === true,
+  });
+  return createHash("sha256").update(canonical).digest("hex");
+}
+
+type SavePlanToolResult =
+  | { success: true; plan: WorkoutPlan }
+  | { success: true; deduped: true; plan_id: number };
+
+function handleSaveWorkoutPlan(
+  userId: number,
+  turnState: ToolTurnState,
+  input: unknown,
+): SavePlanToolResult {
+  const parsed = validateSavePlanInput(input);
+  const hash = hashPlanInput(parsed);
+
+  // Within-turn idempotency: identical normalized plan already written this
+  // turn → return the existing id, no second insert.
+  const existingId = turnState.savedPlanHashes.get(hash);
+  if (existingId !== undefined) {
+    return { success: true, deduped: true, plan_id: existingId };
+  }
+
+  const saved = saveWorkoutPlan(userId, parsed);
+  if (!saved) {
+    throw new ToolInputError("Could not save the plan — the data store is unavailable.", {
+      code: "persist_failed",
+    });
+  }
+  turnState.savedPlanHashes.set(hash, saved.id);
+  return { success: true, plan: saved };
+}
+
 export async function executeTool(
   name: string,
   input: unknown,
@@ -442,6 +774,14 @@ export async function executeTool(
       options.signal,
       options.onSyncProgress,
     );
+  }
+
+  // Plan tools don't take a date range — handle them before parseDateRangeInput.
+  if (name === "query_workout_plans") {
+    return getWorkoutPlans(options.userId);
+  }
+  if (name === "save_workout_plan") {
+    return handleSaveWorkoutPlan(options.userId, options.turnState, input);
   }
 
   const { start_date: startDate, end_date: endDate } = parseDateRangeInput(input);
