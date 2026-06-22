@@ -2,6 +2,96 @@ import Foundation
 
 struct PlansResponse: Decodable {
     let plans: [WorkoutPlan]
+    let recovery: PlanRecovery?
+}
+
+enum RecoveryBand {
+    case high
+    case mid
+    case low
+
+    init(score: Double) {
+        switch score {
+        case ..<34: self = .low
+        case ..<67: self = .mid
+        default: self = .high
+        }
+    }
+
+    init(serverBand: String?, score: Double) {
+        switch serverBand?.lowercased() {
+        case "high": self = .high
+        case "mid", "moderate": self = .mid
+        case "low": self = .low
+        default: self = RecoveryBand(score: score)
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .high: return "Primed"
+        case .mid: return "Moderate"
+        case .low: return "Compromised"
+        }
+    }
+
+    var guidance: String {
+        switch self {
+        case .high: return "Recovered — green light for a hard session."
+        case .mid: return "Moderate recovery — a steady session is a good call."
+        case .low: return "Low recovery — keep it to mobility or rest."
+        }
+    }
+
+    var colorHex: String {
+        switch self {
+        case .high: return "#00d4aa"
+        case .mid: return "#ffaa00"
+        case .low: return "#ff0043"
+        }
+    }
+}
+
+struct PlanRecovery: Decodable, Hashable {
+    let today: Today?
+    let week: [Day]
+
+    struct Today: Decodable, Hashable {
+        let date: String
+        let recoveryScore: Double
+        let band: String
+
+        enum CodingKeys: String, CodingKey {
+            case date
+            case recoveryScore = "recovery_score"
+            case band
+        }
+    }
+
+    struct Day: Decodable, Hashable {
+        let date: String
+        let recoveryScore: Double
+
+        enum CodingKeys: String, CodingKey {
+            case date
+            case recoveryScore = "recovery_score"
+        }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case today, week
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        today = try c.decodeIfPresent(Today.self, forKey: .today)
+        week = try c.decodeIfPresent([Day].self, forKey: .week) ?? []
+    }
+
+    init(today: Today?, week: [Day]) {
+        self.today = today
+        self.week = week
+    }
 }
 
 struct WorkoutPlan: Decodable, Identifiable, Hashable {
@@ -32,13 +122,11 @@ struct WorkoutPlan: Decodable, Identifiable, Hashable {
         let why: String?
     }
 
-    struct Day: Decodable, Hashable, Identifiable {
+    struct Day: Decodable, Hashable {
         let name: String
         let focus: String?
         let intensity: Intensity
         let exercises: [Exercise]
-
-        var id: String { name }
     }
 
     enum Intensity: String, Decodable, Hashable {
@@ -54,12 +142,10 @@ struct WorkoutPlan: Decodable, Identifiable, Hashable {
         }
     }
 
-    struct Exercise: Decodable, Hashable, Identifiable {
+    struct Exercise: Decodable, Hashable {
         let name: String
         let scheme: String
         let note: String?
-
-        var id: String { name + scheme }
     }
 
     struct RecoveryContext: Decodable, Hashable {

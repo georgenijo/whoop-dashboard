@@ -6,6 +6,7 @@ struct DashboardView: View {
     @State private var phase: Phase = .loading
     @State private var lastFetched: Date?
     @State private var isLoading = false
+    @State private var detail: KPITile.Href?
 
     private static let staleInterval: TimeInterval = 300
 
@@ -28,6 +29,13 @@ struct DashboardView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .refreshable { await load(showSpinner: false) }
+            .navigationDestination(item: $detail) { href in
+                switch href {
+                case .recovery: RecoveryView()
+                case .sleep: SleepView()
+                case .strain: StrainView()
+                }
+            }
         }
         .task { await load(showSpinner: true) }
         .onChange(of: scenePhase) { _, newPhase in
@@ -50,7 +58,9 @@ struct DashboardView: View {
             ScrollView {
                 VStack(spacing: Theme.Spacing.sm) {
                     RecoveryHeroView(hero: payload.recoveryHero)
-                    KPIStripView(tiles: payload.kpi)
+                    KPIStripView(tiles: payload.kpi) { tile in
+                        detail = tile.href
+                    }
                     if let insight = payload.aiInsight {
                         AIInsightCardView(insight: insight)
                     }

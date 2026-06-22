@@ -29,7 +29,7 @@ struct PlanDetailView: View {
                     .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
                 }
 
-                ForEach(plan.plan.days) { day in
+                ForEach(Array(plan.plan.days.enumerated()), id: \.offset) { _, day in
                     DayCard(day: day)
                 }
             }
@@ -108,7 +108,7 @@ private struct DayCard: View {
                     .foregroundStyle(Theme.Palette.fg3)
             } else {
                 VStack(spacing: 0) {
-                    ForEach(Array(day.exercises.enumerated()), id: \.element.id) { index, exercise in
+                    ForEach(Array(day.exercises.enumerated()), id: \.offset) { index, exercise in
                         ExerciseRow(exercise: exercise)
                         if index < day.exercises.count - 1 {
                             Rectangle()

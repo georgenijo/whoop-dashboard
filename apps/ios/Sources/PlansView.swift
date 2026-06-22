@@ -11,7 +11,7 @@ struct PlansView: View {
 
     enum Phase {
         case loading
-        case loaded([WorkoutPlan])
+        case loaded(PlansResult)
         case error(String)
     }
 
@@ -43,11 +43,11 @@ struct PlansView: View {
         case .loading:
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-        case .loaded(let plans):
-            if plans.isEmpty {
+        case .loaded(let result):
+            if result.plans.isEmpty {
                 emptyState
             } else {
-                PlansContent(plans: plans)
+                PlansContent(plans: result.plans, recovery: result.recovery)
             }
         case .error(let message):
             VStack(spacing: 12) {
@@ -97,8 +97,8 @@ struct PlansView: View {
         if showSpinner, !hadData { phase = .loading }
 
         do {
-            let plans = try await PlansService(api: api).load()
-            phase = .loaded(plans)
+            let result = try await PlansService(api: api).load()
+            phase = .loaded(result)
             lastFetched = Date()
         } catch APIError.unauthorized {
             if !hadData { phase = .error("Session expired. Sign in again.") }
@@ -118,22 +118,33 @@ struct PlansView: View {
 
 struct PlansContent: View {
     let plans: [WorkoutPlan]
+    let recovery: PlanRecovery?
 
-    private var activePlan: WorkoutPlan? {
+    private var heroPlan: WorkoutPlan? {
         plans.first(where: { $0.isActive }) ?? plans.first
     }
 
+    private var heroIsActive: Bool {
+        plans.contains(where: { $0.isActive })
+    }
+
     private var savedPlans: [WorkoutPlan] {
-        guard let active = activePlan else { return plans }
-        return plans.filter { $0.id != active.id }
+        guard let hero = heroPlan else { return plans }
+        return plans.filter { $0.id != hero.id }
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                if let active = activePlan {
-                    TodaySessionHero(plan: active)
-                    WeekReadinessStrip(plan: active)
+                if let hero = heroPlan {
+                    TodaySessionHero(
+                        plan: hero,
+                        isActive: heroIsActive,
+                        today: recovery?.today
+                    )
+                    if let week = recovery?.week, !week.isEmpty {
+                        WeekReadinessStrip(week: week, todayDate: recovery?.today?.date)
+                    }
                 }
 
                 if !savedPlans.isEmpty {
@@ -161,80 +172,69 @@ struct PlansContent: View {
     }
 }
 
-private func todayDay(in plan: WorkoutPlan) -> WorkoutPlan.Day? {
-    guard !plan.plan.days.isEmpty else { return nil }
-    let weekday = Calendar.current.component(.weekday, from: Date())
-    let index = (weekday - 1) % plan.plan.days.count
-    return plan.plan.days[index]
-}
-
 private struct TodaySessionHero: View {
     let plan: WorkoutPlan
+    let isActive: Bool
+    let today: PlanRecovery.Today?
 
-    private var day: WorkoutPlan.Day? { todayDay(in: plan) }
+    private var band: RecoveryBand? {
+        guard let today else { return nil }
+        return RecoveryBand(serverBand: today.band, score: today.recoveryScore)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("TODAY'S SESSION")
+                Text(isActive ? "TODAY'S SESSION" : "MOST RECENT PLAN")
                     .font(Theme.FontStyle.sans(9.5, weight: .semibold))
                     .tracking(1.4)
                     .foregroundStyle(Theme.Palette.fg2)
                 Spacer()
-                if let score = plan.recoveryContext?.recoveryScore {
-                    ZonePill(score: score, prefix: "\(Int(score.rounded()))%")
-                } else if let day {
-                    IntensityTag(intensity: day.intensity)
+                if let today {
+                    ZonePill(score: today.recoveryScore,
+                             prefix: "\(Int(today.recoveryScore.rounded()))%")
                 }
             }
 
-            if let day {
-                Text(day.name)
-                    .font(Theme.FontStyle.sans(21, weight: .bold))
-                    .foregroundStyle(Theme.Palette.fg0)
-                    .padding(.top, 12)
+            Text(plan.title)
+                .font(Theme.FontStyle.sans(21, weight: .bold))
+                .foregroundStyle(Theme.Palette.fg0)
+                .padding(.top, 12)
 
-                if let line = sessionLine(day) {
-                    Text(line)
-                        .font(Theme.FontStyle.sans(12.5))
-                        .foregroundStyle(Theme.Palette.fg2)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 4)
-                }
-
-                HStack(spacing: 8) {
-                    MetaTag(text: "\(day.exercises.count) lifts")
-                    IntensityTag(intensity: day.intensity)
-                    if let focus = day.focus {
-                        MetaTag(text: focus)
-                    }
-                }
-                .padding(.top, 14)
-            } else {
-                Text("Rest day")
-                    .font(Theme.FontStyle.sans(21, weight: .bold))
-                    .foregroundStyle(Theme.Palette.fg0)
-                    .padding(.top, 12)
+            if let line = sessionLine {
+                Text(line)
+                    .font(Theme.FontStyle.sans(12.5))
+                    .foregroundStyle(Theme.Palette.fg2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 4)
             }
+
+            HStack(spacing: 8) {
+                MetaTag(text: "\(plan.plan.days.count)-day")
+                if let tag = plan.tag {
+                    MetaTag(text: tag)
+                }
+                if !isActive {
+                    MetaTag(text: "Most recent")
+                }
+            }
+            .padding(.top, 14)
         }
         .glassCard(tint: .recovery, padding: 18)
     }
 
-    private func sessionLine(_ day: WorkoutPlan.Day) -> String? {
-        if let note = plan.recoveryContext?.note { return note }
+    private var sessionLine: String? {
+        if let band { return band.guidance }
         if let why = plan.plan.why { return why }
-        return day.focus
+        return plan.description
     }
 }
 
 private struct WeekReadinessStrip: View {
-    let plan: WorkoutPlan
+    let week: [PlanRecovery.Day]
+    let todayDate: String?
 
-    private let labels = ["M", "T", "W", "T", "F", "S", "S"]
-
-    private var todayIndex: Int {
-        (Calendar.current.component(.weekday, from: Date()) + 5) % 7
-    }
+    private var slots: [PlanRecovery.Day] { Array(week.suffix(7)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -244,13 +244,13 @@ private struct WeekReadinessStrip: View {
                 .foregroundStyle(Theme.Palette.fg2)
 
             HStack(spacing: 0) {
-                ForEach(0..<7, id: \.self) { i in
-                    let day = dayForSlot(i)
+                ForEach(Array(slots.enumerated()), id: \.offset) { _, day in
+                    let isToday = day.date == todayDate
                     VStack(spacing: 6) {
-                        Text(labels[i])
-                            .font(Theme.FontStyle.sans(9.5, weight: i == todayIndex ? .bold : .medium))
-                            .foregroundStyle(i == todayIndex ? Theme.Palette.fg0 : Theme.Palette.fg3)
-                        readinessDot(day: day, isToday: i == todayIndex)
+                        Text(weekdayLabel(day.date))
+                            .font(Theme.FontStyle.sans(9.5, weight: isToday ? .bold : .medium))
+                            .foregroundStyle(isToday ? Theme.Palette.fg0 : Theme.Palette.fg3)
+                        readinessDot(score: day.recoveryScore, isToday: isToday)
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -266,14 +266,24 @@ private struct WeekReadinessStrip: View {
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
     }
 
-    private func dayForSlot(_ i: Int) -> WorkoutPlan.Day? {
-        guard !plan.plan.days.isEmpty else { return nil }
-        return plan.plan.days[i % plan.plan.days.count]
+    private func weekdayLabel(_ date: String) -> String {
+        let prefix = String(date.prefix(10))
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        f.dateFormat = "yyyy-MM-dd"
+        guard let d = f.date(from: prefix) else { return "·" }
+        let names = ["S", "M", "T", "W", "T", "F", "S"]
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let weekday = cal.component(.weekday, from: d)
+        return names[(weekday - 1) % 7]
     }
 
     @ViewBuilder
-    private func readinessDot(day: WorkoutPlan.Day?, isToday: Bool) -> some View {
-        let color = day.map { Color(hex: $0.intensity.colorHex) } ?? Theme.Palette.fg4
+    private func readinessDot(score: Double, isToday: Bool) -> some View {
+        let color = Color(hex: RecoveryBand(score: score).colorHex)
         Circle()
             .fill(color.opacity(0.18))
             .overlay(
@@ -344,21 +354,6 @@ private struct MetaTag: View {
     }
 }
 
-private struct IntensityTag: View {
-    let intensity: WorkoutPlan.Intensity
-
-    var body: some View {
-        let color = Color(hex: intensity.colorHex)
-        Text(intensity.label)
-            .font(Theme.FontStyle.sans(10.5, weight: .semibold))
-            .foregroundStyle(color)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(color.opacity(0.14), in: Capsule())
-            .overlay(Capsule().strokeBorder(color.opacity(0.35), lineWidth: 1))
-    }
-}
-
 #Preview("Plans — sample") {
     NavigationStack {
         VStack(spacing: 0) {
@@ -367,7 +362,7 @@ private struct IntensityTag: View {
                     .fill(Theme.Palette.recovery)
                     .frame(width: 8, height: 8)
             }
-            PlansContent(plans: PlansSample.plans)
+            PlansContent(plans: PlansSample.plans, recovery: PlansSample.recovery)
         }
     }
     .preferredColorScheme(.dark)

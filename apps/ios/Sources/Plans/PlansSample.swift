@@ -83,19 +83,39 @@ enum PlansSample {
           "created_at": "2026-06-10T08:00:00.000Z",
           "updated_at": "2026-06-12T08:00:00.000Z"
         }
-      ]
+      ],
+      "recovery": {
+        "today": {
+          "date": "2026-06-21",
+          "recovery_score": 84.0,
+          "band": "high"
+        },
+        "week": [
+          { "date": "2026-06-15", "recovery_score": 41.0 },
+          { "date": "2026-06-16", "recovery_score": 58.0 },
+          { "date": "2026-06-17", "recovery_score": 31.0 },
+          { "date": "2026-06-18", "recovery_score": 66.0 },
+          { "date": "2026-06-19", "recovery_score": 72.0 },
+          { "date": "2026-06-20", "recovery_score": 78.0 },
+          { "date": "2026-06-21", "recovery_score": 84.0 }
+        ]
+      }
     }
     """
 
-    static let plans: [WorkoutPlan] = {
+    private static let decoded: PlansResponse = {
         do {
             let data = Data(json.utf8)
-            return try JSONDecoder().decode(PlansResponse.self, from: data).plans
+            return try JSONDecoder().decode(PlansResponse.self, from: data)
         } catch {
             assertionFailure("PlansSample decode failed — contract drift: \(error)")
-            return []
+            return PlansResponse(plans: [], recovery: nil)
         }
     }()
+
+    static var plans: [WorkoutPlan] { decoded.plans }
+
+    static var recovery: PlanRecovery? { decoded.recovery }
 
     static var plan: WorkoutPlan { plans.first ?? placeholder }
 

@@ -8,13 +8,17 @@ struct KPIStripView: View {
 
     var body: some View {
         HStack(spacing: 1) {
-            ForEach(Array(strip.enumerated()), id: \.element.id) { index, tile in
-                Button {
-                    onTap(tile)
-                } label: {
+            ForEach(Array(strip.enumerated()), id: \.offset) { index, tile in
+                if tile.href != nil {
+                    Button {
+                        onTap(tile)
+                    } label: {
+                        KPICell(tile: tile)
+                    }
+                    .buttonStyle(.plain)
+                } else {
                     KPICell(tile: tile)
                 }
-                .buttonStyle(.plain)
                 if index < strip.count - 1 {
                     Rectangle()
                         .fill(Theme.Palette.borderSubtle)
