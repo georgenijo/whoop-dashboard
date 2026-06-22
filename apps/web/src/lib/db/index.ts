@@ -57,6 +57,17 @@ export { getPRStats } from "./prs";
 export type { JournalRow } from "./journal";
 export { getJournalRange } from "./journal";
 
+export type {
+  Intensity,
+  PlanExercise,
+  PlanDay,
+  PlanStructure,
+  PlanRecoveryContext,
+  WorkoutPlan,
+  SaveWorkoutPlanInput,
+} from "./plans";
+export { getWorkoutPlans, saveWorkoutPlan } from "./plans";
+
 export type { BodyMeasurementRow } from "./body";
 export { getBodyMeasurements } from "./body";
 

@@ -16,6 +16,8 @@ vi.mock("@/lib/db", () => ({
   getStrainRange: vi.fn(),
   getUserSettings: vi.fn(),
   getWorkoutsRange: vi.fn(),
+  getWorkoutPlans: vi.fn(),
+  saveWorkoutPlan: vi.fn(),
 }));
 
 vi.mock("@/lib/sync", () => ({
@@ -27,7 +29,10 @@ import {
   addSyncLog,
   getLastSuccessfulSyncAt,
   getUserSettings,
+  getWorkoutPlans,
   getWorkoutsRange,
+  saveWorkoutPlan,
+  type WorkoutPlan,
 } from "@/lib/db";
 import { runWhoopSync } from "@/lib/sync";
 import { chatLogToolSummaries, executeTool, newToolTurnState, type ToolDetail } from "./tools";
@@ -36,6 +41,8 @@ const addSyncLogMock = vi.mocked(addSyncLog);
 const getLastSuccessfulSyncAtMock = vi.mocked(getLastSuccessfulSyncAt);
 const getUserSettingsMock = vi.mocked(getUserSettings);
 const getWorkoutsRangeMock = vi.mocked(getWorkoutsRange);
+const getWorkoutPlansMock = vi.mocked(getWorkoutPlans);
+const saveWorkoutPlanMock = vi.mocked(saveWorkoutPlan);
 const runWhoopSyncMock = vi.mocked(runWhoopSync);
 
 function makeSuccessSyncResult(overrides: Partial<SyncResult> = {}): SyncResult {
@@ -406,5 +413,180 @@ describe("chatLogToolSummaries", () => {
 
     expect(summary).not.toHaveProperty("response");
     expect(summary.error).toBe("boom");
+  });
+});
+
+describe("save_workout_plan tool", () => {
+  beforeEach(() => {
+    saveWorkoutPlanMock.mockReset();
+    getWorkoutPlansMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const validInput = {
+    title: "Push / Pull / Legs",
+    tag: "Recovery-tuned",
+    description: "Auto-scales load to daily recovery.",
+    why: "HRV trend up +8% so volume bumped a set.",
+    make_active: true,
+    days: [
+      {
+        name: "Push",
+        focus: "Chest · Shoulders · Triceps",
+        intensity: "hard",
+        exercises: [
+          { name: "Barbell Bench Press", scheme: "4 × 5" },
+          { name: "Overhead Press", scheme: "4 × 6", note: "tempo" },
+        ],
+      },
+      {
+        name: "Rest",
+        intensity: "rest",
+        exercises: [],
+      },
+    ],
+  };
+
+  function makeStoredPlan(overrides: Partial<WorkoutPlan> = {}): WorkoutPlan {
+    return {
+      id: 42,
+      title: "Push / Pull / Legs",
+      tag: "Recovery-tuned",
+      description: "Auto-scales load to daily recovery.",
+      created_by: "coach",
+      is_active: true,
+      plan: {
+        days: [
+          {
+            name: "Push",
+            focus: "Chest · Shoulders · Triceps",
+            intensity: "hard",
+            exercises: [
+              { name: "Barbell Bench Press", scheme: "4 × 5" },
+              { name: "Overhead Press", scheme: "4 × 6", note: "tempo" },
+            ],
+          },
+          { name: "Rest", intensity: "rest", exercises: [] },
+        ],
+        why: "HRV trend up +8% so volume bumped a set.",
+      },
+      created_at: "2026-06-21T14:00:00.000Z",
+      updated_at: "2026-06-21T14:00:00.000Z",
+      ...overrides,
+    };
+  }
+
+  it("validates input, writes a row, and returns the stored plan", async () => {
+    const stored = makeStoredPlan();
+    saveWorkoutPlanMock.mockReturnValue(stored);
+    const turnState = newToolTurnState();
+
+    const result = (await executeTool("save_workout_plan", validInput, {
+      userId: 1,
+      turnState,
+    })) as { success: true; plan: WorkoutPlan };
+
+    expect(saveWorkoutPlanMock).toHaveBeenCalledTimes(1);
+    const [userIdArg, inputArg] = saveWorkoutPlanMock.mock.calls[0];
+    expect(userIdArg).toBe(1);
+    // Normalized into the SaveWorkoutPlanInput shape: why folded into plan,
+    // created_by stamped, make_active carried through.
+    expect(inputArg.title).toBe("Push / Pull / Legs");
+    expect(inputArg.make_active).toBe(true);
+    expect(inputArg.created_by).toBe("coach");
+    expect(inputArg.plan.why).toBe("HRV trend up +8% so volume bumped a set.");
+    expect(inputArg.plan.days).toHaveLength(2);
+
+    expect(result.success).toBe(true);
+    expect(result.plan).toEqual(stored);
+  });
+
+  it("dedupes an identical resubmission within the same turn", async () => {
+    saveWorkoutPlanMock.mockReturnValue(makeStoredPlan());
+    const turnState = newToolTurnState();
+
+    const first = (await executeTool("save_workout_plan", validInput, {
+      userId: 1,
+      turnState,
+    })) as { success: true; plan: WorkoutPlan };
+    expect(first.plan.id).toBe(42);
+
+    const second = (await executeTool("save_workout_plan", validInput, {
+      userId: 1,
+      turnState,
+    })) as { success: true; deduped: true; plan_id: number };
+
+    // Second identical submit must NOT insert again.
+    expect(saveWorkoutPlanMock).toHaveBeenCalledTimes(1);
+    expect(second).toEqual({ success: true, deduped: true, plan_id: 42 });
+  });
+
+  it("throws ToolInputError on missing title", async () => {
+    const turnState = newToolTurnState();
+    await expect(
+      executeTool(
+        "save_workout_plan",
+        { ...validInput, title: "  " },
+        { userId: 1, turnState },
+      ),
+    ).rejects.toThrow(/title is required/i);
+    expect(saveWorkoutPlanMock).not.toHaveBeenCalled();
+  });
+
+  it("throws ToolInputError on an invalid intensity", async () => {
+    const turnState = newToolTurnState();
+    await expect(
+      executeTool(
+        "save_workout_plan",
+        {
+          title: "Bad",
+          days: [{ name: "Day", intensity: "easy", exercises: [{ name: "X", scheme: "1" }] }],
+        },
+        { userId: 1, turnState },
+      ),
+    ).rejects.toThrow(/intensity must be one of/i);
+  });
+
+  it("throws ToolInputError when a non-rest day has no exercises", async () => {
+    const turnState = newToolTurnState();
+    await expect(
+      executeTool(
+        "save_workout_plan",
+        { title: "Bad", days: [{ name: "Push", intensity: "hard", exercises: [] }] },
+        { userId: 1, turnState },
+      ),
+    ).rejects.toThrow(/non-rest day must have at least one exercise/i);
+  });
+});
+
+describe("query_workout_plans tool", () => {
+  beforeEach(() => {
+    getWorkoutPlansMock.mockReset();
+  });
+
+  it("returns the user's plans", async () => {
+    const plans: WorkoutPlan[] = [
+      {
+        id: 1,
+        title: "PPL",
+        created_by: "coach",
+        is_active: true,
+        plan: { days: [] },
+        created_at: "2026-06-21T00:00:00.000Z",
+        updated_at: "2026-06-21T00:00:00.000Z",
+      },
+    ];
+    getWorkoutPlansMock.mockReturnValue(plans);
+
+    const result = await executeTool("query_workout_plans", {}, {
+      userId: 7,
+      turnState: newToolTurnState(),
+    });
+
+    expect(getWorkoutPlansMock).toHaveBeenCalledWith(7);
+    expect(result).toEqual(plans);
   });
 });
