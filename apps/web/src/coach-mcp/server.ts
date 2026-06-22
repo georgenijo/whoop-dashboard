@@ -47,9 +47,18 @@ const EXPOSED_TOOL_NAMES = new Set([
 
 const USER_ID = Number(process.env.COACH_MCP_USER_ID);
 
-// One process == one coach turn (cursor-loop.ts spawns a fresh MCP server per
-// turn), so a single turn state shared across all tool calls gives
-// save_workout_plan its within-turn dedup across calls in this turn.
+// LOAD-BEARING INVARIANT: one MCP process == one coach turn. cursor-loop.ts
+// spawns a FRESH server process per coach turn and tears it down at the end,
+// with userId pinned via COACH_MCP_USER_ID. Because the process lifetime IS the
+// turn lifetime, a single module-level ToolTurnState shared across every tool
+// call in this process is correct: it gives save_workout_plan its within-turn
+// dedup (savedPlanHashes) and bounds syncAttempts to this one turn / one user.
+//
+// If a future change daemonizes or reuses this server across turns (or across
+// users), this becomes a cross-turn / cross-user STATE-LEAK bug — savedPlanHashes
+// and syncAttempts would persist into later turns. In that world, move the state
+// per-request (thread a fresh newToolTurnState() through each tools/call handler)
+// instead of holding it at module scope.
 const TURN_STATE: ToolTurnState = newToolTurnState();
 
 function log(msg: string, extra?: unknown) {

@@ -56,10 +56,30 @@ Auth: `requireAuth` (Bearer → Cookie → 401). Serves both web and iOS.
 Response `200`:
 
 ```ts
-{ plans: WorkoutPlan[] }
+{
+  plans: WorkoutPlan[];
+  // OPTIONAL block — older clients ignore it; iOS decodes defensively.
+  recovery?: {
+    // The most recent available recovery day (today's row when scored, else
+    // the latest scored day in the 7-day window). null when no scored day.
+    today: {
+      date: string;          // YYYY-MM-DD
+      recovery_score: number; // 0–100
+      band: "high" | "mid" | "low"; // high ≥67, mid 34–66, low <34
+    } | null;
+    // Last 7 days of REAL recovery scores, ascending by date. May be < 7
+    // entries when data is sparse; days without a scored recovery are omitted.
+    week: { date: string; recovery_score: number }[];
+  };
+}
 ```
 
 Ordering: **active plan(s) first, then `updated_at` descending.**
+
+`recovery` is derived from the same shared helper that backs the `/plans` page
+(today's readiness banner + the 7-day readiness strip), so the web page and the
+iOS Plans tab can never drift. The whole `recovery` block — and `recovery.today`
+within it — is OPTIONAL/nullable: treat both as absent-safe when decoding.
 
 ## JSON example
 
@@ -114,7 +134,19 @@ Ordering: **active plan(s) first, then `updated_at` descending.**
       "created_at": "2026-06-21T14:02:11.000Z",
       "updated_at": "2026-06-21T14:02:11.000Z"
     }
-  ]
+  ],
+  "recovery": {
+    "today": { "date": "2026-06-21", "recovery_score": 62, "band": "mid" },
+    "week": [
+      { "date": "2026-06-15", "recovery_score": 71 },
+      { "date": "2026-06-16", "recovery_score": 58 },
+      { "date": "2026-06-17", "recovery_score": 44 },
+      { "date": "2026-06-18", "recovery_score": 80 },
+      { "date": "2026-06-19", "recovery_score": 66 },
+      { "date": "2026-06-20", "recovery_score": 51 },
+      { "date": "2026-06-21", "recovery_score": 62 }
+    ]
+  }
 }
 ```
 

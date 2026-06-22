@@ -1,13 +1,13 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
-  getRecoveryRange,
   getUserSettings,
   getWorkoutPlans,
   type RecoveryRow,
 } from "@/lib/db";
 import { requireAuthOrSignin } from "@/lib/auth";
-import { localToday, localDateNDaysAgo } from "@/lib/date";
+import { localDateNDaysAgo } from "@/lib/date";
+import { getPlansRecoveryWindow } from "@/lib/plans/recovery";
 import TodayRecoveryBanner from "@/components/plans/TodayRecoveryBanner";
 import ReadinessStrip, { type ReadinessDay } from "@/components/plans/ReadinessStrip";
 import PlanCard from "@/components/plans/PlanCard";
@@ -31,20 +31,12 @@ export default async function PlansPage() {
     redirect("/welcome");
   }
 
-  const today = localToday();
-  const weekStart = localDateNDaysAgo(6); // inclusive 7-day window ending today
-  const recovery = getRecoveryRange(user.id, weekStart, today);
+  // Shared today + 7-day recovery window (single source of truth — the same
+  // helper backs GET /api/plans so the page and the iOS Plans tab can't drift).
+  const { today, rows: recovery, bannerRow } = getPlansRecoveryWindow(user.id);
   const byDate = new Map<string, RecoveryRow>();
   for (const r of recovery) byDate.set(r.date, r);
 
-  // Today's REAL recovery — fall back to the most recent scored day in the
-  // window when today hasn't synced yet (mirrors the dashboard's fallback).
-  const todayRow = byDate.get(today);
-  const latestScored = [...recovery]
-    .reverse()
-    .find((r) => r.recovery_score != null);
-  const bannerRow =
-    todayRow?.recovery_score != null ? todayRow : latestScored ?? null;
   const bannerScore = bannerRow?.recovery_score ?? null;
   const bannerDate = bannerRow?.date ?? null;
 

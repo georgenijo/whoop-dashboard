@@ -78,17 +78,26 @@ type WorkoutPlanRow = {
 const PLAN_COLUMNS =
   "id, title, tag, description, created_by, is_active, plan_json, recovery_context, created_at, updated_at";
 
-function parseJsonOrNull<T>(raw: string | null): T | null {
+function parseJsonOrNull<T>(
+  raw: string | null,
+  onError?: (err: unknown) => void,
+): T | null {
   if (raw == null) return null;
   try {
     return JSON.parse(raw) as T;
-  } catch {
+  } catch (err) {
+    onError?.(err);
     return null;
   }
 }
 
 function rowToPlan(row: WorkoutPlanRow): WorkoutPlan {
-  const plan = parseJsonOrNull<PlanStructure>(row.plan_json) ?? { days: [] };
+  // Corrupt plan_json falls back to an empty-days plan rather than throwing —
+  // but log it so a silently-empty plan is debuggable instead of mysterious.
+  const plan =
+    parseJsonOrNull<PlanStructure>(row.plan_json, (err) =>
+      console.error("[plans] corrupt plan_json", { id: row.id, err }),
+    ) ?? { days: [] };
   const recovery = parseJsonOrNull<PlanRecoveryContext>(row.recovery_context);
   return {
     id: row.id,
