@@ -120,11 +120,17 @@ type StreamEvent = {
   type?: string;
   subtype?: string;
   model_call_id?: string;
+  call_id?: string;
   message?: { content?: Array<{ type?: string; text?: string }> };
   tool_call?: {
+    // call id + timing live on tool_call directly and are present on BOTH the
+    // `started` and `completed` events (as strings); the `started` event also
+    // carries name/input under mcpToolCall.args, while `completed` carries ONLY
+    // mcpToolCall.result. So name/input must be remembered from `started`.
+    toolCallId?: string;
+    startedAtMs?: string;
+    completedAtMs?: string;
     mcpToolCall?: {
-      // Tool name + input + id live under `args`; the tool RESULT is a sibling
-      // `result` on mcpToolCall (NOT nested in args).
       args?: {
         toolName?: string;
         args?: unknown;
@@ -134,6 +140,13 @@ type StreamEvent = {
         success?: {
           isError?: boolean;
           content?: Array<{ text?: { text?: string } }>;
+        };
+        // A blocked call (e.g. permissionMode default without --force) returns
+        // `rejected` instead of `success`. Detect it so it surfaces as an error
+        // in chat_logs rather than a silent empty-ok.
+        rejected?: {
+          reason?: string;
+          isReadonly?: boolean;
         };
       };
     };
@@ -221,7 +234,9 @@ export async function runCursorTurn(
   let toolCalls = 0;
   let timedOut = false;
   let stderr = "";
-  const toolStartAt = new Map<string, number>();
+  // name/input/start are emitted on the `started` event and must be carried to
+  // the `completed` event (which omits them), keyed by the stable call id.
+  const toolMeta = new Map<string, { name: string; input: unknown; startedMs: number }>();
 
   try {
     const exitInfo = await new Promise<{ code: number | null }>((resolve, reject) => {
@@ -233,6 +248,16 @@ export async function runCursorTurn(
           "--mode", "ask",
           "--approve-mcps",
           "--trust",
+          // --force is REQUIRED for headless MCP tool execution: as of
+          // cursor-agent 2026.06.x, --approve-mcps/--trust alone leave
+          // permissionMode "default", which auto-REJECTS every MCP call in -p
+          // mode ("User rejected MCP: whoop-…") — the coach then sees empty
+          // results and answers "Whoop queries were blocked". --force flips the
+          // default to allow-unless-denied; the .cursor/cli.json deny list
+          // (Shell/Write/WebFetch/Read) + --mode ask still block everything
+          // except our whoop MCP tools (verified: shell stays denied under
+          // --force). See thread #111 post-mortem.
+          "--force",
           "--workspace", ws,
           "--output-format", "stream-json",
           "--stream-partial-output",
@@ -370,31 +395,49 @@ export async function runCursorTurn(
         }
         if (evt.type === "tool_call") {
           segText = ""; // segment boundary
-          const mc = evt.tool_call?.mcpToolCall?.args;
-          const name = mc?.toolName ?? "unknown";
-          const callId = mc?.toolCallId ?? randomUUID();
+          const tc = evt.tool_call;
+          // call_id is stable across started/completed; fall back through the
+          // other id carriers, then a random id only as a last resort.
+          const callId =
+            evt.call_id ??
+            tc?.toolCallId ??
+            tc?.mcpToolCall?.args?.toolCallId ??
+            randomUUID();
           if (evt.subtype === "started") {
-            toolStartAt.set(callId, Date.now());
-            options.onToolUseStart?.({ name, input: mc?.args });
+            const a = tc?.mcpToolCall?.args;
+            const name = a?.toolName ?? "unknown";
+            const startedMs = Number(tc?.startedAtMs) || Date.now();
+            toolMeta.set(callId, { name, input: a?.args, startedMs });
+            options.onToolUseStart?.({ name, input: a?.args });
             return;
           }
           if (evt.subtype === "completed") {
             toolCalls += 1;
-            const startedAt = toolStartAt.get(callId) ?? Date.now();
-            const durationMs = Date.now() - startedAt;
-            const success = evt.tool_call?.mcpToolCall?.result?.success;
-            const isError = success?.isError === true;
-            const resultText = success?.content?.[0]?.text?.text ?? "";
+            const meta = toolMeta.get(callId);
+            toolMeta.delete(callId);
+            const name = meta?.name ?? "unknown";
+            const input = meta?.input;
+            const startedMs =
+              meta?.startedMs ?? (Number(tc?.startedAtMs) || Date.now());
+            const completedMs = Number(tc?.completedAtMs) || Date.now();
+            const durationMs = Math.max(0, completedMs - startedMs);
+            const result = tc?.mcpToolCall?.result;
+            const rejected = result?.rejected;
+            const success = result?.success;
+            const isError = rejected != null || success?.isError === true;
+            const resultText = rejected
+              ? `MCP call rejected: ${rejected.reason ?? "unknown reason"}`
+              : success?.content?.[0]?.text?.text ?? "";
             let parsed: unknown = resultText;
             try {
               parsed = JSON.parse(resultText);
             } catch {
               /* keep raw string */
             }
-            const rows = countRows(parsed);
+            const rows = rejected ? null : countRows(parsed);
             toolDetails.push({
               name,
-              input: mc?.args,
+              input,
               duration_ms: durationMs,
               rows,
               status: isError ? "error" : "ok",
@@ -413,7 +456,7 @@ export async function runCursorTurn(
             messages.push({
               role: "assistant",
               content: "",
-              blocks: [{ type: "tool_use", id: callId, name, input: mc?.args ?? {} }],
+              blocks: [{ type: "tool_use", id: callId, name, input: input ?? {} }],
             });
             messages.push({
               role: "user",
