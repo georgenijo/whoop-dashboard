@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-06-26: Cursor coach requires `--force` for headless MCP tool execution (fix for thread #111 "Whoop queries blocked")
+
+**Decision:** Added `--force` to the `cursor-agent` spawn in `cursor-loop.ts`. As of cursor-agent `2026.06.x`, headless `-p` runs leave `permissionMode: "default"`, which auto-**rejects** every MCP tool call (`"User rejected MCP: whoop-…"`); `--approve-mcps`/`--trust` and the `.cursor/cli.json` `permissions.allow` allowlist do NOT grant per-call execution in headless mode (verified across three allow-pattern variants — all rejected; only `--force` executes). Also hardened the stream-json parser to read tool name/input/timing from the `started` event (the `completed` event omits them → `name:"unknown"`, `duration_ms:0`) and to surface `result.rejected` as an **error** in `chat_logs` (it was silently logged as `ok`/empty, which masked the failure during debugging).
+
+**Rationale:** Prod coach runs Cursor Composer 2.5; thread #111 returned generic "Whoop queries were blocked" answers because every `query_*` call was rejected. The **same** cursor-agent binary (`2026.06.19`) worked Jun 23 (thread #110) and failed Jun 25 (#111) → the permission behavior changed **server-side under a static binary** (inference from the timeline, not confirmed against a Cursor changelog). `--force` = allow-unless-denied; containment is preserved by the cli.json `deny` list (`Shell`/`Write`/`WebFetch`/`Read`) + `--mode ask` — verified live on prod that whoop tools return real recovery rows AND that a shell command stays denied under `--force`. **Tradeoff:** posture shifts from deny-by-default allowlist → allow-unless-denied. **Standing fragility:** the coach depends on a Cursor permission contract that can change server-side without a local version bump; the parser hardening is so the next such regression surfaces in `/logs` instead of as silent empty results.
+
+**Status:** active (deployed to prod VM 2026-06-26, commit `0447667`; recovered from a concurrent-`next build` crash-loop during deploy — single clean rebuild restored service)
+
+**References:** coach thread #111, commit `0447667`, `apps/web/src/lib/coach/cursor-loop.ts`; see also the Cursor Composer provider + route-level SSE keep-alive decisions
+
+---
+
 ## 2026-06-21: Plans surface shipped — first Coach WRITE tool + recovery-tuned `/plans` + iOS Plans tab (PRs #423, #424)
 
 **Decision:** Shipped a recovery-tuned Plans feature (the spine of the "recovery-driven training" direction): the Coach's first **write** tool plus a durable, structured `/plans` surface on web + iOS, replacing one-off chat text. Locked calls:
