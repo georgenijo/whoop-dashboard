@@ -16,6 +16,7 @@ const tabs: Item[] = [
 ];
 
 const more: Item[] = [
+  { href: "/stats", label: "Stats", icon: "bar-chart-3" },
   { href: "/coach", label: "Coach", icon: "sparkles" },
   { href: "/plans", label: "Plans", icon: "clipboard-list" },
   { href: "/logs", label: "Logs", icon: "list" },
