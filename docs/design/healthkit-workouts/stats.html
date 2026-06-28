@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Stats · Whoop+</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/app.css" />
+</head>
+<body>
+<div class="aurora"></div>
+<div class="app">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="sb-brand">
+      <div class="mark">W</div>
+      <div class="wm">Whoop<span class="plus">+</span></div>
+    </div>
+    <nav class="sb-nav">
+      <div class="sb-group-label">Dashboard</div>
+      <a class="sb-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Overview</a>
+      <a class="sb-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 6.6a5 5 0 00-8.8-1.6A5 5 0 003.2 6.6c-1 2.5.3 5 2 6.8L12 20l6.8-6.6c1.7-1.8 3-4.3 2-6.8z"/></svg>Recovery</a>
+      <a class="sb-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 119.5 4a6.5 6.5 0 1010.5 10.5z"/></svg>Sleep</a>
+      <a class="sb-link" href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3l2.5-7 4 14 2.5-9 1.5 2h4.5"/></svg>Workouts</a>
+      <a class="sb-link active" href="stats.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Stats</a>
+      <a class="sb-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z"/><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8z"/></svg>Coach</a>
+    </nav>
+    <div class="sb-profile">
+      <div class="av">G</div>
+      <div class="who"><div class="n">George</div><div class="s">whoop · 482 all-time</div></div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+    <header class="topbar">
+      <div class="title-block">
+        <h1>Stats</h1>
+        <div class="date">Training history &amp; records</div>
+      </div>
+      <div class="right">
+        <div class="range" id="range">
+          <button>30D</button>
+          <button>90D</button>
+          <button>YTD</button>
+          <button class="active">2026</button>
+          <button>All</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="content">
+
+      <!-- ALL-TIME -->
+      <section>
+        <div class="microlabel" style="font-size:10px;letter-spacing:0.14em;margin:2px 4px 10px">All-time</div>
+        <div class="totals-strip">
+          <div class="total-cell"><span class="lbl">Workouts</span><span class="val">482</span></div>
+          <div class="total-cell"><span class="lbl">Active time</span><span class="val">311<span class="u">h</span></span></div>
+          <div class="total-cell"><span class="lbl">Distance</span><span class="val">1,240<span class="u">mi</span></span></div>
+          <div class="total-cell"><span class="lbl">Energy</span><span class="val">184<span class="u">k cal</span></span></div>
+        </div>
+      </section>
+
+      <!-- YoY -->
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title"><span class="dot" style="background:#00d4aa;color:#00d4aa"></span>2026 vs 2025</div>
+            <div class="card-sub" style="margin-top:4px">same-period year over year · Jan 1 – Jun 27</div>
+          </div>
+        </div>
+        <div class="statc-grid" id="statc-grid"></div>
+        <div class="backfill-note" style="margin-top:14px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+          2025 baseline is partial — full sync reaches back to Dec 5, 2025. Earlier months show as estimates until the historical backfill completes.
+        </div>
+      </section>
+
+      <!-- BY SPORT -->
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title"><span class="dot" style="background:#ffaa00;color:#ffaa00"></span>By sport</div>
+          <span class="card-sub">2026 · 82 sessions</span>
+        </div>
+        <div class="sport-list" id="sport-list"></div>
+      </section>
+
+      <!-- PERSONAL RECORDS -->
+      <section>
+        <div class="microlabel" style="font-size:10px;letter-spacing:0.14em;margin:2px 4px 10px">Personal records</div>
+        <div class="record-grid" id="record-grid"></div>
+      </section>
+
+      <!-- YoY TREND -->
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <div class="card-title"><span class="dot" style="background:#2563eb;color:#2563eb"></span>Year-over-year trend</div>
+            <div class="card-sub" style="margin-top:4px">monthly rollup · Dec 2025 – Jun 2026</div>
+          </div>
+          <div class="trend-legend">
+            <span class="tl"><i style="background:#2563eb"></i>Workouts</span>
+            <span class="tl"><i style="background:#ffaa00"></i>Avg strain</span>
+          </div>
+        </div>
+        <div class="trend-svg-wrap" id="trend-wrap"></div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<nav class="bottom-nav">
+  <a class="bn-tab" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Home</a>
+  <a class="bn-tab" href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3l2.5-7 4 14 2.5-9 1.5 2h4.5"/></svg>Workouts</a>
+  <a class="bn-tab active" href="stats.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Stats</a>
+  <a class="bn-tab" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z"/></svg>Coach</a>
+</nav>
+
+<script>
+(function(){
+  // ---- sparkline helper ----
+  function spark(vals, color){
+    var w=64,h=22,mn=Math.min.apply(null,vals),mx=Math.max.apply(null,vals),rng=(mx-mn)||1;
+    var pts=vals.map(function(v,i){
+      var x=i/(vals.length-1)*w, y=h-2-((v-mn)/rng)*(h-4); return x.toFixed(1)+","+y.toFixed(1);
+    });
+    var last=pts[pts.length-1].split(",");
+    return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'">'+
+      '<polyline points="'+pts.join(" ")+'" fill="none" stroke="'+color+'" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'+
+      '<circle cx="'+last[0]+'" cy="'+last[1]+'" r="1.8" fill="'+color+'"/></svg>';
+  }
+  var UP='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>';
+  var DN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>';
+
+  // ---- StatComparison ----
+  var STATS=[
+    {lbl:"Workouts", cur:"82", u:"", prior:"68", delta:"+14", dir:"up", spark:[6,8,7,10,9,12], color:"#00d4aa"},
+    {lbl:"Distance", cur:"512", u:"mi", prior:"414 mi", delta:"+98 mi", dir:"up", spark:[60,72,68,84,90,98], color:"#00d4aa"},
+    {lbl:"Active hrs", cur:"61", u:"h", prior:"52 h", delta:"+9 h", dir:"up", spark:[8,9,9,11,10,12], color:"#00d4aa"},
+    {lbl:"Calories", cur:"41", u:"k", prior:"43k", delta:"−2k", dir:"down", spark:[7.6,7.1,6.9,6.3,6.5,5.9], color:"#ff6b6b"}
+  ];
+  document.getElementById("statc-grid").innerHTML = STATS.map(function(s){
+    return '<div class="statc">'+
+      '<div class="sc-left">'+
+        '<div class="sc-lbl">'+s.lbl+'</div>'+
+        '<div class="sc-cur tnum">'+s.cur+(s.u?'<span class="u">'+s.u+'</span>':'')+'</div>'+
+        '<div class="sc-prior">vs 2025 · '+s.prior+'</div>'+
+      '</div>'+
+      '<div class="sc-right">'+
+        '<span class="sc-delta '+s.dir+'">'+(s.dir==="up"?UP:DN)+s.delta+'</span>'+
+        '<span class="sc-spark">'+spark(s.spark,s.color)+'</span>'+
+      '</div>'+
+    '</div>';
+  }).join("");
+
+  // ---- by sport ----
+  var SPORTS=[
+    {name:"Walking", v:50, color:"#00aaff"},
+    {name:"Strength",v:11, color:"#7b61ff"},
+    {name:"Soccer",  v:7,  color:"#ffaa00"},
+    {name:"Cycling", v:5,  color:"#00d4aa"},
+    {name:"Running", v:4,  color:"#ff6b6b"},
+    {name:"Hiking",  v:3,  color:"#22c55e"},
+    {name:"Other",   v:2,  color:"#3f3f46"}
+  ];
+  var mxS=Math.max.apply(null,SPORTS.map(function(s){return s.v;}));
+  document.getElementById("sport-list").innerHTML = SPORTS.map(function(s){
+    return '<div class="sport-row">'+
+      '<span class="name"><i style="background:'+s.color+'"></i>'+s.name+'</span>'+
+      '<span class="track"><span style="width:'+(s.v/mxS*100)+'%;background:'+s.color+'"></span></span>'+
+      '<span class="n">'+s.v+'</span>'+
+    '</div>';
+  }).join("");
+
+  // ---- personal records ----
+  var TROPHY='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h12v3a6 6 0 01-12 0z"/><path d="M6 5H3v1a3 3 0 003 3M18 5h3v1a3 3 0 01-3 3"/><path d="M9 14.5h6M10 20h4M12 14.5V20"/></svg>';
+  var RECORDS=[
+    {lbl:"Longest session", val:"1:42", u:"", meta:"Soccer · Jun 27, 2026"},
+    {lbl:"Most calories", val:"1,120", u:"cal", meta:"Soccer · Jun 27, 2026"},
+    {lbl:"Highest strain", val:"19.4", u:"", meta:"Cycling · Mar 14, 2026"},
+    {lbl:"Biggest week", val:"14:20", u:"h", meta:"Week of May 18, 2026"},
+    {lbl:"Top HR", val:"196", u:"bpm", meta:"Running · Apr 9, 2026"},
+    {lbl:"Most sessions / mo", val:"19", u:"", meta:"March 2026"}
+  ];
+  document.getElementById("record-grid").innerHTML = RECORDS.map(function(r){
+    return '<div class="record-card">'+
+      '<div class="rc-ico">'+TROPHY+'</div>'+
+      '<div class="rc-lbl">'+r.lbl+'</div>'+
+      '<div class="rc-val tnum">'+r.val+(r.u?'<span class="u">'+r.u+'</span>':'')+'</div>'+
+      '<div class="rc-meta">'+r.meta+'</div>'+
+    '</div>';
+  }).join("");
+
+  // ---- YoY trend (monthly rollup: bars=count, line=avg strain) ----
+  var MONTHS=[
+    {m:"Dec", count:9,  strain:7.4, partial:true},
+    {m:"Jan", count:14, strain:8.1},
+    {m:"Feb", count:12, strain:8.6},
+    {m:"Mar", count:19, strain:9.8},
+    {m:"Apr", count:15, strain:9.2},
+    {m:"May", count:13, strain:10.1},
+    {m:"Jun", count:9,  strain:11.3, partial:true}
+  ];
+  var W=760,H=240,padL=34,padR=34,padT=16,padB=30;
+  var n=MONTHS.length, slot=(W-padL-padR)/n;
+  var mxC=20, mnStrain=6, mxStrain=12;
+  function bx(i){ return padL + slot*i + slot*0.22; }
+  var bw=slot*0.56;
+  function byTop(c){ return padT + (1-c/mxC)*(H-padT-padB); }
+  function syY(s){ return padT + (1-(s-mnStrain)/(mxStrain-mnStrain))*(H-padT-padB); }
+
+  var bars=MONTHS.map(function(d,i){
+    var top=byTop(d.count), h=(H-padB)-top;
+    return '<rect x="'+bx(i).toFixed(1)+'" y="'+top.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+h.toFixed(1)+'" rx="3" '+
+      'fill="#2563eb" opacity="'+(d.partial?0.42:0.85)+'"/>'+
+      '<text x="'+(bx(i)+bw/2).toFixed(1)+'" y="'+(top-6).toFixed(1)+'" text-anchor="middle" fill="#a1a1aa" font-family="Geist Mono" font-size="10" font-weight="600">'+d.count+'</text>';
+  }).join("");
+  var linePts=MONTHS.map(function(d,i){ return (bx(i)+bw/2).toFixed(1)+","+syY(d.strain).toFixed(1); });
+  var strainLine='<polyline points="'+linePts.join(" ")+'" fill="none" stroke="#ffaa00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'+
+    MONTHS.map(function(d,i){ return '<circle cx="'+(bx(i)+bw/2).toFixed(1)+'" cy="'+syY(d.strain).toFixed(1)+'" r="3" fill="#ffaa00"/>'; }).join("");
+  var xlabels=MONTHS.map(function(d,i){
+    return '<text x="'+(bx(i)+bw/2).toFixed(1)+'" y="'+(H-padB+18)+'" text-anchor="middle" fill="#6b6b74" font-family="Geist Mono" font-size="10">'+d.m+(d.partial?'*':'')+'</text>';
+  }).join("");
+  var baseline='<line x1="'+padL+'" y1="'+(H-padB)+'" x2="'+(W-padR)+'" y2="'+(H-padB)+'" stroke="rgba(255,255,255,0.08)"/>';
+
+  document.getElementById("trend-wrap").innerHTML =
+    '<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none" style="width:100%;height:auto;aspect-ratio:'+W+'/'+H+'">'+
+      baseline+bars+strainLine+xlabels+
+    '</svg>'+
+    '<div style="font-family:var(--font-mono);font-size:9.5px;color:var(--fg-4);margin-top:4px;text-align:right">* partial month</div>';
+
+  // range pills
+  var range=document.getElementById("range");
+  range.addEventListener("click",function(e){
+    var b=e.target.closest("button"); if(!b) return;
+    [].forEach.call(range.children,function(c){c.classList.remove("active");});
+    b.classList.add("active");
+  });
+})();
+</script>
+</body>
+</html>

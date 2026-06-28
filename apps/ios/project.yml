@@ -41,8 +41,11 @@ targets:
         aps-environment: development
         com.apple.developer.applesignin:
           - Default
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.background-delivery: true
     dependencies:
       - sdk: AuthenticationServices.framework
+      - sdk: HealthKit.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.georgenijo.coach
@@ -57,4 +60,5 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_UISupportedInterfaceOrientations~iphone: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
+        INFOPLIST_KEY_NSHealthShareUsageDescription: "Coach reads your workouts and heart rate from Health to enrich your training stats."
         INFOPLIST_KEY_UIAppFonts: "Geist-Regular.ttf Geist-Medium.ttf Geist-SemiBold.ttf Geist-Bold.ttf GeistMono-Regular.ttf GeistMono-Medium.ttf GeistMono-SemiBold.ttf"

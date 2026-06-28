@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Walking · Jun 24 · Whoop+</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/app.css" />
+</head>
+<body>
+<div class="aurora"></div>
+<div class="app">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="sb-brand">
+      <div class="mark">W</div>
+      <div class="wm">Whoop<span class="plus">+</span></div>
+    </div>
+    <nav class="sb-nav">
+      <div class="sb-group-label">Dashboard</div>
+      <a class="sb-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Overview</a>
+      <a class="sb-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 6.6a5 5 0 00-8.8-1.6A5 5 0 003.2 6.6c-1 2.5.3 5 2 6.8L12 20l6.8-6.6c1.7-1.8 3-4.3 2-6.8z"/></svg>Recovery</a>
+      <a class="sb-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 119.5 4a6.5 6.5 0 1010.5 10.5z"/></svg>Sleep</a>
+      <a class="sb-link active" href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3l2.5-7 4 14 2.5-9 1.5 2h4.5"/></svg>Workouts</a>
+      <a class="sb-link" href="stats.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Stats</a>
+      <a class="sb-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z"/><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8z"/></svg>Coach</a>
+    </nav>
+    <div class="sb-profile">
+      <div class="av">G</div>
+      <div class="who"><div class="n">George</div><div class="s">whoop · 82 this yr</div></div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+    <div class="content" style="padding-top:22px">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+        <a class="back-link" href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>Workouts</a>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <span class="source-badge"><span class="mark"></span>Whoop</span>
+        </div>
+      </div>
+
+      <div class="detail-head">
+        <div class="h-left">
+          <div class="detail-title">
+            <span class="sport-ico"><svg viewBox="0 0 24 24" fill="none" stroke="#00aaff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="13" cy="4.5" r="1.6"/><path d="M11 9l-2 4 2.5 1.5 1 5"/><path d="M11 9l2.5-1 2 2 2.5 1"/><path d="M9.5 13l-2 1-1.5 4"/></svg></span>
+            <h1>Walking</h1>
+          </div>
+          <div class="detail-meta">Jun 24, 2026<span class="sep">·</span>7:12 – 8:04 AM<span class="sep">·</span>52m</div>
+        </div>
+      </div>
+
+      <!-- hero stat strip (from Whoop summary) -->
+      <div class="stat-strip">
+        <div class="stat-cell is-strain"><span class="lbl">Strain</span><span class="val">6.2</span><span class="sub">light · 28th %ile</span></div>
+        <div class="stat-cell"><span class="lbl">Avg HR</span><span class="val">104<span class="u">bpm</span></span><span class="sub">53% of max</span></div>
+        <div class="stat-cell"><span class="lbl">Max HR</span><span class="val">128<span class="u">bpm</span></span><span class="sub">65% of max</span></div>
+        <div class="stat-cell"><span class="lbl">Energy</span><span class="val">312<span class="u">cal</span></span><span class="sub">1,305 kJ</span></div>
+        <div class="stat-cell"><span class="lbl">Distance</span><span class="val" style="color:var(--fg-4)">—</span><span class="sub">not recorded</span></div>
+      </div>
+
+      <div class="grid-main">
+        <div class="col">
+
+          <!-- HR curve — NO STREAM placeholder -->
+          <section class="card hr-chart">
+            <div class="card-head">
+              <div>
+                <div class="card-title"><span class="dot" style="background:#6b6b74;color:#6b6b74"></span>Heart Rate</div>
+                <div class="card-sub" style="margin-top:4px">per-second stream</div>
+              </div>
+              <span class="card-sub" style="color:var(--fg-2)">summary only</span>
+            </div>
+            <div class="nostream">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3l2-5 4 10 2-6 1.5 1h5.5"/><line x1="4" y1="4" x2="20" y2="20" stroke-width="1.4"/></svg>
+              <div class="t">HR detail not captured for this session</div>
+              <div class="s">This walk was recorded by Whoop only. Per-second heart-rate curves appear on sessions captured through Apple Health — newer workouts, or once the historical backfill reaches this date.</div>
+            </div>
+          </section>
+
+          <!-- HR zones still from Whoop -->
+          <section class="card">
+            <div class="card-head">
+              <div class="card-title"><span class="dot" style="background:#06b6d4;color:#06b6d4"></span>HR Zones</div>
+              <span class="card-sub">from Whoop · 52m total</span>
+            </div>
+            <div class="zone-bar" id="zone-bar"></div>
+            <div class="zone-legend" id="zone-legend"></div>
+          </section>
+
+        </div>
+
+        <div class="col">
+
+          <!-- Effort & Recovery locked -->
+          <section class="card">
+            <div class="card-head">
+              <div class="card-title"><span class="dot" style="background:#3f3f46;color:#3f3f46"></span>Effort &amp; Recovery</div>
+              <span class="card-sub">needs stream</span>
+            </div>
+            <div class="nostream" style="padding:28px 22px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>
+              <div class="t">Effort metrics need the HR stream</div>
+              <div class="s">Cardiac drift, recovery rate, time-above-threshold and TRIMP are computed per-second. They populate automatically once a HealthKit HR stream exists for this session.</div>
+            </div>
+          </section>
+
+          <!-- Whoop summary recap -->
+          <section class="card">
+            <div class="card-head">
+              <div class="card-title"><span class="dot" style="background:#ffaa00;color:#ffaa00"></span>Session summary</div>
+              <span class="card-sub">Whoop</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0">
+              <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.05)"><span class="microlabel" style="font-size:10px">Duration</span><span class="tnum" style="font-family:var(--font-mono);font-size:12.5px;color:var(--fg-1)">52m</span></div>
+              <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.05)"><span class="microlabel" style="font-size:10px">Strain</span><span class="tnum" style="font-family:var(--font-mono);font-size:12.5px;color:#ffaa00;font-weight:600">6.2</span></div>
+              <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.05)"><span class="microlabel" style="font-size:10px">Energy</span><span class="tnum" style="font-family:var(--font-mono);font-size:12.5px;color:var(--fg-1)">312 cal · 1,305 kJ</span></div>
+              <div style="display:flex;justify-content:space-between;padding:9px 0"><span class="microlabel" style="font-size:10px">Avg · Max HR</span><span class="tnum" style="font-family:var(--font-mono);font-size:12.5px;color:var(--fg-1)">104 · 128 bpm</span></div>
+            </div>
+          </section>
+
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<nav class="bottom-nav">
+  <a class="bn-tab" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Home</a>
+  <a class="bn-tab active" href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3l2.5-7 4 14 2.5-9 1.5 2h4.5"/></svg>Workouts</a>
+  <a class="bn-tab" href="stats.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Stats</a>
+  <a class="bn-tab" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z"/></svg>Coach</a>
+</nav>
+
+<script>
+(function(){
+  var ZONES = [
+    {label:"Z0",color:"#1e3a8a",min:28, pct:54, range:"rest"},
+    {label:"Z1",color:"#2563eb",min:16, pct:31, range:"<119"},
+    {label:"Z2",color:"#06b6d4",min:7,  pct:13, range:"119–138"},
+    {label:"Z3",color:"#facc15",min:1,  pct:2,  range:"139–158"},
+    {label:"Z4",color:"#f97316",min:0,  pct:0,  range:"159–178"},
+    {label:"Z5",color:"#b91c1c",min:0,  pct:0,  range:">178"}
+  ];
+  function mmss(m){ var t=Math.round(m*60); var mm=Math.floor(t/60), ss=t%60; return mm+":"+(ss<10?"0":"")+ss; }
+  document.getElementById("zone-bar").innerHTML = ZONES.map(function(z){
+    return z.pct>0 ? '<span style="width:'+z.pct+'%;background:'+z.color+'"></span>' : "";
+  }).join("");
+  document.getElementById("zone-legend").innerHTML = ZONES.map(function(z){
+    return '<div class="zc"><span class="top"><i style="background:'+z.color+'"></i>'+z.label+'</span>'+
+      '<span class="min">'+mmss(z.min)+'</span><span class="pct">'+z.pct+'%</span>'+
+      '<span class="zone-range">'+z.range+'</span></div>';
+  }).join("");
+})();
+</script>
+</body>
+</html>
