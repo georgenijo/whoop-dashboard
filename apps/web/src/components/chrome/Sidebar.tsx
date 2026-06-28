@@ -12,6 +12,7 @@ const nav: NavItem[] = [
   { href: "/sleep", label: "Sleep", icon: "moon" },
   { href: "/strain", label: "Strain", icon: "flame" },
   { href: "/workouts", label: "Workouts", icon: "dumbbell" },
+  { href: "/stats", label: "Stats", icon: "bar-chart-3" },
 ];
 
 const secondary: NavItem[] = [

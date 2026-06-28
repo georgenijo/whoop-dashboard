@@ -40,12 +40,15 @@ export {
 
 export type {
   WorkoutRow,
+  WorkoutHrSeries,
   WorkoutsRangeResult,
   TodayWorkoutRow,
   TodayStrainAggregate,
 } from "./workouts";
 export {
   getWorkouts,
+  getWorkoutById,
+  getWorkoutHrSeries,
   getWorkoutsRange,
   getTodayWorkouts,
   getTodayStrainAggregate,

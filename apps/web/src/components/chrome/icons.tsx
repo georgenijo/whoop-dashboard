@@ -1,5 +1,6 @@
 import {
   Activity,
+  BarChart3,
   Bell,
   ClipboardList,
   Dumbbell,
@@ -21,6 +22,7 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   moon: Moon,
   flame: Flame,
   dumbbell: Dumbbell,
+  "bar-chart-3": BarChart3,
   sparkles: Sparkles,
   list: List,
   "clipboard-list": ClipboardList,

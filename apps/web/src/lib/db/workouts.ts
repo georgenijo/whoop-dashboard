@@ -111,6 +111,64 @@ export function getTodayStrainAggregate(
   };
 }
 
+/**
+ * Single workout by its primary key, scoped to the owner. Returns `undefined`
+ * when the id is unknown OR belongs to another user — callers map that to a
+ * 404 (`notFound()`), so cross-tenant ids are indistinguishable from missing.
+ */
+export function getWorkoutById(
+  userId: number,
+  id: string,
+): WorkoutRow | undefined {
+  return forUser(userId).get<WorkoutRow>(
+    `SELECT ${WORKOUT_COLUMNS} FROM workouts WHERE id = ? AND user_id = ?`,
+    id,
+  );
+}
+
+// Per-second HR stream downsampled by the HealthKit ingest (see
+// docs/design/healthkit-workouts/CONTRACT.md). `bpm[i]` is the HR at
+// `start_offset_sec + i*interval_sec` seconds in; nulls mark gaps.
+export type WorkoutHrSeries = {
+  interval_sec: number;
+  start_offset_sec: number;
+  bpm: (number | null)[];
+};
+
+/**
+ * Parsed HR stream for a workout, or `null` when absent.
+ *
+ * The `hr_series` column is added by the HealthKit ingest migration (T1) and
+ * may not exist in older schemas — this tolerates a missing column gracefully
+ * (PRAGMA gate) so the route builds/runs before that migration lands. Goes
+ * through `forUser().read()` so the manual prepared statement stays tenant-
+ * scoped (we bind `user_id` ourselves).
+ */
+export function getWorkoutHrSeries(
+  userId: number,
+  id: string,
+): WorkoutHrSeries | null {
+  return (
+    forUser(userId).read((db, uid) => {
+      const hasColumn = (
+        db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[]
+      ).some((c) => c.name === "hr_series");
+      if (!hasColumn) return null;
+      const row = db
+        .prepare("SELECT hr_series FROM workouts WHERE id = ? AND user_id = ?")
+        .get(id, uid) as { hr_series: string | null } | undefined;
+      if (!row?.hr_series) return null;
+      try {
+        const parsed = JSON.parse(row.hr_series) as WorkoutHrSeries;
+        if (!parsed || !Array.isArray(parsed.bpm)) return null;
+        return parsed;
+      } catch {
+        return null;
+      }
+    }) ?? null
+  );
+}
+
 export type WorkoutsRangeResult = {
   rows: WorkoutRow[];
   truncated: boolean;

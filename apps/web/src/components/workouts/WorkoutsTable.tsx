@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import Link from "next/link";
 import type { WorkoutRow } from "@/lib/db";
 
 type Props = { rows: WorkoutRow[] };
@@ -13,6 +13,10 @@ const ZONES = [
   { key: "zone_4_ms" as const, label: "Z4", color: "#f97316" },
   { key: "zone_5_ms" as const, label: "Z5", color: "#b91c1c" },
 ];
+
+// Shared column template so the header and every row line up. Last two tracks
+// are the at-a-glance mini zone-bar + chevron affordance.
+const GRID_COLUMNS = "96px 1fr 72px 56px 72px 72px 56px 132px 16px";
 
 function formatDuration(sec: number | null): string {
   if (sec == null) return "—";
@@ -36,6 +40,8 @@ function formatMinutes(ms: number | null): string {
   return `${min.toFixed(min >= 10 ? 0 : 1)}m`;
 }
 
+const HEADERS = ["Date", "Sport", "Duration", "Strain", "Avg HR", "Max HR", "kcal"];
+
 export default function WorkoutsTable({ rows }: Props) {
   return (
     <div className="card" style={{ overflowX: "auto" }}>
@@ -52,307 +58,126 @@ export default function WorkoutsTable({ rows }: Props) {
           <div className="sub">Adjust the date range or sync Whoop</div>
         </div>
       ) : (
-        <table
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            fontFamily: "var(--font-mono)",
-            fontSize: 12,
-          }}
-        >
-          <thead>
-            <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-              <th aria-hidden="true" style={{ width: 24 }} />
-              {["Date", "Sport", "Duration", "Strain", "Avg HR", "Max HR", "kcal"].map((h) => (
-                <th
-                  key={h}
-                  style={{
-                    textAlign: "left",
-                    padding: "6px 10px",
-                    color: "var(--fg-3)",
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    letterSpacing: "0.1em",
-                    fontSize: 10,
-                  }}
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((w) => (
-              <WorkoutRowItem key={w.id} workout={w} />
+        <div style={{ minWidth: 760, fontFamily: "var(--font-mono)", fontSize: 12 }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: GRID_COLUMNS,
+              gap: 10,
+              alignItems: "center",
+              padding: "6px 10px",
+              borderBottom: "1px solid rgba(255,255,255,0.06)",
+            }}
+          >
+            {HEADERS.map((h) => (
+              <span
+                key={h}
+                style={{
+                  color: "var(--fg-3)",
+                  fontWeight: 600,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.1em",
+                  fontSize: 10,
+                }}
+              >
+                {h}
+              </span>
             ))}
-          </tbody>
-        </table>
+            <span aria-hidden style={{ color: "var(--fg-3)", fontSize: 10, letterSpacing: "0.1em" }}>
+              ZONES
+            </span>
+            <span aria-hidden />
+          </div>
+          {rows.map((w) => (
+            <WorkoutRowItem key={w.id} workout={w} />
+          ))}
+        </div>
       )}
     </div>
   );
 }
 
 function WorkoutRowItem({ workout: w }: { workout: WorkoutRow }) {
-  const [open, setOpen] = useState(false);
-  const detailId = useId();
-
   const totalZoneMs = ZONES.reduce((sum, z) => sum + (w[z.key] ?? 0), 0);
   const zonesPresent = totalZoneMs > 0;
 
   return (
-    <>
-      <tr
+    <Link
+      href={`/workouts/${w.id}`}
+      aria-label={`View ${w.sport ?? "workout"} on ${formatDate(w.date)}`}
+      style={{
+        display: "grid",
+        gridTemplateColumns: GRID_COLUMNS,
+        gap: 10,
+        alignItems: "center",
+        padding: "8px 10px",
+        borderBottom: "1px solid rgba(255,255,255,0.03)",
+        color: "inherit",
+        textDecoration: "none",
+      }}
+    >
+      <span style={{ color: "var(--fg-2)" }}>{formatDate(w.date)}</span>
+      <span
         style={{
-          borderBottom: open
-            ? "1px solid rgba(255,255,255,0.06)"
-            : "1px solid rgba(255,255,255,0.03)",
+          color: "var(--fg-0)",
+          fontWeight: 500,
+          fontFamily: "var(--font-sans)",
         }}
       >
-        <td style={{ padding: 0 }}>
-          <button
-            type="button"
-            aria-expanded={open}
-            aria-controls={detailId}
-            aria-label={`${open ? "Collapse" : "Expand"} workout on ${formatDate(w.date)}`}
-            onClick={() => setOpen((v) => !v)}
-            style={{
-              width: 24,
-              height: 28,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "transparent",
-              border: 0,
-              cursor: "pointer",
-              color: "var(--fg-3)",
-              padding: 0,
-            }}
-          >
-            <svg
-              aria-hidden="true"
-              viewBox="0 0 16 16"
-              style={{
-                width: 12,
-                height: 12,
-                transform: open ? "rotate(90deg)" : "rotate(0deg)",
-                transition: "transform var(--dur-base)",
-              }}
-            >
-              <path
-                d="M6 4l4 4-4 4"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="1.8"
-              />
-            </svg>
-          </button>
-        </td>
-        <td style={{ padding: "8px 10px", color: "var(--fg-2)" }}>{formatDate(w.date)}</td>
-        <td
+        {w.sport ?? "—"}
+      </span>
+      <span style={{ color: "var(--fg-1)" }}>{formatDuration(w.duration_sec)}</span>
+      <span style={{ color: "#ffaa00", fontWeight: 600 }}>{w.strain?.toFixed(1) ?? "—"}</span>
+      <span style={{ color: "var(--fg-1)" }}>{w.avg_hr != null ? `${w.avg_hr} bpm` : "—"}</span>
+      <span style={{ color: "var(--fg-1)" }}>{w.max_hr != null ? `${w.max_hr} bpm` : "—"}</span>
+      <span style={{ color: "var(--fg-2)" }}>
+        {w.kilojoule != null ? `${(w.kilojoule * 0.239).toFixed(0)}` : "—"}
+      </span>
+
+      {zonesPresent ? (
+        <span
           style={{
-            padding: "8px 10px",
-            color: "var(--fg-0)",
-            fontWeight: 500,
-            fontFamily: "var(--font-sans)",
+            display: "flex",
+            width: "100%",
+            height: 8,
+            borderRadius: 4,
+            overflow: "hidden",
+            background: "rgba(255,255,255,0.04)",
           }}
         >
-          {w.sport ?? "—"}
-        </td>
-        <td style={{ padding: "8px 10px", color: "var(--fg-1)" }}>
-          {formatDuration(w.duration_sec)}
-        </td>
-        <td style={{ padding: "8px 10px", color: "#ffaa00", fontWeight: 600 }}>
-          {w.strain?.toFixed(1) ?? "—"}
-        </td>
-        <td style={{ padding: "8px 10px", color: "var(--fg-1)" }}>
-          {w.avg_hr != null ? `${w.avg_hr} bpm` : "—"}
-        </td>
-        <td style={{ padding: "8px 10px", color: "var(--fg-1)" }}>
-          {w.max_hr != null ? `${w.max_hr} bpm` : "—"}
-        </td>
-        <td style={{ padding: "8px 10px", color: "var(--fg-2)" }}>
-          {w.kilojoule != null ? `${(w.kilojoule * 0.239).toFixed(0)}` : "—"}
-        </td>
-      </tr>
-      {open && (
-        <tr id={detailId} style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
-          <td colSpan={8} style={{ padding: "12px 16px 16px 32px", background: "rgba(255,255,255,0.015)" }}>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-                gap: 12,
-                marginBottom: zonesPresent ? 12 : 0,
-              }}
-            >
-              <DetailCell label="Sport" value={w.sport ?? "—"} />
-              <DetailCell label="Duration" value={formatDuration(w.duration_sec)} />
-              <DetailCell
-                label="Avg HR"
-                value={w.avg_hr != null ? `${w.avg_hr} bpm` : "—"}
+          {ZONES.map((z) => {
+            const ms = w[z.key] ?? 0;
+            const pct = totalZoneMs > 0 ? (ms / totalZoneMs) * 100 : 0;
+            if (pct <= 0) return null;
+            return (
+              <span
+                key={z.label}
+                title={`${z.label}: ${formatMinutes(ms)}`}
+                style={{ width: `${pct}%`, background: z.color }}
               />
-              <DetailCell
-                label="Max HR"
-                value={w.max_hr != null ? `${w.max_hr} bpm` : "—"}
-              />
-              <DetailCell
-                label="kJ"
-                value={w.kilojoule != null ? w.kilojoule.toFixed(0) : "—"}
-              />
-              <DetailCell
-                label="Distance"
-                value={
-                  w.distance_m != null && w.distance_m > 0
-                    ? `${(w.distance_m / 1000).toFixed(2)} km`
-                    : "—"
-                }
-              />
-            </div>
-
-            {zonesPresent ? (
-              <div>
-                <div
-                  style={{
-                    fontFamily: "var(--font-mono)",
-                    fontSize: 10,
-                    color: "var(--fg-3)",
-                    letterSpacing: "0.08em",
-                    textTransform: "uppercase",
-                    marginBottom: 6,
-                  }}
-                >
-                  HR zones
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    width: "100%",
-                    height: 8,
-                    borderRadius: 4,
-                    overflow: "hidden",
-                    marginBottom: 8,
-                    background: "rgba(255,255,255,0.04)",
-                  }}
-                >
-                  {ZONES.map((z) => {
-                    const ms = w[z.key] ?? 0;
-                    const pct = totalZoneMs > 0 ? (ms / totalZoneMs) * 100 : 0;
-                    if (pct <= 0) return null;
-                    return (
-                      <span
-                        key={z.label}
-                        title={`${z.label}: ${formatMinutes(ms)}`}
-                        style={{ width: `${pct}%`, background: z.color }}
-                      />
-                    );
-                  })}
-                </div>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(6, 1fr)",
-                    gap: 8,
-                  }}
-                >
-                  {ZONES.map((z) => {
-                    const ms = w[z.key] ?? 0;
-                    const pct = totalZoneMs > 0 ? (ms / totalZoneMs) * 100 : 0;
-                    return (
-                      <div
-                        key={z.label}
-                        style={{ display: "flex", flexDirection: "column", gap: 2 }}
-                      >
-                        <span
-                          style={{
-                            fontFamily: "var(--font-mono)",
-                            fontSize: 9,
-                            color: "var(--fg-3)",
-                            letterSpacing: "0.04em",
-                            textTransform: "uppercase",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 4,
-                          }}
-                        >
-                          <span
-                            style={{
-                              width: 6,
-                              height: 6,
-                              borderRadius: 1,
-                              background: z.color,
-                            }}
-                          />
-                          {z.label}
-                        </span>
-                        <span
-                          style={{
-                            fontFamily: "var(--font-mono)",
-                            fontSize: 11,
-                            color: "var(--fg-1)",
-                            fontVariantNumeric: "tabular-nums",
-                          }}
-                        >
-                          {formatMinutes(ms)}
-                        </span>
-                        <span
-                          style={{
-                            fontFamily: "var(--font-mono)",
-                            fontSize: 10,
-                            color: "var(--fg-3)",
-                            fontVariantNumeric: "tabular-nums",
-                          }}
-                        >
-                          {pct.toFixed(0)}%
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <div
-                style={{
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 11,
-                  color: "var(--fg-3)",
-                }}
-              >
-                No HR zone data for this workout
-              </div>
-            )}
-          </td>
-        </tr>
+            );
+          })}
+        </span>
+      ) : (
+        <span style={{ color: "var(--fg-3)", fontSize: 10 }}>no zone data</span>
       )}
-    </>
-  );
-}
 
-function DetailCell({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <span
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 9,
-          color: "var(--fg-3)",
-          letterSpacing: "0.08em",
-          textTransform: "uppercase",
-        }}
+        aria-hidden
+        style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--fg-3)" }}
       >
-        {label}
+        <svg
+          viewBox="0 0 16 16"
+          style={{ width: 12, height: 12 }}
+          fill="none"
+          stroke="currentColor"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.8"
+        >
+          <path d="M6 4l4 4-4 4" />
+        </svg>
       </span>
-      <span
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 12,
-          color: "var(--fg-1)",
-          fontVariantNumeric: "tabular-nums",
-        }}
-      >
-        {value}
-      </span>
-    </div>
+    </Link>
   );
 }
