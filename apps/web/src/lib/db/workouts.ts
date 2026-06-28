@@ -492,6 +492,19 @@ export function getPersonalRecords(userId: number): PersonalRecords {
   };
 }
 
+/**
+ * Earliest workout date (YYYY-MM-DD) the user owns, or `null` when they have no
+ * workouts. Lets the iOS Stats screen show an honest "history starts on …" note
+ * so partial-backfill ranges aren't mistaken for complete records. Tenant-scoped
+ * via forUser().
+ */
+export function getWorkoutHistoryFloor(userId: number): string | null {
+  const row = forUser(userId).get<{ floor: string | null }>(
+    `SELECT MIN(date) AS floor FROM workouts WHERE user_id = ?`,
+  );
+  return row?.floor ?? null;
+}
+
 export type MonthlyRollupRow = {
   /** "YYYY-MM" */
   month: string;
