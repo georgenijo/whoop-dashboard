@@ -18,6 +18,11 @@ struct RootView: View {
                         Label("Trends", systemImage: "chart.xyaxis.line")
                     }
 
+                StatsView()
+                    .tabItem {
+                        Label("Stats", systemImage: "chart.bar.fill")
+                    }
+
                 CoachView()
                     .tabItem {
                         Label("Coach", systemImage: "sparkles")
