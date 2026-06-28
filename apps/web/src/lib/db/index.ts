@@ -44,6 +44,13 @@ export type {
   WorkoutsRangeResult,
   TodayWorkoutRow,
   TodayStrainAggregate,
+  AllTimeStats,
+  YoyMetric,
+  YearComparison,
+  SportBreakdownRow,
+  PersonalRecord,
+  PersonalRecords,
+  MonthlyRollupRow,
 } from "./workouts";
 export {
   getWorkouts,
@@ -52,6 +59,11 @@ export {
   getWorkoutsRange,
   getTodayWorkouts,
   getTodayStrainAggregate,
+  getAllTimeStats,
+  getYearComparison,
+  getSportBreakdown,
+  getPersonalRecords,
+  getMonthlyRollup,
 } from "./workouts";
 
 export type { PRStats, PRValue, PRStreak } from "./prs";
