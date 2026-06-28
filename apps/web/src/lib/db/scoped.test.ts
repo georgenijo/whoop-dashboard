@@ -162,6 +162,9 @@ const ALLOWLIST_RELATIVE = new Set<string>([
   "src/lib/db/connection.ts",
   "src/lib/whoop/upsert.ts",
   "src/lib/sync.ts",
+  // HealthKit ingest write helper (issue #425) — match-lookup reads route
+  // through forUser(); insert/enrich writes go through openWrite() directly.
+  "src/lib/healthkit/ingest.ts",
   // Domain read modules — all SQL flows through forUser(...).
   "src/lib/db/recovery.ts",
   "src/lib/db/sleep.ts",
