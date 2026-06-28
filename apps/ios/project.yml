@@ -61,4 +61,5 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations~iphone: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         INFOPLIST_KEY_NSHealthShareUsageDescription: "Coach reads your workouts and heart rate from Health to enrich your training stats."
+        INFOPLIST_KEY_NSHealthUpdateUsageDescription: "Coach does not write to Health; this access is declared only because the HealthKit entitlement requires it."
         INFOPLIST_KEY_UIAppFonts: "Geist-Regular.ttf Geist-Medium.ttf Geist-SemiBold.ttf Geist-Bold.ttf GeistMono-Regular.ttf GeistMono-Medium.ttf GeistMono-SemiBold.ttf"
