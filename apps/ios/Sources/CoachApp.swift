@@ -56,6 +56,7 @@ struct CoachApp: App {
                 .onAppear {
                     if isSignedIn {
                         PushService.shared.requestAuthorizationIfNeeded()
+                        Task { await HealthKitService.shared.bootstrap() }
                     }
                 }
                 .onChange(of: scenePhase) { _, newPhase in
@@ -67,6 +68,9 @@ struct CoachApp: App {
                             let store = chatInFlight
                             let client = api
                             Task { await Self.reconcileInFlight(store: store, api: client) }
+                            if isSignedIn {
+                                Task { await HealthKitService.shared.sync() }
+                            }
                         }
                     case .background:
                         wasBackgrounded = true
@@ -89,6 +93,7 @@ struct CoachApp: App {
                 isSignedIn = true
                 ClientLogger.shared.lifecycle("signin")
                 PushService.shared.requestAuthorizationIfNeeded()
+                Task { await HealthKitService.shared.bootstrap() }
             })
         }
     }
