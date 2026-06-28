@@ -169,6 +169,27 @@ export function getWorkoutHrSeries(
   );
 }
 
+/**
+ * Provenance of a workout row: `'whoop'`, `'healthkit'`, or `null` when the
+ * `source` column doesn't exist yet (pre-migration). PRAGMA-gated like
+ * `getWorkoutHrSeries` so reads tolerate the older schema; tenant-scoped via
+ * `forUser().read()`.
+ */
+export function getWorkoutSource(userId: number, id: string): string | null {
+  return (
+    forUser(userId).read((db, uid) => {
+      const hasColumn = (
+        db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[]
+      ).some((c) => c.name === "source");
+      if (!hasColumn) return null;
+      const row = db
+        .prepare("SELECT source FROM workouts WHERE id = ? AND user_id = ?")
+        .get(id, uid) as { source: string | null } | undefined;
+      return row?.source ?? null;
+    }) ?? null
+  );
+}
+
 export type WorkoutsRangeResult = {
   rows: WorkoutRow[];
   truncated: boolean;

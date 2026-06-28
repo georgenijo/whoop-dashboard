@@ -1,5 +1,6 @@
 import "server-only";
 import { openWrite, type DB } from "@/lib/db/connection";
+import { MATCH_WINDOW_MS, SQL_WINDOW_MS, sportsCompatible } from "@/lib/healthkit/match";
 
 // KEEP IN SYNC WITH streamlit/whoop/db.py:147-262 (column lists for recovery/cycles/sleep/workouts)
 // KEEP IN SYNC WITH sync/daily_summary.py:26-91 (SELECT/INSERT_DAILY_SUMMARY SQL)
@@ -316,6 +317,7 @@ export function upsertWorkout(record: WhoopWorkoutRecord, userId: number, tz: st
   if (record.score_state !== "SCORED" || !record.score) return false;
   const db = openWrite();
   if (!db) return false;
+  let reconciledDates: string[] = [];
   try {
     const zd = record.score.zone_durations;
     const durationSec =
@@ -347,10 +349,95 @@ export function upsertWorkout(record: WhoopWorkoutRecord, userId: number, tz: st
       zone_5_ms: zd.zone_five_milli,
       raw: JSON.stringify(record),
     });
-    return true;
+    // Reverse-dedup: if a HealthKit-only row was inserted before Whoop synced
+    // this same session (dual-wear race / Apple data lands before Whoop cloud
+    // scoring), reconcile it onto this Whoop row so we never keep two rows for
+    // one session (which would double-count every aggregation).
+    reconciledDates = reconcileHealthKitDuplicate(
+      db,
+      record.id,
+      record.start,
+      record.sport_name ?? null,
+      userId,
+    );
   } finally {
     db.close();
   }
+  // A reconciled HK row was deleted from its day — refresh that day's rollup.
+  for (const date of new Set(reconciledDates)) recomputeDailySummary(date, userId);
+  return true;
+}
+
+type HkDupRow = {
+  id: string;
+  sport: string | null;
+  hr_series: string | null;
+  external_id: string | null;
+  distance_m: number | null;
+  avg_hr: number | null;
+  max_hr: number | null;
+  date: string;
+  start_utc: string | null;
+};
+
+/**
+ * Find any `source='healthkit'` row that is the same session as a just-upserted
+ * Whoop row (within ±60s start + compatible sport), transfer its HR stream and
+ * external_id onto the Whoop row (COALESCE — never clobber existing values),
+ * then delete the HK row. Returns the deleted HK rows' dates so the caller can
+ * refresh `daily_summary`. Runs on the caller's open write connection.
+ */
+export function reconcileHealthKitDuplicate(
+  db: DB,
+  whoopId: string,
+  startUtc: string,
+  sport: string | null,
+  userId: number,
+): string[] {
+  const startMs = new Date(startUtc).getTime();
+  if (!Number.isFinite(startMs)) return [];
+  const loIso = new Date(startMs - SQL_WINDOW_MS).toISOString();
+  const hiIso = new Date(startMs + SQL_WINDOW_MS).toISOString();
+
+  const candidates = db
+    .prepare(
+      `SELECT id, sport, hr_series, external_id, distance_m, avg_hr, max_hr, date,
+              json_extract(raw, '$.start') AS start_utc
+       FROM workouts
+       WHERE source = 'healthkit' AND id != ? AND user_id = ?
+         AND json_extract(raw, '$.start') >= ? AND json_extract(raw, '$.start') <= ?`,
+    )
+    .all(whoopId, userId, loIso, hiIso) as HkDupRow[];
+
+  const transfer = db.prepare(
+    `UPDATE workouts SET
+       hr_series   = COALESCE(hr_series, @hr_series),
+       external_id = COALESCE(external_id, @external_id),
+       distance_m  = COALESCE(distance_m, @distance_m),
+       avg_hr      = COALESCE(avg_hr, @avg_hr),
+       max_hr      = COALESCE(max_hr, @max_hr)
+     WHERE id = @whoopId AND user_id = @user_id`,
+  );
+  const del = db.prepare("DELETE FROM workouts WHERE id = ? AND user_id = ?");
+
+  const dates: string[] = [];
+  for (const c of candidates) {
+    if (!c.start_utc) continue;
+    if (!sportsCompatible(c.sport, sport)) continue;
+    if (Math.abs(new Date(c.start_utc).getTime() - startMs) > MATCH_WINDOW_MS) continue;
+    transfer.run({
+      whoopId,
+      user_id: userId,
+      hr_series: c.hr_series,
+      external_id: c.external_id,
+      distance_m: c.distance_m,
+      avg_hr: c.avg_hr,
+      max_hr: c.max_hr,
+    });
+    del.run(c.id, userId);
+    dates.push(c.date);
+  }
+  return dates;
 }
 
 // Shared SQL constants — KEEP IN SYNC WITH sync/daily_summary.py:26-91

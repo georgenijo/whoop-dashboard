@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import {
   getWorkoutById,
   getWorkoutHrSeries,
+  getWorkoutSource,
   getBodyMeasurements,
   getRecoveryTrend,
 } from "@/lib/db";
@@ -142,6 +143,8 @@ export default async function WorkoutDetailPage({
   const rawSeries = getWorkoutHrSeries(user.id, id);
   const series = parseHrSeries(rawSeries);
   const hasSignal = !!series && series.bpm.some((b) => b != null);
+  // Provenance: HealthKit-only rows (no Whoop parent) must not claim "Whoop".
+  const isHealthKitOnly = getWorkoutSource(user.id, id) === "healthkit";
 
   // Profile max HR drives zone boundaries, the curve y-scale, time-above-90% and
   // TRIMP. Prefer the measured profile max, fall back to this workout's own peak.
@@ -203,11 +206,18 @@ export default async function WorkoutDetailPage({
           Workouts
         </Link>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <span className="source-badge">
-            <span className="mark" />
-            Whoop
-          </span>
-          {hasSignal ? (
+          {isHealthKitOnly ? (
+            <span className="source-badge healthkit">
+              <span className="mark" />
+              HealthKit
+            </span>
+          ) : (
+            <span className="source-badge">
+              <span className="mark" />
+              Whoop
+            </span>
+          )}
+          {hasSignal && !isHealthKitOnly ? (
             <span className="source-badge healthkit">
               <span className="mark" />
               HealthKit HR

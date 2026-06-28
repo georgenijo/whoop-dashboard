@@ -3,6 +3,7 @@ import { openWrite } from "@/lib/db/connection";
 import { forUser } from "@/lib/db/scoped";
 import { parseDate, recomputeDailySummary } from "@/lib/whoop/upsert";
 import { parseHrSeries, type HrSeries } from "@/lib/analytics/workoutMetrics";
+import { MATCH_WINDOW_MS, SQL_WINDOW_MS, sportsCompatible } from "./match";
 
 // HealthKit workout ingestion (issue #425). The web app owns the `workouts`
 // table; this module is the single HK write path. Reads (match lookups) route
@@ -10,14 +11,9 @@ import { parseHrSeries, type HrSeries } from "@/lib/analytics/workoutMetrics";
 // guard passes; writes go through openWrite() directly, matching sync.ts. This
 // file is on the scoped.test.ts allowlist as a domain write helper.
 
-/** Match window: an HK workout within ±60s of an existing row's start is the
- *  same session (clock skew between Whoop's and Apple's record boundaries). */
-const MATCH_WINDOW_MS = 60_000;
-// SQL pre-filter window — wider than the exact JS check to absorb any ISO
-// formatting differences between stored Whoop `raw.start` and our bounds.
-const SQL_WINDOW_MS = 5 * 60_000;
 // Hard ceiling on stored stream length — iOS is expected to downsample to
 // ~600 points; reject anything wildly larger rather than bloat the row.
+// (Match window + sport-compat helpers live in ./match, shared with upsert.ts.)
 const MAX_HR_SERIES_POINTS = 5000;
 
 export type HealthKitWorkoutInput = {
@@ -54,41 +50,8 @@ function num(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-/**
- * Normalize a sport name for compatibility comparison: lowercase, strip
- * everything but a-z0-9. Whoop ("Soccer") and HealthKit ("soccer"/"football")
- * use different casing and a few synonyms, so we canonicalize known aliases.
- */
-const SPORT_ALIASES: Record<string, string> = {
-  football: "soccer",
-  soccer: "soccer",
-  run: "running",
-  running: "running",
-  jog: "running",
-  jogging: "running",
-  ride: "cycling",
-  bike: "cycling",
-  biking: "cycling",
-  cycling: "cycling",
-  walk: "walking",
-  walking: "walking",
-  weightlifting: "weightlifting",
-  weighttraining: "weightlifting",
-  strengthtraining: "weightlifting",
-  functionalstrengthtraining: "weightlifting",
-};
-
-function canonSport(sport: string | null | undefined): string {
-  const norm = (sport ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  return SPORT_ALIASES[norm] ?? norm;
-}
-
-function sportsCompatible(a: string | null | undefined, b: string | null | undefined): boolean {
-  const ca = canonSport(a);
-  const cb = canonSport(b);
-  if (!ca || !cb) return false;
-  return ca === cb;
-}
+// (sport-compatibility helpers moved to ./match, shared with the Whoop upsert
+// path so reverse-dedup uses identical matching logic.)
 
 /** Validate a single incoming workout. Returns the parsed shape or null. */
 function validate(
