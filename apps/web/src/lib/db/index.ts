@@ -65,6 +65,7 @@ export {
   getSportBreakdown,
   getPersonalRecords,
   getMonthlyRollup,
+  getWorkoutHistoryFloor,
 } from "./workouts";
 
 export type { PRStats, PRValue, PRStreak } from "./prs";
