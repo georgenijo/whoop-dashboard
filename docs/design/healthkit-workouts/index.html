@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Workouts · Whoop+</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/app.css" />
+</head>
+<body>
+<div class="aurora"></div>
+<div class="app">
+
+  <!-- ============ SIDEBAR ============ -->
+  <aside class="sidebar">
+    <div class="sb-brand">
+      <div class="mark">W</div>
+      <div class="wm">Whoop<span class="plus">+</span></div>
+    </div>
+    <nav class="sb-nav">
+      <div class="sb-group-label">Dashboard</div>
+      <a class="sb-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Overview</a>
+      <a class="sb-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 6.6a5 5 0 00-8.8-1.6A5 5 0 003.2 6.6c-1 2.5.3 5 2 6.8L12 20l6.8-6.6c1.7-1.8 3-4.3 2-6.8z"/></svg>Recovery</a>
+      <a class="sb-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 119.5 4a6.5 6.5 0 1010.5 10.5z"/></svg>Sleep</a>
+      <a class="sb-link active" href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3l2.5-7 4 14 2.5-9 1.5 2h4.5"/></svg>Workouts</a>
+      <a class="sb-link" href="stats.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Stats</a>
+      <a class="sb-link" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z"/><path d="M19 14l.8 2.2L22 17l-2.2.8L19 20l-.8-2.2L16 17l2.2-.8z"/></svg>Coach</a>
+    </nav>
+    <div class="sb-profile">
+      <div class="av">G</div>
+      <div class="who">
+        <div class="n">George</div>
+        <div class="s">whoop · 82 this yr</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ MAIN ============ -->
+  <main class="main">
+    <header class="topbar">
+      <div class="title-block">
+        <h1>Workouts</h1>
+        <div class="date">Last 90 days · 24 sessions</div>
+      </div>
+      <div class="right">
+        <div class="range" id="range">
+          <button>30D</button>
+          <button class="active">90D</button>
+          <button>6M</button>
+          <button>1Y</button>
+        </div>
+        <button class="icon-btn" aria-label="Sync"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-3-6.7M21 4v4h-4"/></svg></button>
+      </div>
+    </header>
+
+    <div class="content">
+
+      <!-- summary row -->
+      <div class="grid-2col">
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title"><span class="dot" style="background:#ffaa00;color:#ffaa00"></span>Sport frequency</div>
+            <span class="card-sub">last 90 days · top 5 + other</span>
+          </div>
+          <div style="display:grid;grid-template-columns:minmax(160px,200px) 1fr;gap:18px;align-items:center">
+            <div style="position:relative" id="donut"></div>
+            <div id="donut-legend" style="display:flex;flex-direction:column;gap:8px"></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title"><span class="dot" style="background:#06b6d4;color:#06b6d4"></span>HR zone breakdown</div>
+            <span class="card-sub">24 sessions · time in zone</span>
+          </div>
+          <div class="zone-bar" id="agg-zone-bar" style="height:14px"></div>
+          <div class="zone-legend" id="agg-zone-legend"></div>
+        </section>
+      </div>
+
+      <!-- workouts table -->
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title"><span class="dot" style="background:#ffaa00;color:#ffaa00"></span>Recent workouts</div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <span class="feature-hint"><span class="mark"></span>HR stream on 6 sessions</span>
+            <span class="card-sub" id="row-count">24 sessions</span>
+          </div>
+        </div>
+        <div class="wk-table">
+          <div class="wk-row wk-head"><span>Date</span><span>Sport</span><span>Duration</span><span>Strain</span><span>Avg · Max</span><span>HR zones</span></div>
+          <div id="wk-rows"></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- bottom nav (mobile) -->
+<nav class="bottom-nav">
+  <a class="bn-tab" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Home</a>
+  <a class="bn-tab active" href="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3l2.5-7 4 14 2.5-9 1.5 2h4.5"/></svg>Workouts</a>
+  <a class="bn-tab" href="stats.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Stats</a>
+  <a class="bn-tab" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z"/></svg>Coach</a>
+</nav>
+
+<script>
+(function(){
+  var ZONES = [
+    {key:0,label:"Z0",color:"#1e3a8a"},
+    {key:1,label:"Z1",color:"#2563eb"},
+    {key:2,label:"Z2",color:"#06b6d4"},
+    {key:3,label:"Z3",color:"#facc15"},
+    {key:4,label:"Z4",color:"#f97316"},
+    {key:5,label:"Z5",color:"#b91c1c"}
+  ];
+  var ACTIVITY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3l2-5 4 10 2-6 1.5 1h5.5"/></svg>';
+
+  // -------- workouts (newest first). zones = minutes per zone, or null (no stream/zone data) --------
+  var WORKOUTS = [
+    {date:"Jun 27", sport:"Soccer",   dur:"1h 42m", strain:17.3, avg:149, max:195, zones:[0,6.5,19.8,34.2,22,19.5], stream:true,  href:"workout-detail.html"},
+    {date:"Jun 25", sport:"Running",  dur:"38m",    strain:11.8, avg:158, max:181, zones:[1,4,9,14,8,2],          stream:true,  href:"workout-detail.html"},
+    {date:"Jun 24", sport:"Walking",  dur:"52m",    strain:6.2,  avg:104, max:128, zones:[28,16,7,1,0,0],         stream:false, href:"workout-detail-no-stream.html"},
+    {date:"Jun 22", sport:"Strength", dur:"47m",    strain:9.4,  avg:121, max:166, zones:[8,14,16,7,2,0],         stream:false, href:"workout-detail-no-stream.html"},
+    {date:"Jun 21", sport:"Soccer",   dur:"1h 36m", strain:16.6, avg:146, max:191, zones:[0,8,22,33,20,13],       stream:false, href:"workout-detail-no-stream.html"},
+    {date:"Jun 19", sport:"Cycling",  dur:"1h 04m", strain:12.1, avg:132, max:171, zones:[4,12,26,16,6,0],        stream:false, href:"workout-detail-no-stream.html"},
+    {date:"Jun 18", sport:"Walking",  dur:"41m",    strain:4.9,  avg:98,  max:119, zones:[26,12,3,0,0,0],         stream:false, href:"workout-detail-no-stream.html"},
+    {date:"Jun 16", sport:"Running",  dur:"45m",    strain:13.2, avg:162, max:186, zones:[1,3,8,17,12,4],         stream:false, href:"workout-detail-no-stream.html"},
+    {date:"Jun 15", sport:"Walking",  dur:"58m",    strain:6.8,  avg:101, max:131, zones:null,                    stream:false, href:"workout-detail-no-stream.html"}
+  ];
+
+  // -------- render table rows --------
+  function zoneBar(zones){
+    if(!zones){ return '<span class="nostream-dot">no zone data</span>'; }
+    var total = zones.reduce(function(a,b){return a+b;},0) || 1;
+    var segs = ZONES.map(function(z){
+      var v = zones[z.key]||0; var pct = v/total*100;
+      if(pct<=0) return "";
+      return '<span title="'+z.label+'" style="width:'+pct.toFixed(2)+'%;background:'+z.color+'"></span>';
+    }).join("");
+    return '<span class="bar">'+segs+'</span>';
+  }
+  var rowsHtml = WORKOUTS.map(function(w){
+    return '<a class="wk-row" href="'+w.href+'">'+
+      '<span class="c-date">'+w.date+'</span>'+
+      '<span class="c-sport"><span class="si">'+ACTIVITY+'</span>'+w.sport+'</span>'+
+      '<span class="c-dur">'+w.dur+'</span>'+
+      '<span class="c-strain">'+w.strain.toFixed(1)+'</span>'+
+      '<span class="c-hr">'+w.avg+' · '+w.max+'</span>'+
+      '<span class="wk-mini">'+zoneBar(w.zones)+
+        '<span class="chev"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4"/></svg></span>'+
+      '</span>'+
+    '</a>';
+  }).join("");
+  document.getElementById("wk-rows").innerHTML = rowsHtml;
+
+  // -------- aggregate zone breakdown (24 sessions) --------
+  var agg = [4,12,26,31,18,9]; // pct
+  document.getElementById("agg-zone-bar").innerHTML = ZONES.map(function(z){
+    return '<span style="width:'+agg[z.key]+'%;background:'+z.color+'"></span>';
+  }).join("");
+  document.getElementById("agg-zone-legend").innerHTML = ZONES.map(function(z){
+    var mins = Math.round(agg[z.key]*7.4);
+    return '<div class="zc"><span class="top"><i style="background:'+z.color+'"></i>'+z.label+'</span>'+
+      '<span class="min">'+mins+'m</span><span class="pct">'+agg[z.key]+'%</span></div>';
+  }).join("");
+
+  // -------- sport frequency donut --------
+  var SPORTS = [
+    {name:"Walking",  v:12, color:"#00aaff"},
+    {name:"Strength", v:4,  color:"#7b61ff"},
+    {name:"Soccer",   v:3,  color:"#ffaa00"},
+    {name:"Running",  v:3,  color:"#ff6b6b"},
+    {name:"Cycling",  v:1,  color:"#00d4aa"},
+    {name:"Other",    v:1,  color:"#3f3f46"}
+  ];
+  var totalS = SPORTS.reduce(function(a,s){return a+s.v;},0);
+  var R=58, C=2*Math.PI*R, off=0, gap=4;
+  var arcs = SPORTS.map(function(s){
+    var frac=s.v/totalS, len=Math.max(0, C*frac - gap);
+    var seg = '<circle cx="80" cy="80" r="'+R+'" fill="none" stroke="'+s.color+'" stroke-width="20" '+
+      'stroke-dasharray="'+len+' '+(C-len)+'" stroke-dashoffset="'+(-off)+'" transform="rotate(-90 80 80)"/>';
+    off += C*frac; return seg;
+  }).join("");
+  document.getElementById("donut").innerHTML =
+    '<svg viewBox="0 0 160 160" width="170" height="170">'+arcs+
+    '<text x="80" y="74" text-anchor="middle" fill="#fff" font-family="Geist" font-weight="500" font-size="30" letter-spacing="-1">'+totalS+'</text>'+
+    '<text x="80" y="94" text-anchor="middle" fill="#6b6b74" font-family="Geist Mono" font-size="9" letter-spacing="1.5">SESSIONS</text></svg>';
+  document.getElementById("donut-legend").innerHTML = SPORTS.map(function(s){
+    var pct=Math.round(s.v/totalS*100);
+    return '<div style="display:grid;grid-template-columns:11px 1fr auto auto;gap:9px;align-items:center;font-family:var(--font-mono);font-size:11.5px">'+
+      '<span style="width:11px;height:11px;border-radius:3px;background:'+s.color+'"></span>'+
+      '<span style="color:var(--fg-1)">'+s.name+'</span>'+
+      '<span style="color:var(--fg-2)" class="tnum">'+s.v+'</span>'+
+      '<span style="color:var(--fg-3);width:34px;text-align:right" class="tnum">'+pct+'%</span></div>';
+  }).join("");
+
+  // range pills
+  var range = document.getElementById("range");
+  range.addEventListener("click", function(e){
+    var b = e.target.closest("button"); if(!b) return;
+    [].forEach.call(range.children, function(c){ c.classList.remove("active"); });
+    b.classList.add("active");
+  });
+})();
+</script>
+</body>
+</html>
