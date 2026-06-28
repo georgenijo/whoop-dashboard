@@ -490,6 +490,37 @@ export function openWrite(): DB | null {
     // a "no user_id column" check.
     rebuildDomainTablesForUserId(db);
     rebuildSleepForSleepId(db);
+
+    // Issue #425 — HealthKit workout enrichment. Three columns on `workouts`:
+    //   - source:      'whoop' (default, every existing/synced row) or
+    //                  'healthkit' (a row inserted from an HK-only workout with
+    //                  no Whoop parent). DEFAULT keeps Whoop sync inserts (which
+    //                  don't set source) stamped 'whoop' automatically.
+    //   - hr_series:   downsampled per-second HR stream JSON, or NULL when the
+    //                  workout has no stream. See docs/design/healthkit-workouts.
+    //   - external_id: HealthKit workout UUID — linkage + idempotency key so a
+    //                  replayed ingest payload no-ops instead of duplicating.
+    // Fresh DBs get these here too (the workouts CREATE above predates them).
+    // Each ALTER is gated by a PRAGMA check so re-running boot is safe.
+    const workoutCols = db
+      .prepare("PRAGMA table_info(workouts)")
+      .all() as { name: string }[];
+    if (!workoutCols.some((c) => c.name === "source")) {
+      db.exec("ALTER TABLE workouts ADD COLUMN source TEXT DEFAULT 'whoop'");
+      // Belt-and-suspenders: ADD COLUMN ... DEFAULT backfills existing rows to
+      // the default, but enforce it explicitly for any pre-existing NULLs.
+      db.exec("UPDATE workouts SET source = 'whoop' WHERE source IS NULL");
+    }
+    if (!workoutCols.some((c) => c.name === "hr_series")) {
+      db.exec("ALTER TABLE workouts ADD COLUMN hr_series JSON");
+    }
+    if (!workoutCols.some((c) => c.name === "external_id")) {
+      db.exec("ALTER TABLE workouts ADD COLUMN external_id TEXT");
+    }
+    db.exec(
+      "CREATE INDEX IF NOT EXISTS idx_workouts_external ON workouts(user_id, external_id)"
+    );
+
     return db;
   } catch (err) {
     // Surfacing the error is critical: silent null returns hide schema
