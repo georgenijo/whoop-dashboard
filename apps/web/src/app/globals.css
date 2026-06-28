@@ -1085,3 +1085,145 @@ body {
     border-top: 1px solid rgba(255,255,255,0.06);
   }
 }
+
+/* ===== stats page (T5) ===== */
+/* Range pills render as <Link> (anchors) on the Stats page — mirror the
+   existing `.range button` styling so the picker looks identical. */
+.range a {
+  display: inline-flex; align-items: center;
+  background: transparent; border: 0; color: var(--fg-2);
+  font-family: var(--font-sans); font-size: 11px; font-weight: 500;
+  padding: 6px 13px; border-radius: 9999px; cursor: pointer;
+  transition: all var(--dur-base) var(--ease-out);
+}
+.range a:hover { color: var(--fg-0); }
+.range a.active {
+  background: rgba(255,255,255,0.95); color: #000;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+
+.stats-microlabel {
+  font-family: var(--font-mono); font-size: 10px; color: var(--fg-3);
+  letter-spacing: 0.14em; text-transform: uppercase; margin: 2px 4px 10px;
+}
+
+.totals-strip {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+  overflow: hidden; border-radius: 18px; position: relative;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.06);
+}
+.totals-strip::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse at top left, rgba(255,0,67,0.1), transparent 55%);
+}
+.total-cell {
+  position: relative; padding: 22px 24px; display: flex; flex-direction: column; gap: 8px;
+  background: linear-gradient(135deg, rgba(18,18,24,0.92), rgba(10,10,14,0.92));
+}
+.total-cell .lbl {
+  font-family: var(--font-mono); font-size: 10px; color: var(--fg-3);
+  letter-spacing: 0.14em; text-transform: uppercase;
+}
+.total-cell .val {
+  font-family: var(--font-display); font-size: 44px; font-weight: 500;
+  letter-spacing: -0.03em; color: var(--fg-0); line-height: 0.95;
+  font-variant-numeric: tabular-nums;
+}
+.total-cell .val .u { font-size: 16px; color: var(--fg-3); margin-left: 3px; font-weight: 400; }
+
+.statc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.statc {
+  padding: 16px 18px; border-radius: 14px; display: flex; align-items: center;
+  justify-content: space-between; gap: 16px;
+  background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);
+}
+.statc .sc-left { min-width: 0; }
+.statc .sc-lbl {
+  font-family: var(--font-mono); font-size: 9px; color: var(--fg-3);
+  letter-spacing: 0.12em; text-transform: uppercase;
+}
+.statc .sc-cur {
+  font-family: var(--font-display); font-size: 30px; font-weight: 500;
+  letter-spacing: -0.02em; color: var(--fg-0); line-height: 1.05; margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.statc .sc-cur .u { font-size: 13px; color: var(--fg-3); margin-left: 2px; font-weight: 400; }
+.statc .sc-prior {
+  font-family: var(--font-mono); font-size: 10px; color: var(--fg-3); margin-top: 3px;
+  font-variant-numeric: tabular-nums;
+}
+.statc .sc-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex: 0 0 auto; }
+.statc .sc-delta {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+  font-variant-numeric: tabular-nums; padding: 3px 8px; border-radius: 9999px;
+}
+.statc .sc-delta.up { color: #00d4aa; background: rgba(0,212,170,0.1); }
+.statc .sc-delta.down { color: #ff6b6b; background: rgba(255,107,107,0.1); }
+.statc .sc-delta svg { width: 11px; height: 11px; }
+.statc .sc-spark svg { display: block; }
+
+.backfill-note {
+  display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: 12px;
+  background: rgba(255,170,0,0.06); border: 1px solid rgba(255,170,0,0.18);
+  font-family: var(--font-mono); font-size: 11px; color: var(--fg-2); line-height: 1.45;
+}
+.backfill-note svg { width: 15px; height: 15px; color: #ffaa00; flex: 0 0 auto; }
+
+.sport-list { display: flex; flex-direction: column; gap: 10px; }
+.sport-row { display: grid; grid-template-columns: 128px 1fr 56px; align-items: center; gap: 12px; }
+.sport-row .name {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-sans); font-size: 12.5px; color: var(--fg-1);
+}
+.sport-row .name i { width: 9px; height: 9px; border-radius: 2px; flex: 0 0 auto; }
+.sport-row .track {
+  height: 9px; border-radius: 5px; background: rgba(255,255,255,0.04); overflow: hidden;
+}
+.sport-row .track > span { display: block; height: 100%; border-radius: 5px; }
+.sport-row .n {
+  font-family: var(--font-mono); font-size: 11.5px; color: var(--fg-2);
+  text-align: right; font-variant-numeric: tabular-nums;
+}
+
+.record-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.record-card {
+  position: relative; padding: 18px; border-radius: 16px; overflow: hidden;
+  background: linear-gradient(135deg, rgba(255,255,255,0.035), rgba(255,255,255,0.008));
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.record-card .rc-ico {
+  width: 30px; height: 30px; border-radius: 9px; display: flex; align-items: center;
+  justify-content: center; background: rgba(255,170,0,0.12); color: #ffaa00; margin-bottom: 14px;
+}
+.record-card .rc-ico svg { width: 16px; height: 16px; }
+.record-card .rc-lbl {
+  font-family: var(--font-mono); font-size: 9px; color: var(--fg-3);
+  letter-spacing: 0.12em; text-transform: uppercase;
+}
+.record-card .rc-val {
+  font-family: var(--font-display); font-size: 26px; font-weight: 500; letter-spacing: -0.02em;
+  color: var(--fg-0); margin-top: 5px; font-variant-numeric: tabular-nums;
+}
+.record-card .rc-val .u { font-size: 13px; color: var(--fg-3); font-weight: 400; margin-left: 2px; }
+.record-card .rc-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--fg-2); margin-top: 6px; }
+
+.trend-svg-wrap svg { width: 100%; display: block; overflow: visible; }
+.trend-legend { display: flex; gap: 14px; }
+.trend-legend .tl {
+  display: flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 10px; color: var(--fg-3);
+}
+.trend-legend .tl i { width: 14px; height: 3px; border-radius: 2px; }
+
+@media (max-width: 1100px) {
+  .totals-strip { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+  .statc-grid { grid-template-columns: 1fr; }
+  .totals-strip { grid-template-columns: 1fr 1fr; }
+  .total-cell { padding: 16px 18px; }
+  .total-cell .val { font-size: 34px; }
+  .record-grid { grid-template-columns: 1fr; }
+}
+/* ===== end stats ===== */

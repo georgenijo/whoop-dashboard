@@ -23,6 +23,7 @@ const TITLES: Record<string, string> = {
   "/sleep": "Sleep",
   "/strain": "Strain",
   "/workouts": "Workouts",
+  "/stats": "Stats",
   "/coach": "Coach",
   "/plans": "Plans",
   "/logs": "Logs",
@@ -47,7 +48,7 @@ export default function TopBar() {
   const searchParams = useSearchParams();
   const title = TITLES[pathname] ?? "Overview";
   const range = (searchParams.get("range") as Range) ?? "30d";
-  const subtitle = useMemo(formatToday, []);
+  const subtitle = useMemo(() => formatToday(), []);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const messageTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
