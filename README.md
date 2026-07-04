@@ -1,3 +1,5 @@
+<picture><source media="(prefers-color-scheme: dark)" srcset="docs/banner-dark.svg"><img src="docs/banner.svg" alt="whoop-dashboard — Health analytics with an AI coach" width="100%"></picture>
+
 # Whoop Dashboard
 
 Personal health analytics dashboard. Pulls recovery, sleep, strain, and workout data from the Whoop API, stores it in SQLite, and renders it in a Next.js web app with an LLM-powered coach.
