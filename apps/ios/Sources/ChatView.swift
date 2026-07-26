@@ -79,6 +79,11 @@ struct ChatView: View {
             if !didLoadInitial {
                 didLoadInitial = true
                 await loadHistory()
+                // recoveryStatus is view-local @State, so it doesn't survive leaving and
+                // reopening this thread; re-arm the bar/send-block from the shared store.
+                if let threadId, chatInFlight.inFlight[threadId] != nil {
+                    await reconcileDroppedTurn(baselineMessageId: recoveryBaselineMessageId)
+                }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .chatThreadNeedsRefresh)) { note in
