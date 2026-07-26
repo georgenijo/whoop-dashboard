@@ -107,14 +107,37 @@ struct SSEError: Decodable {
     let origin: String?
 }
 
+enum ChatRecovery {
+    static func hasNewAssistantReply(
+        _ messages: [ChatMessage],
+        afterMessageId baselineMessageId: Int?
+    ) -> Bool {
+        guard let last = messages.last, last.role == .assistant else { return false }
+        let messagesAfterBaseline = messages.filter { message in
+            guard let baselineMessageId else { return true }
+            return message.id > baselineMessageId
+        }
+        // Requiring a user message after the local baseline prevents an older
+        // assistant reply from looking terminal when the local transcript is
+        // stale because a prior post-done history reload failed.
+        guard
+            let currentUser = messagesAfterBaseline.last(where: { $0.role == .user })
+        else { return false }
+        return last.id > currentUser.id
+    }
+}
+
+struct ChatInFlightTurn {
+    let baselineMessageId: Int?
+}
+
 @MainActor
 @Observable
 final class ChatInFlightStore {
-    /// Thread ids with a coach turn in progress. A turn is marked when the
-    /// `x-thread-id` header lands and cleared only when the turn is terminal
-    /// (live `done`/`error`, or `CoachApp.reconcileInFlight` after a recovered
-    /// backgrounded turn). Never cleared by a plain history reload.
-    var inFlight: Set<Int> = []
+    /// Coach turns in progress, keyed by thread id. The local transcript
+    /// baseline lets foreground reconciliation distinguish the new reply from
+    /// an older assistant message when a POST drops before response headers.
+    var inFlight: [Int: ChatInFlightTurn] = [:]
 
     nonisolated init() {}
 }

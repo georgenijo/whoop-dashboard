@@ -11,9 +11,12 @@ schemes:
     build:
       targets:
         Coach: all
+        CoachTests: [test]
     run:
       config: Debug
     test:
+      targets:
+        - CoachTests
       config: Debug
     profile:
       config: Release
@@ -63,3 +66,16 @@ targets:
         INFOPLIST_KEY_NSHealthShareUsageDescription: "Coach reads your workouts and heart rate from Health to enrich your training stats."
         INFOPLIST_KEY_NSHealthUpdateUsageDescription: "Coach does not write to Health; this access is declared only because the HealthKit entitlement requires it."
         INFOPLIST_KEY_UIAppFonts: "Geist-Regular.ttf Geist-Medium.ttf Geist-SemiBold.ttf Geist-Bold.ttf GeistMono-Regular.ttf GeistMono-Medium.ttf GeistMono-SemiBold.ttf"
+  CoachTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: Coach
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.georgenijo.coach.tests
+        DEVELOPMENT_TEAM: P2U3P8B923
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES

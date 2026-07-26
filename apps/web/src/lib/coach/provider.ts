@@ -11,10 +11,12 @@ export type CoachModelSelection = { provider: CoachProvider; model: string };
 
 // Default chat model — must match the Anthropic loop's model constant.
 export const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
-export const CURSOR_COMPOSER_MODEL = "composer-2.5";
+export const CURSOR_COMPOSER_MODEL = "composer-2.5-fast";
+const LEGACY_CURSOR_COMPOSER_MODEL = "composer-2.5";
 
 export const ANTHROPIC_PREF = `anthropic:${DEFAULT_ANTHROPIC_MODEL}`;
 export const CURSOR_PREF = `cursor:${CURSOR_COMPOSER_MODEL}`;
+const LEGACY_CURSOR_PREF = `cursor:${LEGACY_CURSOR_COMPOSER_MODEL}`;
 
 // The set of model_pref values the settings UI is allowed to persist.
 export const ALLOWED_MODEL_PREFS = [ANTHROPIC_PREF, CURSOR_PREF] as const;
@@ -23,6 +25,10 @@ export type AllowedModelPref = (typeof ALLOWED_MODEL_PREFS)[number];
 const KNOWN: Record<string, CoachModelSelection> = {
   [ANTHROPIC_PREF]: { provider: "anthropic", model: DEFAULT_ANTHROPIC_MODEL },
   [CURSOR_PREF]: { provider: "cursor", model: CURSOR_COMPOSER_MODEL },
+  // Existing users selected the standard slug before the fast variant became
+  // the production default. Upgrade that stored preference in memory so a
+  // deploy cannot silently fall back to Anthropic.
+  [LEGACY_CURSOR_PREF]: { provider: "cursor", model: CURSOR_COMPOSER_MODEL },
 };
 
 const ANTHROPIC_DEFAULT: CoachModelSelection = {

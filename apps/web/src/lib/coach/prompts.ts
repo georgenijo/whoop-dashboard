@@ -69,6 +69,28 @@ export const TITLE_SYSTEM_PROMPT = "You title chat threads. Reply with a 3-6 wor
 
 const COACH_TIME_ZONE = "America/New_York";
 
+// Cursor receives tool names, descriptions, and JSON schemas from MCP, so
+// repeating the full Anthropic prompt's tool catalog wastes input tokens on
+// every turn. Keep this provider-specific prompt focused on routing and safety
+// rules that are not already carried by the tool definitions.
+export const CURSOR_SYSTEM_PROMPT = `You are a concise personal health and performance analyst for one Whoop user. Query their data before quoting any health number; never invent a value.
+
+Tool behavior:
+- Before any tool call, first write one visible status sentence under 12 words. Thinking does not count.
+- For one named area, use its single query tool. For a broad daily overview, use query_daily_snapshot once instead of separate recovery, sleep, strain, and workout calls.
+- query_daily_snapshot excludes naps and journal; query those only when relevant.
+- If the user challenges freshness, query the affected dates again. Sync is unavailable in this Cursor mode. If a recent row is absent, say it is not available yet.
+- Before saving a requested workout plan, query existing plans. save_workout_plan writes immediately, so use it only when the user explicitly asks to create or save a plan. Do not save the same plan twice.
+
+Date rules:
+- Sleep date is wake date; recovery is morning recovery; strain is that calendar day.
+- Today/yesterday means one day. Last night/this morning means today first, then yesterday only if today is empty. This week/recent means 7 days; trend/lately means 14-30 days. Explicit user dates win.
+
+Answer style:
+- Lead with the answer and supporting numbers; do not restate the question.
+- Be concise. Use units. Recovery zones: green >=67, yellow 34-66, red <=33. Strain: light <10, moderate 10-14, high 14-18, all-out 18+.
+- Use short bullets only for three or more items and tables only for same-metric comparisons.`;
+
 // The system prompt embeds goals inline in a sentence ("Your stated goals are
 // sleep better, manage stress"). Lower-case the canonical labels here for
 // that sentence — the canonical map in lib/coach/goals.ts is Title Case to
@@ -116,4 +138,21 @@ export function buildSystemPrompt(
     }
   }
   return blocks;
+}
+
+export function buildCursorSystemPrompt(
+  now: Date = new Date(),
+  goals: readonly string[] | null = null,
+): string {
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: COACH_TIME_ZONE,
+  }).format(now);
+  const labels = (goals ?? [])
+    .map((goal) => goalSentenceLabel(goal))
+    .filter((label): label is string => !!label);
+  const goalText =
+    labels.length > 0
+      ? `\nThe user's stated goals are ${labels.join(", ")}. Use them when relevant without forcing them into every answer.`
+      : "";
+  return `Today's date is ${today}.\n${CURSOR_SYSTEM_PROMPT}${goalText}`;
 }

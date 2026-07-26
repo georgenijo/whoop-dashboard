@@ -2,8 +2,17 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+const testState = vi.hoisted(() => ({
+  afterCallbacks: [] as Array<() => void | Promise<void>>,
+  thread: { id: 42, title: "existing" } as { id: number; title: string | null },
+  conversation: [] as Array<{ role: "user" | "assistant"; content: string }>,
+  provider: "anthropic" as "anthropic" | "cursor",
+}));
+
 vi.mock("next/server", () => ({
-  after: (fn: () => void) => fn(),
+  after: vi.fn((fn: () => void | Promise<void>) => {
+    testState.afterCallbacks.push(fn);
+  }),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -20,9 +29,10 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/db", () => ({
-  createChatThread: vi.fn(() => ({ id: 42, title: "existing" })),
-  getChatThreadById: vi.fn(() => ({ id: 42, title: "existing" })),
-  getChatThreadConversation: vi.fn(() => []),
+  createChatThread: vi.fn(() => testState.thread),
+  getChatThreadById: vi.fn(() => testState.thread),
+  getChatThreadConversation: vi.fn(() => testState.conversation),
+  setChatThreadTitle: vi.fn(),
   getUserSettings: vi.fn(() => null),
 }));
 
@@ -36,6 +46,13 @@ vi.mock("@/lib/coach/api-key", () => ({
       super(`Anthropic API key rejected (origin=${origin})`);
     }
   },
+}));
+
+vi.mock("@/lib/coach/provider", () => ({
+  resolveCoachProvider: vi.fn(() => ({
+    provider: testState.provider,
+    model: testState.provider === "cursor" ? "composer-2.5" : "claude-sonnet-4-6",
+  })),
 }));
 
 type RunOpts = {
@@ -96,6 +113,8 @@ vi.mock("@/lib/coach/persistence", () => ({
   titleChatThread: vi.fn(async () => undefined),
 }));
 
+import { setChatThreadTitle } from "@/lib/db";
+import { titleChatThread } from "@/lib/coach/persistence";
 import { POST } from "./route";
 
 function makeRequest(body: unknown, query?: string): Request {
@@ -122,6 +141,11 @@ async function readEntireStream(stream: ReadableStream<Uint8Array>): Promise<str
 
 afterEach(() => {
   runAndPersistImpl = async () => "ok";
+  testState.afterCallbacks.length = 0;
+  testState.thread = { id: 42, title: "existing" };
+  testState.conversation = [];
+  testState.provider = "anthropic";
+  vi.clearAllMocks();
 });
 
 describe("POST /api/chat — SSE wiring", () => {
@@ -142,6 +166,7 @@ describe("POST /api/chat — SSE wiring", () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toMatch(/text\/event-stream/);
+    expect(res.headers.get("x-accel-buffering")).toBe("no");
     const text = await readEntireStream(res.body as ReadableStream<Uint8Array>);
 
     expect(text).toContain(
@@ -153,10 +178,80 @@ describe("POST /api/chat — SSE wiring", () => {
     expect(text).toMatch(/event: done\ndata: \{"reply":"final reply"\}\n\n/);
   });
 
-  it("emits no heartbeat frames for a fast turn (watchdog stays armed, never fires)", async () => {
-    // A turn that completes well under the idle window must produce zero comment
-    // frames — the silence watchdog is reset by real sends and only fires after
-    // genuine quiet (not a blind periodic timer; cf. the PR #249 revert).
+  it("makes done terminal and refines an immediate deterministic title after the response", async () => {
+    testState.thread = { id: 42, title: null };
+    runAndPersistImpl = async () => "final reply";
+
+    const res = await POST(
+      makeRequest({
+        messages: [{ role: "user", content: "  Compare   my recovery\nthis month  " }],
+        thread_id: 42,
+      }),
+    );
+    const text = await readEntireStream(res.body as ReadableStream<Uint8Array>);
+
+    expect(setChatThreadTitle).toHaveBeenCalledWith(
+      42,
+      "Compare my recovery this month",
+    );
+    expect(text).toBe(': ready\n\nevent: done\ndata: {"reply":"final reply"}\n\n');
+    expect(titleChatThread).not.toHaveBeenCalled();
+    expect(testState.afterCallbacks).toHaveLength(1);
+
+    await testState.afterCallbacks[0]();
+    expect(titleChatThread).toHaveBeenCalledWith(
+      42,
+      "  Compare   my recovery\nthis month  ",
+      "test-key",
+    );
+  });
+
+  it("still persists a deterministic title when no Anthropic key is available", async () => {
+    testState.thread = { id: 42, title: null };
+    testState.provider = "cursor";
+    const { resolveApiKeyForUser, MissingApiKeyError } = await import(
+      "@/lib/coach/api-key"
+    );
+    vi.mocked(resolveApiKeyForUser).mockImplementationOnce(() => {
+      throw new MissingApiKeyError();
+    });
+
+    const res = await POST(
+      makeRequest({
+        messages: [{ role: "user", content: "How did I sleep?" }],
+        thread_id: 42,
+      }),
+    );
+    await readEntireStream(res.body as ReadableStream<Uint8Array>);
+
+    expect(res.status).toBe(200);
+    expect(setChatThreadTitle).toHaveBeenCalledWith(42, "How did I sleep?");
+    expect(testState.afterCallbacks).toHaveLength(0);
+  });
+
+  it("keeps a successful turn terminal when deterministic title persistence fails", async () => {
+    testState.thread = { id: 42, title: null };
+    vi.mocked(setChatThreadTitle).mockImplementationOnce(() => {
+      throw new Error("database unavailable");
+    });
+    runAndPersistImpl = async () => "final reply";
+
+    const res = await POST(
+      makeRequest({
+        messages: [{ role: "user", content: "How did I recover?" }],
+        thread_id: 42,
+      }),
+    );
+    const text = await readEntireStream(res.body as ReadableStream<Uint8Array>);
+
+    expect(res.status).toBe(200);
+    expect(text).toContain('event: done\ndata: {"reply":"final reply"}\n\n');
+    expect(text).not.toContain("event: error");
+  });
+
+  it("immediately acknowledges a fast turn without an idle heartbeat", async () => {
+    // The initial comment flushes headers immediately; a turn completing under
+    // the idle window must not receive the separate watchdog heartbeat.
     runAndPersistImpl = async () => {
       await new Promise((r) => setTimeout(r, 50));
       return "ok";
@@ -167,10 +262,8 @@ describe("POST /api/chat — SSE wiring", () => {
     );
     const text = await readEntireStream(res.body as ReadableStream<Uint8Array>);
 
-    for (const chunk of text.split("\n\n")) {
-      if (chunk === "") continue;
-      expect(chunk.startsWith(":"), `unexpected comment frame: ${chunk}`).toBe(false);
-    }
+    expect(text.startsWith(": ready\n\n")).toBe(true);
+    expect(text).not.toContain(": hb");
   });
 
   it("emits a heartbeat after the wire goes idle (silence watchdog)", async () => {
@@ -194,7 +287,10 @@ describe("POST /api/chat — SSE wiring", () => {
       );
       const reader = (res.body as ReadableStream<Uint8Array>).getReader();
 
-      // Wire is silent; advance past the idle threshold → watchdog fires.
+      const ready = await reader.read();
+      expect(new TextDecoder().decode(ready.value)).toContain(": ready");
+
+      // No real event follows; advance past the idle threshold → watchdog fires.
       await vi.advanceTimersByTimeAsync(9000);
 
       const { value } = await reader.read();

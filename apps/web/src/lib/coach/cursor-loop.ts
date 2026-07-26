@@ -18,15 +18,26 @@ import { randomUUID } from "node:crypto";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { getUserSettings, type ChatMessageInsert } from "@/lib/db";
 import { dbPath } from "@/lib/db/connection";
-import { buildSystemPrompt } from "./prompts";
+import { buildCursorSystemPrompt } from "./prompts";
 import { CURSOR_COMPOSER_MODEL } from "./provider";
 import { CursorAgentError, resolveCursorKey } from "./cursor-key";
 import type { DetailState, RunAnthropicOptions, Usage } from "./loop";
-import type { ToolDetail } from "./tools";
+import {
+  executeTool,
+  newToolTurnState,
+  type ToolDetail,
+} from "./tools";
 
 const MAX_CURSOR_WALL_MS = 120_000;
 const MAX_CURSOR_TOOL_CALLS = 12;
 const MAX_TRANSCRIPT_CHARS = 8_000;
+const RECENT_REFERENCE_PATTERN =
+  /\b(today|tonight|right now|currently|current|this morning|last night|how am i(?: doing)?)\b/i;
+const PLAN_INTENT_PATTERN = /\b(plan|program|split|routine)\b/i;
+// A result event is Cursor's protocol-level terminal marker. Normally the CLI
+// exits within a few milliseconds after it; cap an abnormal post-result tail
+// without returning early and leaving cursor-agent/MCP children unreaped.
+const TERMINAL_CLOSE_GRACE_MS = 250;
 
 // Where the cursor-agent binary lives. The systemd service's PATH may not
 // include ~/.local/bin, so the VM sets COACH_CURSOR_AGENT_BIN to the absolute
@@ -95,20 +106,104 @@ function flattenConversation(conversation: MessageParam[]): string {
   return out;
 }
 
-function buildPrompt(userId: number, newUserText: string, conversation: MessageParam[]): string {
-  const system = buildSystemPrompt(
+type PreloadedContext = {
+  toolName:
+    | "query_recovery"
+    | "query_sleep"
+    | "query_strain"
+    | "query_workouts"
+    | "query_daily_snapshot";
+  dateRange: { start_date: string; end_date: string };
+  data: unknown;
+};
+
+export function selectRecentPrefetchTool(
+  newUserText: string,
+): PreloadedContext["toolName"] | null {
+  if (
+    !RECENT_REFERENCE_PATTERN.test(newUserText) ||
+    PLAN_INTENT_PATTERN.test(newUserText)
+  ) {
+    return null;
+  }
+  const domains = [
+    {
+      tool: "query_recovery" as const,
+      matches: /\b(recovery|hrv|heart rate variability|rhr|resting heart rate|readiness)\b/i,
+    },
+    {
+      tool: "query_sleep" as const,
+      matches: /\b(sleep|slept|bedtime|wake time|last night)\b/i,
+    },
+    {
+      tool: "query_strain" as const,
+      matches: /\b(strain|exertion)\b/i,
+    },
+    {
+      tool: "query_workouts" as const,
+      matches: /\b(workout|workouts|train|trained|training|exercise|activity)\b/i,
+    },
+  ].filter(({ matches }) => matches.test(newUserText));
+
+  if (domains.length === 1) return domains[0].tool;
+  if (
+    domains.length > 1 ||
+    /\b(how am i(?: doing)?|how (?:was|is) today|overview|summary|status|metrics|daily check|check-?in)\b/i.test(
+      newUserText,
+    )
+  ) {
+    return "query_daily_snapshot";
+  }
+  return null;
+}
+
+function previousIsoDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
+async function preloadRecentContext(
+  userId: number,
+  newUserText: string,
+): Promise<PreloadedContext | null> {
+  const toolName = selectRecentPrefetchTool(newUserText);
+  if (!toolName) return null;
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+  }).format(new Date());
+  const needsPreviousDay = /\b(last night|this morning)\b/i.test(newUserText);
+  const dateRange = {
+    start_date: needsPreviousDay ? previousIsoDate(today) : today,
+    end_date: today,
+  };
+  const data = await executeTool(toolName, dateRange, {
+    userId,
+    turnState: newToolTurnState(),
+  });
+  return { toolName, dateRange, data };
+}
+
+function buildPrompt(
+  userId: number,
+  newUserText: string,
+  conversation: MessageParam[],
+  preloadedContext: PreloadedContext | null,
+): string {
+  const system = buildCursorSystemPrompt(
     new Date(),
     getUserSettings(userId)?.coach_goals ?? null,
-  )
-    .map((b) => b.text)
-    .join("\n\n");
+  );
   // The route appends the current user message as the LAST `conversation` entry
   // before invoking the turn (same contract as the Anthropic path). Drop it here
   // so it isn't duplicated — it's surfaced under "Current request" below.
   const transcript = flattenConversation(conversation.slice(0, -1));
   return [
     system,
-    "\n\nNote: trigger_whoop_sync is unavailable in this mode. Answer from existing data; if a recent date has no rows, say so plainly rather than trying to sync.",
+    preloadedContext
+      ? `\n\n## Preloaded authoritative Whoop data\nThe server already ran ${preloadedContext.toolName} for ${preloadedContext.dateRange.start_date} through ${preloadedContext.dateRange.end_date} immediately before this turn. Treat this exactly like successful tool output. Do NOT call that query again for the covered dates unless the user explicitly asks you to refresh.\n${JSON.stringify(preloadedContext.data)}`
+      : "",
     transcript ? `\n\n## Conversation so far\n${transcript}` : "",
     `\n\n## Current request\n${newUserText}`,
   ].join("");
@@ -119,8 +214,17 @@ function buildPrompt(userId: number, newUserText: string, conversation: MessageP
 type StreamEvent = {
   type?: string;
   subtype?: string;
+  model?: string;
   model_call_id?: string;
   call_id?: string;
+  duration_ms?: number;
+  duration_api_ms?: number;
+  durationMs?: number;
+  durationApiMs?: number;
+  is_error?: boolean;
+  isError?: boolean;
+  result?: unknown;
+  error?: unknown;
   message?: { content?: Array<{ type?: string; text?: string }> };
   tool_call?: {
     // call id + timing live on tool_call directly and are present on BOTH the
@@ -152,6 +256,71 @@ type StreamEvent = {
     };
   };
 };
+
+export type CursorTerminalResult = {
+  subtype: string | null;
+  isError: boolean;
+  resultText: string;
+  errorText: string;
+  durationMs: number | null;
+  apiDurationMs: number | null;
+  model: string | null;
+};
+
+function nonNegativeNumber(...values: unknown[]): number | null {
+  for (const value of values) {
+    const parsed =
+      typeof value === "number"
+        ? value
+        : typeof value === "string"
+          ? Number(value)
+          : Number.NaN;
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  return null;
+}
+
+function stringifyResult(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value == null) return "";
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+/** Parse Cursor's protocol-level terminal event across snake/camel variants. */
+export function parseCursorTerminalResult(
+  event: unknown,
+): CursorTerminalResult | null {
+  if (!event || typeof event !== "object") return null;
+  const evt = event as StreamEvent;
+  if (evt.type?.toLowerCase() !== "result") return null;
+
+  const subtype = typeof evt.subtype === "string" ? evt.subtype : null;
+  const subtypeIsError =
+    subtype != null && /error|fail|cancel|timeout/i.test(subtype);
+  const isError = evt.is_error === true || evt.isError === true || subtypeIsError;
+  const resultText = stringifyResult(evt.result);
+  const errorText = stringifyResult(evt.error) || (isError ? resultText : "");
+
+  return {
+    subtype,
+    isError,
+    resultText,
+    errorText,
+    durationMs: nonNegativeNumber(evt.duration_ms, evt.durationMs),
+    apiDurationMs: nonNegativeNumber(evt.duration_api_ms, evt.durationApiMs),
+    model: typeof evt.model === "string" ? evt.model : null,
+  };
+}
+
+function eventCountKey(evt: StreamEvent): string {
+  const type = evt.type?.trim() || "unknown";
+  const subtype = evt.subtype?.trim();
+  return subtype ? `${type}:${subtype}` : type;
+}
 
 function countRows(parsed: unknown): number | null {
   if (Array.isArray(parsed)) return parsed.length;
@@ -215,6 +384,8 @@ async function makeWorkspace(userId: number): Promise<string> {
 export async function runCursorTurn(
   args: RunCursorTurnArgs,
 ): Promise<RunCursorTurnResult> {
+  args.options.signal?.throwIfAborted();
+  const turnStartedMs = Date.now();
   const { userId, newUserText, conversation, toolDetails, detailState, options } = args;
   const key = resolveCursorKey();
   const messages: ChatMessageInsert[] = args.accumulator ?? [];
@@ -226,20 +397,105 @@ export async function runCursorTurn(
     blocks: [{ type: "text", text: newUserText }],
   });
 
-  const prompt = buildPrompt(userId, newUserText, conversation);
+  const selectedPrefetchTool = selectRecentPrefetchTool(newUserText);
+  const shouldPrefetch = selectedPrefetchTool != null;
+  const prefetchInput = { intent: "recent_context" };
+  if (selectedPrefetchTool) {
+    options.onToolUseStart?.({
+      name: selectedPrefetchTool,
+      input: prefetchInput,
+    });
+  }
+  const prefetchStartedMs = Date.now();
+  let preloadedContext: PreloadedContext | null = null;
+  let prefetchError: string | null = null;
+  try {
+    preloadedContext = await preloadRecentContext(userId, newUserText);
+  } catch (error) {
+    // Fail open: Cursor still has its normal MCP tools, so a transient preload
+    // problem should not take down the turn.
+    prefetchError = error instanceof Error ? error.message : String(error);
+  }
+  const prefetchMs = Date.now() - prefetchStartedMs;
+  if (selectedPrefetchTool) {
+    options.onToolUseEnd?.({
+      name: selectedPrefetchTool,
+      duration_ms: prefetchMs,
+      rows: preloadedContext == null ? null : countRows(preloadedContext.data),
+      status: prefetchError == null ? "ok" : "error",
+      ...(prefetchError ? { error: prefetchError } : {}),
+    });
+  }
+  const promptStartedMs = Date.now();
+  const prompt = buildPrompt(
+    userId,
+    newUserText,
+    conversation,
+    preloadedContext,
+  );
+  const promptBuildMs = Date.now() - promptStartedMs;
+  const cursorDetail = {
+    requested_model: CURSOR_COMPOSER_MODEL,
+    resolved_model: null as string | null,
+    prompt_chars: prompt.length,
+    prefetch: {
+      attempted: shouldPrefetch,
+      loaded: preloadedContext != null,
+      duration_ms: prefetchMs,
+      tool_name: preloadedContext?.toolName ?? selectedPrefetchTool,
+      date_range: preloadedContext?.dateRange ?? null,
+      payload_chars:
+        preloadedContext == null ? 0 : JSON.stringify(preloadedContext.data).length,
+      error: prefetchError,
+    },
+    event_counts: {} as Record<string, number>,
+    tool_events: [] as Array<{
+      name: string;
+      phase: "started" | "completed";
+      at_ms: number;
+      duration_ms?: number;
+      status?: "ok" | "error";
+    }>,
+    terminal_subtype: null as string | null,
+    terminal_seen: false,
+    timing: {
+      prompt_build_ms: promptBuildMs,
+      workspace_prep_ms: 0,
+      spawn_call_ms: 0,
+      spawn_to_system_init_ms: null as number | null,
+      spawn_to_first_event_ms: null as number | null,
+      spawn_to_first_assistant_text_ms: null as number | null,
+      spawn_to_first_tool_event_ms: null as number | null,
+      spawn_to_terminal_result_ms: null as number | null,
+      cursor_duration_ms: null as number | null,
+      cursor_api_duration_ms: null as number | null,
+      spawn_to_process_close_ms: null as number | null,
+      process_close_tail_ms: null as number | null,
+      cleanup_ms: 0,
+      turn_ms: 0,
+    },
+  };
+  detailState.cursor = cursorDetail;
+  options.signal?.throwIfAborted();
+  const workspaceStartedMs = Date.now();
   const ws = await makeWorkspace(userId);
+  cursorDetail.timing.workspace_prep_ms = Date.now() - workspaceStartedMs;
 
   let reply = "";
   let segText = ""; // current assistant segment, for snapshot dedup
   let toolCalls = 0;
   let timedOut = false;
   let stderr = "";
+  let terminalError = "";
+  let terminalResultText = "";
+  let terminalSucceeded = false;
   // name/input/start are emitted on the `started` event and must be carried to
   // the `completed` event (which omits them), keyed by the stable call id.
   const toolMeta = new Map<string, { name: string; input: unknown; startedMs: number }>();
 
   try {
     const exitInfo = await new Promise<{ code: number | null }>((resolve, reject) => {
+      const spawnStartedMs = Date.now();
       const child = spawn(
         CURSOR_AGENT_BIN,
         [
@@ -272,8 +528,10 @@ export async function runCursorTurn(
           detached: true,
         },
       );
+      cursorDetail.timing.spawn_call_ms = Date.now() - spawnStartedMs;
 
       let killEscalation: ReturnType<typeof setTimeout> | undefined;
+      let terminalCloseTimer: ReturnType<typeof setTimeout> | undefined;
       // Signal the whole process group; fall back to the direct child if the
       // group send fails (e.g. pid already reaped).
       const killTree = (signal: NodeJS.Signals) => {
@@ -295,6 +553,11 @@ export async function runCursorTurn(
           killEscalation.unref?.();
         }
       };
+      const capTerminalTail = () => {
+        if (terminalCloseTimer) return;
+        terminalCloseTimer = setTimeout(terminate, TERMINAL_CLOSE_GRACE_MS);
+        terminalCloseTimer.unref?.();
+      };
 
       const killTimer = setTimeout(() => {
         timedOut = true;
@@ -303,6 +566,9 @@ export async function runCursorTurn(
 
       const onAbort = () => terminate();
       options.signal?.addEventListener("abort", onAbort, { once: true });
+      // addEventListener does not replay an abort that happened while the
+      // prompt/workspace was being prepared. Close that race explicitly.
+      if (options.signal?.aborted) terminate();
 
       const stdout = child.stdout;
       const stderrStream = child.stderr;
@@ -314,30 +580,33 @@ export async function runCursorTurn(
         return;
       }
       let buf = "";
+      const processLine = (rawLine: string) => {
+        const line = rawLine.trim();
+        if (!line) return;
+        let evt: StreamEvent;
+        try {
+          evt = JSON.parse(line) as StreamEvent;
+        } catch {
+          return;
+        }
+        try {
+          handleEvent(evt);
+        } catch (err) {
+          // A cap breach kills the whole tree; surface via reject path.
+          clearTimeout(killTimer);
+          terminate();
+          options.signal?.removeEventListener("abort", onAbort);
+          reject(err);
+        }
+      };
       stdout.setEncoding("utf8");
       stdout.on("data", (chunk: string) => {
         buf += chunk;
         let nl: number;
         while ((nl = buf.indexOf("\n")) >= 0) {
-          const line = buf.slice(0, nl).trim();
+          const line = buf.slice(0, nl);
           buf = buf.slice(nl + 1);
-          if (!line) continue;
-          let evt: StreamEvent;
-          try {
-            evt = JSON.parse(line) as StreamEvent;
-          } catch {
-            continue;
-          }
-          try {
-            handleEvent(evt);
-          } catch (err) {
-            // A cap breach kills the whole tree; surface via reject path.
-            clearTimeout(killTimer);
-            terminate();
-            options.signal?.removeEventListener("abort", onAbort);
-            reject(err);
-            return;
-          }
+          processLine(line);
         }
       });
       stderrStream.setEncoding("utf8");
@@ -349,17 +618,67 @@ export async function runCursorTurn(
       child.on("error", (err) => {
         clearTimeout(killTimer);
         if (killEscalation) clearTimeout(killEscalation);
+        if (terminalCloseTimer) clearTimeout(terminalCloseTimer);
         options.signal?.removeEventListener("abort", onAbort);
         reject(err);
       });
       child.on("close", (code) => {
+        // Cursor normally newline-terminates stream-json records, but retain a
+        // valid terminal record even if a CLI version closes directly after it.
+        if (buf.trim()) {
+          processLine(buf);
+          buf = "";
+        }
         clearTimeout(killTimer);
         if (killEscalation) clearTimeout(killEscalation);
+        if (terminalCloseTimer) clearTimeout(terminalCloseTimer);
         options.signal?.removeEventListener("abort", onAbort);
+        const closeElapsedMs = Date.now() - spawnStartedMs;
+        cursorDetail.timing.spawn_to_process_close_ms = closeElapsedMs;
+        const terminalElapsedMs =
+          cursorDetail.timing.spawn_to_terminal_result_ms;
+        cursorDetail.timing.process_close_tail_ms =
+          terminalElapsedMs == null
+            ? null
+            : Math.max(0, closeElapsedMs - terminalElapsedMs);
         resolve({ code });
       });
 
       function handleEvent(evt: StreamEvent) {
+        const elapsedMs = Date.now() - spawnStartedMs;
+        if (cursorDetail.timing.spawn_to_first_event_ms == null) {
+          cursorDetail.timing.spawn_to_first_event_ms = elapsedMs;
+        }
+        const countKey = eventCountKey(evt);
+        cursorDetail.event_counts[countKey] =
+          (cursorDetail.event_counts[countKey] ?? 0) + 1;
+
+        if (
+          evt.type?.toLowerCase() === "system" &&
+          evt.subtype?.toLowerCase() === "init"
+        ) {
+          cursorDetail.timing.spawn_to_system_init_ms ??= elapsedMs;
+          if (typeof evt.model === "string") {
+            cursorDetail.resolved_model = evt.model;
+          }
+          return;
+        }
+
+        const terminal = parseCursorTerminalResult(evt);
+        if (terminal) {
+          cursorDetail.terminal_seen = true;
+          cursorDetail.terminal_subtype = terminal.subtype;
+          cursorDetail.timing.spawn_to_terminal_result_ms ??= elapsedMs;
+          cursorDetail.timing.cursor_duration_ms = terminal.durationMs;
+          cursorDetail.timing.cursor_api_duration_ms = terminal.apiDurationMs;
+          if (terminal.model) cursorDetail.resolved_model = terminal.model;
+          terminalResultText = terminal.resultText;
+          terminalError = terminal.isError ? terminal.errorText : "";
+          terminalSucceeded = !terminal.isError;
+          capTerminalTail();
+          return;
+        }
+
         // Assistant text. With --stream-partial-output the model emits a run of
         // incremental token fragments, then a cumulative full-segment snapshot.
         // The snapshot is NOT reliably tagged (model_call_id is present on some
@@ -375,6 +694,7 @@ export async function runCursorTurn(
             if (p.type === "text" && typeof p.text === "string") text += p.text;
           }
           if (!text) return;
+          cursorDetail.timing.spawn_to_first_assistant_text_ms ??= elapsedMs;
           if (segText && text.startsWith(segText)) {
             const suffix = text.slice(segText.length);
             segText = text;
@@ -394,6 +714,7 @@ export async function runCursorTurn(
           return;
         }
         if (evt.type === "tool_call") {
+          cursorDetail.timing.spawn_to_first_tool_event_ms ??= elapsedMs;
           segText = ""; // segment boundary
           const tc = evt.tool_call;
           // call_id is stable across started/completed; fall back through the
@@ -405,26 +726,44 @@ export async function runCursorTurn(
             randomUUID();
           if (evt.subtype === "started") {
             const a = tc?.mcpToolCall?.args;
-            const name = a?.toolName ?? "unknown";
+            // Cursor also emits internal MCP bookkeeping calls through the
+            // same outer event type. They have no mcpToolCall.args.toolName
+            // and are not Coach tools: keep them in event_counts, but do not
+            // surface/persist a fake `unknown` tool round trip.
+            if (!a?.toolName) return;
+            const name = a.toolName;
             const startedMs = Number(tc?.startedAtMs) || Date.now();
             toolMeta.set(callId, { name, input: a?.args, startedMs });
+            cursorDetail.tool_events.push({
+              name,
+              phase: "started",
+              at_ms: elapsedMs,
+            });
             options.onToolUseStart?.({ name, input: a?.args });
             return;
           }
           if (evt.subtype === "completed") {
-            toolCalls += 1;
             const meta = toolMeta.get(callId);
+            if (!meta) return;
+            toolCalls += 1;
             toolMeta.delete(callId);
-            const name = meta?.name ?? "unknown";
-            const input = meta?.input;
+            const name = meta.name;
+            const input = meta.input;
             const startedMs =
-              meta?.startedMs ?? (Number(tc?.startedAtMs) || Date.now());
+              meta.startedMs ?? (Number(tc?.startedAtMs) || Date.now());
             const completedMs = Number(tc?.completedAtMs) || Date.now();
             const durationMs = Math.max(0, completedMs - startedMs);
             const result = tc?.mcpToolCall?.result;
             const rejected = result?.rejected;
             const success = result?.success;
             const isError = rejected != null || success?.isError === true;
+            cursorDetail.tool_events.push({
+              name,
+              phase: "completed",
+              at_ms: elapsedMs,
+              duration_ms: durationMs,
+              status: isError ? "error" : "ok",
+            });
             const resultText = rejected
               ? `MCP call rejected: ${rejected.reason ?? "unknown reason"}`
               : success?.content?.[0]?.text?.text ?? "";
@@ -482,10 +821,21 @@ export async function runCursorTurn(
       }
     });
 
+    options.signal?.throwIfAborted();
     if (timedOut) {
       throw new CursorAgentError("timeout", "Cursor coach timed out");
     }
-    if (exitInfo.code !== 0 && !reply) {
+    if (terminalError) {
+      throw new CursorAgentError(
+        "agent",
+        `Cursor agent failed: ${terminalError.slice(0, 200)}`,
+      );
+    }
+    if (!reply.trim() && terminalResultText) {
+      reply = terminalResultText;
+      options.onTextDelta?.(terminalResultText);
+    }
+    if (exitInfo.code !== 0 && !terminalSucceeded && !reply) {
       const auth = /unauthor|forbidden|invalid.*key|401|403/i.test(stderr);
       throw new CursorAgentError(
         auth ? "auth" : "agent",
@@ -511,6 +861,9 @@ export async function runCursorTurn(
       err instanceof Error ? err.message : String(err),
     );
   } finally {
+    const cleanupStartedMs = Date.now();
     await rm(ws, { recursive: true, force: true }).catch(() => {});
+    cursorDetail.timing.cleanup_ms = Date.now() - cleanupStartedMs;
+    cursorDetail.timing.turn_ms = Date.now() - turnStartedMs;
   }
 }
