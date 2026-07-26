@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run build:mcp && next build",
+    "build:mcp": "esbuild src/coach-mcp/server.ts --bundle --platform=node --format=esm --packages=external --tsconfig=tsconfig.json --outfile=dist/coach-mcp/server.mjs",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
@@ -34,6 +35,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.0.1",
+    "esbuild": "^0.27.7",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "jsdom": "^29.1.1",
