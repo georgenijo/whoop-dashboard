@@ -26,7 +26,14 @@ describe("parseModelPref", () => {
     expect(parseModelPref(ANTHROPIC_PREF).provider).toBe("anthropic");
     expect(parseModelPref(CURSOR_PREF)).toEqual({
       provider: "cursor",
-      model: "composer-2.5",
+      model: "composer-2.5-fast",
+    });
+  });
+
+  it("upgrades the legacy Cursor preference to the fast variant", () => {
+    expect(parseModelPref("cursor:composer-2.5")).toEqual({
+      provider: "cursor",
+      model: "composer-2.5-fast",
     });
   });
 

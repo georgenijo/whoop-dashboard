@@ -36,6 +36,53 @@ export type Usage = {
 
 export type DetailState = {
   iterations: number;
+  persistence_ms?: number;
+  cursor?: {
+    requested_model: string;
+    resolved_model: string | null;
+    prompt_chars: number;
+    prefetch: {
+      attempted: boolean;
+      loaded: boolean;
+      duration_ms: number;
+      tool_name:
+        | "query_recovery"
+        | "query_sleep"
+        | "query_strain"
+        | "query_workouts"
+        | "query_daily_snapshot"
+        | null;
+      date_range: { start_date: string; end_date: string } | null;
+      payload_chars: number;
+      error: string | null;
+    };
+    event_counts: Record<string, number>;
+    tool_events: Array<{
+      name: string;
+      phase: "started" | "completed";
+      at_ms: number;
+      duration_ms?: number;
+      status?: "ok" | "error";
+    }>;
+    terminal_subtype: string | null;
+    terminal_seen: boolean;
+    timing: {
+      prompt_build_ms: number;
+      workspace_prep_ms: number;
+      spawn_call_ms: number;
+      spawn_to_system_init_ms: number | null;
+      spawn_to_first_event_ms: number | null;
+      spawn_to_first_assistant_text_ms: number | null;
+      spawn_to_first_tool_event_ms: number | null;
+      spawn_to_terminal_result_ms: number | null;
+      cursor_duration_ms: number | null;
+      cursor_api_duration_ms: number | null;
+      spawn_to_process_close_ms: number | null;
+      process_close_tail_ms: number | null;
+      cleanup_ms: number;
+      turn_ms: number;
+    };
+  };
 };
 
 export type CoachStreamHandlers = ToolProgressHandlers & {

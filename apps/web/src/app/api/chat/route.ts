@@ -1,6 +1,11 @@
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { after } from "next/server";
-import { createChatThread, getChatThreadById, getChatThreadConversation } from "@/lib/db";
+import {
+  createChatThread,
+  getChatThreadById,
+  getChatThreadConversation,
+  setChatThreadTitle,
+} from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 import {
   type ApiKeyOrigin,
@@ -14,6 +19,7 @@ import {
 } from "@/lib/coach/persistence";
 import { resolveCoachProvider } from "@/lib/coach/provider";
 import { classifyChatError } from "@/lib/coach/error-mapping";
+import { deriveTitleFromText } from "@/lib/coach/title";
 import { forModule } from "@/lib/logger";
 
 const chatLog = forModule("api.chat");
@@ -25,6 +31,10 @@ const chatLog = forModule("api.chat");
 // thinking) and tool execution. Provider-agnostic because it lives here, above
 // the provider dispatch, rather than inside a single provider's loop.
 const SSE_HEARTBEAT = new TextEncoder().encode(": hb\n\n");
+// Flush response headers and acknowledge the accepted turn immediately. SSE
+// clients ignore comment frames, while the web/iOS optimistic "Thinking…"
+// state now has a live connection instead of waiting for Cursor's first token.
+const SSE_READY = new TextEncoder().encode(": ready\n\n");
 
 // Silence watchdog. If no real SSE bytes have gone out for HEARTBEAT_IDLE_MS,
 // emit a heartbeat. Reset by every send, so a chatty stream never sees one —
@@ -33,12 +43,6 @@ const SSE_HEARTBEAT = new TextEncoder().encode(": hb\n\n");
 // 130s request timeout.
 const HEARTBEAT_IDLE_MS = 8000;
 const HEARTBEAT_CHECK_MS = 4000;
-
-// How long the stream will wait on the parallel auto-title before closing. The
-// reply is already sent (`done`) by this point; the wait only delays close so
-// the client's post-stream thread refresh sees the new title. A slow title
-// call is handed to after() instead of holding the connection open.
-const TITLE_STREAM_WAIT_MS = 4000;
 
 type ChatMessageInput = { role: "user" | "assistant"; content: string };
 type ChatSseEvent =
@@ -115,9 +119,47 @@ function chatStreamResponse(body: BodyInit, threadId: number): Response {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
       "Connection": "keep-alive",
+      "X-Accel-Buffering": "no",
       "x-thread-id": String(threadId),
     },
   });
+}
+
+function persistDeterministicTitle(threadId: number, firstUserText: string): void {
+  try {
+    const title = deriveTitleFromText(firstUserText);
+    if (title) setChatThreadTitle(threadId, title);
+  } catch (error) {
+    // The Coach turn is already persisted at this point. Titling is cosmetic
+    // and must never turn a successful reply into an API/SSE failure.
+    chatLog.warn(
+      {
+        thread_id: threadId,
+        err: error instanceof Error ? error.message : String(error),
+      },
+      "deterministic_title_failed",
+    );
+  }
+}
+
+function registerTitleRefinement(
+  threadId: number,
+  firstUserText: string,
+  apiKey: string | null,
+): () => void {
+  if (!apiKey) return () => undefined;
+
+  // Register while the Route Handler still owns the request context. The
+  // callback runs only after the response completes; the mutable gate prevents
+  // failed turns from receiving an LLM-generated title.
+  let enabled = false;
+  after(() => {
+    if (!enabled) return;
+    return titleChatThread(threadId, firstUserText, apiKey);
+  });
+  return () => {
+    enabled = true;
+  };
 }
 
 export async function POST(req: Request) {
@@ -169,6 +211,9 @@ export async function POST(req: Request) {
       !thread.title?.trim() &&
       !conversation.some((message) => message.role === "assistant");
     conversation.push({ role: "user", content: lastUser });
+    const enableTitleRefinement = shouldAutoTitle
+      ? registerTitleRefinement(thread.id, lastUser, apiKey)
+      : () => undefined;
 
     if (!wantsStream(req)) {
       try {
@@ -183,11 +228,9 @@ export async function POST(req: Request) {
           apiKeyOrigin,
           { signal: req.signal },
         );
-        if (shouldAutoTitle && apiKey) {
-          const titleKey = apiKey;
-          after(() => {
-            void titleChatThread(thread.id, lastUser, titleKey);
-          });
+        if (shouldAutoTitle) {
+          persistDeterministicTitle(thread.id, lastUser);
+          enableTitleRefinement();
         }
         return Response.json({ thread_id: thread.id, reply });
       } catch (err) {
@@ -250,6 +293,9 @@ export async function POST(req: Request) {
           }
         };
 
+        controller.enqueue(SSE_READY);
+        lastActivityMs = Date.now();
+
         // Silence watchdog: emit a heartbeat only after the wire has been quiet
         // for HEARTBEAT_IDLE_MS. Every send() resets the clock, so an actively
         // streaming turn never triggers it. Covers whichever provider this turn
@@ -296,27 +342,17 @@ export async function POST(req: Request) {
             return;
           }
 
-          send("done", { reply });
-          // Auto-title on the same stream instead of a fire-and-forget after()
-          // hook: keep the connection open (briefly) until the title is
-          // persisted so the client's post-stream thread refresh picks it up.
-          // This removes the client's 5s /api/threads poll, whose only job was
-          // to discover the title landing late. titleChatThread swallows its
-          // own errors. A slow title is handed to after() so it still lands.
-          if (shouldAutoTitle && apiKey) {
-            const titlePromise = titleChatThread(thread.id, lastUser, apiKey);
-            let titled = false;
-            await Promise.race([
-              titlePromise.then(() => {
-                titled = true;
-              }),
-              new Promise<void>((resolve) =>
-                setTimeout(resolve, TITLE_STREAM_WAIT_MS),
-              ),
-            ]);
-            if (!titled) after(() => titlePromise);
+          // Persist a useful title before the terminal event so the client's
+          // immediate thread refresh sees it. Optional LLM refinement belongs
+          // in Next's post-response lifecycle and must never hold the SSE
+          // connection open.
+          if (shouldAutoTitle) {
+            persistDeterministicTitle(thread.id, lastUser);
+            enableTitleRefinement();
           }
+          send("done", { reply });
           close();
+          return;
         } catch (err) {
           if (!abortController.signal.aborted) {
             const classified = classifyChatError(err);

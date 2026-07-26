@@ -1,5 +1,82 @@
 import Foundation
 
+struct SSEEventFrame: Equatable {
+    let name: String
+    let data: String
+}
+
+/// Incremental Server-Sent Events framing.
+///
+/// `URLSession.AsyncBytes.lines` owns byte/chunk reassembly. This parser owns
+/// SSE's line-level rules: CRLF normalization, comment/unknown-field ignores,
+/// multi-line `data` joining, blank-line dispatch, and partial-event discard at
+/// EOF.
+struct SSEEventParser {
+    private var eventName: String?
+    private var dataLines: [String] = []
+
+    mutating func consume(_ rawLine: String) -> SSEEventFrame? {
+        var line = rawLine
+        if line.last == "\r" {
+            line.removeLast()
+        }
+
+        guard !line.isEmpty else {
+            return dispatch()
+        }
+        guard !line.hasPrefix(":") else {
+            return nil
+        }
+
+        let field: Substring
+        var value: Substring
+        if let separator = line.firstIndex(of: ":") {
+            field = line[..<separator]
+            value = line[line.index(after: separator)...]
+            if value.first == " " {
+                value = value.dropFirst()
+            }
+        } else {
+            field = Substring(line)
+            value = ""
+        }
+
+        switch field {
+        case "event":
+            eventName = String(value)
+        case "data":
+            dataLines.append(String(value))
+        default:
+            // `id`, `retry`, and extension fields do not affect Coach events.
+            break
+        }
+        return nil
+    }
+
+    mutating func finish() -> SSEEventFrame? {
+        // Per the SSE parsing algorithm, EOF without a blank-line terminator
+        // discards the partial event. Treating a truncated, JSON-valid `done`
+        // as complete could incorrectly clear an in-flight turn.
+        eventName = nil
+        dataLines.removeAll(keepingCapacity: true)
+        return nil
+    }
+
+    private mutating func dispatch() -> SSEEventFrame? {
+        defer {
+            eventName = nil
+            dataLines.removeAll(keepingCapacity: true)
+        }
+
+        // The SSE default event name is "message". Coach uses named events,
+        // but retaining the default makes framing spec-compliant and lets the
+        // decoder safely ignore an unknown default event.
+        guard !dataLines.isEmpty else { return nil }
+        let name = eventName.flatMap { $0.isEmpty ? nil : $0 } ?? "message"
+        return SSEEventFrame(name: name, data: dataLines.joined(separator: "\n"))
+    }
+}
+
 struct ChatService {
     let api: APIClient
 
@@ -55,31 +132,16 @@ struct ChatService {
                     }
 
                     let decoder = JSONDecoder()
-                    var eventName: String?
-                    var dataBuffer = ""
-
-                    func flush() {
-                        defer {
-                            eventName = nil
-                            dataBuffer = ""
-                        }
-                        guard let name = eventName, !dataBuffer.isEmpty,
-                            let payload = dataBuffer.data(using: .utf8) else { return }
-                        if let event = ChatService.decodeEvent(name, payload, decoder) {
-                            continuation.yield(event)
-                        }
-                    }
+                    var parser = SSEEventParser()
 
                     for try await line in lines {
-                        if line.isEmpty {
-                            flush()
-                        } else if line.hasPrefix("event:") {
-                            eventName = ChatService.stripPrefix(line, "event:")
-                        } else if line.hasPrefix("data:") {
-                            dataBuffer += ChatService.stripPrefix(line, "data:")
+                        if let frame = parser.consume(line) {
+                            ChatService.emit(frame, decoder: decoder, into: continuation)
                         }
                     }
-                    flush()
+                    if let frame = parser.finish() {
+                        ChatService.emit(frame, decoder: decoder, into: continuation)
+                    }
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
@@ -89,26 +151,43 @@ struct ChatService {
         }
     }
 
-    private static func stripPrefix(_ line: String, _ prefix: String) -> String {
-        var rest = String(line.dropFirst(prefix.count))
-        if rest.hasPrefix(" ") { rest.removeFirst() }
-        return rest
+    private static func emit(
+        _ frame: SSEEventFrame,
+        decoder: JSONDecoder,
+        into continuation: AsyncThrowingStream<ChatStreamEvent, Error>.Continuation
+    ) {
+        guard let payload = frame.data.data(using: .utf8) else { return }
+        do {
+            if let event = try decodeEvent(frame.name, payload, decoder) {
+                continuation.yield(event)
+            }
+        } catch {
+            // Do not log payloads: chat event data can contain user/assistant
+            // content. Event name and byte count are sufficient diagnostics.
+            ClientLogger.shared.warn(
+                "chat_sse_decode_failed",
+                details: [
+                    "event": frame.name,
+                    "payload_bytes": payload.count,
+                ]
+            )
+        }
     }
 
-    private static func decodeEvent(
+    static func decodeEvent(
         _ name: String,
         _ payload: Data,
         _ decoder: JSONDecoder
-    ) -> ChatStreamEvent? {
+    ) throws -> ChatStreamEvent? {
         switch name {
         case "text_delta":
-            guard let d = try? decoder.decode(SSETextDelta.self, from: payload) else { return nil }
+            let d = try decoder.decode(SSETextDelta.self, from: payload)
             return .textDelta(d.text)
         case "tool_use_start":
-            guard let d = try? decoder.decode(SSEToolUseStart.self, from: payload) else { return nil }
+            let d = try decoder.decode(SSEToolUseStart.self, from: payload)
             return .toolUseStart(name: d.name)
         case "tool_use_end":
-            guard let d = try? decoder.decode(SSEToolUseEnd.self, from: payload) else { return nil }
+            let d = try decoder.decode(SSEToolUseEnd.self, from: payload)
             return .toolUseEnd(
                 name: d.name,
                 status: d.status,
@@ -117,13 +196,13 @@ struct ChatService {
                 error: d.error
             )
         case "tool_progress":
-            guard let d = try? decoder.decode(SSEToolProgress.self, from: payload) else { return nil }
+            let d = try decoder.decode(SSEToolProgress.self, from: payload)
             return .toolProgress(tool: d.tool, stage: d.stage, message: d.message)
         case "done":
-            guard let d = try? decoder.decode(SSEDone.self, from: payload) else { return nil }
+            let d = try decoder.decode(SSEDone.self, from: payload)
             return .done(reply: d.reply)
         case "error":
-            guard let d = try? decoder.decode(SSEError.self, from: payload) else { return nil }
+            let d = try decoder.decode(SSEError.self, from: payload)
             return .error(kind: d.kind, message: d.message, origin: d.origin)
         default:
             return nil

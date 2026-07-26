@@ -682,8 +682,8 @@ export default function SettingsPage() {
               Claude Sonnet 4.6 (default)
             </option>
             {cursorAvailable && (
-              <option value="cursor:composer-2.5">
-                Cursor Composer 2.5 (experimental)
+              <option value="cursor:composer-2.5-fast">
+                Cursor Composer 2.5 Fast (experimental)
               </option>
             )}
           </select>

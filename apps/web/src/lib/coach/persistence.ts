@@ -85,6 +85,10 @@ export async function runAndPersistCoachTurn(
       thread_id: thread.id,
       provider: selection.provider,
       model: selection.model,
+      timing: {
+        persistence_ms: detailState.persistence_ms ?? null,
+      },
+      ...(detailState.cursor ? { cursor: detailState.cursor } : {}),
     });
 
   try {
@@ -115,7 +119,9 @@ export async function runAndPersistCoachTurn(
             accumulator
           );
     detailState.iterations = result.iterations;
+    const persistenceStartedMs = Date.now();
     addChatMessages(thread.id, result.messages);
+    detailState.persistence_ms = Date.now() - persistenceStartedMs;
     handle?.markCommitted();
     addChatLog({
       started_at: startedAt,

@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-07-26: Cursor latency path prioritizes safe one-pass turns; warm SDK deferred
+
+**Decision:** Optimize the production Coach around Cursor Composer 2.5 Fast while retaining the contained `cursor-agent --mode ask` process boundary. Add per-stage Cursor timing, use a compact Cursor-specific prompt, preload an authoritative SQLite daily snapshot for current/last-night intents so common questions finish in one model pass, immediately flush the SSE connection, send `done` as the terminal event, and recover dropped iOS streams by reconciling persisted messages. Legacy `cursor:composer-2.5` preferences resolve in memory to the Fast variant.
+
+**Rationale:** Direct measurements separated the turn into ~1.3s fresh CLI initialization, remote inference, ~40ms SQLite tool execution, model/tool/model round trips, and a small process-close tail. Composer 2.5 Fast reduced direct raw model wall time, while preloading current context removed the much larger second inference pass for common health-status questions. Cursor's official SDK proved that a warm executor can eliminate almost all repeated initialization time, but its local runtime allowed shell execution in the safety probe, ignored the CLI containment configuration, and could not enable its built-in sandbox on this host. Adopting it now would expose app/health data to a broader tool surface, so it remains deferred until enforceable read-only containment is available. “Near zero” therefore means immediate accepted/query feedback plus removal of local and round-trip overhead, not zero remote inference.
+
+**Status:** active — implementation and PR verification in progress
+
+**References:** `apps/web/src/lib/coach/cursor-loop.ts`, `apps/web/src/lib/coach/prompts.ts`, `apps/web/src/lib/coach/provider.ts`, `apps/web/src/app/api/chat/route.ts`, `apps/ios/Sources/ChatService.swift`, `apps/ios/Sources/ChatView.swift`
+
+---
+
 ## 2026-06-28: HealthKit workout enrichment + Stats surface shipped (issues #425–429; PRs #431, #433)
 
 **Decision:** Brought the per-second intra-workout heart-rate stream — which Whoop's *developer API* does not expose but the Whoop *app* writes into Apple HealthKit — into the dashboard, plus a longitudinal Stats surface. Locked calls:

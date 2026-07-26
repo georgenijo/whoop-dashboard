@@ -2,7 +2,12 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { buildSystemPrompt, DEFAULT_SYSTEM_PROMPT } from "./prompts";
+import {
+  buildCursorSystemPrompt,
+  buildSystemPrompt,
+  CURSOR_SYSTEM_PROMPT,
+  DEFAULT_SYSTEM_PROMPT,
+} from "./prompts";
 
 describe("buildSystemPrompt", () => {
   it("uses the Coach timezone for today's date", () => {
@@ -90,5 +95,26 @@ describe("DEFAULT_SYSTEM_PROMPT", () => {
     expect(DEFAULT_SYSTEM_PROMPT).toMatch(/cooldown_window_seconds/);
     expect(DEFAULT_SYSTEM_PROMPT).toMatch(/next_sync_allowed_at/);
     expect(DEFAULT_SYSTEM_PROMPT).toMatch(/try again in/i);
+  });
+});
+
+describe("buildCursorSystemPrompt", () => {
+  it("keeps Cursor-specific safety and routing rules compact", () => {
+    const prompt = buildCursorSystemPrompt(
+      new Date("2026-05-02T02:35:00.000Z"),
+      ["sleep_better"],
+    );
+
+    expect(prompt).toContain("Today's date is 2026-05-01.");
+    expect(prompt).toContain("under 12 words");
+    expect(prompt).toContain("query_daily_snapshot once");
+    expect(prompt).toContain("Sync is unavailable");
+    expect(prompt).toContain("sleep better");
+    expect(prompt.length).toBeLessThan(DEFAULT_SYSTEM_PROMPT.length / 2);
+  });
+
+  it("does not duplicate the full tool schema catalog", () => {
+    expect(CURSOR_SYSTEM_PROMPT).not.toContain("cooldown_window_seconds");
+    expect(CURSOR_SYSTEM_PROMPT).not.toContain("zone_0_ms");
   });
 });

@@ -5,6 +5,7 @@ struct ChatView: View {
 
     @Environment(\.api) private var api
     @Environment(\.chatInFlight) private var chatInFlight
+    @Environment(\.scenePhase) private var scenePhase
     @State private var threadId: Int?
     @State private var rows: [ChatRow] = []
     @State private var input: String = ""
@@ -14,6 +15,8 @@ struct ChatView: View {
     @State private var didLoadInitial = false
     @State private var streamingAssistant: StreamingAssistant?
     @State private var activeTools: [ToolChip] = []
+    @State private var recoveryStatus: RecoveryStatus?
+    @State private var showAbandonRecoveryConfirmation = false
 
     init(threadId: Int?, initialTitle: String?) {
         self.initialTitle = initialTitle
@@ -29,6 +32,11 @@ struct ChatView: View {
         let id = UUID()
         let name: String
         var stage: String?
+    }
+
+    enum RecoveryStatus: Equatable {
+        case checking
+        case waiting
     }
 
     enum ChatRow: Identifiable, Hashable {
@@ -53,6 +61,9 @@ struct ChatView: View {
             if !activeTools.isEmpty {
                 toolChipsBar
             }
+            if let recoveryStatus {
+                recoveryBar(recoveryStatus)
+            }
             if let sendError {
                 sendErrorBanner(sendError)
             }
@@ -68,12 +79,67 @@ struct ChatView: View {
             if !didLoadInitial {
                 didLoadInitial = true
                 await loadHistory()
+                // recoveryStatus is view-local @State, so it doesn't survive leaving and
+                // reopening this thread; re-arm the bar/send-block from the shared store.
+                if let threadId, chatInFlight.inFlight[threadId] != nil {
+                    await reconcileDroppedTurn(baselineMessageId: recoveryBaselineMessageId)
+                }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .chatThreadNeedsRefresh)) { note in
             guard let id = note.object as? Int, id == threadId, !isSending else { return }
+            recoveryStatus = nil
             Task { await loadHistory() }
         }
+        .confirmationDialog(
+            "Stop waiting for this reply?",
+            isPresented: $showAbandonRecoveryConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Stop waiting", role: .destructive) {
+                abandonRecovery()
+            }
+            Button("Keep checking", role: .cancel) {}
+        } message: {
+            Text("The reply may still be running. Sending another message could overlap it.")
+        }
+    }
+
+    private func recoveryBar(_ status: RecoveryStatus) -> some View {
+        HStack(spacing: 8) {
+            if status == .checking {
+                ProgressView()
+                    .controlSize(.mini)
+                    .tint(Theme.Palette.ai)
+            } else {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.Palette.ai)
+            }
+            Text(status == .checking ? "Checking for reply…" : "Reply is still running…")
+                .font(Theme.FontStyle.sans(11.5))
+                .foregroundStyle(Theme.Palette.fg2)
+            Spacer()
+            if status == .waiting {
+                Button("Check now") {
+                    Task {
+                        await reconcileDroppedTurn(
+                            baselineMessageId: recoveryBaselineMessageId
+                        )
+                    }
+                }
+                .font(Theme.FontStyle.sans(11.5, weight: .medium))
+                .foregroundStyle(Theme.Palette.ai)
+                Button("Stop") {
+                    showAbandonRecoveryConfirmation = true
+                }
+                .font(Theme.FontStyle.sans(11.5, weight: .medium))
+                .foregroundStyle(Theme.Palette.fg3)
+            }
+        }
+        .padding(.horizontal, Theme.Spacing.md)
+        .padding(.vertical, 7)
+        .background(Theme.Palette.ai.opacity(0.06))
     }
 
     private var toolChipsBar: some View {
@@ -237,7 +303,24 @@ struct ChatView: View {
     }
 
     private var canSend: Bool {
-        !isSending && !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !isSending
+            && recoveryStatus == nil
+            && !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var latestPersistedMessageId: Int? {
+        rows.reversed().compactMap { row -> Int? in
+            if case .persisted(let message) = row { return message.id }
+            return nil
+        }.first
+    }
+
+    private var recoveryBaselineMessageId: Int? {
+        guard
+            let threadId,
+            let turn = chatInFlight.inFlight[threadId]
+        else { return latestPersistedMessageId }
+        return turn.baselineMessageId
     }
 
     @MainActor
@@ -270,6 +353,8 @@ struct ChatView: View {
 
         isSending = true
         sendError = nil
+        recoveryStatus = nil
+        let baselineMessageId = latestPersistedMessageId
         let optimisticId = UUID()
         rows.append(.optimistic(id: optimisticId, content: trimmed))
         rows.append(.typing)
@@ -292,10 +377,14 @@ struct ChatView: View {
 
         func markInFlight(_ id: Int) {
             markedThreadId = id
-            inFlight.inFlight.insert(id)
+            inFlight.inFlight[id] = ChatInFlightTurn(
+                baselineMessageId: baselineMessageId
+            )
         }
         func clearInFlight() {
-            if let id = markedThreadId { inFlight.inFlight.remove(id) }
+            if let id = markedThreadId {
+                inFlight.inFlight.removeValue(forKey: id)
+            }
         }
 
         do {
@@ -349,9 +438,18 @@ struct ChatView: View {
                 await loadHistory()
             } else if !sawError {
                 // Stream ended without `done` or an SSE `error`: a transport drop.
-                // Leave the turn in-flight so foreground refresh recovers it; no
-                // banner, no rollback. Just clear the typing row.
+                activeTools = []
                 rows.removeAll { if case .typing = $0 { return true }; return false }
+                if let recoveryThreadId = threadId {
+                    // Existing threads remain recoverable even if the
+                    // x-thread-id response header never arrived.
+                    markInFlight(recoveryThreadId)
+                    if scenePhase == .active {
+                        await reconcileDroppedTurn(baselineMessageId: baselineMessageId)
+                    }
+                } else {
+                    handleUnconfirmedThreadDrop(optimisticId: optimisticId, content: trimmed)
+                }
             }
         } catch APIError.unauthorized {
             rollbackOptimistic(optimisticId: optimisticId, restore: trimmed)
@@ -365,8 +463,18 @@ struct ChatView: View {
             rows.removeAll { if case .typing = $0 { return true }; return false }
         } catch {
             if Self.isTransportDrop(error) {
-                // Backgrounded / connection lost: silent, recoverable on foreground.
+                activeTools = []
                 rows.removeAll { if case .typing = $0 { return true }; return false }
+                // Preserve the existing silent app-scoped recovery when the app
+                // backgrounds. If the ChatView remains active, self-heal here.
+                if let recoveryThreadId = threadId {
+                    markInFlight(recoveryThreadId)
+                    if scenePhase == .active {
+                        await reconcileDroppedTurn(baselineMessageId: baselineMessageId)
+                    }
+                } else {
+                    handleUnconfirmedThreadDrop(optimisticId: optimisticId, content: trimmed)
+                }
             } else if !sawDone && !sawError {
                 // Open succeeded but no event resolved the turn and the error is
                 // not a recognized transport drop: surface a generic banner.
@@ -375,6 +483,68 @@ struct ChatView: View {
                 clearInFlight()
             }
         }
+    }
+
+    /// Reconcile a foreground transport drop without making the user leave and
+    /// reopen the thread. Four bounded probes cover the common race where the
+    /// server persists shortly after the transport disappears.
+    @MainActor
+    private func reconcileDroppedTurn(baselineMessageId: Int?) async {
+        guard let threadId else { return }
+        recoveryStatus = .checking
+
+        var previousOffset = 0
+        for probeOffset in [0, 1, 2, 5] {
+            let delaySeconds = probeOffset - previousOffset
+            previousOffset = probeOffset
+            if delaySeconds > 0 {
+                do {
+                    try await Task.sleep(nanoseconds: UInt64(delaySeconds) * 1_000_000_000)
+                } catch {
+                    recoveryStatus = nil
+                    return
+                }
+            }
+            guard scenePhase == .active else {
+                // CoachApp owns silent reconciliation after backgrounding.
+                recoveryStatus = nil
+                return
+            }
+
+            do {
+                let detail = try await ChatService(api: api).threadDetail(id: threadId)
+                if ChatRecovery.hasNewAssistantReply(
+                    detail.messages,
+                    afterMessageId: baselineMessageId
+                ) {
+                    rows = detail.messages.map { .persisted($0) }
+                    chatInFlight.inFlight.removeValue(forKey: threadId)
+                    recoveryStatus = nil
+                    loadError = nil
+                    return
+                }
+            } catch {
+                // Network may still be reconnecting. Continue the bounded probes
+                // without replacing the conversation with an error screen.
+            }
+        }
+
+        recoveryStatus = .waiting
+    }
+
+    @MainActor
+    private func abandonRecovery() {
+        if let threadId {
+            chatInFlight.inFlight.removeValue(forKey: threadId)
+        }
+        recoveryStatus = nil
+        sendError = "Stopped checking. The reply may still appear in thread history."
+    }
+
+    @MainActor
+    private func handleUnconfirmedThreadDrop(optimisticId: UUID, content: String) {
+        rollbackOptimistic(optimisticId: optimisticId, restore: content)
+        sendError = "Connection lost before the new thread could be confirmed. Check your threads before retrying."
     }
 
     private func appendStreamingDelta(_ delta: String) {
