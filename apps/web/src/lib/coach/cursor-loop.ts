@@ -12,6 +12,7 @@ import "server-only";
 // See memory: coach-cursor-composer-provider for the proven recipe.
 import { spawn } from "node:child_process";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -51,6 +52,35 @@ const APP_ROOT = process.env.COACH_APP_ROOT || process.cwd();
 const MCP_SERVER_PATH =
   process.env.COACH_MCP_SERVER_PATH ||
   path.join(APP_ROOT, "src", "coach-mcp", "server.ts");
+
+// Precompiled artifact from `npm run build:mcp` (esbuild, see package.json) —
+// eliminates the per-turn tsx transpile of server.ts. Used in production after
+// a build; falls back to the tsx invocation otherwise (local dev, or a
+// COACH_MCP_SERVER_PATH override in play).
+// `--conditions=react-server` is still required at the node invocation: the
+// server-only import stays an external (unbundled) specifier, so its
+// conditional-export resolution still happens at module-load time either way.
+const COMPILED_MCP_SERVER_PATH =
+  process.env.COACH_MCP_COMPILED_PATH ||
+  path.join(APP_ROOT, "dist", "coach-mcp", "server.mjs");
+
+// Under `next dev` a stale dist/ left over from an earlier `npm run build`
+// would silently shadow edits to src/coach-mcp (and everything it bundles),
+// so dev stays on tsx. Set COACH_MCP_USE_COMPILED=1 to force the compiled
+// path anyway — e.g. benching the precompiled server against a dev server.
+function preferCompiledMcpServer(): boolean {
+  if (process.env.COACH_MCP_SERVER_PATH) return false;
+  if (!existsSync(COMPILED_MCP_SERVER_PATH)) return false;
+  if (process.env.COACH_MCP_USE_COMPILED === "1") return true;
+  return process.env.NODE_ENV === "production";
+}
+
+function resolveMcpServerArgs(): string[] {
+  if (preferCompiledMcpServer()) {
+    return ["--conditions=react-server", COMPILED_MCP_SERVER_PATH];
+  }
+  return ["--conditions=react-server", "--import", "tsx", MCP_SERVER_PATH];
+}
 
 export type RunCursorTurnArgs = {
   userId: number;
@@ -356,7 +386,7 @@ async function makeWorkspace(userId: number): Promise<string> {
         mcpServers: {
           whoop: {
             command: "node",
-            args: ["--conditions=react-server", "--import", "tsx", MCP_SERVER_PATH],
+            args: resolveMcpServerArgs(),
             cwd: APP_ROOT,
             // PATH included explicitly so `node` resolves even if a future
             // cursor-agent treats `env` as a replacement rather than a merge.

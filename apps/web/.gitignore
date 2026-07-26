@@ -17,6 +17,9 @@
 /.next/
 /out/
 
+# precompiled coach MCP server (npm run build:mcp / part of npm run build)
+/dist/
+
 # production
 /build
 
