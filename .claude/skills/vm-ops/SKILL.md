@@ -14,13 +14,25 @@ Production lives on an Oracle Cloud VM. Public traffic: DNS → Cloudflare (prox
 | VM host | `129.80.134.194` |
 | Public web domain | `coach.georgenijo.com` (Cloudflare proxy + Access → VM nginx → `localhost:8501`) |
 | iOS API domain | `coach-api.georgenijo.com` (Cloudflare proxy, **no** Access — bearer-only → VM nginx → `localhost:8501`) |
+| Tailnet name | `whoop-vm` (100.114.248.101) — **the only working shell path** |
 | SSH user | `ubuntu` (sudo) |
 | App user | `george` (NO sudo — see "Two-user dance") |
 | SSH key | `~/.ssh/id_ed25519` |
 
+**Use `tailscale ssh`, not plain `ssh`.** Port 22 on the public IP now runs a
+ForceCommand that launches George's personal SSH-site TUI for every user. It
+authenticates, then exits with `Requires an active PTY` and never runs your
+command; with `-tt` it draws a TUI and swallows the command. The sftp
+subsystem is disabled, so `scp` is not a workaround either. Tailscale SSH has
+its own server and bypasses system sshd:
+
 ```bash
-ssh -i ~/.ssh/id_ed25519 ubuntu@129.80.134.194
+tailscale ssh george@whoop-vm "<cmd>"   # repo + DB (george owns them)
+tailscale ssh ubuntu@whoop-vm "<cmd>"   # passwordless sudo (systemctl, journalctl)
 ```
+
+Every `ssh -i ~/.ssh/id_ed25519 ubuntu@129.80.134.194 …` below should be read
+as `tailscale ssh ubuntu@whoop-vm …`.
 
 ## Two-user dance
 
@@ -199,6 +211,14 @@ For larger backfills, write a one-shot Python script that calls `WhoopClient.fet
 
 ## Gotchas
 
+- **`next build` takes 5+ min here and survives a dropped ssh session.** If the connection dies mid-build the orphan keeps the build lock, and the next `npm run build` fails with `Another next build process is already running.` — it is not stale, it is still going. Launch builds detached and poll for the artifact instead of holding the session open:
+  ```bash
+  tailscale ssh george@whoop-vm "cd ~/Documents/whoop-dashboard/apps/web \
+    && setsid nohup npm run build > /tmp/build.log 2>&1 < /dev/null & echo launched"
+  # then poll: ls .next/BUILD_ID  →  exists means done
+  ```
+  `npm run build` = `build:mcp` (esbuild → `dist/coach-mcp/server.mjs`, the precompiled Coach MCP server) **then** `next build`. Both must finish.
+- **`JWT_SIGNING_KEY` is not in `.env.local`** — it lives in the systemd drop-in `/etc/systemd/system/whoop-web.service.d/override.conf`. Read it with `sudo systemctl show whoop-web -p Environment --value`. Needed by `scripts/bench-coach.mjs`, which mints its own session JWT.
 - **Next.js version is custom** — see `apps/web/AGENTS.md`. Don't rely on training-data Next.js patterns; check `node_modules/next/dist/docs/` for the installed version's APIs.
 - **`useSearchParams` requires Suspense** in this Next build — wrap any client component using it (Sidebar, TopBar both wrapped in `app/layout.tsx`).
 - **Browser cache bites hard — close old tabs after deploy.** Each `npm run build` regenerates Next.js chunk hashes (visible in DevTools Network tab — filenames like `0257pdz1-imal.js` change every build). Tabs open before the deploy keep requesting old chunk URLs on dynamic imports → 404s → fallback retries → page feels hiccupy/sluggish even though server TTFB is 100-200ms. Cmd+Shift+R sometimes evicts cleanly but not reliably. **Reliable fix: close the old tab and open a new one.** If reports of "old behavior" come in, suspect cache before code.

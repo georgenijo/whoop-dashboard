@@ -27,6 +27,10 @@ const AUTH_EXEMPT_PREFIXES: readonly string[] = [
   "/api/auth/",
   "/api/whoop/webhook",
   "/api/admin/",
+  // Build identity only (commit sha + build time, no user data, no secrets).
+  // Must be reachable without a session so a deploy can verify which build is
+  // live before anyone signs in.
+  "/api/health",
 ];
 
 function isAuthExempt(pathname: string): boolean {

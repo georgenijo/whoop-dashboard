@@ -125,14 +125,17 @@ export function initIosTestDb(prefix: string): IosTestDb {
     const d = db();
     try {
       d.prepare(
+        // sleep's PK is (user_id, sleep_id) — a date can carry several rows
+        // (naps + the main sleep), so sleep_id is NOT NULL and must be seeded.
         `INSERT OR REPLACE INTO sleep (
-           user_id, date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms,
+           user_id, sleep_id, date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms,
            sleep_need_ms, performance, efficiency,
            need_from_baseline_ms, need_from_debt_ms, need_from_strain_ms, need_from_nap_ms,
            nap
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         1,
+        `sleep-${date}-${opts.nap ?? 0}`,
         date,
         opts.in_bed_ms ?? null,
         opts.light_ms ?? null,

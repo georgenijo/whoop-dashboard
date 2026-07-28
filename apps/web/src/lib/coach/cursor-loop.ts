@@ -13,7 +13,7 @@ import "server-only";
 import { spawn } from "node:child_process";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
@@ -29,6 +29,17 @@ import {
   type ToolDetail,
 } from "./tools";
 
+// Hard reaper for the cursor-agent subprocess tree, NOT a quality-of-answer
+// policy. cursor-agent is spawned detached (own process group) and spawns the
+// MCP server as a grandchild; nothing in the request lifecycle reaps that
+// tree, so a wedged CLI would otherwise live forever against a service capped
+// at 512M. Only two things can kill it: client abort, or this timer.
+//
+// COUPLED TO THE iOS CLIENT: `apps/ios/Sources/APIClient.swift` sets
+// `request.timeoutInterval = 130`. This wall must stay BELOW that, so an
+// over-running turn dies server-side as a logged `chat_logs` row instead of
+// vanishing as an un-attributable client-side drop. Raising this without
+// raising the iOS timeout first just moves the failure somewhere invisible.
 const MAX_CURSOR_WALL_MS = 120_000;
 const MAX_CURSOR_TOOL_CALLS = 12;
 const MAX_TRANSCRIPT_CHARS = 8_000;
@@ -39,6 +50,31 @@ const PLAN_INTENT_PATTERN = /\b(plan|program|split|routine)\b/i;
 // exits within a few milliseconds after it; cap an abnormal post-result tail
 // without returning early and leaving cursor-agent/MCP children unreaped.
 const TERMINAL_CLOSE_GRACE_MS = 250;
+
+// cursor-agent registers every workspace it is pointed at under
+// `~/.cursor/projects/<path-with-slashes-as-dashes>` and never reaps them.
+// Our workspaces are per-turn throwaways, so without this the directory grows
+// by one entry per coach turn, forever (123 had accumulated on the agent box
+// and 60 on prod before this was noticed). Deleting the workspace itself is
+// not enough — the registration outlives it.
+//
+// Best-effort by design: a failure here must never surface as a turn failure.
+async function removeCursorProjectRegistration(workspace: string): Promise<void> {
+  try {
+    const home = process.env.HOME || homedir();
+    if (!home) return;
+    // /tmp/coach-cursor-AbC123 -> tmp-coach-cursor-AbC123
+    const slug = workspace.replace(/^[/\\]+/, "").replace(/[/\\]/g, "-");
+    if (!slug || slug.includes("..")) return;
+    const registered = path.join(home, ".cursor", "projects", slug);
+    // Guard against ever pointing outside the projects dir.
+    const root = path.join(home, ".cursor", "projects") + path.sep;
+    if (!registered.startsWith(root)) return;
+    await rm(registered, { recursive: true, force: true });
+  } catch {
+    /* cleanup is best-effort */
+  }
+}
 
 // Where the cursor-agent binary lives. The systemd service's PATH may not
 // include ~/.local/bin, so the VM sets COACH_CURSOR_AGENT_BIN to the absolute
@@ -893,6 +929,7 @@ export async function runCursorTurn(
   } finally {
     const cleanupStartedMs = Date.now();
     await rm(ws, { recursive: true, force: true }).catch(() => {});
+    await removeCursorProjectRegistration(ws);
     cursorDetail.timing.cleanup_ms = Date.now() - cleanupStartedMs;
     cursorDetail.timing.turn_ms = Date.now() - turnStartedMs;
   }
