@@ -11,9 +11,9 @@ import "server-only";
 //
 // See memory: coach-cursor-composer-provider for the proven recipe.
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, realpath, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
@@ -29,6 +29,17 @@ import {
   type ToolDetail,
 } from "./tools";
 
+// Hard reaper for the cursor-agent subprocess tree, NOT a quality-of-answer
+// policy. cursor-agent is spawned detached (own process group) and spawns the
+// MCP server as a grandchild; nothing in the request lifecycle reaps that
+// tree, so a wedged CLI would otherwise live forever against a service capped
+// at 512M. Only two things can kill it: client abort, or this timer.
+//
+// COUPLED TO THE iOS CLIENT: `apps/ios/Sources/APIClient.swift` sets
+// `request.timeoutInterval = 130`. This wall must stay BELOW that, so an
+// over-running turn dies server-side as a logged `chat_logs` row instead of
+// vanishing as an un-attributable client-side drop. Raising this without
+// raising the iOS timeout first just moves the failure somewhere invisible.
 const MAX_CURSOR_WALL_MS = 120_000;
 const MAX_CURSOR_TOOL_CALLS = 12;
 const MAX_TRANSCRIPT_CHARS = 8_000;
@@ -39,6 +50,43 @@ const PLAN_INTENT_PATTERN = /\b(plan|program|split|routine)\b/i;
 // exits within a few milliseconds after it; cap an abnormal post-result tail
 // without returning early and leaving cursor-agent/MCP children unreaped.
 const TERMINAL_CLOSE_GRACE_MS = 250;
+
+// cursor-agent registers every workspace it is pointed at under
+// `~/.cursor/projects/<path-with-slashes-as-dashes>` and never reaps them.
+// Our workspaces are per-turn throwaways, so without this the directory grows
+// by one entry per coach turn, forever (123 had accumulated on the agent box
+// and 60 on prod before this was noticed). Deleting the workspace itself is
+// not enough — the registration outlives it.
+//
+// Best-effort by design: a failure here must never surface as a turn failure.
+// On macOS the workspace path must be cleaned under BOTH spellings: tmpdir()
+// there is /var/folders/... but /var is a symlink to /private/var, and
+// cursor-agent registers the raw --workspace arg AND the symlink-resolved cwd
+// as two separate projects. Slugging only the raw path leaves the
+// `private-var-folders-...` twin behind, so the leak survives on dev machines.
+// On Linux /tmp is not a symlink and both spellings collapse to one slug.
+async function removeCursorProjectRegistration(workspace: string): Promise<void> {
+  try {
+    const home = process.env.HOME || homedir();
+    if (!home) return;
+    const root = path.join(home, ".cursor", "projects");
+    const candidates = new Set<string>([workspace]);
+    const resolved = await realpath(workspace).catch(() => null);
+    if (resolved) candidates.add(resolved);
+
+    for (const candidate of candidates) {
+      // /tmp/coach-cursor-AbC123 -> tmp-coach-cursor-AbC123
+      const slug = candidate.replace(/^[/\\]+/, "").replace(/[/\\]/g, "-");
+      if (!slug || slug.includes("..")) continue;
+      const registered = path.join(root, slug);
+      // Guard against ever pointing outside the projects dir.
+      if (!registered.startsWith(root + path.sep)) continue;
+      await rm(registered, { recursive: true, force: true });
+    }
+  } catch {
+    /* cleanup is best-effort */
+  }
+}
 
 // Where the cursor-agent binary lives. The systemd service's PATH may not
 // include ~/.local/bin, so the VM sets COACH_CURSOR_AGENT_BIN to the absolute
@@ -892,6 +940,10 @@ export async function runCursorTurn(
     );
   } finally {
     const cleanupStartedMs = Date.now();
+    // Unregister BEFORE deleting the workspace: resolving the symlinked
+    // spelling of the path (macOS /var -> /private/var) requires the
+    // directory to still exist.
+    await removeCursorProjectRegistration(ws);
     await rm(ws, { recursive: true, force: true }).catch(() => {});
     cursorDetail.timing.cleanup_ms = Date.now() - cleanupStartedMs;
     cursorDetail.timing.turn_ms = Date.now() - turnStartedMs;

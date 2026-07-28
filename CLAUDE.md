@@ -108,7 +108,17 @@ Threads have auto-titles via Haiku 4.5 fired in `after()` (Next.js post-response
     db.exec("ALTER TABLE chat_logs ADD COLUMN details TEXT");
   }
   ```
-- The 5 Whoop domain tables (`recovery`, `cycles`, `sleep`, `workouts`, `daily_summary`) use composite PK `(user_id, date)` (Phase D). The rebuild runs once at first `openWrite()` against a pre-Phase-D DB — idempotent via `PRAGMA table_info` gate. **NEVER write domain tables from Python**; the Next.js side is the sole owner.
+- All 5 Whoop domain tables are tenant-scoped by `user_id` (Phase D), but the **primary keys are NOT uniform** — verified against prod, and asserted per-table in `connection.test.ts`:
+
+  | Table | PRIMARY KEY | Why |
+  |---|---|---|
+  | `recovery` | `(user_id, date)` | one per day |
+  | `cycles` | `(user_id, date)` | one per day |
+  | `daily_summary` | `(user_id, date)` | one per day |
+  | `sleep` | `(user_id, sleep_id)` | a date carries naps **plus** the main sleep |
+  | `workouts` | `(id)` | many per day; Whoop's own id |
+
+  Assuming `(user_id, date)` everywhere is wrong and was the cause of a stale test suite. The rebuild runs once at first `openWrite()` against a pre-Phase-D DB — idempotent via `PRAGMA table_info` gate. **NEVER write domain tables from Python**; the Next.js side is the sole owner.
 - Read paths against domain tables MUST go through `forUser(userId).all/get/read(...)` in `apps/web/src/lib/db/scoped.ts`. The wrapper appends `userId` as the trailing positional `?`; call sites write `... AND user_id = ?` as the LAST placeholder. A CI vitest (`scoped.test.ts`) blocks any stray `FROM recovery|cycles|sleep|workouts|daily_summary|body_measurements` outside the wrapper + allowlist.
 - Other read paths use `safeQuery` (read-only open). Other write paths use `safeWriteQuery` or direct `openWrite()`.
 - Lazy-bootstrapped tables: `users`, `sessions`, `chat_threads`, `chat_messages`, `chat_logs`, `sync_logs`, `app_settings`, `integrations`, `user_settings`, `device_tokens`, `webhook_events`.
@@ -117,7 +127,9 @@ Threads have auto-titles via Haiku 4.5 fired in `after()` (Next.js post-response
 
 `src/lib/auth.ts` exposes `requireAuth(req)`. Precedence: **Bearer → Cookie → 401**. Bearer (iOS) verifies a session JWT; cookie (`__Host-coach_session`) is set by the SIWA round-trip at `/api/auth/apple-web/callback`. No bootstrap fallback — unauthenticated requests get 401.
 
-Public web requests are gated upstream by `apps/web/src/proxy.ts authGate()`, which 307s page requests to `/signin` and returns JSON 401 for API routes. Exempt prefixes: `/signin`, `/api/auth/`, `/api/whoop/webhook`, `/api/admin/`.
+Public web requests are gated upstream by `apps/web/src/proxy.ts authGate()`, which 307s page requests to `/signin` and returns JSON 401 for API routes. Exempt prefixes: `/signin`, `/api/auth/`, `/api/whoop/webhook`, `/api/admin/`, `/api/health`.
+
+`/api/health` returns build identity only (`{status}` publicly; `{status, sha, built_at, uptime_s}` to direct on-box callers) so `scripts/deploy` can verify which commit is actually serving traffic. Adding to this list is a policy change — it widens the unauthenticated surface, so it needs a Decisions Log entry, not just a code edit.
 
 Admin routes use a separate gate keyed on `ADMIN_APPLE_SUB` env (fail-closed if unset).
 
@@ -141,18 +153,54 @@ Admin routes use a separate gate keyed on `ADMIN_APPLE_SUB` env (fail-closed if 
 
 ## Deploy
 
-VM (Ubuntu) runs `whoop-web.service` (systemd) on port 8501. Deploy flow:
+VM (Ubuntu) runs `whoop-web.service` (systemd) on port 8501.
+
+**Use `scripts/deploy`** — do not hand-run the steps below. The script snapshots
+the DB, pulls, runs the build *detached* (a dropped ssh session does not kill
+`next build`, and the orphan keeps the lock), restarts, then **verifies** that
+`/api/health` reports the commit it just deployed. It prints a rollback recipe
+on exit.
 
 ```bash
-# 1. Snapshot the DB BEFORE any schema-touching change (Phase D et al). Stash
-#    a timestamped copy locally so a failed migration is a 30-second rollback.
+scripts/deploy            # deploy origin/main
+scripts/deploy --check    # report drift only (what's live vs main), change nothing
+scripts/deploy --ref <sha>
+```
+
+`scripts/deploy --check` answers "is prod current?" in one command. Prod once
+ran three commits behind main for a day with the fix for a live coach-timeout
+bug merged and undeployed, because nothing reported what was actually running.
+
+SSH to the VM goes through **`tailscale ssh george|ubuntu@whoop-vm`** — plain
+`ssh` to the public IP hits a ForceCommand TUI and exits `Requires an active
+PTY`. See the `vm-ops` skill.
+
+<details>
+<summary>Manual flow (reference only — prefer the script)</summary>
+
+```bash
+# 1. Snapshot the DB BEFORE any schema-touching change (Phase D et al).
+#    NEVER cp/scp the live DB. It is WAL mode with the service still writing:
+#    committed data sits in the -wal sidecar, so a raw copy of the main file
+#    can restore as an EMPTY database, and a copy straddling a checkpoint can
+#    tear it. Both exit 0 — the failure is silent exactly when it matters.
+#    Use SQLite's online-backup API, which is safe against live writers:
 TS=$(date +%Y%m%d-%H%M%S)
-scp ubuntu@<vm-ip>:/home/george/Documents/whoop-dashboard/shared/whoop_data.db \
-    "$HOME/whoop_data.db.backup.$TS"
-#    Rollback recipe (only if migration fails):
-#      ssh ubuntu@<vm-ip> 'sudo systemctl stop whoop-web'
-#      scp "$HOME/whoop_data.db.backup.$TS" \
-#          ubuntu@<vm-ip>:/home/george/Documents/whoop-dashboard/shared/whoop_data.db
+#    quick_check returns TEXT, not an exit status — assert it, or a corrupt
+#    snapshot passes as a good rollback artifact. $TS must expand LOCALLY.
+tailscale ssh george@whoop-vm "python3 -c '
+import sqlite3, sys
+s = sqlite3.connect(sys.argv[1], timeout=30); d = sqlite3.connect(sys.argv[2])
+s.backup(d); r = d.execute(\"PRAGMA quick_check\").fetchone()[0]; d.close(); s.close()
+sys.exit(0 if r == \"ok\" else \"quick_check FAILED: \" + str(r))
+' /home/george/Documents/whoop-dashboard/shared/whoop_data.db /home/george/whoop_data.db.backup.$TS"
+#    Rollback recipe (only if migration fails) — delete the sidecars FIRST, or a
+#    leftover -wal replays onto the restored older file and blends two states
+#    (SQLite validates WAL frames by checksum, never by which DB they belong to):
+#      tailscale ssh ubuntu@whoop-vm 'sudo systemctl stop whoop-web'
+#      tailscale ssh george@whoop-vm 'cd /home/george/Documents/whoop-dashboard/shared \
+#        && rm -f whoop_data.db-wal whoop_data.db-shm \
+#        && cp /home/george/whoop_data.db.backup.$TS whoop_data.db'
 #      ssh ubuntu@<vm-ip> 'sudo -u george git -C /home/george/Documents/whoop-dashboard checkout <prev-sha>'
 #      ssh ubuntu@<vm-ip> 'cd /home/george/Documents/whoop-dashboard/apps/web && sudo -u george npm ci && sudo -u george npm run build && sudo systemctl start whoop-web'
 
@@ -171,7 +219,9 @@ sudo -u george python3 -c "import sqlite3; \
       print(t, n)"
 ```
 
-Public domain has an auth gate (302 to login). For VM-side smoke tests, hit `localhost:8501` directly to bypass.
+</details>
+
+Public domain has an auth gate (302 to login). For VM-side smoke tests, hit `localhost:8501` directly to bypass. `/api/health` is auth-exempt and returns the running build's commit sha.
 
 The VM has no `sqlite3` binary — query via `sudo -u george python3 -c "import sqlite3; ..."`.
 

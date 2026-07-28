@@ -6,6 +6,20 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-07-28: Deploys must be verified, not assumed — `/api/health` + `scripts/deploy`
+
+**Decision:** A deploy is not "done" until the running process reports the commit that was deployed. Added an auth-exempt `/api/health` returning `{sha, built_at}` (stamped at build time by `next.config.ts`, overridable via `COACH_BUILD_SHA`), and `scripts/deploy`, which snapshots the DB, pulls, builds **detached**, restarts, and then fails loudly if `/api/health` does not report the target sha. `scripts/deploy --check` reports drift without changing anything. The prose deploy recipe in `CLAUDE.md` is demoted to a reference-only `<details>` block.
+
+Also locked: `MAX_CURSOR_WALL_MS` (120s) is documented as a subprocess **reaper** coupled to the iOS `timeoutInterval = 130` — raising it without raising the client first converts a logged `chat_logs` error into an invisible client-side drop. Per-turn Cursor workspaces now unregister themselves from `~/.cursor/projects/`. Domain-table primary keys are documented per-table (`sleep` is `(user_id, sleep_id)`, `workouts` is `(id)`), not as a uniform `(user_id, date)`.
+
+**Rationale:** Prod ran three commits behind `main` for a day while the merged fix for a live coach-timeout bug sat undeployed; nine of the last hundred coach turns were failing and the only signal was a user noticing blank messages. Every failure mode here was *invisible rather than hard*: no build identity, a build that survives a dropped ssh session and holds its lock, a `~/.cursor/projects` entry leaked per turn (123 accumulated on the agent box, 60 on prod), and a test suite red on `main` for 7 tests — which meant "tests pass" had stopped being a usable signal. Fixing the observability is what makes the next incident cheap; the timeout fix itself was already merged.
+
+**Status:** active
+
+**References:** `scripts/deploy`, `apps/web/src/app/api/health/route.ts`, `apps/web/src/lib/build-info.ts`, `apps/web/next.config.ts`, `apps/web/src/proxy.ts`, `apps/web/src/lib/coach/cursor-loop.ts`; supersedes the manual deploy recipe in `CLAUDE.md`; see also the 2026-07-26 Cursor latency decision.
+
+---
+
 ## 2026-07-26: Cursor latency path prioritizes safe one-pass turns; warm SDK deferred
 
 **Decision:** Optimize the production Coach around Cursor Composer 2.5 Fast while retaining the contained `cursor-agent --mode ask` process boundary. Add per-stage Cursor timing, use a compact Cursor-specific prompt, preload an authoritative SQLite daily snapshot for current/last-night intents so common questions finish in one model pass, immediately flush the SSE connection, send `done` as the terminal event, and recover dropped iOS streams by reconciling persisted messages. Legacy `cursor:composer-2.5` preferences resolve in memory to the Fast variant.

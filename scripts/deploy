@@ -1,0 +1,195 @@
+#!/usr/bin/env bash
+# Deploy main to the prod VM, and *verify* it landed.
+#
+# Why this exists: the deploy recipe used to live in prose in CLAUDE.md, and
+# every step of it had a trap that had to be rediscovered by hand:
+#
+#   - plain `ssh ubuntu@<ip>` no longer works (sshd ForceCommand runs a TUI
+#     and exits "Requires an active PTY"); tailscale ssh bypasses it
+#   - `next build` takes 5+ min and SURVIVES a dropped ssh session, so a
+#     naive `ssh ... npm run build` looks like it failed while the real build
+#     is still holding the lock
+#   - nothing reported which commit was actually serving traffic, so prod ran
+#     three commits behind main for a day with the fix for a live bug merged
+#
+# Usage:
+#   scripts/deploy              # deploy origin/main
+#   scripts/deploy --ref <sha>  # deploy a specific ref
+#   scripts/deploy --check      # report drift only, change nothing
+set -euo pipefail
+
+VM_USER_APP=george
+VM_USER_SUDO=ubuntu
+VM_HOST=whoop-vm                  # tailnet name; see the vm-ops skill
+REPO=/home/george/Documents/whoop-dashboard
+APP="$REPO/apps/web"
+SERVICE=whoop-web
+PORT=8501
+BUILD_POLL_SECONDS=900            # 15 min ceiling; a cold build is ~5-6 min
+
+REF=origin/main
+CHECK_ONLY=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --ref)   REF="$2"; shift 2 ;;
+    --check) CHECK_ONLY=1; shift ;;
+    -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
+    *) echo "unknown arg: $1" >&2; exit 2 ;;
+  esac
+done
+
+# The tailscale client/daemon version-skew warning is benign and fires on every
+# call; drop just that line so real stderr still surfaces.
+quiet_ssh() {
+  tailscale ssh "$@" < /dev/null 2> >(grep -v '^Warning: client version' >&2)
+}
+app()   { quiet_ssh "$VM_USER_APP@$VM_HOST"  "$@"; }
+sudo_() { quiet_ssh "$VM_USER_SUDO@$VM_HOST" "$@"; }
+say()  { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
+die()  { printf '\n\033[31mFAILED: %s\033[0m\n' "$*" >&2; exit 1; }
+
+# --- 0. what is live right now -----------------------------------------------
+say "Current state"
+LIVE_SHA=$(app "curl -sS --max-time 10 http://localhost:$PORT/api/health" \
+  | sed -n 's/.*\"sha\":\"\([^\"]*\)\".*/\1/p' || true)
+CHECKOUT_SHA=$(app "git -C $REPO rev-parse --short HEAD")
+echo "  checkout on VM : $CHECKOUT_SHA"
+echo "  serving traffic: ${LIVE_SHA:-<no /api/health — pre-health build>}"
+
+if [ -n "$LIVE_SHA" ] && [ "$LIVE_SHA" != "$CHECKOUT_SHA" ]; then
+  echo "  NOTE: checkout != running build. The service is stale; a restart is pending."
+fi
+
+# Refresh the LOCAL remote-tracking ref before resolving it. `git rev-parse`
+# never contacts the remote, so without this a clone that hasn't fetched since
+# the last merge resolves origin/main to a stale commit — the script would then
+# deploy the OLD commit, verify it against itself, and print success, while
+# --check reports "nothing to do". That is exactly the drift this tool exists
+# to catch, so it must not be able to produce a false all-clear.
+case "$REF" in
+  origin/*) git fetch origin -q || die "local git fetch failed — cannot trust $REF" ;;
+esac
+TARGET_SHA=$(git rev-parse --short "$REF")
+echo "  target ($REF): $TARGET_SHA"
+if [ "$CHECKOUT_SHA" = "$TARGET_SHA" ] && [ "${LIVE_SHA:-}" = "$TARGET_SHA" ]; then
+  echo "  already deployed and serving $TARGET_SHA — nothing to do."
+  exit 0
+fi
+[ "$CHECK_ONLY" = "1" ] && { echo "  (--check: stopping here)"; exit 0; }
+
+# --- 1. snapshot the DB ------------------------------------------------------
+# Cheap insurance. Schema migrations are lazy ALTERs in openWrite(), so ANY
+# deploy can migrate the DB on the first write after restart.
+say "Snapshotting prod DB"
+TS=$(date +%Y%m%d-%H%M%S)
+BACKUP="/home/george/whoop_data.db.backup.$TS"
+# NOT `cp`. The DB is WAL mode (connection.ts: journal_mode = WAL) and the
+# service is still running and writing here — nothing is stopped until step 4.
+# Everything committed since the last checkpoint lives only in the -wal
+# sidecar, so copying the main file alone can yield a backup that restores as
+# an EMPTY database, and a cp straddling a checkpoint can tear the file. Both
+# exit 0, so the failure is silent precisely when you need the backup.
+# sqlite3.Connection.backup() is the online-backup API: it holds a read txn for
+# the whole copy, is safe against concurrent writers, and emits a
+# self-contained file with no sidecar. quick_check proves the artifact is
+# readable before we go anywhere near the deploy.
+# quick_check returns diagnostic TEXT, never a failing exit status — printing
+# it would let a corrupt snapshot pass as a valid rollback artifact. Raise
+# unless it is exactly "ok" so `|| die` actually fires.
+app "python3 -c 'import sqlite3,sys; s=sqlite3.connect(sys.argv[1],timeout=30); d=sqlite3.connect(sys.argv[2]); s.backup(d); r=d.execute(\"PRAGMA quick_check\").fetchone()[0]; d.close(); s.close(); sys.exit(0) if r==\"ok\" else sys.exit(\"quick_check FAILED: \"+str(r))' $REPO/shared/whoop_data.db $BACKUP && ls -la $BACKUP" \
+  || die "DB snapshot failed or did not verify — refusing to deploy without a good rollback artifact"
+
+# --- 2. pull -----------------------------------------------------------------
+say "Pulling $REF"
+app "cd $REPO && git fetch --all -q && git checkout -q main && git reset --hard $TARGET_SHA && git rev-parse --short HEAD" \
+  || die "git pull failed"
+
+# Re-derive the expected sha ON THE VM. Git's abbreviation length is per-repo
+# (it grows with object count) and core.abbrev is per-machine, so a sha
+# abbreviated here can legitimately differ in length from the same commit
+# abbreviated there — which would fail verification on a perfectly good deploy.
+# Compare like with like: both sides now come from the VM's own git.
+EXPECT_SHA=$(app "git -C $REPO rev-parse --short HEAD")
+[ -n "$EXPECT_SHA" ] || die "could not read deployed sha from the VM"
+
+# --- 3. build (detached — MUST survive this ssh session) ---------------------
+# `set -o pipefail` must be set INSIDE the remote command: the local pipefail on
+# line 19 governs local pipelines only, so without this the remote pipeline's
+# status is tail's (always 0) and a failed `npm ci` would sail straight through
+# into a build against gutted node_modules.
+say "Installing deps + building (detached; ~5-6 min)"
+app "cd $APP && set -o pipefail && npm ci --silent 2>&1 | tail -2" || die "npm ci failed"
+
+# Completion is signalled by an EXIT-CODE SENTINEL, not by .next/BUILD_ID.
+# Next writes BUILD_ID (build/index.js:1583) well BEFORE static generation runs
+# (~line 1665), so a build that dies during prerender still leaves a BUILD_ID
+# behind. Polling for that file would happily restart prod into a broken build —
+# the precise failure this script exists to prevent.
+app "cd $APP && rm -f /tmp/deploy-build.log /tmp/deploy-build.exit && \
+     setsid nohup bash -c 'npm run build > /tmp/deploy-build.log 2>&1; echo \$? > /tmp/deploy-build.exit' \
+     < /dev/null > /dev/null 2>&1 & echo launched"
+
+waited=0
+BUILD_RC=""
+while [ "$waited" -lt "$BUILD_POLL_SECONDS" ]; do
+  sleep 20; waited=$((waited + 20))
+  BUILD_RC=$(app "cat /tmp/deploy-build.exit 2>/dev/null || true")
+  if [ -n "$BUILD_RC" ]; then
+    echo "  build finished after ${waited}s (exit $BUILD_RC)"; break
+  fi
+  if app "grep -q 'Another next build process' /tmp/deploy-build.log 2>/dev/null && echo locked || true" | grep -q locked; then
+    die "another next build holds the lock — an orphan from a dropped session is still running.
+     Inspect: tailscale ssh $VM_USER_APP@$VM_HOST 'pgrep -af \"next build\"'"
+  fi
+  printf '  ... %ss\n' "$waited"
+done
+
+[ -n "$BUILD_RC" ] \
+  || die "build did not finish in ${BUILD_POLL_SECONDS}s. Log: /tmp/deploy-build.log"
+[ "$BUILD_RC" = "0" ] || {
+  echo "--- last 20 lines of build log ---"
+  app "tail -20 /tmp/deploy-build.log || true"
+  die "build exited $BUILD_RC — NOT restarting the service. Full log: /tmp/deploy-build.log"
+}
+
+# --- 4. restart --------------------------------------------------------------
+say "Restarting $SERVICE"
+sudo_ "sudo systemctl restart $SERVICE && sleep 8 && sudo systemctl is-active $SERVICE" \
+  || die "service did not come back — journalctl -u $SERVICE -n 50"
+
+# --- 5. verify the deploy actually landed ------------------------------------
+say "Verifying"
+NEW_SHA=$(app "curl -sS --max-time 15 http://localhost:$PORT/api/health" \
+  | sed -n 's/.*\"sha\":\"\([^\"]*\)\".*/\1/p' || true)
+# `|| echo 000` so a failed remote curl reports a bad status instead of tripping
+# set -e and aborting with no diagnostic at the last step of a deploy.
+SIGNIN=$(app "curl -sS -o /dev/null -w '%{http_code}' --max-time 15 http://localhost:$PORT/signin" || echo 000)
+
+echo "  /api/health sha : ${NEW_SHA:-<none>}"
+echo "  /signin         : $SIGNIN"
+
+[ "$SIGNIN" = "200" ] || die "/signin returned $SIGNIN"
+# An empty NEW_SHA is only acceptable when deploying a build that predates
+# /api/health. Once the endpoint exists, silence means the restart failed to
+# pick up the new build and MUST NOT pass as success.
+if [ -z "$NEW_SHA" ]; then
+  die "/api/health returned no sha — the service is not serving the new build.
+     If you are intentionally deploying a commit older than /api/health, re-run
+     with --check to confirm, then deploy manually."
+fi
+if [ "$NEW_SHA" != "$EXPECT_SHA" ]; then
+  die "running build is $NEW_SHA but $EXPECT_SHA was deployed — restart did not pick up the build"
+fi
+
+say "Deployed $EXPECT_SHA"
+cat <<EOF
+
+Rollback (only if something is wrong):
+  tailscale ssh $VM_USER_SUDO@$VM_HOST 'sudo systemctl stop $SERVICE'
+  # Delete the sidecars FIRST. SIGTERM to node does not guarantee a clean
+  # SQLite close, and SQLite validates WAL frames by salt/checksum only — it
+  # never checks the WAL belongs to this DB image — so a leftover -wal would
+  # replay onto the restored older file and blend two database states.
+  tailscale ssh $VM_USER_APP@$VM_HOST  'rm -f $REPO/shared/whoop_data.db-wal $REPO/shared/whoop_data.db-shm && cp $BACKUP $REPO/shared/whoop_data.db'
+  scripts/deploy --ref $CHECKOUT_SHA
+EOF

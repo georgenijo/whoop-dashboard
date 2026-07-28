@@ -68,12 +68,27 @@ describe("Phase D — domain tables carry user_id", () => {
     }
   });
 
-  it("recovery / cycles / sleep / daily_summary: PRIMARY KEY is (user_id, date)", () => {
+  // Every domain table is tenant-scoped by user_id, but the second key column
+  // is per-table: one row per day for recovery/cycles/daily_summary, and one
+  // row per SLEEP for sleep (a date carries naps plus the main sleep, so date
+  // is not unique there). Asserted explicitly per table rather than assuming a
+  // uniform (user_id, date) — that assumption is what silently rotted here.
+  it("domain tables: PRIMARY KEY is user_id + the right per-table key", () => {
     const file = newDbFile();
     process.env.WHOOP_DB_PATH = file;
     const db = conn.openWrite();
+    const expectedPk: Record<string, string[]> = {
+      recovery: ["user_id", "date"],
+      cycles: ["user_id", "date"],
+      daily_summary: ["user_id", "date"],
+      sleep: ["user_id", "sleep_id"],
+      // Many workouts per day, keyed by Whoop's own id. Included so all five
+      // domain tables named in CLAUDE.md are covered — omitting it is how the
+      // uniform-(user_id, date) misconception survived in the first place.
+      workouts: ["id"],
+    };
     try {
-      for (const t of ["recovery", "cycles", "sleep", "daily_summary"]) {
+      for (const t of ["recovery", "cycles", "sleep", "daily_summary", "workouts"]) {
         const pkCols = (
           db!
             .prepare(`PRAGMA table_info(${t})`)
@@ -82,7 +97,7 @@ describe("Phase D — domain tables carry user_id", () => {
           .filter((c) => c.pk > 0)
           .sort((a, b) => a.pk - b.pk)
           .map((c) => c.name);
-        expect(pkCols, `${t} pk`).toEqual(["user_id", "date"]);
+        expect(pkCols, `${t} pk`).toEqual(expectedPk[t]);
       }
     } finally {
       db?.close();

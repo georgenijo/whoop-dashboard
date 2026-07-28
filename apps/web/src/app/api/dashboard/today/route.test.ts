@@ -85,16 +85,23 @@ function insertSleep(
     performance?: number | null;
     efficiency?: number | null;
     nap?: 0 | 1;
+    // Override when a test needs TWO rows with the same date + nap flag — the
+    // derived default would otherwise collide and INSERT OR REPLACE would
+    // silently overwrite the first row instead of adding a second.
+    sleep_id?: string;
   } = {},
 ): void {
   const d = db();
   try {
     d.prepare(
+      // sleep's PK is (user_id, sleep_id) — a date can carry several rows
+      // (naps + the main sleep), so sleep_id is NOT NULL and must be seeded.
       `INSERT OR REPLACE INTO sleep
-        (user_id, date, in_bed_ms, light_ms, deep_ms, rem_ms, sleep_need_ms, performance, efficiency, nap)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (user_id, sleep_id, date, in_bed_ms, light_ms, deep_ms, rem_ms, sleep_need_ms, performance, efficiency, nap)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       1,
+      opts.sleep_id ?? `sleep-${date}-${opts.nap ?? 0}`,
       date,
       opts.in_bed_ms ?? null,
       opts.light_ms ?? null,
