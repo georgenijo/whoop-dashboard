@@ -81,6 +81,14 @@ say "Pulling $REF"
 app "cd $REPO && git fetch --all -q && git checkout -q main && git reset --hard $TARGET_SHA && git rev-parse --short HEAD" \
   || die "git pull failed"
 
+# Re-derive the expected sha ON THE VM. Git's abbreviation length is per-repo
+# (it grows with object count) and core.abbrev is per-machine, so a sha
+# abbreviated here can legitimately differ in length from the same commit
+# abbreviated there — which would fail verification on a perfectly good deploy.
+# Compare like with like: both sides now come from the VM's own git.
+EXPECT_SHA=$(app "git -C $REPO rev-parse --short HEAD")
+[ -n "$EXPECT_SHA" ] || die "could not read deployed sha from the VM"
+
 # --- 3. build (detached — MUST survive this ssh session) ---------------------
 say "Installing deps + building (detached; ~5-6 min)"
 app "cd $APP && npm ci --silent 2>&1 | tail -2" || die "npm ci failed"
@@ -111,17 +119,27 @@ sudo_ "sudo systemctl restart $SERVICE && sleep 8 && sudo systemctl is-active $S
 say "Verifying"
 NEW_SHA=$(app "curl -sS --max-time 15 http://localhost:$PORT/api/health" \
   | sed -n 's/.*\"sha\":\"\([^\"]*\)\".*/\1/p' || true)
-SIGNIN=$(app "curl -sS -o /dev/null -w '%{http_code}' --max-time 15 http://localhost:$PORT/signin")
+# `|| echo 000` so a failed remote curl reports a bad status instead of tripping
+# set -e and aborting with no diagnostic at the last step of a deploy.
+SIGNIN=$(app "curl -sS -o /dev/null -w '%{http_code}' --max-time 15 http://localhost:$PORT/signin" || echo 000)
 
 echo "  /api/health sha : ${NEW_SHA:-<none>}"
 echo "  /signin         : $SIGNIN"
 
 [ "$SIGNIN" = "200" ] || die "/signin returned $SIGNIN"
-if [ -n "$NEW_SHA" ] && [ "$NEW_SHA" != "$TARGET_SHA" ]; then
-  die "running build is $NEW_SHA but $TARGET_SHA was deployed — restart did not pick up the build"
+# An empty NEW_SHA is only acceptable when deploying a build that predates
+# /api/health. Once the endpoint exists, silence means the restart failed to
+# pick up the new build and MUST NOT pass as success.
+if [ -z "$NEW_SHA" ]; then
+  die "/api/health returned no sha — the service is not serving the new build.
+     If you are intentionally deploying a commit older than /api/health, re-run
+     with --check to confirm, then deploy manually."
+fi
+if [ "$NEW_SHA" != "$EXPECT_SHA" ]; then
+  die "running build is $NEW_SHA but $EXPECT_SHA was deployed — restart did not pick up the build"
 fi
 
-say "Deployed $TARGET_SHA"
+say "Deployed $EXPECT_SHA"
 cat <<EOF
 
 Rollback (only if something is wrong):
