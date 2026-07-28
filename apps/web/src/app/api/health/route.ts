@@ -25,6 +25,14 @@
 // the public edge has the real client IP as the FIRST entry. Only a request
 // that never traversed nginx has a loopback address there. Fail closed:
 // anything unrecognised gets the bare status.
+//
+// THIS IS DEFENCE IN DEPTH, NOT A SECURITY BOUNDARY. Headers are attacker
+// controlled, and next-server currently listens on *:8501 (ufw inactive), so
+// anything that can route to the VM can reach this port directly, bypassing
+// nginx, and forge `x-forwarded-for: ::1`. That is acceptable only because the
+// protected value is a commit sha of a PUBLIC repo. Do not extend this
+// predicate to gate anything that actually matters — bind the listener to
+// 127.0.0.1 first. Tracked in issue #441.
 import { BUILD_SHA, BUILD_TIME } from "@/lib/build-info";
 
 export const dynamic = "force-dynamic";

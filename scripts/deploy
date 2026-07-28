@@ -93,8 +93,11 @@ BACKUP="/home/george/whoop_data.db.backup.$TS"
 # the whole copy, is safe against concurrent writers, and emits a
 # self-contained file with no sidecar. quick_check proves the artifact is
 # readable before we go anywhere near the deploy.
-app "python3 -c 'import sqlite3,sys; s=sqlite3.connect(sys.argv[1],timeout=30); d=sqlite3.connect(sys.argv[2]); s.backup(d); print(\"quick_check:\", d.execute(\"PRAGMA quick_check\").fetchone()[0]); d.close(); s.close()' $REPO/shared/whoop_data.db $BACKUP && ls -la $BACKUP" \
-  || die "DB snapshot failed"
+# quick_check returns diagnostic TEXT, never a failing exit status — printing
+# it would let a corrupt snapshot pass as a valid rollback artifact. Raise
+# unless it is exactly "ok" so `|| die` actually fires.
+app "python3 -c 'import sqlite3,sys; s=sqlite3.connect(sys.argv[1],timeout=30); d=sqlite3.connect(sys.argv[2]); s.backup(d); r=d.execute(\"PRAGMA quick_check\").fetchone()[0]; d.close(); s.close(); sys.exit(0) if r==\"ok\" else sys.exit(\"quick_check FAILED: \"+str(r))' $REPO/shared/whoop_data.db $BACKUP && ls -la $BACKUP" \
+  || die "DB snapshot failed or did not verify — refusing to deploy without a good rollback artifact"
 
 # --- 2. pull -----------------------------------------------------------------
 say "Pulling $REF"

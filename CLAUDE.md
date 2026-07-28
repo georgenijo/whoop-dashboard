@@ -127,7 +127,9 @@ Threads have auto-titles via Haiku 4.5 fired in `after()` (Next.js post-response
 
 `src/lib/auth.ts` exposes `requireAuth(req)`. Precedence: **Bearer → Cookie → 401**. Bearer (iOS) verifies a session JWT; cookie (`__Host-coach_session`) is set by the SIWA round-trip at `/api/auth/apple-web/callback`. No bootstrap fallback — unauthenticated requests get 401.
 
-Public web requests are gated upstream by `apps/web/src/proxy.ts authGate()`, which 307s page requests to `/signin` and returns JSON 401 for API routes. Exempt prefixes: `/signin`, `/api/auth/`, `/api/whoop/webhook`, `/api/admin/`.
+Public web requests are gated upstream by `apps/web/src/proxy.ts authGate()`, which 307s page requests to `/signin` and returns JSON 401 for API routes. Exempt prefixes: `/signin`, `/api/auth/`, `/api/whoop/webhook`, `/api/admin/`, `/api/health`.
+
+`/api/health` returns build identity only (`{status}` publicly; `{status, sha, built_at, uptime_s}` to direct on-box callers) so `scripts/deploy` can verify which commit is actually serving traffic. Adding to this list is a policy change — it widens the unauthenticated surface, so it needs a Decisions Log entry, not just a code edit.
 
 Admin routes use a separate gate keyed on `ADMIN_APPLE_SUB` env (fail-closed if unset).
 
@@ -184,11 +186,14 @@ PTY`. See the `vm-ops` skill.
 #    tear it. Both exit 0 — the failure is silent exactly when it matters.
 #    Use SQLite's online-backup API, which is safe against live writers:
 TS=$(date +%Y%m%d-%H%M%S)
+#    quick_check returns TEXT, not an exit status — assert it, or a corrupt
+#    snapshot passes as a good rollback artifact. $TS must expand LOCALLY.
 tailscale ssh george@whoop-vm "python3 -c '
 import sqlite3, sys
 s = sqlite3.connect(sys.argv[1], timeout=30); d = sqlite3.connect(sys.argv[2])
-s.backup(d); print(d.execute(\"PRAGMA quick_check\").fetchone()[0]); d.close(); s.close()
-' /home/george/Documents/whoop-dashboard/shared/whoop_data.db /home/george/whoop_data.db.backup.\$TS"
+s.backup(d); r = d.execute(\"PRAGMA quick_check\").fetchone()[0]; d.close(); s.close()
+sys.exit(0 if r == \"ok\" else \"quick_check FAILED: \" + str(r))
+' /home/george/Documents/whoop-dashboard/shared/whoop_data.db /home/george/whoop_data.db.backup.$TS"
 #    Rollback recipe (only if migration fails) — delete the sidecars FIRST, or a
 #    leftover -wal replays onto the restored older file and blends two states
 #    (SQLite validates WAL frames by checksum, never by which DB they belong to):

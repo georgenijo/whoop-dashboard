@@ -49,6 +49,9 @@ type SleepOpts = {
   sleep_need_ms?: number | null;
   performance?: number | null;
   efficiency?: number | null;
+  // Override when a test needs TWO rows with the same date + nap flag — the
+  // derived default would collide and INSERT OR REPLACE would overwrite.
+  sleep_id?: string;
   need_from_baseline_ms?: number | null;
   need_from_debt_ms?: number | null;
   need_from_strain_ms?: number | null;
@@ -135,7 +138,7 @@ export function initIosTestDb(prefix: string): IosTestDb {
          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         1,
-        `sleep-${date}-${opts.nap ?? 0}`,
+        opts.sleep_id ?? `sleep-${date}-${opts.nap ?? 0}`,
         date,
         opts.in_bed_ms ?? null,
         opts.light_ms ?? null,

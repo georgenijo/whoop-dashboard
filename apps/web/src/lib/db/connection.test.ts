@@ -82,9 +82,13 @@ describe("Phase D — domain tables carry user_id", () => {
       cycles: ["user_id", "date"],
       daily_summary: ["user_id", "date"],
       sleep: ["user_id", "sleep_id"],
+      // Many workouts per day, keyed by Whoop's own id. Included so all five
+      // domain tables named in CLAUDE.md are covered — omitting it is how the
+      // uniform-(user_id, date) misconception survived in the first place.
+      workouts: ["id"],
     };
     try {
-      for (const t of ["recovery", "cycles", "sleep", "daily_summary"]) {
+      for (const t of ["recovery", "cycles", "sleep", "daily_summary", "workouts"]) {
         const pkCols = (
           db!
             .prepare(`PRAGMA table_info(${t})`)

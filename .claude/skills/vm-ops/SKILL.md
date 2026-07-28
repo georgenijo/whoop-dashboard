@@ -211,13 +211,18 @@ For larger backfills, write a one-shot Python script that calls `WhoopClient.fet
 
 ## Gotchas
 
-- **`next build` takes 5+ min here and survives a dropped ssh session.** If the connection dies mid-build the orphan keeps the build lock, and the next `npm run build` fails with `Another next build process is already running.` — it is not stale, it is still going. Launch builds detached and poll for the artifact instead of holding the session open:
+- **Prefer `scripts/deploy`** — it already encodes everything in this section correctly. Reach for the manual commands only when debugging the deploy itself.
+- **`next build` takes 5+ min here and survives a dropped ssh session.** If the connection dies mid-build the orphan keeps the build lock, and the next `npm run build` fails with `Another next build process is already running.` — it is not stale, it is still going. Launch builds detached and poll for an **exit-code sentinel**:
   ```bash
   tailscale ssh george@whoop-vm "cd ~/Documents/whoop-dashboard/apps/web \
-    && setsid nohup npm run build > /tmp/build.log 2>&1 < /dev/null & echo launched"
-  # then poll: ls .next/BUILD_ID  →  exists means done
+    && setsid nohup bash -c 'npm run build > /tmp/build.log 2>&1; echo \$? > /tmp/build.exit' \
+    < /dev/null > /dev/null 2>&1 & echo launched"
+  # then poll: cat /tmp/build.exit  →  exists means finished, "0" means SUCCEEDED
   ```
+  **Never poll `.next/BUILD_ID` as a success signal.** Next writes it (`build/index.js:1583`) well before static generation runs, so a build that dies in prerender still leaves one behind — you would restart the service into a broken build.
+
   `npm run build` = `build:mcp` (esbuild → `dist/coach-mcp/server.mjs`, the precompiled Coach MCP server) **then** `next build`. Both must finish.
+- **Never `cp`/`scp` the live DB as a backup.** It is WAL mode with the service writing; committed data sits in the `-wal` sidecar, so a raw copy can restore as an EMPTY database and a copy straddling a checkpoint tears the file — both exit 0. Use SQLite's online-backup API and assert `quick_check` (see `scripts/deploy`, step 1). On restore, delete `-wal`/`-shm` first.
 - **`JWT_SIGNING_KEY` is not in `.env.local`** — it lives in the systemd drop-in `/etc/systemd/system/whoop-web.service.d/override.conf`. Read it with `sudo systemctl show whoop-web -p Environment --value`. Needed by `scripts/bench-coach.mjs`, which mints its own session JWT.
 - **Next.js version is custom** — see `apps/web/AGENTS.md`. Don't rely on training-data Next.js patterns; check `node_modules/next/dist/docs/` for the installed version's APIs.
 - **`useSearchParams` requires Suspense** in this Next build — wrap any client component using it (Sidebar, TopBar both wrapped in `app/layout.tsx`).
