@@ -11,7 +11,7 @@ import "server-only";
 //
 // See memory: coach-cursor-composer-provider for the proven recipe.
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, realpath, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
@@ -59,18 +59,30 @@ const TERMINAL_CLOSE_GRACE_MS = 250;
 // not enough — the registration outlives it.
 //
 // Best-effort by design: a failure here must never surface as a turn failure.
+// On macOS the workspace path must be cleaned under BOTH spellings: tmpdir()
+// there is /var/folders/... but /var is a symlink to /private/var, and
+// cursor-agent registers the raw --workspace arg AND the symlink-resolved cwd
+// as two separate projects. Slugging only the raw path leaves the
+// `private-var-folders-...` twin behind, so the leak survives on dev machines.
+// On Linux /tmp is not a symlink and both spellings collapse to one slug.
 async function removeCursorProjectRegistration(workspace: string): Promise<void> {
   try {
     const home = process.env.HOME || homedir();
     if (!home) return;
-    // /tmp/coach-cursor-AbC123 -> tmp-coach-cursor-AbC123
-    const slug = workspace.replace(/^[/\\]+/, "").replace(/[/\\]/g, "-");
-    if (!slug || slug.includes("..")) return;
-    const registered = path.join(home, ".cursor", "projects", slug);
-    // Guard against ever pointing outside the projects dir.
-    const root = path.join(home, ".cursor", "projects") + path.sep;
-    if (!registered.startsWith(root)) return;
-    await rm(registered, { recursive: true, force: true });
+    const root = path.join(home, ".cursor", "projects");
+    const candidates = new Set<string>([workspace]);
+    const resolved = await realpath(workspace).catch(() => null);
+    if (resolved) candidates.add(resolved);
+
+    for (const candidate of candidates) {
+      // /tmp/coach-cursor-AbC123 -> tmp-coach-cursor-AbC123
+      const slug = candidate.replace(/^[/\\]+/, "").replace(/[/\\]/g, "-");
+      if (!slug || slug.includes("..")) continue;
+      const registered = path.join(root, slug);
+      // Guard against ever pointing outside the projects dir.
+      if (!registered.startsWith(root + path.sep)) continue;
+      await rm(registered, { recursive: true, force: true });
+    }
   } catch {
     /* cleanup is best-effort */
   }
@@ -928,8 +940,11 @@ export async function runCursorTurn(
     );
   } finally {
     const cleanupStartedMs = Date.now();
-    await rm(ws, { recursive: true, force: true }).catch(() => {});
+    // Unregister BEFORE deleting the workspace: resolving the symlinked
+    // spelling of the path (macOS /var -> /private/var) requires the
+    // directory to still exist.
     await removeCursorProjectRegistration(ws);
+    await rm(ws, { recursive: true, force: true }).catch(() => {});
     cursorDetail.timing.cleanup_ms = Date.now() - cleanupStartedMs;
     cursorDetail.timing.turn_ms = Date.now() - turnStartedMs;
   }

@@ -60,6 +60,15 @@ if [ -n "$LIVE_SHA" ] && [ "$LIVE_SHA" != "$CHECKOUT_SHA" ]; then
   echo "  NOTE: checkout != running build. The service is stale; a restart is pending."
 fi
 
+# Refresh the LOCAL remote-tracking ref before resolving it. `git rev-parse`
+# never contacts the remote, so without this a clone that hasn't fetched since
+# the last merge resolves origin/main to a stale commit — the script would then
+# deploy the OLD commit, verify it against itself, and print success, while
+# --check reports "nothing to do". That is exactly the drift this tool exists
+# to catch, so it must not be able to produce a false all-clear.
+case "$REF" in
+  origin/*) git fetch origin -q || die "local git fetch failed — cannot trust $REF" ;;
+esac
 TARGET_SHA=$(git rev-parse --short "$REF")
 echo "  target ($REF): $TARGET_SHA"
 if [ "$CHECKOUT_SHA" = "$TARGET_SHA" ] && [ "${LIVE_SHA:-}" = "$TARGET_SHA" ]; then
@@ -74,7 +83,18 @@ fi
 say "Snapshotting prod DB"
 TS=$(date +%Y%m%d-%H%M%S)
 BACKUP="/home/george/whoop_data.db.backup.$TS"
-app "cp $REPO/shared/whoop_data.db $BACKUP && ls -la $BACKUP" || die "DB snapshot failed"
+# NOT `cp`. The DB is WAL mode (connection.ts: journal_mode = WAL) and the
+# service is still running and writing here — nothing is stopped until step 4.
+# Everything committed since the last checkpoint lives only in the -wal
+# sidecar, so copying the main file alone can yield a backup that restores as
+# an EMPTY database, and a cp straddling a checkpoint can tear the file. Both
+# exit 0, so the failure is silent precisely when you need the backup.
+# sqlite3.Connection.backup() is the online-backup API: it holds a read txn for
+# the whole copy, is safe against concurrent writers, and emits a
+# self-contained file with no sidecar. quick_check proves the artifact is
+# readable before we go anywhere near the deploy.
+app "python3 -c 'import sqlite3,sys; s=sqlite3.connect(sys.argv[1],timeout=30); d=sqlite3.connect(sys.argv[2]); s.backup(d); print(\"quick_check:\", d.execute(\"PRAGMA quick_check\").fetchone()[0]); d.close(); s.close()' $REPO/shared/whoop_data.db $BACKUP && ls -la $BACKUP" \
+  || die "DB snapshot failed"
 
 # --- 2. pull -----------------------------------------------------------------
 say "Pulling $REF"
@@ -90,25 +110,44 @@ EXPECT_SHA=$(app "git -C $REPO rev-parse --short HEAD")
 [ -n "$EXPECT_SHA" ] || die "could not read deployed sha from the VM"
 
 # --- 3. build (detached — MUST survive this ssh session) ---------------------
+# `set -o pipefail` must be set INSIDE the remote command: the local pipefail on
+# line 19 governs local pipelines only, so without this the remote pipeline's
+# status is tail's (always 0) and a failed `npm ci` would sail straight through
+# into a build against gutted node_modules.
 say "Installing deps + building (detached; ~5-6 min)"
-app "cd $APP && npm ci --silent 2>&1 | tail -2" || die "npm ci failed"
-app "cd $APP && rm -f .next/BUILD_ID /tmp/deploy-build.log && \
-     setsid nohup npm run build > /tmp/deploy-build.log 2>&1 < /dev/null & echo launched"
+app "cd $APP && set -o pipefail && npm ci --silent 2>&1 | tail -2" || die "npm ci failed"
+
+# Completion is signalled by an EXIT-CODE SENTINEL, not by .next/BUILD_ID.
+# Next writes BUILD_ID (build/index.js:1583) well BEFORE static generation runs
+# (~line 1665), so a build that dies during prerender still leaves a BUILD_ID
+# behind. Polling for that file would happily restart prod into a broken build —
+# the precise failure this script exists to prevent.
+app "cd $APP && rm -f /tmp/deploy-build.log /tmp/deploy-build.exit && \
+     setsid nohup bash -c 'npm run build > /tmp/deploy-build.log 2>&1; echo \$? > /tmp/deploy-build.exit' \
+     < /dev/null > /dev/null 2>&1 & echo launched"
 
 waited=0
+BUILD_RC=""
 while [ "$waited" -lt "$BUILD_POLL_SECONDS" ]; do
   sleep 20; waited=$((waited + 20))
-  if app "test -f $APP/.next/BUILD_ID && echo yes" | grep -q yes; then
-    echo "  build complete after ${waited}s"; break
+  BUILD_RC=$(app "cat /tmp/deploy-build.exit 2>/dev/null || true")
+  if [ -n "$BUILD_RC" ]; then
+    echo "  build finished after ${waited}s (exit $BUILD_RC)"; break
   fi
-  if app "grep -q 'Another next build process' /tmp/deploy-build.log && echo locked" | grep -q locked; then
+  if app "grep -q 'Another next build process' /tmp/deploy-build.log 2>/dev/null && echo locked || true" | grep -q locked; then
     die "another next build holds the lock — an orphan from a dropped session is still running.
      Inspect: tailscale ssh $VM_USER_APP@$VM_HOST 'pgrep -af \"next build\"'"
   fi
   printf '  ... %ss\n' "$waited"
 done
-app "test -f $APP/.next/BUILD_ID && echo yes" | grep -q yes \
+
+[ -n "$BUILD_RC" ] \
   || die "build did not finish in ${BUILD_POLL_SECONDS}s. Log: /tmp/deploy-build.log"
+[ "$BUILD_RC" = "0" ] || {
+  echo "--- last 20 lines of build log ---"
+  app "tail -20 /tmp/deploy-build.log || true"
+  die "build exited $BUILD_RC — NOT restarting the service. Full log: /tmp/deploy-build.log"
+}
 
 # --- 4. restart --------------------------------------------------------------
 say "Restarting $SERVICE"
@@ -144,6 +183,10 @@ cat <<EOF
 
 Rollback (only if something is wrong):
   tailscale ssh $VM_USER_SUDO@$VM_HOST 'sudo systemctl stop $SERVICE'
-  tailscale ssh $VM_USER_APP@$VM_HOST  'cp $BACKUP $REPO/shared/whoop_data.db'
+  # Delete the sidecars FIRST. SIGTERM to node does not guarantee a clean
+  # SQLite close, and SQLite validates WAL frames by salt/checksum only — it
+  # never checks the WAL belongs to this DB image — so a leftover -wal would
+  # replay onto the restored older file and blend two database states.
+  tailscale ssh $VM_USER_APP@$VM_HOST  'rm -f $REPO/shared/whoop_data.db-wal $REPO/shared/whoop_data.db-shm && cp $BACKUP $REPO/shared/whoop_data.db'
   scripts/deploy --ref $CHECKOUT_SHA
 EOF

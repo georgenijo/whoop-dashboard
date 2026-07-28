@@ -177,15 +177,25 @@ PTY`. See the `vm-ops` skill.
 <summary>Manual flow (reference only — prefer the script)</summary>
 
 ```bash
-# 1. Snapshot the DB BEFORE any schema-touching change (Phase D et al). Stash
-#    a timestamped copy locally so a failed migration is a 30-second rollback.
+# 1. Snapshot the DB BEFORE any schema-touching change (Phase D et al).
+#    NEVER cp/scp the live DB. It is WAL mode with the service still writing:
+#    committed data sits in the -wal sidecar, so a raw copy of the main file
+#    can restore as an EMPTY database, and a copy straddling a checkpoint can
+#    tear it. Both exit 0 — the failure is silent exactly when it matters.
+#    Use SQLite's online-backup API, which is safe against live writers:
 TS=$(date +%Y%m%d-%H%M%S)
-scp ubuntu@<vm-ip>:/home/george/Documents/whoop-dashboard/shared/whoop_data.db \
-    "$HOME/whoop_data.db.backup.$TS"
-#    Rollback recipe (only if migration fails):
-#      ssh ubuntu@<vm-ip> 'sudo systemctl stop whoop-web'
-#      scp "$HOME/whoop_data.db.backup.$TS" \
-#          ubuntu@<vm-ip>:/home/george/Documents/whoop-dashboard/shared/whoop_data.db
+tailscale ssh george@whoop-vm "python3 -c '
+import sqlite3, sys
+s = sqlite3.connect(sys.argv[1], timeout=30); d = sqlite3.connect(sys.argv[2])
+s.backup(d); print(d.execute(\"PRAGMA quick_check\").fetchone()[0]); d.close(); s.close()
+' /home/george/Documents/whoop-dashboard/shared/whoop_data.db /home/george/whoop_data.db.backup.\$TS"
+#    Rollback recipe (only if migration fails) — delete the sidecars FIRST, or a
+#    leftover -wal replays onto the restored older file and blends two states
+#    (SQLite validates WAL frames by checksum, never by which DB they belong to):
+#      tailscale ssh ubuntu@whoop-vm 'sudo systemctl stop whoop-web'
+#      tailscale ssh george@whoop-vm 'cd /home/george/Documents/whoop-dashboard/shared \
+#        && rm -f whoop_data.db-wal whoop_data.db-shm \
+#        && cp /home/george/whoop_data.db.backup.$TS whoop_data.db'
 #      ssh ubuntu@<vm-ip> 'sudo -u george git -C /home/george/Documents/whoop-dashboard checkout <prev-sha>'
 #      ssh ubuntu@<vm-ip> 'cd /home/george/Documents/whoop-dashboard/apps/web && sudo -u george npm ci && sudo -u george npm run build && sudo systemctl start whoop-web'
 
