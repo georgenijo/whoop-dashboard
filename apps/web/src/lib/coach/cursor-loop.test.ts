@@ -1,5 +1,8 @@
 // @vitest-environment node
 import { EventEmitter } from "node:events";
+import { access, mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { PassThrough } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -45,6 +48,7 @@ import {
   CursorVisibleTextAccumulator,
   cursorAgentChildPath,
   parseCursorTerminalResult,
+  prepareCursorShimBin,
   runCursorTurn,
   selectRecentPrefetchTool,
   type RunCursorTurnArgs,
@@ -135,27 +139,57 @@ describe("CursorVisibleTextAccumulator", () => {
 });
 
 describe("cursorAgentChildPath", () => {
-  it("removes PATH for an absolute production binary so optional LSP startup is skipped", () => {
+  it("narrows PATH to the workspace shim dir for an absolute production binary", () => {
+    // The shim dir carries bash + coreutils for the launcher script but no
+    // npx, so optional LSP startup stays skipped without breaking the shebang.
     expect(
       cursorAgentChildPath(
         "/home/george/.local/bin/cursor-agent",
         "/usr/bin:/bin",
         undefined,
+        "/tmp/coach-cursor-x/.shim-bin",
       ),
-    ).toBe("");
+    ).toBe("/tmp/coach-cursor-x/.shim-bin");
   });
 
   it("keeps PATH for the local name fallback and honors an explicit production override", () => {
     expect(
-      cursorAgentChildPath("cursor-agent", "/usr/local/bin:/usr/bin", undefined),
+      cursorAgentChildPath(
+        "cursor-agent",
+        "/usr/local/bin:/usr/bin",
+        undefined,
+        "/tmp/coach-cursor-x/.shim-bin",
+      ),
     ).toBe("/usr/local/bin:/usr/bin");
     expect(
       cursorAgentChildPath(
         "/opt/cursor-agent",
         "/usr/bin",
         "/opt/coach-runtime",
+        "/tmp/coach-cursor-x/.shim-bin",
       ),
     ).toBe("/opt/coach-runtime");
+  });
+});
+
+describe("prepareCursorShimBin", () => {
+  it("symlinks the launcher's tools (bash included) but never npx", async () => {
+    const ws = await mkdtemp(path.join(tmpdir(), "shim-test-"));
+    try {
+      const shimDir = await prepareCursorShimBin(ws, process.env.PATH);
+      expect(shimDir).toBe(path.join(ws, ".shim-bin"));
+      const entries = await readdir(shimDir);
+      // bash is what the real cursor-agent launcher's `#!/usr/bin/env bash`
+      // shebang dies on with exit 127 when PATH is empty (thread 126).
+      expect(entries).toContain("bash");
+      expect(entries).toContain("dirname");
+      expect(entries).toContain("basename");
+      expect(entries).not.toContain("npx");
+      // The links must resolve — a dangling symlink would still exit 127.
+      await access(path.join(shimDir, "bash"));
+    } finally {
+      await rm(ws, { recursive: true, force: true });
+    }
   });
 });
 

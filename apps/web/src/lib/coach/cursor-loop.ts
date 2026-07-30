@@ -11,7 +11,7 @@ import "server-only";
 //
 // See memory: coach-cursor-composer-provider for the proven recipe.
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, writeFile, realpath, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, realpath, rm, symlink } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
@@ -112,20 +112,77 @@ const CURSOR_AGENT_BIN =
  * even when the workspace is our empty, read-denied per-turn sandbox. On the
  * 512M production service that unnecessary process costs roughly 120M RSS.
  *
- * An absolute agent binary needs no PATH lookup, and the compiled MCP server
- * uses an absolute Node command below, so remove PATH in that production shape.
- * Cursor treats a missing `npx` as an unavailable optional LSP and continues
- * with a no-op diagnostics provider. Keep the inherited PATH for the
- * `cursor-agent` fallback used by local development, where the binary itself
- * still needs PATH resolution.
+ * Denying the LSP means keeping `npx` unresolvable, but PATH cannot simply be
+ * emptied: the installed `cursor-agent` entrypoint is not a binary, it is a
+ * bash launcher (`#!/usr/bin/env bash`) that needs `bash` plus a few coreutils
+ * from PATH before it execs its bundled Node. An empty PATH fails the shebang
+ * with exit 127 before Cursor even starts (thread 126 post-mortem) — and
+ * `npx` lives in /usr/bin right next to `bash`, so no system directory gives
+ * one without the other. Instead each turn workspace carries a shim bin dir
+ * symlinking exactly the tools the launcher uses and nothing else; PATH points
+ * only there. Cursor treats the missing `npx` as an unavailable optional LSP
+ * and continues with a no-op diagnostics provider.
+ *
+ * Keep the inherited PATH for the `cursor-agent` name fallback used by local
+ * development, where the binary itself still needs PATH resolution.
  */
 export function cursorAgentChildPath(
   agentBin: string,
   parentPath: string | undefined,
   override: string | undefined,
+  shimBinDir: string,
 ): string | undefined {
   if (!path.isAbsolute(agentBin)) return parentPath;
-  return override ?? "";
+  return override ?? shimBinDir;
+}
+
+// Everything the cursor-agent bash launcher resolves via PATH: `bash` for the
+// `#!/usr/bin/env bash` shebang (env itself is kernel-resolved by absolute
+// path), then basename/dirname + realpath-or-readlink for symlink resolution;
+// `env` is defensive. The bundled Node it execs is addressed absolutely, so
+// nothing beyond these is needed. If a future launcher revision adds a tool,
+// the turn fails as `cursor-agent exited 127` in chat_logs — extend this list.
+const CURSOR_LAUNCHER_TOOLS = [
+  "bash",
+  "env",
+  "basename",
+  "dirname",
+  "realpath",
+  "readlink",
+];
+const SHIM_BIN_DIRNAME = ".shim-bin";
+
+export function shimBinDirFor(ws: string): string {
+  return path.join(ws, SHIM_BIN_DIRNAME);
+}
+
+export async function prepareCursorShimBin(
+  ws: string,
+  parentPath: string | undefined,
+): Promise<string> {
+  const shimDir = shimBinDirFor(ws);
+  await mkdir(shimDir, { recursive: true });
+  const searchDirs = (parentPath ?? "")
+    .split(path.delimiter)
+    .filter(Boolean)
+    .concat(["/usr/bin", "/bin", "/usr/local/bin"]);
+  for (const tool of CURSOR_LAUNCHER_TOOLS) {
+    const source = searchDirs
+      .map((dir) => path.join(dir, tool))
+      .find((candidate) => existsSync(candidate));
+    if (!source) {
+      console.warn(
+        `[coach] cursor shim: '${tool}' not found in any PATH dir; launcher may exit 127`,
+      );
+      continue;
+    }
+    try {
+      await symlink(source, path.join(shimDir, tool));
+    } catch (err) {
+      console.warn(`[coach] cursor shim: failed to link '${tool}':`, err);
+    }
+  }
+  return shimDir;
 }
 
 // App root (apps/web) — anchors the MCP server path and node_modules so the
@@ -469,6 +526,7 @@ async function makeWorkspace(userId: number, images: CoachImage[]): Promise<stri
     const manifestPath = path.join(ws, "attachment-manifest.json");
     await mkdir(dotCursor, { recursive: true });
     await mkdir(attachmentDir, { recursive: true, mode: 0o700 });
+    await prepareCursorShimBin(ws, process.env.PATH);
     const manifest: Record<string, string> = {};
     for (const image of images) {
       const imagePath = path.join(attachmentDir, `${image.id}.jpg`);
@@ -699,6 +757,7 @@ export async function runCursorTurn(
               CURSOR_AGENT_BIN,
               process.env.PATH,
               process.env.COACH_CURSOR_CHILD_PATH,
+              shimBinDirFor(ws),
             ),
             CURSOR_API_KEY: key,
           },
