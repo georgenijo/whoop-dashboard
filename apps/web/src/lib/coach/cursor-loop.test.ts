@@ -43,6 +43,7 @@ vi.mock("./cursor-key", async (importOriginal) => {
 
 import {
   CursorVisibleTextAccumulator,
+  cursorAgentChildPath,
   parseCursorTerminalResult,
   runCursorTurn,
   selectRecentPrefetchTool,
@@ -130,6 +131,31 @@ describe("CursorVisibleTextAccumulator", () => {
     text.append("A direct ");
     text.append("answer.");
     expect(text.value()).toBe("A direct answer.");
+  });
+});
+
+describe("cursorAgentChildPath", () => {
+  it("removes PATH for an absolute production binary so optional LSP startup is skipped", () => {
+    expect(
+      cursorAgentChildPath(
+        "/home/george/.local/bin/cursor-agent",
+        "/usr/bin:/bin",
+        undefined,
+      ),
+    ).toBe("");
+  });
+
+  it("keeps PATH for the local name fallback and honors an explicit production override", () => {
+    expect(
+      cursorAgentChildPath("cursor-agent", "/usr/local/bin:/usr/bin", undefined),
+    ).toBe("/usr/local/bin:/usr/bin");
+    expect(
+      cursorAgentChildPath(
+        "/opt/cursor-agent",
+        "/usr/bin",
+        "/opt/coach-runtime",
+      ),
+    ).toBe("/opt/coach-runtime");
   });
 });
 
