@@ -17,15 +17,13 @@ function resolveBuildSha(): string {
   }
 }
 
+const allowedDevOrigins = process.env.COACH_DEV_ORIGINS?.split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const nextConfig: NextConfig = {
   devIndicators: false,
-  allowedDevOrigins: [
-    "100.117.125.1",
-    "george-ubuntu.tail1fdfb0.ts.net",
-  ],
-  // The Cursor SDK ships pre-bundled LICENSE text alongside its server chunks;
-  // Turbopack otherwise attempts to parse those text files as modules.
-  serverExternalPackages: ["@cursor/sdk"],
+  allowedDevOrigins,
   env: {
     COACH_BUILD_SHA: resolveBuildSha(),
     COACH_BUILD_TIME: new Date().toISOString(),

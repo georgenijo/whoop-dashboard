@@ -55,6 +55,7 @@ describe("parseModelPref", () => {
     expect(parseModelPref("cursor:model with spaces").provider).toBe(
       "anthropic",
     );
+    expect(parseModelPref("cursor:--help").provider).toBe("anthropic");
   });
 });
 

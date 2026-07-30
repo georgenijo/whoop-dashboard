@@ -35,6 +35,7 @@ vi.mock("@/lib/coach/cursor-models", async (importOriginal) => {
 });
 
 import { GET, POST } from "./route";
+import { CursorModelCatalogError } from "@/lib/coach/cursor-models";
 
 function post(body: unknown): Request {
   return new Request("http://localhost/api/settings", {
@@ -105,6 +106,48 @@ describe("/api/settings model preferences", () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({
       error: "Cursor model is not available for this account",
+    });
+    expect(db.upsertUserSettings).not.toHaveBeenCalled();
+  });
+
+  it("uses 422 when Cursor rejects the configured key", async () => {
+    db.getUserSettings.mockReturnValue({
+      cursor_key: "key_personal",
+      model_pref: "anthropic:claude-sonnet-4-6",
+    });
+    resolveCursorKeyMock.mockReturnValue({
+      key: "key_personal",
+      origin: "user",
+    });
+    listCursorModelsForKeyMock.mockRejectedValue(
+      new CursorModelCatalogError("invalid_key", "rejected"),
+    );
+
+    const response = await POST(post({ model_pref: "cursor:composer-2.5" }));
+    expect(response.status).toBe(422);
+    expect(await response.json()).toEqual({
+      error: "Cursor rejected the configured API key",
+    });
+    expect(db.upsertUserSettings).not.toHaveBeenCalled();
+  });
+
+  it("uses 502 when Cursor model discovery is unavailable", async () => {
+    db.getUserSettings.mockReturnValue({
+      cursor_key: "key_personal",
+      model_pref: "anthropic:claude-sonnet-4-6",
+    });
+    resolveCursorKeyMock.mockReturnValue({
+      key: "key_personal",
+      origin: "user",
+    });
+    listCursorModelsForKeyMock.mockRejectedValue(
+      new CursorModelCatalogError("unavailable", "offline"),
+    );
+
+    const response = await POST(post({ model_pref: "cursor:composer-2.5" }));
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({
+      error: "Cursor model catalog is unavailable",
     });
     expect(db.upsertUserSettings).not.toHaveBeenCalled();
   });

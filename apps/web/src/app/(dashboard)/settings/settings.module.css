@@ -185,8 +185,8 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: currentColor;
-  box-shadow: 0 0 7px currentColor;
+  background: currentcolor;
+  box-shadow: 0 0 7px currentcolor;
 }
 
 .statusGood {
@@ -324,6 +324,13 @@
   border-color: rgba(174, 158, 255, 0.85);
   background: linear-gradient(180deg, #917dff, #755cf1);
   transform: translateY(-1px);
+}
+
+.primaryButton:focus-visible,
+.secondaryButton:focus-visible,
+.dangerButton:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(123, 97, 255, 0.2);
 }
 
 .secondaryButton:hover:not(:disabled) {

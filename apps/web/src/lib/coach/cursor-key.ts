@@ -45,7 +45,7 @@ export function resolveCursorKey(userId: number): ResolvedCursorKey {
 }
 
 /**
- * Validate a Cursor key without spending a model turn. The SDK model catalog
+ * Validate a Cursor key without spending a model turn. The model catalog
  * authenticates the key and returns the models available to that account.
  */
 export async function probeCursorKey(

@@ -16,8 +16,11 @@ import {
 
 // `system_prompt` is a global app_setting (shared); `model_pref` is per-user.
 function settingsPayload(userId: number) {
-  const selection = parseModelPref(getUserSettings(userId)?.model_pref);
-  const cursorAvailable = cursorProviderEnabled(userId);
+  const settings = getUserSettings(userId);
+  const selection = parseModelPref(settings?.model_pref);
+  const cursorAvailable = Boolean(
+    settings?.cursor_key || process.env.CURSOR_API_KEY,
+  );
   return {
     system_prompt: getSetting("system_prompt") || DEFAULT_SYSTEM_PROMPT,
     default_system_prompt: DEFAULT_SYSTEM_PROMPT,
@@ -81,9 +84,15 @@ export async function POST(req: Request) {
           }
         } catch (error) {
           if (error instanceof CursorModelCatalogError) {
+            if (error.reason === "invalid_key") {
+              return Response.json(
+                { error: "Cursor rejected the configured API key" },
+                { status: 422 },
+              );
+            }
             return Response.json(
               { error: "Cursor model catalog is unavailable" },
-              { status: error.reason === "invalid_key" ? 401 : 502 },
+              { status: 502 },
             );
           }
           throw error;

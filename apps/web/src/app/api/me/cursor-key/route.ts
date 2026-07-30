@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { getUserSettings, upsertUserSettings } from "@/lib/db";
 import { maskCursorKey } from "@/lib/coach/key-mask";
 import { probeCursorKey } from "@/lib/coach/cursor-key";
+import { ANTHROPIC_PREF } from "@/lib/coach/provider";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +61,7 @@ export async function POST(req: Request) {
     }
     const trimmed = body.key.trim();
     // Cursor does not document a stable user-key prefix. Keep the local shape
-    // check deliberately loose and let the authenticated SDK probe decide
+    // check deliberately loose and let the authenticated catalog probe decide
     // whether the credential is valid.
     if (trimmed.length < 16 || /\s/.test(trimmed)) {
       return NextResponse.json(
@@ -94,8 +95,17 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   try {
     const { user } = await requireAuth(req);
-    upsertUserSettings({ user_id: user.id, cursor_key: null });
-    return NextResponse.json(maskedFor(user.id));
+    // A model validated against a personal key may not be available through
+    // the shared fallback. Reset at the same time the key origin changes.
+    upsertUserSettings({
+      user_id: user.id,
+      cursor_key: null,
+      model_pref: ANTHROPIC_PREF,
+    });
+    return NextResponse.json({
+      ...maskedFor(user.id),
+      model_pref: ANTHROPIC_PREF,
+    });
   } catch (error) {
     if (error instanceof Response) return error;
     throw error;

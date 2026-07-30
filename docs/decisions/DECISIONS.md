@@ -6,13 +6,25 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-07-30: Cursor catalog uses the public HTTP endpoint on Node 20
+
+**Decision:** Fetch each credential's account-scoped model catalog from Cursor's `GET /v1/models` endpoint with Bearer authentication, matching the official SDK's catalog request and response shape. Keep the existing contained `cursor-agent` subprocess loop for Coach execution and do not ship `@cursor/sdk` in the web runtime.
+
+**Rationale:** A read-only production check found Node 20.20.2, while `@cursor/sdk` 1.0.26 requires Node 22.13 or newer and brings telemetry plus platform binary packages for a single catalog call. The direct authenticated request preserves live per-account model discovery without making this settings PR depend on a production Node upgrade.
+
+**Status:** active; supersedes the SDK dependency decision below
+
+**References:** issue #449, PR #450, `apps/web/src/lib/coach/cursor-models.ts`, `apps/web/package.json`
+
+---
+
 ## 2026-07-30: Cursor SDK owns model discovery, not Coach execution
 
 **Decision:** Add `@cursor/sdk` to the web app and use `Cursor.models.list({ apiKey })` for per-user credential validation and authenticated model discovery. Keep the existing contained `cursor-agent` subprocess loop for Coach execution; persist the selected canonical SDK model ID in the existing `cursor:<model>` preference and pass that ID to the CLI. Personal-key precedence and encrypted storage remain unchanged.
 
 **Rationale:** The SDK returns a structured, account-scoped catalog (`id`, display name, description, aliases, parameters, and variants), while CLI model output is presentation text and can change shape. A full SDK runtime migration remains out of scope because the current CLI boundary and MCP permission controls are production-hardened; discovery alone is low-risk and eliminates a stale hard-coded model list.
 
-**Status:** active; supersedes the validation mechanism in the credential decision below
+**Status:** superseded by 2026-07-30 Cursor HTTP catalog decision
 
 **References:** issue #449, PR #450, `apps/web/src/lib/coach/cursor-models.ts`, `apps/web/src/lib/coach/cursor-loop.ts`
 

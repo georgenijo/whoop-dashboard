@@ -64,7 +64,7 @@ describe("resolveCursorKey", () => {
 });
 
 describe("probeCursorKey", () => {
-  it("uses the SDK model catalog with the candidate key", async () => {
+  it("uses the model catalog with the candidate key", async () => {
     listCursorModelsForKeyMock.mockResolvedValue([
       {
         id: "composer-2.5",
@@ -76,7 +76,7 @@ describe("probeCursorKey", () => {
     expect(listCursorModelsForKeyMock).toHaveBeenCalledWith("crsr_candidate");
   });
 
-  it("classifies an SDK authentication failure", async () => {
+  it("classifies a catalog authentication failure", async () => {
     const { CursorModelCatalogError } = await import("./cursor-models");
     listCursorModelsForKeyMock.mockRejectedValue(
       new CursorModelCatalogError("invalid_key", "rejected"),

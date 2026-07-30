@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
@@ -23,6 +23,8 @@ vi.mock("@/lib/coach/cursor-key", () => ({
 }));
 
 import { DELETE, GET, POST } from "./route";
+
+const originalCursorApiKey = process.env.CURSOR_API_KEY;
 
 function makeRequest(method: "GET" | "POST" | "DELETE", body?: unknown): Request {
   return new Request("http://localhost/api/me/cursor-key", {
@@ -48,6 +50,12 @@ beforeEach(() => {
   getUserSettingsMock.mockReset();
   upsertUserSettingsMock.mockReset();
   probeCursorKeyMock.mockReset();
+  delete process.env.CURSOR_API_KEY;
+});
+
+afterEach(() => {
+  if (originalCursorApiKey === undefined) delete process.env.CURSOR_API_KEY;
+  else process.env.CURSOR_API_KEY = originalCursorApiKey;
 });
 
 describe("POST /api/me/cursor-key", () => {
@@ -135,10 +143,26 @@ describe("DELETE /api/me/cursor-key", () => {
       present: false,
       masked: null,
       fallback_available: false,
+      model_pref: "anthropic:claude-sonnet-4-6",
     });
     expect(upsertUserSettingsMock).toHaveBeenCalledWith({
       user_id: 1,
       cursor_key: null,
+      model_pref: "anthropic:claude-sonnet-4-6",
+    });
+  });
+
+  it("resets the model even when a shared Cursor fallback remains", async () => {
+    process.env.CURSOR_API_KEY = "key_shared";
+    const response = await DELETE(makeRequest("DELETE"));
+    expect(await response.json()).toMatchObject({
+      fallback_available: true,
+      model_pref: "anthropic:claude-sonnet-4-6",
+    });
+    expect(upsertUserSettingsMock).toHaveBeenCalledWith({
+      user_id: 1,
+      cursor_key: null,
+      model_pref: "anthropic:claude-sonnet-4-6",
     });
   });
 });

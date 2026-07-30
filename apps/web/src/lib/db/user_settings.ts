@@ -75,15 +75,6 @@ function ensureUserSettingsTable(db: DB): void {
       updated_at TEXT NOT NULL
     );
   `);
-  const columns = db
-    .prepare("PRAGMA table_info(user_settings)")
-    .all() as { name: string }[];
-  if (!columns.some((column) => column.name === "cursor_key")) {
-    db.exec("ALTER TABLE user_settings ADD COLUMN cursor_key TEXT");
-  }
-  if (!columns.some((column) => column.name === "cursor_key_version")) {
-    db.exec("ALTER TABLE user_settings ADD COLUMN cursor_key_version INTEGER");
-  }
 }
 
 function userExists(db: DB, userId: number): boolean {

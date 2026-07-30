@@ -18,6 +18,7 @@ type LocalSetting = {
 };
 
 type WhoopConnectorStatus = "connected" | "needs_reconnect" | "disconnected";
+type WhoopCheckStatus = "loading" | "ready" | "error";
 
 type WhoopConnector = {
   provider: "whoop";
@@ -46,13 +47,26 @@ type ByokError =
   | { kind: "probe_failed" }
   | { kind: "request_failed"; message: string };
 
+const ANTHROPIC_PREF = "anthropic:claude-sonnet-4-6";
+
 const CONNECTOR_STATUS_COPY: Record<
   WhoopConnectorStatus,
-  { label: string; tone: string }
+  {
+    label: string;
+    tone: "statusGood" | "statusWarning" | "statusMuted";
+  }
 > = {
   connected: { label: "Connected", tone: "statusGood" },
   needs_reconnect: { label: "Needs reconnect", tone: "statusWarning" },
   disconnected: { label: "Disconnected", tone: "statusMuted" },
+};
+
+const CURSOR_MODEL_STATUS_COPY: Record<CursorModelCatalogStatus, string> = {
+  ready: "Choose Claude directly or any model enabled for your Cursor account.",
+  loading: "Loading the models enabled for your Cursor account…",
+  invalid_key: "Cursor rejected the current key. Update it below to load models.",
+  unavailable: "Cursor model discovery is temporarily unavailable.",
+  not_configured: "Add a Cursor key below to enable its model catalog.",
 };
 
 const LOCAL_SETTINGS: LocalSetting[] = [
@@ -131,7 +145,10 @@ export default function SettingsPage() {
   const [defaultSystemPrompt, setDefaultSystemPrompt] = useState("");
   const [savedSystemPrompt, setSavedSystemPrompt] = useState("");
   const [saving, setSaving] = useState(false);
+  const [promptError, setPromptError] = useState<string | null>(null);
   const [whoop, setWhoop] = useState<WhoopConnector | null>(null);
+  const [whoopCheckStatus, setWhoopCheckStatus] =
+    useState<WhoopCheckStatus>("loading");
   const [whoopWorking, setWhoopWorking] = useState(false);
   const [byok, setByok] = useState<ByokState>({ present: false, masked: null });
   const [byokInput, setByokInput] = useState("");
@@ -149,9 +166,7 @@ export default function SettingsPage() {
   const [cursorByokError, setCursorByokError] = useState<ByokError | null>(
     null,
   );
-  const [modelPref, setModelPref] = useState(
-    "anthropic:claude-sonnet-4-6",
-  );
+  const [modelPref, setModelPref] = useState(ANTHROPIC_PREF);
   const [cursorAvailable, setCursorAvailable] = useState(false);
   const [cursorModels, setCursorModels] = useState<CursorModel[]>([]);
   const [cursorModelsStatus, setCursorModelsStatus] =
@@ -167,9 +182,18 @@ export default function SettingsPage() {
         response.ok ? (response.json() as Promise<WhoopConnector>) : null,
       )
       .then((data) => {
-        if (data) setWhoop(data);
+        if (!data) {
+          setWhoop(null);
+          setWhoopCheckStatus("error");
+          return;
+        }
+        setWhoop(data);
+        setWhoopCheckStatus("ready");
       })
-      .catch(() => {});
+      .catch(() => {
+        setWhoop(null);
+        setWhoopCheckStatus("error");
+      });
   }, []);
 
   const refreshCursorModels = useCallback(async () => {
@@ -198,17 +222,24 @@ export default function SettingsPage() {
     for (const setting of LOCAL_SETTINGS) {
       loaded[setting.key] = localStorage.getItem(setting.key) === "1";
     }
+    // Defer browser-only preference hydration so this effect does not perform
+    // a synchronous state update (react-hooks/set-state-in-effect).
     queueMicrotask(() => setLocalValues(loaded));
 
     fetch("/api/settings")
-      .then((response) => response.json())
+      .then((response) =>
+        response.ok
+          ? (response.json() as Promise<{
+              system_prompt: string;
+              default_system_prompt: string;
+              model_pref?: string;
+              cursor_available?: boolean;
+            }>)
+          : null,
+      )
       .then(
-        (data: {
-          system_prompt: string;
-          default_system_prompt: string;
-          model_pref?: string;
-          cursor_available?: boolean;
-        }) => {
+        (data) => {
+          if (!data) return;
           setSystemPrompt(data.system_prompt);
           setSavedSystemPrompt(data.system_prompt);
           setDefaultSystemPrompt(data.default_system_prompt);
@@ -239,6 +270,8 @@ export default function SettingsPage() {
         }
       })
       .catch(() => {});
+    // Model discovery sets loading state immediately, so defer the initial
+    // invocation for the same effect-lint reason as local preference hydration.
     queueMicrotask(() => void refreshCursorModels());
   }, [refreshCursorModels]);
 
@@ -277,14 +310,9 @@ export default function SettingsPage() {
         | {
             ok: false;
             code: "invalid_key" | "invalid_request" | "probe_failed";
-          };
+      };
       if (data.ok === true) {
-        const freshResponse = await fetch("/api/me/anthropic-key");
-        if (freshResponse.ok) {
-          setByok((await freshResponse.json()) as ByokState);
-        } else {
-          setByok({ present: data.present, masked: data.masked });
-        }
+        setByok({ present: data.present, masked: data.masked });
         setByokInput("");
         return;
       }
@@ -329,6 +357,11 @@ export default function SettingsPage() {
       }
       setByok({ present: false, masked: null });
       setByokInput("");
+    } catch (error) {
+      setByokError({
+        kind: "request_failed",
+        message: error instanceof Error ? error.message : String(error),
+      });
     } finally {
       setByokClearing(false);
     }
@@ -406,19 +439,24 @@ export default function SettingsPage() {
         });
         return;
       }
-      const data = (await response.json()) as CursorByokState;
+      const data = (await response.json()) as CursorByokState & {
+        model_pref: string;
+      };
       setCursorByok(data);
       setCursorByokInput("");
       setCursorAvailable(data.fallback_available);
+      setModelPref(data.model_pref);
       if (data.fallback_available) {
         await refreshCursorModels();
       } else {
         setCursorModels([]);
         setCursorModelsStatus("not_configured");
       }
-      if (!data.fallback_available && modelPref.startsWith("cursor:")) {
-        await saveModelPref("anthropic:claude-sonnet-4-6");
-      }
+    } catch (error) {
+      setCursorByokError({
+        kind: "request_failed",
+        message: error instanceof Error ? error.message : String(error),
+      });
     } finally {
       setCursorByokClearing(false);
     }
@@ -472,14 +510,22 @@ export default function SettingsPage() {
 
   async function saveSystemPrompt() {
     setSaving(true);
+    setPromptError(null);
     try {
       const response = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ system_prompt: systemPrompt }),
       });
+      if (!response.ok) {
+        throw new Error(`Couldn't save instructions (HTTP ${response.status}).`);
+      }
       const data = (await response.json()) as { system_prompt: string };
       setSavedSystemPrompt(data.system_prompt);
+    } catch (error) {
+      setPromptError(
+        error instanceof Error ? error.message : "Couldn't save instructions.",
+      );
     } finally {
       setSaving(false);
     }
@@ -500,8 +546,15 @@ export default function SettingsPage() {
     }
     setWhoopWorking(true);
     try {
-      await fetch("/api/auth/whoop/disconnect", { method: "POST" });
+      const response = await fetch("/api/auth/whoop/disconnect", {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       refreshWhoop();
+    } catch {
+      setWhoopCheckStatus("error");
     } finally {
       setWhoopWorking(false);
     }
@@ -522,17 +575,8 @@ export default function SettingsPage() {
   const selectedCursorModelIsMissing =
     selectedCursorModel !== null &&
     !cursorModels.some((model) => model.id === selectedCursorModel);
-  const modelDescription = modelError
-    ? modelError
-    : cursorModelsStatus === "ready"
-      ? "Choose Claude directly or any model enabled for your Cursor account."
-      : cursorModelsStatus === "loading"
-        ? "Loading the models enabled for your Cursor account…"
-        : cursorModelsStatus === "invalid_key"
-          ? "Cursor rejected the current key. Update it below to load models."
-          : cursorModelsStatus === "unavailable"
-            ? "Cursor model discovery is temporarily unavailable."
-            : "Add a Cursor key below to enable its model catalog.";
+  const modelDescription =
+    modelError ?? CURSOR_MODEL_STATUS_COPY[cursorModelsStatus];
 
   return (
     <div className={styles.settingsPage}>
@@ -570,11 +614,17 @@ export default function SettingsPage() {
                       className={`${styles.status} ${styles[whoopCopy.tone]}`}
                     >
                       <span className={styles.statusDot} aria-hidden />
-                      {whoop ? whoopCopy.label : "Checking"}
+                      {whoopCheckStatus === "loading"
+                        ? "Checking"
+                        : whoopCheckStatus === "error"
+                          ? "Unavailable"
+                          : whoopCopy.label}
                     </span>
                   </div>
                   <p className={styles.connectorMeta}>
-                    {whoop
+                    {whoopCheckStatus === "error"
+                      ? "Couldn't load connection status. Try again."
+                      : whoop
                       ? whoop.last_sync_at
                         ? `Last sync ${formatRelative(whoop.last_sync_at)}`
                         : "Ready for the first sync"
@@ -584,7 +634,18 @@ export default function SettingsPage() {
               </div>
 
               <div className={styles.actionGroup}>
-                {whoopStatus !== "disconnected" ? (
+                {whoopCheckStatus === "error" ? (
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={() => {
+                      setWhoopCheckStatus("loading");
+                      refreshWhoop();
+                    }}
+                  >
+                    Retry
+                  </button>
+                ) : whoopStatus !== "disconnected" ? (
                   <>
                     <button
                       type="button"
@@ -826,7 +887,13 @@ export default function SettingsPage() {
                   </p>
                 </div>
                 <span className={styles.saveState} aria-live="polite">
-                  {saving ? "Saving…" : promptDirty ? "Unsaved changes" : "Saved"}
+                  {saving
+                    ? "Saving…"
+                    : promptError
+                      ? "Save failed"
+                      : promptDirty
+                        ? "Unsaved changes"
+                        : "Saved"}
                 </span>
               </div>
               <textarea
@@ -857,6 +924,11 @@ export default function SettingsPage() {
                   </button>
                 </div>
               </div>
+              {promptError && (
+                <p className={styles.errorMessage} role="alert">
+                  {promptError}
+                </p>
+              )}
             </div>
           </div>
         </section>

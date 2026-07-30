@@ -34,7 +34,12 @@ export function parseModelPref(
   if (pref && KNOWN[pref]) return KNOWN[pref];
   if (pref?.startsWith("cursor:")) {
     const model = pref.slice("cursor:".length).trim();
-    if (model && model.length <= 200 && !/[\s\x00-\x1f]/.test(model)) {
+    if (
+      model &&
+      !model.startsWith("-") &&
+      model.length <= 200 &&
+      !/[\s\x00-\x1f]/.test(model)
+    ) {
       return { provider: "cursor", model };
     }
   }
