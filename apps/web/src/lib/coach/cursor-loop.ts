@@ -107,6 +107,27 @@ async function removeCursorProjectRegistration(workspace: string): Promise<void>
 const CURSOR_AGENT_BIN =
   process.env.COACH_CURSOR_AGENT_BIN || "cursor-agent";
 
+/**
+ * Cursor starts a TypeScript language server through `npx` for every workspace,
+ * even when the workspace is our empty, read-denied per-turn sandbox. On the
+ * 512M production service that unnecessary process costs roughly 120M RSS.
+ *
+ * An absolute agent binary needs no PATH lookup, and the compiled MCP server
+ * uses an absolute Node command below, so remove PATH in that production shape.
+ * Cursor treats a missing `npx` as an unavailable optional LSP and continues
+ * with a no-op diagnostics provider. Keep the inherited PATH for the
+ * `cursor-agent` fallback used by local development, where the binary itself
+ * still needs PATH resolution.
+ */
+export function cursorAgentChildPath(
+  agentBin: string,
+  parentPath: string | undefined,
+  override: string | undefined,
+): string | undefined {
+  if (!path.isAbsolute(agentBin)) return parentPath;
+  return override ?? "";
+}
+
 // App root (apps/web) — anchors the MCP server path and node_modules so the
 // MCP subprocess (spawned from a throwaway cwd) can resolve tsx + tsconfig.
 const APP_ROOT = process.env.COACH_APP_ROOT || process.cwd();
@@ -472,7 +493,9 @@ async function makeWorkspace(userId: number, images: CoachImage[]): Promise<stri
       JSON.stringify({
         mcpServers: {
           whoop: {
-            command: "node",
+            // Absolute so cursor-agent does not need a general PATH merely to
+            // launch the one approved MCP subprocess.
+            command: process.execPath,
             args: resolveMcpServerArgs(),
             cwd: APP_ROOT,
             // PATH included explicitly so `node` resolves even if a future
@@ -670,7 +693,15 @@ export async function runCursorTurn(
         ],
         {
           cwd: ws,
-          env: { ...process.env, CURSOR_API_KEY: key },
+          env: {
+            ...process.env,
+            PATH: cursorAgentChildPath(
+              CURSOR_AGENT_BIN,
+              process.env.PATH,
+              process.env.COACH_CURSOR_CHILD_PATH,
+            ),
+            CURSOR_API_KEY: key,
+          },
           stdio: ["ignore", "pipe", "pipe"],
           // New process group so we can signal cursor-agent AND its MCP-server
           // grandchild together via process.kill(-pid) on abort/timeout.
