@@ -13,11 +13,15 @@ import {
 // `system_prompt` is a global app_setting (shared); `model_pref` is per-user.
 function settingsPayload(userId: number) {
   const selection = parseModelPref(getUserSettings(userId)?.model_pref);
+  const cursorAvailable = cursorProviderEnabled(userId);
   return {
     system_prompt: getSetting("system_prompt") || DEFAULT_SYSTEM_PROMPT,
     default_system_prompt: DEFAULT_SYSTEM_PROMPT,
-    model_pref: selection.provider === "cursor" ? CURSOR_PREF : ANTHROPIC_PREF,
-    cursor_available: cursorProviderEnabled(),
+    model_pref:
+      selection.provider === "cursor" && cursorAvailable
+        ? CURSOR_PREF
+        : ANTHROPIC_PREF,
+    cursor_available: cursorAvailable,
   };
 }
 
@@ -48,7 +52,7 @@ export async function POST(req: Request) {
       if (!ALLOWED_MODEL_PREFS.includes(body.model_pref as AllowedModelPref)) {
         return Response.json({ error: "invalid model_pref" }, { status: 400 });
       }
-      if (body.model_pref === CURSOR_PREF && !cursorProviderEnabled()) {
+      if (body.model_pref === CURSOR_PREF && !cursorProviderEnabled(user.id)) {
         return Response.json(
           { error: "Cursor provider is not available on this server" },
           { status: 400 },

@@ -29,6 +29,7 @@ type WhoopConnector = {
 };
 
 type ByokState = { present: boolean; masked: string | null };
+type CursorByokState = ByokState & { fallback_available: boolean };
 type ByokError =
   | { kind: "invalid_key" }
   | { kind: "probe_failed" }
@@ -126,6 +127,17 @@ export default function SettingsPage() {
   const [byokSaving, setByokSaving] = useState(false);
   const [byokClearing, setByokClearing] = useState(false);
   const [byokError, setByokError] = useState<ByokError | null>(null);
+  const [cursorByok, setCursorByok] = useState<CursorByokState>({
+    present: false,
+    masked: null,
+    fallback_available: false,
+  });
+  const [cursorByokInput, setCursorByokInput] = useState("");
+  const [cursorByokSaving, setCursorByokSaving] = useState(false);
+  const [cursorByokClearing, setCursorByokClearing] = useState(false);
+  const [cursorByokError, setCursorByokError] = useState<ByokError | null>(
+    null,
+  );
   const [modelPref, setModelPref] = useState(
     "anthropic:claude-sonnet-4-6",
   );
@@ -182,6 +194,19 @@ export default function SettingsPage() {
         if (data) setByok(data);
       })
       .catch(() => {});
+
+    fetch("/api/me/cursor-key")
+      .then((response) =>
+        response.ok ? (response.json() as Promise<CursorByokState>) : null,
+      )
+      .then((data) => {
+        if (!data) return;
+        setCursorByok(data);
+        if (data.present || data.fallback_available) {
+          setCursorAvailable(true);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   function toggleLocal(key: string, value: boolean) {
@@ -192,6 +217,10 @@ export default function SettingsPage() {
   const trimmedByokInput = byokInput.trim();
   const byokShapeValid =
     trimmedByokInput.startsWith("sk-ant-") && trimmedByokInput.length >= 20;
+  const trimmedCursorByokInput = cursorByokInput.trim();
+  const cursorByokShapeValid =
+    trimmedCursorByokInput.length >= 16 &&
+    !/\s/.test(trimmedCursorByokInput);
 
   async function handleByokSave() {
     if (byokSaving || !byokShapeValid) return;
@@ -272,12 +301,98 @@ export default function SettingsPage() {
     }
   }
 
-  function byokErrorMessage(error: ByokError): string {
+  async function handleCursorByokSave() {
+    if (cursorByokSaving || !cursorByokShapeValid) return;
+    setCursorByokSaving(true);
+    setCursorByokError(null);
+    try {
+      const response = await fetch("/api/me/cursor-key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: trimmedCursorByokInput }),
+      });
+      if (!response.ok) {
+        setCursorByokError({
+          kind: "request_failed",
+          message: `HTTP ${response.status}`,
+        });
+        return;
+      }
+      const data = (await response.json()) as
+        | ({ ok: true } & CursorByokState)
+        | {
+            ok: false;
+            code: "invalid_key" | "invalid_request" | "probe_failed";
+          };
+      if (data.ok === true) {
+        setCursorByok(data);
+        setCursorByokInput("");
+        setCursorAvailable(true);
+        return;
+      }
+      if (data.code === "invalid_key") {
+        setCursorByokError({ kind: "invalid_key" });
+      } else if (data.code === "probe_failed") {
+        setCursorByokError({ kind: "probe_failed" });
+      } else {
+        setCursorByokError({
+          kind: "request_failed",
+          message: data.code,
+        });
+      }
+    } catch (error) {
+      setCursorByokError({
+        kind: "request_failed",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setCursorByokSaving(false);
+    }
+  }
+
+  async function handleCursorByokClear() {
+    if (cursorByokClearing) return;
+    if (
+      !confirm(
+        "Remove your personal Cursor key? Coach will use the shared server key when available.",
+      )
+    ) {
+      return;
+    }
+    setCursorByokClearing(true);
+    setCursorByokError(null);
+    try {
+      const response = await fetch("/api/me/cursor-key", {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        setCursorByokError({
+          kind: "request_failed",
+          message: `HTTP ${response.status}`,
+        });
+        return;
+      }
+      const data = (await response.json()) as CursorByokState;
+      setCursorByok(data);
+      setCursorByokInput("");
+      setCursorAvailable(data.fallback_available);
+      if (!data.fallback_available && modelPref.startsWith("cursor:")) {
+        setModelPref("anthropic:claude-sonnet-4-6");
+      }
+    } finally {
+      setCursorByokClearing(false);
+    }
+  }
+
+  function byokErrorMessage(
+    provider: "Anthropic" | "Cursor",
+    error: ByokError,
+  ): string {
     switch (error.kind) {
       case "invalid_key":
-        return "That key was rejected by Anthropic. Double-check and try again.";
+        return `That key was rejected by ${provider}. Double-check and try again.`;
       case "probe_failed":
-        return "Couldn't reach Anthropic to verify the key. Try again in a moment.";
+        return `Couldn't reach ${provider} to verify the key. Try again in a moment.`;
       case "request_failed":
         return `Request failed: ${error.message}`;
     }
@@ -470,8 +585,8 @@ export default function SettingsPage() {
                   Claude Sonnet 4.6
                 </option>
                 {cursorAvailable && (
-                  <option value="cursor:composer-2.5">
-                    Cursor Composer 2.5 · experimental
+                  <option value="cursor:composer-2.5-fast">
+                    Cursor Composer 2.5 Fast
                   </option>
                 )}
               </select>
@@ -543,12 +658,93 @@ export default function SettingsPage() {
 
               {byokError && (
                 <p className={styles.errorMessage} role="alert">
-                  {byokErrorMessage(byokError)}
+                  {byokErrorMessage("Anthropic", byokError)}
                 </p>
               )}
               <p className={styles.privacyNote}>
                 Your key is encrypted at rest and never shown again after it is
                 saved.
+              </p>
+            </div>
+
+            <div className={styles.divider} />
+
+            <div className={styles.stackedSetting} id="coach-cursor-byok">
+              <div className={styles.stackedHeader}>
+                <div className={styles.settingCopy}>
+                  <div className={styles.labelWithIcon}>
+                    <KeyRound aria-hidden size={15} />
+                    <h3>Cursor access</h3>
+                  </div>
+                  <p>
+                    {cursorByok.present
+                      ? "Composer is using your encrypted personal API key."
+                      : cursorByok.fallback_available
+                        ? "Composer is currently using the shared server key."
+                        : "Add a personal key to enable Cursor Composer."}
+                  </p>
+                </div>
+                <span
+                  className={`${styles.sourceBadge} ${
+                    cursorByok.present ? styles.sourcePersonal : ""
+                  }`}
+                >
+                  {cursorByok.present
+                    ? "Personal key"
+                    : cursorByok.fallback_available
+                      ? "Shared key"
+                      : "Not configured"}
+                </span>
+              </div>
+
+              {cursorByok.present ? (
+                <div className={styles.inlineControl}>
+                  <code className={styles.maskedKey}>{cursorByok.masked}</code>
+                  <button
+                    type="button"
+                    className={styles.dangerButton}
+                    onClick={handleCursorByokClear}
+                    disabled={cursorByokClearing}
+                    data-track="settings:cursor-byok-clear"
+                  >
+                    {cursorByokClearing ? "Removing…" : "Remove key"}
+                  </button>
+                </div>
+              ) : (
+                <div className={styles.inlineControl}>
+                  <input
+                    className={styles.textInput}
+                    type="password"
+                    value={cursorByokInput}
+                    onChange={(event) => {
+                      setCursorByokInput(event.target.value);
+                      if (cursorByokError) setCursorByokError(null);
+                    }}
+                    placeholder="Paste Cursor API key"
+                    aria-label="Personal Cursor API key"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    className={styles.primaryButton}
+                    onClick={handleCursorByokSave}
+                    disabled={!cursorByokShapeValid || cursorByokSaving}
+                    data-track="settings:cursor-byok-save"
+                  >
+                    {cursorByokSaving ? "Verifying…" : "Use this key"}
+                  </button>
+                </div>
+              )}
+
+              {cursorByokError && (
+                <p className={styles.errorMessage} role="alert">
+                  {byokErrorMessage("Cursor", cursorByokError)}
+                </p>
+              )}
+              <p className={styles.privacyNote}>
+                Your key is verified without a model turn, then encrypted at
+                rest.
               </p>
             </div>
 

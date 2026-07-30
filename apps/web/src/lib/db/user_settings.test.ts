@@ -94,6 +94,27 @@ describe("user_settings + vault", () => {
     expect(row.anthropic_key_version).toBe(1);
   });
 
+  it("encrypts cursor_key on disk and decrypts it on read", async () => {
+    const { settings, conn } = await loadModules();
+    settings.upsertUserSettings({
+      user_id: 1,
+      cursor_key: "crsr_PLAINTEXT-MARKER-SHOULD-NOT-LEAK",
+    });
+    expect(settings.getUserSettings(1)?.cursor_key).toBe(
+      "crsr_PLAINTEXT-MARKER-SHOULD-NOT-LEAK",
+    );
+
+    const db = conn.openWrite();
+    const row = db!
+      .prepare(
+        "SELECT cursor_key, cursor_key_version FROM user_settings WHERE user_id = 1",
+      )
+      .get() as { cursor_key: string; cursor_key_version: number };
+    db!.close();
+    expect(row.cursor_key).not.toContain("PLAINTEXT-MARKER");
+    expect(row.cursor_key_version).toBe(1);
+  });
+
   it("upsert is idempotent — second call replaces existing row", async () => {
     const { settings } = await loadModules();
     settings.upsertUserSettings({
@@ -116,6 +137,7 @@ describe("user_settings + vault", () => {
     settings.upsertUserSettings({
       user_id: 1,
       anthropic_key: "k1",
+      cursor_key: "crsr_1",
       model_pref: "m1",
       timezone: "UTC",
       monthly_token_cap: 500,
@@ -123,6 +145,7 @@ describe("user_settings + vault", () => {
     settings.upsertUserSettings({ user_id: 1, model_pref: "m2" });
     const got = settings.getUserSettings(1);
     expect(got?.anthropic_key).toBe("k1");
+    expect(got?.cursor_key).toBe("crsr_1");
     expect(got?.model_pref).toBe("m2");
     expect(got?.timezone).toBe("UTC");
     expect(got?.monthly_token_cap).toBe(500);
@@ -134,6 +157,19 @@ describe("user_settings + vault", () => {
     expect(settings.getUserSettings(1)?.anthropic_key).toBe("k1");
     settings.upsertUserSettings({ user_id: 1, anthropic_key: null });
     expect(settings.getUserSettings(1)?.anthropic_key).toBeNull();
+  });
+
+  it("explicit null clears cursor_key without changing anthropic_key", async () => {
+    const { settings } = await loadModules();
+    settings.upsertUserSettings({
+      user_id: 1,
+      anthropic_key: "sk-ant-keep",
+      cursor_key: "crsr_remove",
+    });
+    settings.upsertUserSettings({ user_id: 1, cursor_key: null });
+    const got = settings.getUserSettings(1);
+    expect(got?.cursor_key).toBeNull();
+    expect(got?.anthropic_key).toBe("sk-ant-keep");
   });
 
   it("updated_at advances on subsequent writes", async () => {

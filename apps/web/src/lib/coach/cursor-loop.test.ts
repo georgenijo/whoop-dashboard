@@ -30,7 +30,13 @@ vi.mock("./tools", () => ({
 }));
 vi.mock("./cursor-key", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./cursor-key")>();
-  return { ...actual, resolveCursorKey: vi.fn(() => "cursor-test-key") };
+  return {
+    ...actual,
+    resolveCursorKey: vi.fn(() => ({
+      key: "cursor-test-key",
+      origin: "user",
+    })),
+  };
 });
 
 import {

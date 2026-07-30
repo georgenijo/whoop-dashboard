@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-07-30: Cursor credentials follow per-user BYOK precedence
+
+**Decision:** Add encrypted `cursor_key` + `cursor_key_version` columns to `user_settings`. Cursor key resolution now mirrors Anthropic: the authenticated user's decrypted key wins, `CURSOR_API_KEY` remains the shared server fallback, and no key means the provider is unavailable for that user. Settings exposes masked save/remove controls and validates new keys with the non-inference `cursor-agent models` command before persisting.
+
+**Rationale:** The original Cursor provider in PR #416 deliberately supported only one operator-managed key, which made a revoked shared credential take every Cursor user offline and did not match the product's BYOK direction. Per-user encrypted keys isolate rotation and failures while retaining the existing server fallback for users who do not provide one.
+
+**Status:** active
+
+**References:** PR #416 (shared-only decision superseded), issue #442, PR #450, `apps/web/src/lib/coach/cursor-key.ts`, `apps/web/src/lib/db/user_settings.ts`, `apps/web/src/app/api/me/cursor-key/route.ts`
+
+---
+
 ## 2026-07-28: Deploys must be verified, not assumed — `/api/health` + `scripts/deploy`
 
 **Decision:** A deploy is not "done" until the running process reports the commit that was deployed. Added an auth-exempt `/api/health` returning `{sha, built_at}` (stamped at build time by `next.config.ts`, overridable via `COACH_BUILD_SHA`), and `scripts/deploy`, which snapshots the DB, pulls, builds **detached**, restarts, and then fails loudly if `/api/health` does not report the target sha. `scripts/deploy --check` reports drift without changing anything. The prose deploy recipe in `CLAUDE.md` is demoted to a reference-only `<details>` block.

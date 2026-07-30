@@ -465,7 +465,7 @@ export async function runCursorTurn(
   args.options.signal?.throwIfAborted();
   const turnStartedMs = Date.now();
   const { userId, newUserText, conversation, toolDetails, detailState, options } = args;
-  const key = resolveCursorKey();
+  const { key, origin: keyOrigin } = resolveCursorKey(userId);
   const messages: ChatMessageInsert[] = args.accumulator ?? [];
 
   // The user turn, persisted in the same shape as the Anthropic path.
@@ -920,6 +920,7 @@ export async function runCursorTurn(
         auth
           ? "Cursor API key rejected"
           : `cursor-agent exited ${exitInfo.code}: ${stderr.slice(0, 200)}`,
+        auth ? keyOrigin : undefined,
       );
     }
 

@@ -1,6 +1,7 @@
 import "server-only";
-// Coach provider selection. The coach can run on Anthropic (default, per-user
-// BYOK) or Cursor Composer (opt-in, shared CURSOR_API_KEY). Selection is stored
+// Coach provider selection. The coach can run on Anthropic (default) or Cursor
+// Composer. Both providers support per-user BYOK with a shared env fallback.
+// Selection is stored
 // in `user_settings.model_pref` as a "<provider>:<model>" string — no DB
 // migration, reuses the existing column. Unknown / NULL prefs fall back to the
 // Anthropic default, so legacy values and unset users keep working unchanged.
@@ -44,9 +45,11 @@ export function parseModelPref(
   return ANTHROPIC_DEFAULT;
 }
 
-/** Whether the Cursor provider is available (shared key configured). */
-export function cursorProviderEnabled(): boolean {
-  return Boolean(process.env.CURSOR_API_KEY);
+/** Whether Cursor has either a personal key or the shared server fallback. */
+export function cursorProviderEnabled(userId: number): boolean {
+  return Boolean(
+    getUserSettings(userId)?.cursor_key || process.env.CURSOR_API_KEY,
+  );
 }
 
 /**
@@ -56,7 +59,7 @@ export function cursorProviderEnabled(): boolean {
  */
 export function resolveCoachProvider(userId: number): CoachModelSelection {
   const selection = parseModelPref(getUserSettings(userId)?.model_pref);
-  if (selection.provider === "cursor" && !cursorProviderEnabled()) {
+  if (selection.provider === "cursor" && !cursorProviderEnabled(userId)) {
     return ANTHROPIC_DEFAULT;
   }
   return selection;
