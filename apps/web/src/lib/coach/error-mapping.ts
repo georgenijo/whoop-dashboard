@@ -38,9 +38,13 @@ export function classifyChatError(err: unknown): ClassifiedChatError {
   if (err instanceof CursorAgentError) {
     if (err.reason === "auth") {
       return {
-        status: 502,
-        kind: "upstream_error",
-        message: "The Cursor coach key was rejected. Contact the operator.",
+        status: err.origin === "user" ? 401 : 502,
+        kind: err.origin === "user" ? "bad_api_key" : "upstream_error",
+        message:
+          err.origin === "user"
+            ? "Your Cursor API key was rejected. Update it in Settings."
+            : "The server's Cursor API key was rejected. Add a personal key in Settings.",
+        origin: err.origin,
       };
     }
     if (err.reason === "timeout") {

@@ -1,6 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import {
+  Activity,
+  BrainCircuit,
+  KeyRound,
+  LogOut,
+  SlidersHorizontal,
+  UserRound,
+} from "lucide-react";
+import styles from "./settings.module.css";
 
 type LocalSetting = {
   key: string;
@@ -9,6 +18,7 @@ type LocalSetting = {
 };
 
 type WhoopConnectorStatus = "connected" | "needs_reconnect" | "disconnected";
+type WhoopCheckStatus = "loading" | "ready" | "error";
 
 type WhoopConnector = {
   provider: "whoop";
@@ -19,11 +29,54 @@ type WhoopConnector = {
   last_sync_at: string | null;
 };
 
-const CONNECTOR_STATUS_COPY: Record<WhoopConnectorStatus, { label: string; color: string }> = {
-  connected: { label: "Connected", color: "#4ade80" },
-  needs_reconnect: { label: "Needs reconnect", color: "#fbbf24" },
-  disconnected: { label: "Disconnected", color: "rgba(255,255,255,0.4)" },
+type ByokState = { present: boolean; masked: string | null };
+type CursorByokState = ByokState & { fallback_available: boolean };
+type CursorModel = {
+  id: string;
+  display_name: string;
+  description: string | null;
 };
+type CursorModelCatalogStatus =
+  | "loading"
+  | "ready"
+  | "not_configured"
+  | "invalid_key"
+  | "unavailable";
+type ByokError =
+  | { kind: "invalid_key" }
+  | { kind: "probe_failed" }
+  | { kind: "request_failed"; message: string };
+
+const ANTHROPIC_PREF = "anthropic:claude-sonnet-4-6";
+
+const CONNECTOR_STATUS_COPY: Record<
+  WhoopConnectorStatus,
+  {
+    label: string;
+    tone: "statusGood" | "statusWarning" | "statusMuted";
+  }
+> = {
+  connected: { label: "Connected", tone: "statusGood" },
+  needs_reconnect: { label: "Needs reconnect", tone: "statusWarning" },
+  disconnected: { label: "Disconnected", tone: "statusMuted" },
+};
+
+const CURSOR_MODEL_STATUS_COPY: Record<CursorModelCatalogStatus, string> = {
+  ready: "Choose Claude directly or any model enabled for your Cursor account.",
+  loading: "Loading the models enabled for your Cursor account…",
+  invalid_key: "Cursor rejected the current key. Update it below to load models.",
+  unavailable: "Cursor model discovery is temporarily unavailable.",
+  not_configured: "Add a Cursor key below to enable its model catalog.",
+};
+
+const LOCAL_SETTINGS: LocalSetting[] = [
+  {
+    key: "trendline",
+    label: "Line of best fit",
+    description:
+      "Overlay a linear trend line on charts to make direction easier to spot.",
+  },
+];
 
 function formatRelative(iso: string | null): string | null {
   if (!iso) return null;
@@ -39,80 +92,52 @@ function formatRelative(iso: string | null): string | null {
   return `${days}d ago`;
 }
 
-const LOCAL_SETTINGS: LocalSetting[] = [
-  {
-    key: "trendline",
-    label: "Line of best fit",
-    description: "Overlay a linear trend line on all charts to show direction over the selected period.",
-  },
-];
-
-function Toggle({ checked, onChange, disabled }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean }) {
+function Toggle({
+  checked,
+  onChange,
+  label,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  label: string;
+  disabled?: boolean;
+}) {
   return (
     <button
+      type="button"
+      className={styles.toggle}
       role="switch"
       aria-checked={checked}
+      aria-label={label}
       disabled={disabled}
+      data-checked={checked}
       onClick={() => !disabled && onChange(!checked)}
-      style={{
-        width: 44,
-        height: 24,
-        borderRadius: 9999,
-        border: "none",
-        cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.4 : 1,
-        background: checked ? "#7b61ff" : "rgba(255,255,255,0.08)",
-        boxShadow: checked ? "0 0 12px rgba(123,97,255,0.4)" : "none",
-        position: "relative",
-        flexShrink: 0,
-        transition: "background 200ms, box-shadow 200ms",
-      }}
     >
-      <span style={{
-        position: "absolute",
-        top: 3,
-        left: checked ? 23 : 3,
-        width: 18,
-        height: 18,
-        borderRadius: "50%",
-        background: "#fff",
-        transition: "left 200ms",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.4)",
-      }} />
+      <span className={styles.toggleThumb} />
     </button>
   );
 }
 
-function Row({ label, description, children, isFirst }: { label: string; description: string; children: React.ReactNode; isFirst?: boolean }) {
+function SettingRow({
+  label,
+  description,
+  children,
+}: {
+  label: string;
+  description: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap: 24,
-        padding: "16px 0",
-        borderTop: isFirst ? "none" : "1px solid rgba(255,255,255,0.05)",
-      }}
-    >
-      <div>
-        <div style={{ fontFamily: "var(--font-sans)", fontSize: 13, fontWeight: 500, color: "var(--fg-0)", marginBottom: 3 }}>
-          {label}
-        </div>
-        <div style={{ fontFamily: "var(--font-sans)", fontSize: 12, color: "var(--fg-3)", lineHeight: 1.45 }}>
-          {description}
-        </div>
+    <div className={styles.settingRow}>
+      <div className={styles.settingCopy}>
+        <h3>{label}</h3>
+        <p>{description}</p>
       </div>
       {children}
     </div>
   );
 }
-
-type ByokState = { present: boolean; masked: string | null };
-type ByokError =
-  | { kind: "invalid_key" }
-  | { kind: "probe_failed" }
-  | { kind: "request_failed"; message: string };
 
 export default function SettingsPage() {
   const [localValues, setLocalValues] = useState<Record<string, boolean>>({});
@@ -120,30 +145,72 @@ export default function SettingsPage() {
   const [defaultSystemPrompt, setDefaultSystemPrompt] = useState("");
   const [savedSystemPrompt, setSavedSystemPrompt] = useState("");
   const [saving, setSaving] = useState(false);
+  const [promptError, setPromptError] = useState<string | null>(null);
   const [whoop, setWhoop] = useState<WhoopConnector | null>(null);
+  const [whoopCheckStatus, setWhoopCheckStatus] =
+    useState<WhoopCheckStatus>("loading");
   const [whoopWorking, setWhoopWorking] = useState(false);
   const [byok, setByok] = useState<ByokState>({ present: false, masked: null });
   const [byokInput, setByokInput] = useState("");
   const [byokSaving, setByokSaving] = useState(false);
   const [byokClearing, setByokClearing] = useState(false);
   const [byokError, setByokError] = useState<ByokError | null>(null);
-  const [modelPref, setModelPref] = useState<string>("anthropic:claude-sonnet-4-6");
+  const [cursorByok, setCursorByok] = useState<CursorByokState>({
+    present: false,
+    masked: null,
+    fallback_available: false,
+  });
+  const [cursorByokInput, setCursorByokInput] = useState("");
+  const [cursorByokSaving, setCursorByokSaving] = useState(false);
+  const [cursorByokClearing, setCursorByokClearing] = useState(false);
+  const [cursorByokError, setCursorByokError] = useState<ByokError | null>(
+    null,
+  );
+  const [modelPref, setModelPref] = useState(ANTHROPIC_PREF);
   const [cursorAvailable, setCursorAvailable] = useState(false);
+  const [cursorModels, setCursorModels] = useState<CursorModel[]>([]);
+  const [cursorModelsStatus, setCursorModelsStatus] =
+    useState<CursorModelCatalogStatus>("loading");
   const [modelSaving, setModelSaving] = useState(false);
+  const [modelError, setModelError] = useState<string | null>(null);
 
   const refreshWhoop = useCallback(() => {
-    // Promise chain (not async/await) so the function returns synchronously
-    // — the eslint rule react-hooks/set-state-in-effect flags only the
-    // synchronous `setState` calls during effect setup, and an unawaited
-    // chain qualifies as side-effectful, not effect-body work.
+    // Keep connector status non-blocking: the rest of Settings still works
+    // when this request is unavailable.
     fetch("/api/connectors/whoop")
-      .then((r) => (r.ok ? (r.json() as Promise<WhoopConnector>) : null))
+      .then((response) =>
+        response.ok ? (response.json() as Promise<WhoopConnector>) : null,
+      )
       .then((data) => {
-        if (data) setWhoop(data);
+        if (!data) {
+          setWhoop(null);
+          setWhoopCheckStatus("error");
+          return;
+        }
+        setWhoop(data);
+        setWhoopCheckStatus("ready");
       })
       .catch(() => {
-        // Connector status is non-critical — silent failure is fine.
+        setWhoop(null);
+        setWhoopCheckStatus("error");
       });
+  }, []);
+
+  const refreshCursorModels = useCallback(async () => {
+    setCursorModelsStatus("loading");
+    try {
+      const response = await fetch("/api/me/cursor-models");
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = (await response.json()) as {
+        status: Exclude<CursorModelCatalogStatus, "loading">;
+        models: CursorModel[];
+      };
+      setCursorModels(data.models);
+      setCursorModelsStatus(data.status);
+    } catch {
+      setCursorModels([]);
+      setCursorModelsStatus("unavailable");
+    }
   }, []);
 
   useEffect(() => {
@@ -152,89 +219,114 @@ export default function SettingsPage() {
 
   useEffect(() => {
     const loaded: Record<string, boolean> = {};
-    for (const s of LOCAL_SETTINGS) {
-      loaded[s.key] = localStorage.getItem(s.key) === "1";
+    for (const setting of LOCAL_SETTINGS) {
+      loaded[setting.key] = localStorage.getItem(setting.key) === "1";
     }
-    setLocalValues(loaded);
+    // Defer browser-only preference hydration so this effect does not perform
+    // a synchronous state update (react-hooks/set-state-in-effect).
+    queueMicrotask(() => setLocalValues(loaded));
 
     fetch("/api/settings")
-      .then((r) => r.json())
-      .then((d: {
-        system_prompt: string;
-        default_system_prompt: string;
-        model_pref?: string;
-        cursor_available?: boolean;
-      }) => {
-        setSystemPrompt(d.system_prompt);
-        setSavedSystemPrompt(d.system_prompt);
-        setDefaultSystemPrompt(d.default_system_prompt);
-        if (d.model_pref) setModelPref(d.model_pref);
-        setCursorAvailable(Boolean(d.cursor_available));
-      })
+      .then((response) =>
+        response.ok
+          ? (response.json() as Promise<{
+              system_prompt: string;
+              default_system_prompt: string;
+              model_pref?: string;
+              cursor_available?: boolean;
+            }>)
+          : null,
+      )
+      .then(
+        (data) => {
+          if (!data) return;
+          setSystemPrompt(data.system_prompt);
+          setSavedSystemPrompt(data.system_prompt);
+          setDefaultSystemPrompt(data.default_system_prompt);
+          if (data.model_pref) setModelPref(data.model_pref);
+          setCursorAvailable(Boolean(data.cursor_available));
+        },
+      )
       .catch(() => {});
 
     fetch("/api/me/anthropic-key")
-      .then((r) => (r.ok ? (r.json() as Promise<ByokState>) : null))
+      .then((response) =>
+        response.ok ? (response.json() as Promise<ByokState>) : null,
+      )
       .then((data) => {
         if (data) setByok(data);
       })
-      .catch(() => {
-        // Non-critical — UI defaults to "not set", user can still paste.
-      });
-  }, []);
+      .catch(() => {});
 
-  function toggleLocal(key: string, val: boolean) {
-    localStorage.setItem(key, val ? "1" : "0");
-    setLocalValues((prev) => ({ ...prev, [key]: val }));
+    fetch("/api/me/cursor-key")
+      .then((response) =>
+        response.ok ? (response.json() as Promise<CursorByokState>) : null,
+      )
+      .then((data) => {
+        if (!data) return;
+        setCursorByok(data);
+        if (data.present || data.fallback_available) {
+          setCursorAvailable(true);
+        }
+      })
+      .catch(() => {});
+    // Model discovery sets loading state immediately, so defer the initial
+    // invocation for the same effect-lint reason as local preference hydration.
+    queueMicrotask(() => void refreshCursorModels());
+  }, [refreshCursorModels]);
+
+  function toggleLocal(key: string, value: boolean) {
+    localStorage.setItem(key, value ? "1" : "0");
+    setLocalValues((previous) => ({ ...previous, [key]: value }));
   }
 
   const trimmedByokInput = byokInput.trim();
   const byokShapeValid =
     trimmedByokInput.startsWith("sk-ant-") && trimmedByokInput.length >= 20;
+  const trimmedCursorByokInput = cursorByokInput.trim();
+  const cursorByokShapeValid =
+    trimmedCursorByokInput.length >= 16 &&
+    !/\s/.test(trimmedCursorByokInput);
 
   async function handleByokSave() {
     if (byokSaving || !byokShapeValid) return;
     setByokSaving(true);
     setByokError(null);
     try {
-      const r = await fetch("/api/me/anthropic-key", {
+      const response = await fetch("/api/me/anthropic-key", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ key: trimmedByokInput }),
       });
-      if (!r.ok) {
-        setByokError({ kind: "request_failed", message: `HTTP ${r.status}` });
+      if (!response.ok) {
+        setByokError({
+          kind: "request_failed",
+          message: `HTTP ${response.status}`,
+        });
         return;
       }
-      const d = (await r.json()) as
+      const data = (await response.json()) as
         | { ok: true; present: true; masked: string }
-        | { ok: false; code: "invalid_key" | "invalid_request" | "probe_failed" };
-      if (d.ok === true) {
-        // POST response carries the mask, but re-fetch GET so the displayed
-        // state matches the server's read path (defense-in-depth: if a
-        // future POST returns a slightly different shape we still render
-        // truth from GET).
-        const got = await fetch("/api/me/anthropic-key");
-        if (got.ok) {
-          const fresh = (await got.json()) as ByokState;
-          setByok(fresh);
-        } else {
-          setByok({ present: d.present, masked: d.masked });
-        }
+        | {
+            ok: false;
+            code: "invalid_key" | "invalid_request" | "probe_failed";
+      };
+      if (data.ok === true) {
+        setByok({ present: data.present, masked: data.masked });
         setByokInput("");
         return;
       }
-      if (d.code === "invalid_key") {
+      if (data.code === "invalid_key") {
         setByokError({ kind: "invalid_key" });
-      } else if (d.code === "probe_failed") {
+      } else if (data.code === "probe_failed") {
         setByokError({ kind: "probe_failed" });
       } else {
-        setByokError({ kind: "request_failed", message: d.code });
+        setByokError({ kind: "request_failed", message: data.code });
       }
-    } catch (err) {
+    } catch (error) {
       setByokError({
         kind: "request_failed",
-        message: err instanceof Error ? err.message : String(err),
+        message: error instanceof Error ? error.message : String(error),
       });
     } finally {
       setByokSaving(false);
@@ -243,54 +335,174 @@ export default function SettingsPage() {
 
   async function handleByokClear() {
     if (byokClearing) return;
-    if (!confirm("Remove your personal Anthropic key? The Coach will fall back to the shared server key.")) {
+    if (
+      !confirm(
+        "Remove your personal Anthropic key? The Coach will fall back to the shared server key.",
+      )
+    ) {
       return;
     }
     setByokClearing(true);
     setByokError(null);
     try {
-      const r = await fetch("/api/me/anthropic-key", { method: "DELETE" });
-      if (!r.ok) {
-        setByokError({ kind: "request_failed", message: `HTTP ${r.status}` });
+      const response = await fetch("/api/me/anthropic-key", {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        setByokError({
+          kind: "request_failed",
+          message: `HTTP ${response.status}`,
+        });
         return;
       }
       setByok({ present: false, masked: null });
       setByokInput("");
+    } catch (error) {
+      setByokError({
+        kind: "request_failed",
+        message: error instanceof Error ? error.message : String(error),
+      });
     } finally {
       setByokClearing(false);
     }
   }
 
-  function byokErrorMessage(err: ByokError): string {
-    switch (err.kind) {
+  async function handleCursorByokSave() {
+    if (cursorByokSaving || !cursorByokShapeValid) return;
+    setCursorByokSaving(true);
+    setCursorByokError(null);
+    try {
+      const response = await fetch("/api/me/cursor-key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: trimmedCursorByokInput }),
+      });
+      if (!response.ok) {
+        setCursorByokError({
+          kind: "request_failed",
+          message: `HTTP ${response.status}`,
+        });
+        return;
+      }
+      const data = (await response.json()) as
+        | ({ ok: true } & CursorByokState)
+        | {
+            ok: false;
+            code: "invalid_key" | "invalid_request" | "probe_failed";
+          };
+      if (data.ok === true) {
+        setCursorByok(data);
+        setCursorByokInput("");
+        setCursorAvailable(true);
+        await refreshCursorModels();
+        return;
+      }
+      if (data.code === "invalid_key") {
+        setCursorByokError({ kind: "invalid_key" });
+      } else if (data.code === "probe_failed") {
+        setCursorByokError({ kind: "probe_failed" });
+      } else {
+        setCursorByokError({
+          kind: "request_failed",
+          message: data.code,
+        });
+      }
+    } catch (error) {
+      setCursorByokError({
+        kind: "request_failed",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setCursorByokSaving(false);
+    }
+  }
+
+  async function handleCursorByokClear() {
+    if (cursorByokClearing) return;
+    if (
+      !confirm(
+        "Remove your personal Cursor key? Coach will use the shared server key when available.",
+      )
+    ) {
+      return;
+    }
+    setCursorByokClearing(true);
+    setCursorByokError(null);
+    try {
+      const response = await fetch("/api/me/cursor-key", {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        setCursorByokError({
+          kind: "request_failed",
+          message: `HTTP ${response.status}`,
+        });
+        return;
+      }
+      const data = (await response.json()) as CursorByokState & {
+        model_pref: string;
+      };
+      setCursorByok(data);
+      setCursorByokInput("");
+      setCursorAvailable(data.fallback_available);
+      setModelPref(data.model_pref);
+      if (data.fallback_available) {
+        await refreshCursorModels();
+      } else {
+        setCursorModels([]);
+        setCursorModelsStatus("not_configured");
+      }
+    } catch (error) {
+      setCursorByokError({
+        kind: "request_failed",
+        message: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setCursorByokClearing(false);
+    }
+  }
+
+  function byokErrorMessage(
+    provider: "Anthropic" | "Cursor",
+    error: ByokError,
+  ): string {
+    switch (error.kind) {
       case "invalid_key":
-        return "That key was rejected by Anthropic. Double-check and try again.";
+        return `That key was rejected by ${provider}. Double-check and try again.`;
       case "probe_failed":
-        return "Couldn't reach Anthropic to verify the key. Try again in a moment.";
+        return `Couldn't reach ${provider} to verify the key. Try again in a moment.`;
       case "request_failed":
-        return `Request failed: ${err.message}`;
+        return `Request failed: ${error.message}`;
     }
   }
 
   async function saveModelPref(next: string) {
     if (next === modelPref) return;
-    const prev = modelPref;
-    setModelPref(next); // optimistic
+    const previous = modelPref;
+    setModelPref(next);
     setModelSaving(true);
+    setModelError(null);
     try {
-      const r = await fetch("/api/settings", {
+      const response = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model_pref: next }),
       });
-      if (!r.ok) {
-        setModelPref(prev);
+      if (!response.ok) {
+        setModelPref(previous);
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        setModelError(data?.error || `Couldn't save model (HTTP ${response.status}).`);
       } else {
-        const d = (await r.json()) as { model_pref?: string };
-        if (d.model_pref) setModelPref(d.model_pref);
+        const data = (await response.json()) as { model_pref?: string };
+        if (data.model_pref) setModelPref(data.model_pref);
       }
-    } catch {
-      setModelPref(prev);
+    } catch (error) {
+      setModelPref(previous);
+      setModelError(
+        error instanceof Error ? error.message : "Couldn't save model.",
+      );
     } finally {
       setModelSaving(false);
     }
@@ -298,440 +510,491 @@ export default function SettingsPage() {
 
   async function saveSystemPrompt() {
     setSaving(true);
-    const r = await fetch("/api/settings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ system_prompt: systemPrompt }),
-    });
-    const d = await r.json();
-    setSavedSystemPrompt(d.system_prompt);
-    setSaving(false);
+    setPromptError(null);
+    try {
+      const response = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ system_prompt: systemPrompt }),
+      });
+      if (!response.ok) {
+        throw new Error(`Couldn't save instructions (HTTP ${response.status}).`);
+      }
+      const data = (await response.json()) as { system_prompt: string };
+      setSavedSystemPrompt(data.system_prompt);
+    } catch (error) {
+      setPromptError(
+        error instanceof Error ? error.message : "Couldn't save instructions.",
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
-  function resetSystemPrompt() {
-    setSystemPrompt(defaultSystemPrompt);
-  }
-
-  async function handleConnectWhoop() {
-    // Connect / Reconnect both go through the same Whoop OAuth start route.
+  function handleConnectWhoop() {
     window.location.href = "/api/auth/login";
   }
 
   async function handleDisconnectWhoop() {
     if (whoopWorking) return;
-    if (!confirm("Disconnect Whoop? You'll need to reconnect to resume syncing.")) return;
+    if (
+      !confirm(
+        "Disconnect Whoop? You'll need to reconnect to resume syncing.",
+      )
+    ) {
+      return;
+    }
     setWhoopWorking(true);
     try {
-      await fetch("/api/auth/whoop/disconnect", { method: "POST" });
-      await refreshWhoop();
+      const response = await fetch("/api/auth/whoop/disconnect", {
+        method: "POST",
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      refreshWhoop();
+    } catch {
+      setWhoopCheckStatus("error");
     } finally {
       setWhoopWorking(false);
     }
   }
 
-  function handleLogoutSubmit(e: React.FormEvent<HTMLFormElement>) {
-    // POST-only logout: a GET would let any cross-origin link prefetch log
-    // the user out. Confirm-then-submit keeps the destructive-button UX.
+  function handleLogoutSubmit(event: React.FormEvent<HTMLFormElement>) {
     if (!confirm("Sign out?")) {
-      e.preventDefault();
+      event.preventDefault();
     }
   }
 
   const promptDirty = systemPrompt !== savedSystemPrompt;
   const whoopStatus = whoop?.status ?? "disconnected";
   const whoopCopy = CONNECTOR_STATUS_COPY[whoopStatus];
+  const selectedCursorModel = modelPref.startsWith("cursor:")
+    ? modelPref.slice("cursor:".length)
+    : null;
+  const selectedCursorModelIsMissing =
+    selectedCursorModel !== null &&
+    !cursorModels.some((model) => model.id === selectedCursorModel);
+  const modelDescription =
+    modelError ?? CURSOR_MODEL_STATUS_COPY[cursorModelsStatus];
 
   return (
-    <div style={{ maxWidth: 720, display: "flex", flexDirection: "column", gap: 18 }}>
-      <div className="card">
-        <div className="card-head">
-          <div className="card-title">Connectors</div>
-        </div>
-        <div style={{ paddingTop: 12 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 16,
-              padding: "12px 14px",
-              background: "rgba(0,0,0,0.2)",
-              border: "1px solid rgba(255,255,255,0.06)",
-              borderRadius: 8,
-            }}
-          >
-            <div style={{ display: "flex", flexDirection: "column", gap: 4, minWidth: 0 }}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  fontFamily: "var(--font-sans)",
-                  fontSize: 13,
-                  fontWeight: 500,
-                  color: "var(--fg-0)",
-                }}
-              >
-                Whoop
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                    fontSize: 11,
-                    fontWeight: 400,
-                    color: whoopCopy.color,
-                  }}
-                >
-                  <span
-                    aria-hidden
-                    style={{
-                      display: "inline-block",
-                      width: 7,
-                      height: 7,
-                      borderRadius: "50%",
-                      background: whoopCopy.color,
-                    }}
-                  />
-                  {whoopCopy.label}
+    <div className={styles.settingsPage}>
+      <header className={styles.pageIntro}>
+        <p className={styles.eyebrow}>Your workspace</p>
+        <h2>One place to shape how Coach works for you.</h2>
+        <p className={styles.introCopy}>
+          Manage your data source, Coach behavior, and personal preferences
+          without digging through separate setup screens.
+        </p>
+      </header>
+
+      <div className={styles.settingsSurface}>
+        <section className={styles.settingsSection}>
+          <div className={styles.sectionIntro}>
+            <span className={styles.sectionIcon}>
+              <Activity aria-hidden size={18} />
+            </span>
+            <div>
+              <h2>Connections</h2>
+              <p>Control the health data that flows into your dashboard.</p>
+            </div>
+          </div>
+
+          <div className={styles.sectionBody}>
+            <div className={styles.connectorRow}>
+              <div className={styles.connectorIdentity}>
+                <span className={styles.whoopMark} aria-hidden>
+                  W
                 </span>
+                <div>
+                  <div className={styles.connectorTitle}>
+                    <h3>Whoop</h3>
+                    <span
+                      className={`${styles.status} ${styles[whoopCopy.tone]}`}
+                    >
+                      <span className={styles.statusDot} aria-hidden />
+                      {whoopCheckStatus === "loading"
+                        ? "Checking"
+                        : whoopCheckStatus === "error"
+                          ? "Unavailable"
+                          : whoopCopy.label}
+                    </span>
+                  </div>
+                  <p className={styles.connectorMeta}>
+                    {whoopCheckStatus === "error"
+                      ? "Couldn't load connection status. Try again."
+                      : whoop
+                      ? whoop.last_sync_at
+                        ? `Last sync ${formatRelative(whoop.last_sync_at)}`
+                        : "Ready for the first sync"
+                      : "Checking connection status…"}
+                  </p>
+                </div>
               </div>
-              <div style={{ fontFamily: "var(--font-sans)", fontSize: 11, color: "var(--fg-3)" }}>
-                {whoop
-                  ? whoop.last_sync_at
-                    ? `Last sync ${formatRelative(whoop.last_sync_at)}`
-                    : "No sync yet"
-                  : "Loading…"}
-                {whoop?.expires_at && whoopStatus !== "disconnected" && (
+
+              <div className={styles.actionGroup}>
+                {whoopCheckStatus === "error" ? (
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={() => {
+                      setWhoopCheckStatus("loading");
+                      refreshWhoop();
+                    }}
+                  >
+                    Retry
+                  </button>
+                ) : whoopStatus !== "disconnected" ? (
                   <>
-                    {" · "}token{" "}
-                    {formatRelative(whoop.expires_at)?.replace("ago", "old")}
+                    <button
+                      type="button"
+                      className={styles.secondaryButton}
+                      onClick={handleConnectWhoop}
+                      data-track="whoop:reconnect"
+                    >
+                      Reconnect
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.dangerButton}
+                      onClick={handleDisconnectWhoop}
+                      disabled={whoopWorking}
+                      data-track="whoop:disconnect"
+                    >
+                      {whoopWorking ? "Disconnecting…" : "Disconnect"}
+                    </button>
                   </>
+                ) : (
+                  <button
+                    type="button"
+                    className={styles.primaryButton}
+                    onClick={handleConnectWhoop}
+                    data-track="whoop:connect"
+                  >
+                    Connect Whoop
+                  </button>
                 )}
               </div>
             </div>
-            <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
-              {whoopStatus !== "disconnected" ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={handleConnectWhoop}
-                    data-track="whoop:reconnect"
-                    style={{
-                      background: "rgba(255,255,255,0.08)",
-                      border: "1px solid rgba(255,255,255,0.1)",
-                      color: "var(--fg-0)",
-                      padding: "6px 12px",
-                      borderRadius: 6,
-                      fontSize: 12,
-                      fontFamily: "var(--font-sans)",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Reconnect
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDisconnectWhoop}
-                    disabled={whoopWorking}
-                    data-track="whoop:disconnect"
-                    style={{
-                      background: "transparent",
-                      border: "1px solid rgba(255,80,80,0.3)",
-                      color: "#ff8b8b",
-                      padding: "6px 12px",
-                      borderRadius: 6,
-                      fontSize: 12,
-                      fontFamily: "var(--font-sans)",
-                      cursor: whoopWorking ? "wait" : "pointer",
-                      opacity: whoopWorking ? 0.5 : 1,
-                    }}
-                  >
-                    Disconnect
-                  </button>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleConnectWhoop}
-                  data-track="whoop:connect"
-                  style={{
-                    background: "#7b61ff",
-                    border: "none",
-                    color: "#fff",
-                    padding: "6px 14px",
-                    borderRadius: 6,
-                    fontSize: 12,
-                    fontFamily: "var(--font-sans)",
-                    cursor: "pointer",
-                  }}
+          </div>
+        </section>
+
+        <section className={styles.settingsSection}>
+          <div className={styles.sectionIntro}>
+            <span className={`${styles.sectionIcon} ${styles.coachIcon}`}>
+              <BrainCircuit aria-hidden size={18} />
+            </span>
+            <div>
+              <h2>Coach</h2>
+              <p>Choose the intelligence, access, and voice behind each reply.</p>
+            </div>
+          </div>
+
+          <div className={styles.sectionBody}>
+            <SettingRow
+              label="Model"
+              description={modelDescription}
+            >
+              <select
+                className={styles.select}
+                value={modelPref}
+                disabled={modelSaving}
+                aria-label="Coach model"
+                onChange={(event) => saveModelPref(event.target.value)}
+              >
+                <option value="anthropic:claude-sonnet-4-6">
+                  Claude Sonnet 4.6
+                </option>
+                {cursorModels.map((model) => (
+                  <option key={model.id} value={`cursor:${model.id}`}>
+                    Cursor — {model.display_name}
+                  </option>
+                ))}
+                {cursorAvailable && selectedCursorModelIsMissing && (
+                  <option value={`cursor:${selectedCursorModel}`}>
+                    Cursor — {selectedCursorModel} (saved)
+                  </option>
+                )}
+              </select>
+            </SettingRow>
+
+            <div className={styles.divider} />
+
+            <div className={styles.stackedSetting} id="coach-byok">
+              <div className={styles.stackedHeader}>
+                <div className={styles.settingCopy}>
+                  <div className={styles.labelWithIcon}>
+                    <KeyRound aria-hidden size={15} />
+                    <h3>Anthropic access</h3>
+                  </div>
+                  <p>
+                    {byok.present
+                      ? "Coach is using your encrypted personal API key."
+                      : "Coach is currently using the shared server key."}
+                  </p>
+                </div>
+                <span
+                  className={`${styles.sourceBadge} ${
+                    byok.present ? styles.sourcePersonal : ""
+                  }`}
                 >
-                  Connect
-                </button>
+                  {byok.present ? "Personal key" : "Shared key"}
+                </span>
+              </div>
+
+              {byok.present ? (
+                <div className={styles.inlineControl}>
+                  <code className={styles.maskedKey}>{byok.masked}</code>
+                  <button
+                    type="button"
+                    className={styles.dangerButton}
+                    onClick={handleByokClear}
+                    disabled={byokClearing}
+                    data-track="settings:byok-clear"
+                  >
+                    {byokClearing ? "Removing…" : "Remove key"}
+                  </button>
+                </div>
+              ) : (
+                <div className={styles.inlineControl}>
+                  <input
+                    className={styles.textInput}
+                    type="password"
+                    value={byokInput}
+                    onChange={(event) => {
+                      setByokInput(event.target.value);
+                      if (byokError) setByokError(null);
+                    }}
+                    placeholder="Paste sk-ant-…"
+                    aria-label="Personal Anthropic API key"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    className={styles.primaryButton}
+                    onClick={handleByokSave}
+                    disabled={!byokShapeValid || byokSaving}
+                    data-track="settings:byok-save"
+                  >
+                    {byokSaving ? "Verifying…" : "Use this key"}
+                  </button>
+                </div>
+              )}
+
+              {byokError && (
+                <p className={styles.errorMessage} role="alert">
+                  {byokErrorMessage("Anthropic", byokError)}
+                </p>
+              )}
+              <p className={styles.privacyNote}>
+                Your key is encrypted at rest and never shown again after it is
+                saved.
+              </p>
+            </div>
+
+            <div className={styles.divider} />
+
+            <div className={styles.stackedSetting} id="coach-cursor-byok">
+              <div className={styles.stackedHeader}>
+                <div className={styles.settingCopy}>
+                  <div className={styles.labelWithIcon}>
+                    <KeyRound aria-hidden size={15} />
+                    <h3>Cursor access</h3>
+                  </div>
+                  <p>
+                    {cursorByok.present
+                      ? "Composer is using your encrypted personal API key."
+                      : cursorByok.fallback_available
+                        ? "Composer is currently using the shared server key."
+                        : "Add a personal key to enable Cursor Composer."}
+                  </p>
+                </div>
+                <span
+                  className={`${styles.sourceBadge} ${
+                    cursorByok.present ? styles.sourcePersonal : ""
+                  }`}
+                >
+                  {cursorByok.present
+                    ? "Personal key"
+                    : cursorByok.fallback_available
+                      ? "Shared key"
+                      : "Not configured"}
+                </span>
+              </div>
+
+              {cursorByok.present ? (
+                <div className={styles.inlineControl}>
+                  <code className={styles.maskedKey}>{cursorByok.masked}</code>
+                  <button
+                    type="button"
+                    className={styles.dangerButton}
+                    onClick={handleCursorByokClear}
+                    disabled={cursorByokClearing}
+                    data-track="settings:cursor-byok-clear"
+                  >
+                    {cursorByokClearing ? "Removing…" : "Remove key"}
+                  </button>
+                </div>
+              ) : (
+                <div className={styles.inlineControl}>
+                  <input
+                    className={styles.textInput}
+                    type="password"
+                    value={cursorByokInput}
+                    onChange={(event) => {
+                      setCursorByokInput(event.target.value);
+                      if (cursorByokError) setCursorByokError(null);
+                    }}
+                    placeholder="Paste Cursor API key"
+                    aria-label="Personal Cursor API key"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <button
+                    type="button"
+                    className={styles.primaryButton}
+                    onClick={handleCursorByokSave}
+                    disabled={!cursorByokShapeValid || cursorByokSaving}
+                    data-track="settings:cursor-byok-save"
+                  >
+                    {cursorByokSaving ? "Verifying…" : "Use this key"}
+                  </button>
+                </div>
+              )}
+
+              {cursorByokError && (
+                <p className={styles.errorMessage} role="alert">
+                  {byokErrorMessage("Cursor", cursorByokError)}
+                </p>
+              )}
+              <p className={styles.privacyNote}>
+                Your key is verified without a model turn, then encrypted at
+                rest.
+              </p>
+            </div>
+
+            <div className={styles.divider} />
+
+            <div className={styles.stackedSetting}>
+              <div className={styles.stackedHeader}>
+                <div className={styles.settingCopy}>
+                  <h3>Instructions</h3>
+                  <p>
+                    Give Coach persistent context about how you want it to
+                    think and respond.
+                  </p>
+                </div>
+                <span className={styles.saveState} aria-live="polite">
+                  {saving
+                    ? "Saving…"
+                    : promptError
+                      ? "Save failed"
+                      : promptDirty
+                        ? "Unsaved changes"
+                        : "Saved"}
+                </span>
+              </div>
+              <textarea
+                className={styles.promptInput}
+                value={systemPrompt}
+                onChange={(event) => setSystemPrompt(event.target.value)}
+                aria-label="Coach instructions"
+                spellCheck={false}
+              />
+              <div className={styles.promptActions}>
+                <span>Changes apply to your next message.</span>
+                <div className={styles.actionGroup}>
+                  <button
+                    type="button"
+                    className={styles.secondaryButton}
+                    onClick={() => setSystemPrompt(defaultSystemPrompt)}
+                    disabled={systemPrompt === defaultSystemPrompt}
+                  >
+                    Reset
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.primaryButton}
+                    onClick={saveSystemPrompt}
+                    disabled={!promptDirty || saving}
+                  >
+                    {saving ? "Saving…" : "Save changes"}
+                  </button>
+                </div>
+              </div>
+              {promptError && (
+                <p className={styles.errorMessage} role="alert">
+                  {promptError}
+                </p>
               )}
             </div>
           </div>
-        </div>
-      </div>
+        </section>
 
-      <div className="card" id="coach-byok">
-        <div className="card-head">
-          <div className="card-title">Coach API key</div>
-        </div>
-        <div style={{ paddingTop: 12, display: "flex", flexDirection: "column", gap: 12 }}>
-          {byok.present ? (
-            <>
-              <div
-                style={{
-                  fontFamily: "var(--font-sans)",
-                  fontSize: 12,
-                  color: "var(--fg-2)",
-                  lineHeight: 1.55,
-                }}
-              >
-                Using your personal key (<code style={{ fontFamily: "var(--font-mono)" }}>{byok.masked}</code>).
-              </div>
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button
-                  type="button"
-                  onClick={handleByokClear}
-                  disabled={byokClearing}
-                  data-track="settings:byok-clear"
-                  style={{
-                    background: "transparent",
-                    border: "1px solid rgba(255,80,80,0.3)",
-                    color: "#ff8b8b",
-                    padding: "6px 14px",
-                    borderRadius: 6,
-                    fontSize: 12,
-                    fontFamily: "var(--font-sans)",
-                    cursor: byokClearing ? "wait" : "pointer",
-                    opacity: byokClearing ? 0.5 : 1,
-                  }}
-                >
-                  {byokClearing ? "Removing…" : "Remove key"}
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <div
-                style={{
-                  fontFamily: "var(--font-sans)",
-                  fontSize: 12,
-                  color: "var(--fg-2)",
-                  lineHeight: 1.55,
-                }}
-              >
-                Using shared server key. Paste your own <code style={{ fontFamily: "var(--font-mono)" }}>sk-ant-…</code> key to override.
-              </div>
-              <input
-                type="password"
-                value={byokInput}
-                onChange={(e) => {
-                  setByokInput(e.target.value);
-                  if (byokError) setByokError(null);
-                }}
-                placeholder="sk-ant-…"
-                autoComplete="off"
-                spellCheck={false}
-                style={{
-                  width: "100%",
-                  background: "rgba(0,0,0,0.25)",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  borderRadius: 8,
-                  padding: "10px 12px",
-                  color: "var(--fg-0)",
-                  fontFamily: "var(--font-mono)",
-                  fontSize: 12,
-                  outline: "none",
-                }}
-              />
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <button
-                  type="button"
-                  onClick={handleByokSave}
-                  disabled={!byokShapeValid || byokSaving}
-                  data-track="settings:byok-save"
-                  style={{
-                    background: byokShapeValid && !byokSaving ? "#7b61ff" : "rgba(255,255,255,0.08)",
-                    border: "none",
-                    color: byokShapeValid && !byokSaving ? "#fff" : "var(--fg-3)",
-                    padding: "6px 14px",
-                    borderRadius: 6,
-                    fontSize: 12,
-                    cursor: byokShapeValid && !byokSaving ? "pointer" : "default",
-                    fontFamily: "var(--font-sans)",
-                  }}
-                >
-                  {byokSaving ? "Verifying…" : "Save key"}
-                </button>
-              </div>
-            </>
-          )}
-          {byokError ? (
-            <div
-              role="alert"
-              style={{
-                fontFamily: "var(--font-sans)",
-                fontSize: 12,
-                color: "#ff8b8b",
-                lineHeight: 1.5,
-              }}
-            >
-              {byokErrorMessage(byokError)}
+        <section className={styles.settingsSection}>
+          <div className={styles.sectionIntro}>
+            <span className={styles.sectionIcon}>
+              <SlidersHorizontal aria-hidden size={18} />
+            </span>
+            <div>
+              <h2>Preferences</h2>
+              <p>Tune how the dashboard presents your data on this device.</p>
             </div>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-head" style={{ alignItems: "center" }}>
-          <div className="card-title">System prompt</div>
-          <span className="card-sub">Edits apply to the next message</span>
-        </div>
-        <div style={{ paddingTop: 12 }}>
-          <textarea
-            value={systemPrompt}
-            onChange={(e) => setSystemPrompt(e.target.value)}
-            spellCheck={false}
-            style={{
-              width: "100%",
-              minHeight: 220,
-              background: "rgba(0,0,0,0.25)",
-              border: "1px solid rgba(255,255,255,0.08)",
-              borderRadius: 8,
-              padding: "12px 14px",
-              color: "var(--fg-0)",
-              fontFamily: "var(--font-mono)",
-              fontSize: 12,
-              lineHeight: 1.55,
-              resize: "vertical",
-              outline: "none",
-            }}
-          />
-          <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center", justifyContent: "flex-end" }}>
-            <button
-              onClick={resetSystemPrompt}
-              disabled={systemPrompt === defaultSystemPrompt}
-              style={{
-                background: "none",
-                border: "1px solid rgba(255,255,255,0.1)",
-                color: "var(--fg-2)",
-                padding: "6px 14px",
-                borderRadius: 6,
-                fontSize: 12,
-                cursor: systemPrompt === defaultSystemPrompt ? "default" : "pointer",
-                opacity: systemPrompt === defaultSystemPrompt ? 0.4 : 1,
-                fontFamily: "var(--font-sans)",
-              }}
-            >
-              Reset to default
-            </button>
-            <button
-              onClick={saveSystemPrompt}
-              disabled={!promptDirty || saving}
-              style={{
-                background: promptDirty ? "#7b61ff" : "rgba(255,255,255,0.08)",
-                border: "none",
-                color: promptDirty ? "#fff" : "var(--fg-3)",
-                padding: "6px 14px",
-                borderRadius: 6,
-                fontSize: 12,
-                cursor: promptDirty && !saving ? "pointer" : "default",
-                fontFamily: "var(--font-sans)",
-              }}
-            >
-              {saving ? "Saving…" : promptDirty ? "Save changes" : "Saved"}
-            </button>
           </div>
-        </div>
-      </div>
 
-      <div className="card">
-        <div className="card-head">
-          <div className="card-title">Coach model</div>
-          <span className="card-sub">Which model answers in the coach</span>
-        </div>
-        <Row
-          isFirst
-          label="Model"
-          description={
-            cursorAvailable
-              ? "Claude is the default. Cursor Composer is experimental."
-              : "Cursor Composer is unavailable on this server."
-          }
-        >
-          <select
-            value={modelPref}
-            disabled={modelSaving}
-            onChange={(e) => saveModelPref(e.target.value)}
-            style={{
-              background: "rgba(0,0,0,0.25)",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: 6,
-              color: "var(--fg-0)",
-              padding: "6px 10px",
-              fontSize: 12,
-              fontFamily: "var(--font-sans)",
-              cursor: modelSaving ? "default" : "pointer",
-              outline: "none",
-            }}
-          >
-            <option value="anthropic:claude-sonnet-4-6">
-              Claude Sonnet 4.6 (default)
-            </option>
-            {cursorAvailable && (
-              <option value="cursor:composer-2.5-fast">
-                Cursor Composer 2.5 Fast (experimental)
-              </option>
-            )}
-          </select>
-        </Row>
-      </div>
+          <div className={styles.sectionBody}>
+            {LOCAL_SETTINGS.map((setting) => (
+              <SettingRow
+                key={setting.key}
+                label={setting.label}
+                description={setting.description}
+              >
+                <Toggle
+                  label={`Toggle ${setting.label.toLowerCase()}`}
+                  checked={Boolean(localValues[setting.key])}
+                  onChange={(value) => toggleLocal(setting.key, value)}
+                />
+              </SettingRow>
+            ))}
+          </div>
+        </section>
 
-      <div className="card">
-        <div className="card-head">
-          <div className="card-title">Chart preferences</div>
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-          {LOCAL_SETTINGS.map((s, i) => (
-            <Row key={s.key} isFirst={i === 0} label={s.label} description={s.description}>
-              <Toggle checked={!!localValues[s.key]} onChange={(v) => toggleLocal(s.key, v)} />
-            </Row>
-          ))}
-        </div>
-      </div>
+        <section className={styles.settingsSection}>
+          <div className={styles.sectionIntro}>
+            <span className={styles.sectionIcon}>
+              <UserRound aria-hidden size={18} />
+            </span>
+            <div>
+              <h2>Account</h2>
+              <p>Manage access to this dashboard.</p>
+            </div>
+          </div>
 
-      <div className="card">
-        <div className="card-head">
-          <div className="card-title">Account</div>
-        </div>
-        <Row isFirst label="Sign out" description="Clear your session cookie and return to the sign-in page.">
-          <form
-            method="post"
-            action="/api/auth/logout"
-            onSubmit={handleLogoutSubmit}
-            style={{ margin: 0 }}
-          >
-            <button
-              type="submit"
-              data-track="auth:signout"
-              style={{
-                background: "transparent",
-                border: "1px solid rgba(255,80,80,0.3)",
-                color: "#ff8b8b",
-                padding: "6px 14px",
-                borderRadius: 6,
-                fontSize: 12,
-                fontFamily: "var(--font-sans)",
-                cursor: "pointer",
-              }}
+          <div className={styles.sectionBody}>
+            <SettingRow
+              label="Sign out"
+              description="Clear your session on this device and return to sign in."
             >
-              Sign out
-            </button>
-          </form>
-        </Row>
+              <form
+                method="post"
+                action="/api/auth/logout"
+                onSubmit={handleLogoutSubmit}
+                className={styles.signoutForm}
+              >
+                <button
+                  type="submit"
+                  className={styles.dangerButton}
+                  data-track="auth:signout"
+                >
+                  <LogOut aria-hidden size={14} />
+                  Sign out
+                </button>
+              </form>
+            </SettingRow>
+          </div>
+        </section>
       </div>
     </div>
   );

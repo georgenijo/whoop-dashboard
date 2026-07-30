@@ -9,3 +9,9 @@ export function maskAnthropicKey(key: string): string {
   const tail = key.slice(-4);
   return `sk-ant-…${tail}`;
 }
+
+/** Display-safe Cursor key rendering. Never returns the cleartext key. */
+export function maskCursorKey(key: string): string {
+  const tail = key.slice(-4);
+  return `••••…${tail}`;
+}

@@ -30,7 +30,13 @@ vi.mock("./tools", () => ({
 }));
 vi.mock("./cursor-key", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./cursor-key")>();
-  return { ...actual, resolveCursorKey: vi.fn(() => "cursor-test-key") };
+  return {
+    ...actual,
+    resolveCursorKey: vi.fn(() => ({
+      key: "cursor-test-key",
+      origin: "user",
+    })),
+  };
 });
 
 import {
@@ -62,6 +68,7 @@ function baseArgs(
   detailState: DetailState,
   onTextDelta = vi.fn(),
   signal?: AbortSignal,
+  model = CURSOR_COMPOSER_MODEL,
 ) {
   const usage: Usage = {
     input_tokens_total: 0,
@@ -72,6 +79,7 @@ function baseArgs(
   };
   return {
     userId: 1,
+    model,
     threadId: 10,
     newUserText: "How am I doing?",
     conversation: [
@@ -168,8 +176,11 @@ describe("runCursorTurn Cursor lifecycle details", () => {
     spawnMock.mockReturnValue(child);
     const detailState: DetailState = { iterations: 0 };
     const onTextDelta = vi.fn();
+    const selectedModel = "gpt-5.5-high";
 
-    const turn = runCursorTurn(baseArgs(detailState, onTextDelta));
+    const turn = runCursorTurn(
+      baseArgs(detailState, onTextDelta, undefined, selectedModel),
+    );
     await waitForSpawn();
 
     child.stdout.write(
@@ -250,7 +261,7 @@ describe("runCursorTurn Cursor lifecycle details", () => {
 
     const cursor = detailState.cursor;
     expect(cursor).toBeDefined();
-    expect(cursor?.requested_model).toBe(CURSOR_COMPOSER_MODEL);
+    expect(cursor?.requested_model).toBe(selectedModel);
     expect(cursor?.resolved_model).toBe("composer-2.5-resolved");
     expect(cursor?.prefetch).toMatchObject({
       attempted: true,
@@ -266,6 +277,7 @@ describe("runCursorTurn Cursor lifecycle details", () => {
       expect.objectContaining({ userId: 1 }),
     );
     const spawnArgs = spawnMock.mock.calls[0]?.[1] as string[];
+    expect(spawnArgs[spawnArgs.indexOf("--model") + 1]).toBe(selectedModel);
     expect(spawnArgs.at(-1)).toContain("Preloaded authoritative Whoop data");
     expect(cursor?.terminal_seen).toBe(true);
     expect(cursor?.terminal_subtype).toBe("success");

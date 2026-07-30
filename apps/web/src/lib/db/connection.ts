@@ -229,14 +229,16 @@ export function openWrite(): DB | null {
       -- Per-provider lookup for the Phase C sync orchestrator (iterate every
       -- user with a Whoop integration, schedule a refresh).
       CREATE INDEX IF NOT EXISTS idx_integrations_provider ON integrations(provider);
-      -- Per-user app preferences. Single typed row per user. anthropic_key
-      -- is encrypted via NaCl secretbox (same key/key_version scheme as
+      -- Per-user app preferences. Single typed row per user. Provider keys
+      -- are encrypted via NaCl secretbox (same key/key_version scheme as
       -- integrations); NULL means "use server fallback". Other columns are
       -- plaintext and nullable until the user sets a preference.
       CREATE TABLE IF NOT EXISTS user_settings (
         user_id INTEGER PRIMARY KEY REFERENCES users(id),
         anthropic_key TEXT,
         anthropic_key_version INTEGER,
+        cursor_key TEXT,
+        cursor_key_version INTEGER,
         model_pref TEXT,
         timezone TEXT,
         monthly_token_cap INTEGER,
@@ -481,6 +483,14 @@ export function openWrite(): DB | null {
     }
     if (!userSettingsCols.some((c) => c.name === "tz")) {
       db.exec("ALTER TABLE user_settings ADD COLUMN tz TEXT");
+    }
+    // Cursor BYOK — encrypted exactly like anthropic_key. Existing rows remain
+    // NULL and continue to use the shared CURSOR_API_KEY fallback.
+    if (!userSettingsCols.some((c) => c.name === "cursor_key")) {
+      db.exec("ALTER TABLE user_settings ADD COLUMN cursor_key TEXT");
+    }
+    if (!userSettingsCols.some((c) => c.name === "cursor_key_version")) {
+      db.exec("ALTER TABLE user_settings ADD COLUMN cursor_key_version INTEGER");
     }
 
     // Phase D — data isolation. Add `user_id` to the five domain tables so

@@ -20,7 +20,6 @@ import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { getUserSettings, type ChatMessageInsert } from "@/lib/db";
 import { dbPath } from "@/lib/db/connection";
 import { buildCursorSystemPrompt } from "./prompts";
-import { CURSOR_COMPOSER_MODEL } from "./provider";
 import { CursorAgentError, resolveCursorKey } from "./cursor-key";
 import type { DetailState, RunAnthropicOptions, Usage } from "./loop";
 import {
@@ -132,6 +131,7 @@ function resolveMcpServerArgs(): string[] {
 
 export type RunCursorTurnArgs = {
   userId: number;
+  model: string;
   threadId: number;
   newUserText: string;
   conversation: MessageParam[];
@@ -464,8 +464,16 @@ export async function runCursorTurn(
 ): Promise<RunCursorTurnResult> {
   args.options.signal?.throwIfAborted();
   const turnStartedMs = Date.now();
-  const { userId, newUserText, conversation, toolDetails, detailState, options } = args;
-  const key = resolveCursorKey();
+  const {
+    userId,
+    model,
+    newUserText,
+    conversation,
+    toolDetails,
+    detailState,
+    options,
+  } = args;
+  const { key, origin: keyOrigin } = resolveCursorKey(userId);
   const messages: ChatMessageInsert[] = args.accumulator ?? [];
 
   // The user turn, persisted in the same shape as the Anthropic path.
@@ -513,7 +521,7 @@ export async function runCursorTurn(
   );
   const promptBuildMs = Date.now() - promptStartedMs;
   const cursorDetail = {
-    requested_model: CURSOR_COMPOSER_MODEL,
+    requested_model: model,
     resolved_model: null as string | null,
     prompt_chars: prompt.length,
     prefetch: {
@@ -578,7 +586,7 @@ export async function runCursorTurn(
         CURSOR_AGENT_BIN,
         [
           "-p",
-          "--model", CURSOR_COMPOSER_MODEL,
+          "--model", model,
           "--mode", "ask",
           "--approve-mcps",
           "--trust",
@@ -920,6 +928,7 @@ export async function runCursorTurn(
         auth
           ? "Cursor API key rejected"
           : `cursor-agent exited ${exitInfo.code}: ${stderr.slice(0, 200)}`,
+        auth ? keyOrigin : undefined,
       );
     }
 

@@ -17,8 +17,13 @@ function resolveBuildSha(): string {
   }
 }
 
+const allowedDevOrigins = process.env.COACH_DEV_ORIGINS?.split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const nextConfig: NextConfig = {
   devIndicators: false,
+  allowedDevOrigins,
   env: {
     COACH_BUILD_SHA: resolveBuildSha(),
     COACH_BUILD_TIME: new Date().toISOString(),

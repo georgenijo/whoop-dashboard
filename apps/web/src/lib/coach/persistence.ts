@@ -96,6 +96,7 @@ export async function runAndPersistCoachTurn(
       selection.provider === "cursor"
         ? await runCursorTurn({
             userId,
+            model: selection.model,
             threadId: thread.id,
             newUserText: lastUser,
             conversation,

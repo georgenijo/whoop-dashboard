@@ -1,13 +1,12 @@
 import "server-only";
 // Per-user application preferences. Single row per user, lazy-created on
 // first upsert. Mirrors the `integrations` table's encryption strategy:
-// `anthropic_key` is symmetric-encrypted with VAULT_KEY (NaCl secretbox)
-// and tagged with `anthropic_key_version` so future key rotations don't
-// silently produce undecryptable garbage.
+// Provider API keys are symmetric-encrypted with VAULT_KEY (NaCl secretbox)
+// and tagged with a key-version column so future rotations don't silently
+// produce undecryptable garbage.
 //
-// NULL `anthropic_key` is meaningful: it means "use server fallback"
-// (BYOK opt-out). A row may exist with anthropic_key=NULL and model_pref
-// set — that's the common case once Settings UI lands.
+// NULL provider keys are meaningful: they mean "use server fallback" (BYOK
+// opt-out). A row may exist with both keys NULL and model_pref set.
 
 import {
   CURRENT_KEY_VERSION,
@@ -22,6 +21,7 @@ import { hasTable, openWrite, type DB } from "./connection";
 export type UserSettings = {
   user_id: number;
   anthropic_key: string | null;
+  cursor_key: string | null;
   model_pref: string | null;
   timezone: string | null;
   monthly_token_cap: number | null;
@@ -35,6 +35,7 @@ export type UserSettingsInput = {
   user_id: number;
   // `undefined` = leave existing column untouched. `null` = clear the column.
   anthropic_key?: string | null;
+  cursor_key?: string | null;
   model_pref?: string | null;
   timezone?: string | null;
   monthly_token_cap?: number | null;
@@ -63,6 +64,8 @@ function ensureUserSettingsTable(db: DB): void {
       user_id INTEGER PRIMARY KEY REFERENCES users(id),
       anthropic_key TEXT,
       anthropic_key_version INTEGER,
+      cursor_key TEXT,
+      cursor_key_version INTEGER,
       model_pref TEXT,
       timezone TEXT,
       monthly_token_cap INTEGER,
@@ -85,6 +88,8 @@ type UserSettingsRowRaw = {
   user_id: number;
   anthropic_key: string | null;
   anthropic_key_version: number | null;
+  cursor_key: string | null;
+  cursor_key_version: number | null;
   model_pref: string | null;
   timezone: string | null;
   monthly_token_cap: number | null;
@@ -95,13 +100,12 @@ type UserSettingsRowRaw = {
 };
 
 /**
- * Returns the user's settings row with `anthropic_key` decrypted, or null
- * if no row exists for this user_id.
+ * Returns the user's settings row with provider keys decrypted, or null if no
+ * row exists for this user_id.
  *
- * Returns the row but with `anthropic_key = null` if decryption fails
- * (missing/wrong VAULT_KEY, unsupported key_version, tampered ciphertext).
- * The non-secret columns are still returned so the UI can render model_pref
- * etc. without locking up on a key issue. Errors are logged server-side.
+ * A provider key is returned as null if its decryption fails (missing/wrong
+ * VAULT_KEY, unsupported key_version, tampered ciphertext). Other columns and
+ * independently valid keys still surface. Errors are logged server-side.
  */
 export function getUserSettings(user_id: number): UserSettings | null {
   const db = openWrite();
@@ -111,9 +115,9 @@ export function getUserSettings(user_id: number): UserSettings | null {
     const row = db
       .prepare(
         `
-        SELECT user_id, anthropic_key, anthropic_key_version, model_pref,
-               timezone, monthly_token_cap, coach_goals, onboarded_at, tz,
-               updated_at
+        SELECT user_id, anthropic_key, anthropic_key_version, cursor_key,
+               cursor_key_version, model_pref, timezone, monthly_token_cap,
+               coach_goals, onboarded_at, tz, updated_at
         FROM user_settings
         WHERE user_id = ?
         `
@@ -135,6 +139,26 @@ export function getUserSettings(user_id: number): UserSettings | null {
             `[user_settings] anthropic_key decrypt failed for user_id=${user_id}: ${err.message}`
           );
           decryptedAnthropic = null;
+        } else {
+          throw err;
+        }
+      }
+    }
+
+    let decryptedCursor: string | null = null;
+    if (row.cursor_key !== null) {
+      try {
+        assertKeyVersionSupported(row.cursor_key_version ?? 0);
+        decryptedCursor = decrypt(row.cursor_key);
+      } catch (err) {
+        if (
+          err instanceof VaultDecryptError ||
+          err instanceof VaultMissingKeyError
+        ) {
+          console.error(
+            `[user_settings] cursor_key decrypt failed for user_id=${user_id}: ${err.message}`
+          );
+          decryptedCursor = null;
         } else {
           throw err;
         }
@@ -172,6 +196,7 @@ export function getUserSettings(user_id: number): UserSettings | null {
     return {
       user_id: row.user_id,
       anthropic_key: decryptedAnthropic,
+      cursor_key: decryptedCursor,
       model_pref: row.model_pref,
       timezone: row.timezone,
       monthly_token_cap: row.monthly_token_cap,
@@ -189,13 +214,13 @@ export function getUserSettings(user_id: number): UserSettings | null {
  * Insert-or-update the row. Columns absent from `input` are left as-is on
  * existing rows; on first insert they default to NULL.
  *
- * `anthropic_key`:
+ * `anthropic_key` / `cursor_key`:
  *   - `undefined` → leave the column unchanged
  *   - `null`      → clear the column (and key_version)
  *   - string      → encrypt with VAULT_KEY and store ciphertext + key_version
  *
  * Throws:
- *   - VaultMissingKeyError if anthropic_key is a string but VAULT_KEY is unset
+ *   - VaultMissingKeyError if a provider key is a string but VAULT_KEY is unset
  *   - UserSettingsUserMissingError if user_id has no users(id) row
  */
 export function upsertUserSettings(input: UserSettingsInput): void {
@@ -210,8 +235,9 @@ export function upsertUserSettings(input: UserSettingsInput): void {
     const existing = db
       .prepare(
         `
-        SELECT anthropic_key, anthropic_key_version, model_pref, timezone,
-               monthly_token_cap, coach_goals, onboarded_at, tz
+        SELECT anthropic_key, anthropic_key_version, cursor_key,
+               cursor_key_version, model_pref, timezone, monthly_token_cap,
+               coach_goals, onboarded_at, tz
         FROM user_settings
         WHERE user_id = ?
         `
@@ -220,6 +246,8 @@ export function upsertUserSettings(input: UserSettingsInput): void {
       | {
           anthropic_key: string | null;
           anthropic_key_version: number | null;
+          cursor_key: string | null;
+          cursor_key_version: number | null;
           model_pref: string | null;
           timezone: string | null;
           monthly_token_cap: number | null;
@@ -240,6 +268,19 @@ export function upsertUserSettings(input: UserSettingsInput): void {
     } else {
       nextAnthropic = encrypt(input.anthropic_key);
       nextAnthropicVersion = CURRENT_KEY_VERSION;
+    }
+
+    let nextCursor: string | null;
+    let nextCursorVersion: number | null;
+    if (input.cursor_key === undefined) {
+      nextCursor = existing?.cursor_key ?? null;
+      nextCursorVersion = existing?.cursor_key_version ?? null;
+    } else if (input.cursor_key === null) {
+      nextCursor = null;
+      nextCursorVersion = null;
+    } else {
+      nextCursor = encrypt(input.cursor_key);
+      nextCursorVersion = CURRENT_KEY_VERSION;
     }
 
     const nextModel =
@@ -268,12 +309,15 @@ export function upsertUserSettings(input: UserSettingsInput): void {
     db.prepare(
       `
       INSERT INTO user_settings (
-        user_id, anthropic_key, anthropic_key_version, model_pref, timezone,
-        monthly_token_cap, coach_goals, onboarded_at, tz, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        user_id, anthropic_key, anthropic_key_version, cursor_key,
+        cursor_key_version, model_pref, timezone, monthly_token_cap,
+        coach_goals, onboarded_at, tz, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET
         anthropic_key = excluded.anthropic_key,
         anthropic_key_version = excluded.anthropic_key_version,
+        cursor_key = excluded.cursor_key,
+        cursor_key_version = excluded.cursor_key_version,
         model_pref = excluded.model_pref,
         timezone = excluded.timezone,
         monthly_token_cap = excluded.monthly_token_cap,
@@ -286,6 +330,8 @@ export function upsertUserSettings(input: UserSettingsInput): void {
       input.user_id,
       nextAnthropic,
       nextAnthropicVersion,
+      nextCursor,
+      nextCursorVersion,
       nextModel,
       nextTz,
       nextCap,
