@@ -23,8 +23,10 @@ import { buildCursorSystemPrompt } from "./prompts";
 import { CursorAgentError, resolveCursorKey } from "./cursor-key";
 import type { DetailState, RunAnthropicOptions, Usage } from "./loop";
 import {
+  captureToolResponse,
   executeTool,
   newToolTurnState,
+  redactToolPayload,
   type ToolDetail,
 } from "./tools";
 
@@ -147,6 +149,43 @@ export type RunCursorTurnResult = {
   iterations: number;
   messages: ChatMessageInsert[];
 };
+
+export class CursorVisibleTextAccumulator {
+  private segment = "";
+  private finalAnswer = "";
+
+  append(value: string): string {
+    if (!value) return "";
+    if (this.segment && value.startsWith(this.segment)) {
+      const suffix = value.slice(this.segment.length);
+      this.segment = value;
+      this.finalAnswer += suffix;
+      return suffix;
+    }
+    this.segment += value;
+    this.finalAnswer += value;
+    return value;
+  }
+
+  segmentBoundary(): void {
+    this.segment = "";
+  }
+
+  toolBoundary(): void {
+    this.segment = "";
+    this.finalAnswer = "";
+  }
+
+  fallback(value: string): string {
+    if (this.finalAnswer.trim() || !value) return "";
+    this.finalAnswer = value;
+    return value;
+  }
+
+  value(): string {
+    return this.finalAnswer;
+  }
+}
 
 // ---- prompt assembly -------------------------------------------------------
 
@@ -486,8 +525,10 @@ export async function runCursorTurn(
   const selectedPrefetchTool = selectRecentPrefetchTool(newUserText);
   const shouldPrefetch = selectedPrefetchTool != null;
   const prefetchInput = { intent: "recent_context" };
+  const prefetchCallId = `prefetch:${selectedPrefetchTool ?? "none"}:${turnStartedMs}`;
   if (selectedPrefetchTool) {
     options.onToolUseStart?.({
+      id: prefetchCallId,
       name: selectedPrefetchTool,
       input: prefetchInput,
     });
@@ -504,12 +545,29 @@ export async function runCursorTurn(
   }
   const prefetchMs = Date.now() - prefetchStartedMs;
   if (selectedPrefetchTool) {
-    options.onToolUseEnd?.({
+    const prefetchRows =
+      preloadedContext == null ? null : countRows(preloadedContext.data);
+    const prefetchResponse = prefetchError
+      ? { error: prefetchError }
+      : captureToolResponse(preloadedContext?.data);
+    toolDetails.push({
+      id: prefetchCallId,
       name: selectedPrefetchTool,
+      input: prefetchInput,
       duration_ms: prefetchMs,
-      rows: preloadedContext == null ? null : countRows(preloadedContext.data),
+      rows: prefetchRows,
       status: prefetchError == null ? "ok" : "error",
       ...(prefetchError ? { error: prefetchError } : {}),
+      response: prefetchResponse,
+    });
+    options.onToolUseEnd?.({
+      id: prefetchCallId,
+      name: selectedPrefetchTool,
+      duration_ms: prefetchMs,
+      rows: prefetchRows,
+      status: prefetchError == null ? "ok" : "error",
+      ...(prefetchError ? { error: prefetchError } : {}),
+      response: prefetchResponse,
     });
   }
   const promptStartedMs = Date.now();
@@ -567,8 +625,7 @@ export async function runCursorTurn(
   const ws = await makeWorkspace(userId);
   cursorDetail.timing.workspace_prep_ms = Date.now() - workspaceStartedMs;
 
-  let reply = "";
-  let segText = ""; // current assistant segment, for snapshot dedup
+  const visibleText = new CursorVisibleTextAccumulator();
   let toolCalls = 0;
   let timedOut = false;
   let stderr = "";
@@ -781,27 +838,17 @@ export async function runCursorTurn(
           }
           if (!text) return;
           cursorDetail.timing.spawn_to_first_assistant_text_ms ??= elapsedMs;
-          if (segText && text.startsWith(segText)) {
-            const suffix = text.slice(segText.length);
-            segText = text;
-            if (suffix) {
-              reply += suffix;
-              options.onTextDelta?.(suffix);
-            }
-          } else {
-            segText += text;
-            reply += text;
-            options.onTextDelta?.(text);
-          }
+          const delta = visibleText.append(text);
+          if (delta) options.onTextDelta?.(delta);
           return;
         }
         if (evt.type === "thinking") {
-          segText = ""; // segment boundary
+          visibleText.segmentBoundary();
           return;
         }
         if (evt.type === "tool_call") {
           cursorDetail.timing.spawn_to_first_tool_event_ms ??= elapsedMs;
-          segText = ""; // segment boundary
+          visibleText.segmentBoundary();
           const tc = evt.tool_call;
           // call_id is stable across started/completed; fall back through the
           // other id carriers, then a random id only as a last resort.
@@ -818,6 +865,9 @@ export async function runCursorTurn(
             // surface/persist a fake `unknown` tool round trip.
             if (!a?.toolName) return;
             const name = a.toolName;
+            // Everything emitted before a real tool boundary is operational
+            // commentary. The final visible answer starts fresh after tools.
+            visibleText.toolBoundary();
             const startedMs = Number(tc?.startedAtMs) || Date.now();
             toolMeta.set(callId, { name, input: a?.args, startedMs });
             cursorDetail.tool_events.push({
@@ -825,7 +875,11 @@ export async function runCursorTurn(
               phase: "started",
               at_ms: elapsedMs,
             });
-            options.onToolUseStart?.({ name, input: a?.args });
+            options.onToolUseStart?.({
+              id: callId,
+              name,
+              input: redactToolPayload(a?.args),
+            });
             return;
           }
           if (evt.subtype === "completed") {
@@ -861,6 +915,7 @@ export async function runCursorTurn(
             }
             const rows = rejected ? null : countRows(parsed);
             toolDetails.push({
+              id: callId,
               name,
               input,
               duration_ms: durationMs,
@@ -870,10 +925,13 @@ export async function runCursorTurn(
               response: parsed,
             });
             options.onToolUseEnd?.({
+              id: callId,
               name,
               duration_ms: durationMs,
               rows,
               status: isError ? "error" : "ok",
+              ...(isError ? { error: resultText.slice(0, 200) } : {}),
+              response: captureToolResponse(parsed),
             });
             // Persist Anthropic-shaped tool_use + tool_result rows. These are
             // auto-filtered from /coach history (same as the Anthropic path)
@@ -917,11 +975,11 @@ export async function runCursorTurn(
         `Cursor agent failed: ${terminalError.slice(0, 200)}`,
       );
     }
-    if (!reply.trim() && terminalResultText) {
-      reply = terminalResultText;
-      options.onTextDelta?.(terminalResultText);
+    const fallbackDelta = visibleText.fallback(terminalResultText);
+    if (fallbackDelta) {
+      options.onTextDelta?.(fallbackDelta);
     }
-    if (exitInfo.code !== 0 && !terminalSucceeded && !reply) {
+    if (exitInfo.code !== 0 && !terminalSucceeded && !visibleText.value()) {
       const auth = /unauthor|forbidden|invalid.*key|401|403/i.test(stderr);
       throw new CursorAgentError(
         auth ? "auth" : "agent",
@@ -932,7 +990,7 @@ export async function runCursorTurn(
       );
     }
 
-    reply = reply.trim();
+    const reply = visibleText.value().trim();
     messages.push({
       role: "assistant",
       content: reply,

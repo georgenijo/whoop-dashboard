@@ -17,6 +17,8 @@ vi.mock("./prompts", () => ({
   buildCursorSystemPrompt: vi.fn(() => "System prompt"),
 }));
 vi.mock("./tools", () => ({
+  captureToolResponse: vi.fn((value: unknown) => value),
+  redactToolPayload: vi.fn((value: unknown) => value),
   newToolTurnState: vi.fn(() => ({
     syncAttempts: 0,
     savedPlanHashes: new Map(),
@@ -40,6 +42,7 @@ vi.mock("./cursor-key", async (importOriginal) => {
 });
 
 import {
+  CursorVisibleTextAccumulator,
   parseCursorTerminalResult,
   runCursorTurn,
   selectRecentPrefetchTool,
@@ -100,6 +103,31 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   spawnMock.mockReset();
+});
+
+describe("CursorVisibleTextAccumulator", () => {
+  it("deduplicates incremental fragments and cumulative snapshots", () => {
+    const text = new CursorVisibleTextAccumulator();
+    expect(text.append("Hello")).toBe("Hello");
+    expect(text.append(" ")).toBe(" ");
+    expect(text.append("Hello world")).toBe("world");
+    expect(text.value()).toBe("Hello world");
+  });
+
+  it("clears pre-tool commentary and keeps only post-tool final text", () => {
+    const text = new CursorVisibleTextAccumulator();
+    text.append("I’ll check that.");
+    text.toolBoundary();
+    text.append("Your recovery improved.");
+    expect(text.value()).toBe("Your recovery improved.");
+  });
+
+  it("retains a complete no-tool direct answer", () => {
+    const text = new CursorVisibleTextAccumulator();
+    text.append("A direct ");
+    text.append("answer.");
+    expect(text.value()).toBe("A direct answer.");
+  });
 });
 
 describe("parseCursorTerminalResult", () => {

@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-07-30: Coach work receipts persist bounded visible operations
+
+**Decision:** Persist a versioned, bounded JSON work receipt only on each new turn's final visible assistant message. Receipts contain user-visible pre-tool commentary plus redacted tool inputs, status, timing, row counts, errors, and bounded results. Do not reconstruct receipts from `chat_logs`, expose hidden model reasoning, send receipts back to the model, backfill historical turns, or attach receipts to intermediate tool rows.
+
+**Rationale:** A final-message receipt gives the web client durable progressive disclosure across reloads without duplicating model context or treating operational logs as a reconstructable source of truth. Version validation, secret-key redaction, and the existing 12KB response-capture policy keep the client-safe payload explicit and bounded while preserving the exact tool history users need to inspect.
+
+**Status:** active
+
+**References:** `apps/web/src/lib/coach/work-log-types.ts`, `apps/web/src/lib/coach/work-log.ts`, `apps/web/src/lib/db/coach.ts`, `apps/web/src/components/coach/CoachWorkDisclosure.tsx`
+
+---
+
 ## 2026-07-30: Cursor catalog uses the public HTTP endpoint on Node 20
 
 **Decision:** Fetch each credential's account-scoped model catalog from Cursor's `GET /v1/models` endpoint with Bearer authentication, matching the official SDK's catalog request and response shape. Keep the existing contained `cursor-agent` subprocess loop for Coach execution and do not ship `@cursor/sdk` in the web runtime.

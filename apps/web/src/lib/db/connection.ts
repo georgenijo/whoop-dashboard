@@ -118,6 +118,7 @@ export function openWrite(): DB | null {
         role TEXT NOT NULL,
         content TEXT NOT NULL,
         blocks TEXT,
+        work_log TEXT,
         created_at TEXT NOT NULL,
         status TEXT DEFAULT 'complete'
       );
@@ -385,6 +386,9 @@ export function openWrite(): DB | null {
     }
     if (!chatCols.some((c) => c.name === "status")) {
       db.exec("ALTER TABLE chat_messages ADD COLUMN status TEXT DEFAULT 'complete'");
+    }
+    if (!chatCols.some((c) => c.name === "work_log")) {
+      db.exec("ALTER TABLE chat_messages ADD COLUMN work_log TEXT");
     }
     db.exec("CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id, id)");
     const sleepCols = db.prepare("PRAGMA table_info(sleep)").all() as { name: string }[];

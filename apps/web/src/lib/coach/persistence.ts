@@ -21,6 +21,8 @@ import { deriveTitleFromText } from "./title";
 import { type ToolDetail, chatLogToolSummaries } from "./tools";
 import { resolveCoachProvider } from "./provider";
 import { runCursorTurn } from "./cursor-loop";
+import { CoachWorkLogCollector } from "./work-log";
+import type { CoachWorkLog } from "./work-log-types";
 import { forModule } from "@/lib/logger";
 
 const log = forModule("coach.persistence");
@@ -59,7 +61,7 @@ export async function runAndPersistCoachTurn(
   apiKeyOrigin: ApiKeyOrigin,
   options: RunAnthropicOptions = {},
   handle?: CoachTurnHandle
-): Promise<string> {
+): Promise<{ reply: string; workLog: CoachWorkLog }> {
   const startedAt = new Date().toISOString();
   const startMs = Date.now();
   const promptPreview = lastUser.slice(0, 200);
@@ -74,6 +76,8 @@ export async function runAndPersistCoachTurn(
   const detailState: DetailState = { iterations: 0 };
   const accumulator = handle?.accumulator;
   const selection = resolveCoachProvider(userId);
+  const workLogCollector = new CoachWorkLogCollector();
+  const providerOptions = workLogCollector.wrap(options);
 
   const buildDetails = () =>
     JSON.stringify({
@@ -103,7 +107,7 @@ export async function runAndPersistCoachTurn(
             toolDetails,
             usage,
             detailState,
-            options,
+            options: providerOptions,
             accumulator,
           })
         : await runAnthropicSdk(
@@ -116,10 +120,19 @@ export async function runAndPersistCoachTurn(
             detailState,
             apiKey,
             apiKeyOrigin,
-            options,
+            providerOptions,
             accumulator
           );
     detailState.iterations = result.iterations;
+    const durationMs = Date.now() - startMs;
+    const workLog = workLogCollector.complete(durationMs, toolDetails);
+    for (let index = result.messages.length - 1; index >= 0; index -= 1) {
+      const message = result.messages[index];
+      if (message?.role === "assistant" && message.content === result.reply) {
+        message.work_log = workLog;
+        break;
+      }
+    }
     const persistenceStartedMs = Date.now();
     addChatMessages(thread.id, result.messages);
     detailState.persistence_ms = Date.now() - persistenceStartedMs;
@@ -127,7 +140,7 @@ export async function runAndPersistCoachTurn(
     addChatLog({
       started_at: startedAt,
       prompt_preview: promptPreview,
-      duration_ms: Date.now() - startMs,
+      duration_ms: durationMs,
       status: "ok",
       response_length: result.reply.length,
       error_message: null,
@@ -137,7 +150,7 @@ export async function runAndPersistCoachTurn(
       details: buildDetails(),
       thread_id: thread.id,
     });
-    return result.reply;
+    return { reply: result.reply, workLog };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     addChatLog({

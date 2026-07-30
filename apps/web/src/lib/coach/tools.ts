@@ -818,6 +818,7 @@ export async function executeTool(
 }
 
 export type ToolDetail = {
+  id: string;
   name: string;
   input: unknown;
   duration_ms: number;
@@ -832,13 +833,15 @@ export type ToolDetail = {
 };
 
 export type ToolProgressHandlers = {
-  onToolUseStart?: (event: { name: string; input: unknown }) => void;
+  onToolUseStart?: (event: { id: string; name: string; input: unknown }) => void;
   onToolUseEnd?: (event: {
+    id: string;
     name: string;
     duration_ms: number;
     rows: number | null;
     status: "ok" | "error";
     error?: string;
+    response?: unknown;
   }) => void;
   /**
    * Mid-tool progress for long-running tools. Producer policy lives in
@@ -846,6 +849,7 @@ export type ToolProgressHandlers = {
    * resolve in <500ms and don't get a progress channel.
    */
   onToolProgress?: (event: {
+    id: string;
     tool: string;
     stage: string;
     message?: string;
@@ -909,7 +913,11 @@ export async function executeToolResult(
 ): Promise<ToolResultBlockParam> {
   const { progress, signal, turnState, userId } = opts;
   const startMs = Date.now();
-  progress?.onToolUseStart?.({ name: toolUse.name, input: toolUse.input });
+  progress?.onToolUseStart?.({
+    id: toolUse.id,
+    name: toolUse.name,
+    input: redactToolPayload(toolUse.input),
+  });
   console.info("[coach] tool_call", {
     thread_id: threadId,
     name: toolUse.name,
@@ -921,6 +929,7 @@ export async function executeToolResult(
     toolUse.name === "trigger_whoop_sync" && progress?.onToolProgress
       ? (e: SyncProgressEvent) =>
           progress.onToolProgress!({
+            id: toolUse.id,
             tool: "trigger_whoop_sync",
             stage: e.stage,
             ...(e.message ? { message: e.message } : {}),
@@ -939,6 +948,7 @@ export async function executeToolResult(
     const durationMs = Date.now() - startMs;
     const error = err instanceof Error ? err.message : String(err);
     toolDetails.push({
+      id: toolUse.id,
       name: toolUse.name,
       input: toolUse.input,
       duration_ms: durationMs,
@@ -947,11 +957,13 @@ export async function executeToolResult(
       error,
     });
     progress?.onToolUseEnd?.({
+      id: toolUse.id,
       name: toolUse.name,
       duration_ms: durationMs,
       rows: null,
       status: "error",
       error,
+      response: { error },
     });
     console.warn("[coach] tool_result", {
       thread_id: threadId,
@@ -971,6 +983,7 @@ export async function executeToolResult(
   const durationMs = Date.now() - startMs;
   const rows = countRows(result);
   toolDetails.push({
+    id: toolUse.id,
     name: toolUse.name,
     input: toolUse.input,
     duration_ms: durationMs,
@@ -979,10 +992,12 @@ export async function executeToolResult(
     response: result,
   });
   progress?.onToolUseEnd?.({
+    id: toolUse.id,
     name: toolUse.name,
     duration_ms: durationMs,
     rows,
     status: "ok",
+    response: captureToolResponse(result),
   });
   console.info("[coach] tool_result", {
     thread_id: threadId,
@@ -1001,35 +1016,59 @@ export async function executeToolResult(
 // Cap on the persisted response payload per tool call (JSON chars). Past this,
 // emit a `_truncated` marker with a 5-row preview when the shape allows it.
 const TOOL_RESPONSE_MAX_CHARS = 12_000;
+const SENSITIVE_KEY = /^(?:authorization|cookie|api[_-]?key|.*token.*|.*secret.*)$/i;
 
-function captureToolResponse(response: unknown): unknown {
+export function redactToolPayload(
+  value: unknown,
+  seen = new WeakSet<object>(),
+): unknown {
+  if (Array.isArray(value)) {
+    if (seen.has(value)) return "[Circular]";
+    seen.add(value);
+    return value.map((item) => redactToolPayload(item, seen));
+  }
+  if (value && typeof value === "object") {
+    if (seen.has(value)) return "[Circular]";
+    seen.add(value);
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        SENSITIVE_KEY.test(key) ? "[REDACTED]" : redactToolPayload(item, seen),
+      ]),
+    );
+  }
+  return value;
+}
+
+export function captureToolResponse(response: unknown): unknown {
   if (response === undefined) return undefined;
+  const safeResponse = redactToolPayload(response);
   let serialized: string;
   try {
-    serialized = JSON.stringify(response);
+    serialized = JSON.stringify(safeResponse);
   } catch {
     return { _truncated: true, reason: "non_serializable" };
   }
   if (serialized.length <= TOOL_RESPONSE_MAX_CHARS) {
-    return response;
+    return safeResponse;
   }
-  if (Array.isArray(response)) {
+  if (Array.isArray(safeResponse)) {
     return {
       _truncated: true,
-      total_count: response.length,
-      preview: response.slice(0, 5),
+      total_count: safeResponse.length,
+      preview: safeResponse.slice(0, 5),
     };
   }
   // query_workouts wraps rows in `{ rows, _meta }`. Preserve the preview
   // shape so the UI doesn't fall through to a near-empty JSON viewer.
   if (
-    typeof response === "object" &&
-    response !== null &&
-    !Array.isArray(response) &&
-    Array.isArray((response as { rows?: unknown }).rows)
+    typeof safeResponse === "object" &&
+    safeResponse !== null &&
+    !Array.isArray(safeResponse) &&
+    Array.isArray((safeResponse as { rows?: unknown }).rows)
   ) {
-    const rows = (response as { rows: unknown[] }).rows;
-    const meta = (response as { _meta?: { total_count?: unknown } })._meta;
+    const rows = (safeResponse as { rows: unknown[] }).rows;
+    const meta = (safeResponse as { _meta?: { total_count?: unknown } })._meta;
     const totalCount =
       meta && typeof meta.total_count === "number" ? meta.total_count : rows.length;
     return {
@@ -1046,9 +1085,10 @@ function captureToolResponse(response: unknown): unknown {
 
 export function chatLogToolSummaries(toolDetails: ToolDetail[]) {
   return toolDetails.map(
-    ({ name, input, duration_ms, rows, status, error, response }) => ({
+    ({ id, name, input, duration_ms, rows, status, error, response }) => ({
+      id,
       name,
-      input,
+      input: redactToolPayload(input ?? {}),
       duration_ms,
       rows,
       status,
