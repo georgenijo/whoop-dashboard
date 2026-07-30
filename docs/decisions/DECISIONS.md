@@ -6,13 +6,25 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-07-30: Merging to main authorizes production deployment
+
+**Decision:** Successful merges to `main` deploy automatically after the existing test and build job passes. Keep the production environment's `main`-only branch policy, serialized deploy concurrency, exact-SHA verification, ephemeral Tailscale workload identity, and rollback-aware deploy script, but do not require a separate environment reviewer.
+
+**Rationale:** PR review and the deliberate merge are the production authorization for this personal deployment. A second approval after merge repeats the same decision without improving commit verification, while the CI prerequisites and branch restriction still prevent unverified or non-`main` code from reaching production.
+
+**Status:** active
+
+**References:** `.github/workflows/ci.yml`, `scripts/deploy`, `docs/operations/environment-and-deploy.md`, GitHub environment `production`
+
+---
+
 ## 2026-07-30: CI verifies every web change and CD delegates to the production deploy script
 
 **Decision:** Add GitHub Actions verification (`npm ci`, tests, build, and deploy-script syntax) for pull requests and `main`, then deploy verified `main` commits through a protected `production` environment using an ephemeral Tailscale workload identity. GitHub receives only the Tailscale federation client ID/audience; application runtime secrets remain in the VM's canonical `apps/web/.env.local`. The deploy job is serialized, opt-in through `PRODUCTION_DEPLOY_ENABLED`, and invokes `scripts/deploy --ref "$GITHUB_SHA"` as the single implementation of backup, build, restart, verification, and rollback reporting.
 
 **Rationale:** CI should prove the exact commit before production changes, while deployment must preserve the hardened SQLite online-backup and health-verification behavior already encoded in `scripts/deploy`. Workload identity avoids a permanent runner or long-lived SSH/auth key, environment approval creates an explicit production boundary, and the enable flag lets the workflow merge safely before the one-time tailnet policy and federation credential are configured.
 
-**Status:** active
+**Status:** superseded by 2026-07-30 “Merging to main authorizes production deployment”
 
 **References:** `.github/workflows/ci.yml`, `scripts/deploy`, `docs/operations/environment-and-deploy.md`
 
