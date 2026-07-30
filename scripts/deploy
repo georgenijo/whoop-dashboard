@@ -125,8 +125,13 @@ app "cd $APP && set -o pipefail && npm ci --silent 2>&1 | tail -2" || die "npm c
 # (~line 1665), so a build that dies during prerender still leaves a BUILD_ID
 # behind. Polling for that file would happily restart prod into a broken build —
 # the precise failure this script exists to prevent.
+#
+# --max-old-space-size: V8's default heap cap on the 956M VM is ~490M, which is
+# also the build's actual working set — run 30588295522 OOM'd at 487M while an
+# earlier build of a near-identical tree passed. Pin the cap above the margin;
+# the box's 1G swap absorbs what RAM can't.
 app "cd $APP && rm -f /tmp/deploy-build.log /tmp/deploy-build.exit && \
-     setsid nohup bash -c 'npm run build > /tmp/deploy-build.log 2>&1; echo \$? > /tmp/deploy-build.exit' \
+     setsid nohup bash -c 'NODE_OPTIONS=--max-old-space-size=800 npm run build > /tmp/deploy-build.log 2>&1; echo \$? > /tmp/deploy-build.exit' \
      < /dev/null > /dev/null 2>&1 & echo launched"
 
 waited=0
