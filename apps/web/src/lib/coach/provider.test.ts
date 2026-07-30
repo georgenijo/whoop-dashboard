@@ -35,16 +35,26 @@ describe("parseModelPref", () => {
     });
   });
 
-  it("upgrades the legacy Cursor preference to the fast variant", () => {
+  it("preserves an existing Cursor base-model preference", () => {
     expect(parseModelPref("cursor:composer-2.5")).toEqual({
       provider: "cursor",
-      model: "composer-2.5-fast",
+      model: "composer-2.5",
     });
   });
 
-  it("falls back unknown/legacy values to Anthropic", () => {
+  it("accepts dynamically discovered Cursor model preferences", () => {
+    expect(parseModelPref("cursor:gpt-5.5-high")).toEqual({
+      provider: "cursor",
+      model: "gpt-5.5-high",
+    });
+  });
+
+  it("falls back malformed/legacy values to Anthropic", () => {
     expect(parseModelPref("garbage:x").provider).toBe("anthropic");
     expect(parseModelPref("claude-sonnet-4-6").provider).toBe("anthropic");
+    expect(parseModelPref("cursor:model with spaces").provider).toBe(
+      "anthropic",
+    );
   });
 });
 

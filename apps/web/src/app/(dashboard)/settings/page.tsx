@@ -30,6 +30,17 @@ type WhoopConnector = {
 
 type ByokState = { present: boolean; masked: string | null };
 type CursorByokState = ByokState & { fallback_available: boolean };
+type CursorModel = {
+  id: string;
+  display_name: string;
+  description: string | null;
+};
+type CursorModelCatalogStatus =
+  | "loading"
+  | "ready"
+  | "not_configured"
+  | "invalid_key"
+  | "unavailable";
 type ByokError =
   | { kind: "invalid_key" }
   | { kind: "probe_failed" }
@@ -142,7 +153,11 @@ export default function SettingsPage() {
     "anthropic:claude-sonnet-4-6",
   );
   const [cursorAvailable, setCursorAvailable] = useState(false);
+  const [cursorModels, setCursorModels] = useState<CursorModel[]>([]);
+  const [cursorModelsStatus, setCursorModelsStatus] =
+    useState<CursorModelCatalogStatus>("loading");
   const [modelSaving, setModelSaving] = useState(false);
+  const [modelError, setModelError] = useState<string | null>(null);
 
   const refreshWhoop = useCallback(() => {
     // Keep connector status non-blocking: the rest of Settings still works
@@ -155,6 +170,23 @@ export default function SettingsPage() {
         if (data) setWhoop(data);
       })
       .catch(() => {});
+  }, []);
+
+  const refreshCursorModels = useCallback(async () => {
+    setCursorModelsStatus("loading");
+    try {
+      const response = await fetch("/api/me/cursor-models");
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = (await response.json()) as {
+        status: Exclude<CursorModelCatalogStatus, "loading">;
+        models: CursorModel[];
+      };
+      setCursorModels(data.models);
+      setCursorModelsStatus(data.status);
+    } catch {
+      setCursorModels([]);
+      setCursorModelsStatus("unavailable");
+    }
   }, []);
 
   useEffect(() => {
@@ -207,7 +239,8 @@ export default function SettingsPage() {
         }
       })
       .catch(() => {});
-  }, []);
+    queueMicrotask(() => void refreshCursorModels());
+  }, [refreshCursorModels]);
 
   function toggleLocal(key: string, value: boolean) {
     localStorage.setItem(key, value ? "1" : "0");
@@ -328,6 +361,7 @@ export default function SettingsPage() {
         setCursorByok(data);
         setCursorByokInput("");
         setCursorAvailable(true);
+        await refreshCursorModels();
         return;
       }
       if (data.code === "invalid_key") {
@@ -376,8 +410,14 @@ export default function SettingsPage() {
       setCursorByok(data);
       setCursorByokInput("");
       setCursorAvailable(data.fallback_available);
+      if (data.fallback_available) {
+        await refreshCursorModels();
+      } else {
+        setCursorModels([]);
+        setCursorModelsStatus("not_configured");
+      }
       if (!data.fallback_available && modelPref.startsWith("cursor:")) {
-        setModelPref("anthropic:claude-sonnet-4-6");
+        await saveModelPref("anthropic:claude-sonnet-4-6");
       }
     } finally {
       setCursorByokClearing(false);
@@ -403,6 +443,7 @@ export default function SettingsPage() {
     const previous = modelPref;
     setModelPref(next);
     setModelSaving(true);
+    setModelError(null);
     try {
       const response = await fetch("/api/settings", {
         method: "POST",
@@ -411,12 +452,19 @@ export default function SettingsPage() {
       });
       if (!response.ok) {
         setModelPref(previous);
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        setModelError(data?.error || `Couldn't save model (HTTP ${response.status}).`);
       } else {
         const data = (await response.json()) as { model_pref?: string };
         if (data.model_pref) setModelPref(data.model_pref);
       }
-    } catch {
+    } catch (error) {
       setModelPref(previous);
+      setModelError(
+        error instanceof Error ? error.message : "Couldn't save model.",
+      );
     } finally {
       setModelSaving(false);
     }
@@ -468,6 +516,23 @@ export default function SettingsPage() {
   const promptDirty = systemPrompt !== savedSystemPrompt;
   const whoopStatus = whoop?.status ?? "disconnected";
   const whoopCopy = CONNECTOR_STATUS_COPY[whoopStatus];
+  const selectedCursorModel = modelPref.startsWith("cursor:")
+    ? modelPref.slice("cursor:".length)
+    : null;
+  const selectedCursorModelIsMissing =
+    selectedCursorModel !== null &&
+    !cursorModels.some((model) => model.id === selectedCursorModel);
+  const modelDescription = modelError
+    ? modelError
+    : cursorModelsStatus === "ready"
+      ? "Choose Claude directly or any model enabled for your Cursor account."
+      : cursorModelsStatus === "loading"
+        ? "Loading the models enabled for your Cursor account…"
+        : cursorModelsStatus === "invalid_key"
+          ? "Cursor rejected the current key. Update it below to load models."
+          : cursorModelsStatus === "unavailable"
+            ? "Cursor model discovery is temporarily unavailable."
+            : "Add a Cursor key below to enable its model catalog.";
 
   return (
     <div className={styles.settingsPage}>
@@ -568,11 +633,7 @@ export default function SettingsPage() {
           <div className={styles.sectionBody}>
             <SettingRow
               label="Model"
-              description={
-                cursorAvailable
-                  ? "Claude is the default. Cursor Composer is experimental."
-                  : "Claude Sonnet is the active model on this server."
-              }
+              description={modelDescription}
             >
               <select
                 className={styles.select}
@@ -584,9 +645,14 @@ export default function SettingsPage() {
                 <option value="anthropic:claude-sonnet-4-6">
                   Claude Sonnet 4.6
                 </option>
-                {cursorAvailable && (
-                  <option value="cursor:composer-2.5-fast">
-                    Cursor Composer 2.5 Fast
+                {cursorModels.map((model) => (
+                  <option key={model.id} value={`cursor:${model.id}`}>
+                    Cursor — {model.display_name}
+                  </option>
+                ))}
+                {cursorAvailable && selectedCursorModelIsMissing && (
+                  <option value={`cursor:${selectedCursorModel}`}>
+                    Cursor — {selectedCursorModel} (saved)
                   </option>
                 )}
               </select>

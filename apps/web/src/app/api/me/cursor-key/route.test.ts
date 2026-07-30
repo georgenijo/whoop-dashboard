@@ -3,17 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+const requireAuthMock = vi.hoisted(() => vi.fn());
+
 vi.mock("@/lib/auth", () => ({
-  requireAuth: vi.fn(async () => ({
-    user: {
-      id: 1,
-      email: "test@example.com",
-      name: null,
-      apple_sub: "test-sub",
-      timezone: null,
-    },
-    source: "ios" as const,
-  })),
+  requireAuth: (...args: unknown[]) => requireAuthMock(...args),
 }));
 
 const getUserSettingsMock = vi.fn();
@@ -41,6 +34,17 @@ function makeRequest(method: "GET" | "POST" | "DELETE", body?: unknown): Request
 }
 
 beforeEach(() => {
+  requireAuthMock.mockReset();
+  requireAuthMock.mockResolvedValue({
+    user: {
+      id: 1,
+      email: "test@example.com",
+      name: null,
+      apple_sub: "test-sub",
+      timezone: null,
+    },
+    source: "ios",
+  });
   getUserSettingsMock.mockReset();
   upsertUserSettingsMock.mockReset();
   probeCursorKeyMock.mockReset();
@@ -91,6 +95,14 @@ describe("POST /api/me/cursor-key", () => {
 });
 
 describe("GET /api/me/cursor-key", () => {
+  it("preserves an authentication Response instead of turning it into a 500", async () => {
+    requireAuthMock.mockRejectedValue(
+      new Response("Unauthorized", { status: 401 }),
+    );
+    const response = await GET(makeRequest("GET"));
+    expect(response.status).toBe(401);
+  });
+
   it("returns only the masked key", async () => {
     getUserSettingsMock.mockReturnValue({
       cursor_key: "key_CLEARTEXT-SHOULD-NEVER-LEAK-Z9yX",

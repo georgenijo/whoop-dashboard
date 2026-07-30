@@ -6,13 +6,25 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-07-30: Cursor SDK owns model discovery, not Coach execution
+
+**Decision:** Add `@cursor/sdk` to the web app and use `Cursor.models.list({ apiKey })` for per-user credential validation and authenticated model discovery. Keep the existing contained `cursor-agent` subprocess loop for Coach execution; persist the selected canonical SDK model ID in the existing `cursor:<model>` preference and pass that ID to the CLI. Personal-key precedence and encrypted storage remain unchanged.
+
+**Rationale:** The SDK returns a structured, account-scoped catalog (`id`, display name, description, aliases, parameters, and variants), while CLI model output is presentation text and can change shape. A full SDK runtime migration remains out of scope because the current CLI boundary and MCP permission controls are production-hardened; discovery alone is low-risk and eliminates a stale hard-coded model list.
+
+**Status:** active; supersedes the validation mechanism in the credential decision below
+
+**References:** issue #449, PR #450, `apps/web/src/lib/coach/cursor-models.ts`, `apps/web/src/lib/coach/cursor-loop.ts`
+
+---
+
 ## 2026-07-30: Cursor credentials follow per-user BYOK precedence
 
 **Decision:** Add encrypted `cursor_key` + `cursor_key_version` columns to `user_settings`. Cursor key resolution now mirrors Anthropic: the authenticated user's decrypted key wins, `CURSOR_API_KEY` remains the shared server fallback, and no key means the provider is unavailable for that user. Settings exposes masked save/remove controls and validates new keys with the non-inference `cursor-agent models` command before persisting.
 
 **Rationale:** The original Cursor provider in PR #416 deliberately supported only one operator-managed key, which made a revoked shared credential take every Cursor user offline and did not match the product's BYOK direction. Per-user encrypted keys isolate rotation and failures while retaining the existing server fallback for users who do not provide one.
 
-**Status:** active
+**Status:** superseded by 2026-07-30 Cursor SDK model discovery decision (credential storage and precedence remain active)
 
 **References:** PR #416 (shared-only decision superseded), issue #442, PR #450, `apps/web/src/lib/coach/cursor-key.ts`, `apps/web/src/lib/db/user_settings.ts`, `apps/web/src/app/api/me/cursor-key/route.ts`
 

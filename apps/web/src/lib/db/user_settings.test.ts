@@ -172,6 +172,35 @@ describe("user_settings + vault", () => {
     expect(got?.anthropic_key).toBe("sk-ant-keep");
   });
 
+  it("isolates independent Cursor keys across users while preserving both providers", async () => {
+    const { settings, conn } = await loadModules();
+    const db = conn.openWrite();
+    db!.prepare("INSERT INTO users (id, email) VALUES (?, ?)").run(
+      2,
+      "second@example.com",
+    );
+    db!.close();
+
+    settings.upsertUserSettings({
+      user_id: 1,
+      anthropic_key: "sk-ant-user-one",
+      cursor_key: "key_cursor-user-one",
+    });
+    settings.upsertUserSettings({
+      user_id: 2,
+      cursor_key: "key_cursor-user-two",
+    });
+
+    expect(settings.getUserSettings(1)).toMatchObject({
+      anthropic_key: "sk-ant-user-one",
+      cursor_key: "key_cursor-user-one",
+    });
+    expect(settings.getUserSettings(2)).toMatchObject({
+      anthropic_key: null,
+      cursor_key: "key_cursor-user-two",
+    });
+  });
+
   it("updated_at advances on subsequent writes", async () => {
     const { settings } = await loadModules();
     settings.upsertUserSettings({ user_id: 1, model_pref: "m1" });

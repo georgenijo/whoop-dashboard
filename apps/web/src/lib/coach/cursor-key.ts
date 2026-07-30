@@ -1,7 +1,10 @@
 import "server-only";
 
-import { execFile } from "node:child_process";
 import { getUserSettings } from "@/lib/db";
+import {
+  CursorModelCatalogError,
+  listCursorModelsForKey,
+} from "./cursor-models";
 
 export type CursorKeyOrigin = "user" | "env";
 export type ResolvedCursorKey = {
@@ -42,38 +45,19 @@ export function resolveCursorKey(userId: number): ResolvedCursorKey {
 }
 
 /**
- * Validate a Cursor key without spending a model turn. `cursor-agent models`
- * authenticates and lists the account's models; an invalid key exits nonzero
- * with an auth-specific diagnostic.
+ * Validate a Cursor key without spending a model turn. The SDK model catalog
+ * authenticates the key and returns the models available to that account.
  */
-export function probeCursorKey(key: string): Promise<CursorKeyProbeResult> {
-  const bin = process.env.COACH_CURSOR_AGENT_BIN || "cursor-agent";
-  return new Promise((resolve) => {
-    execFile(
-      bin,
-      ["models"],
-      {
-        env: { ...process.env, CURSOR_API_KEY: key },
-        encoding: "utf8",
-        timeout: 15_000,
-        maxBuffer: 256 * 1024,
-      },
-      (error, stdout, stderr) => {
-        if (!error) {
-          resolve("ok");
-          return;
-        }
-        const diagnostic = `${stdout}\n${stderr}\n${error.message}`;
-        if (
-          /invalid.*key|key.*invalid|unauthor|forbidden|\b401\b|\b403\b/i.test(
-            diagnostic,
-          )
-        ) {
-          resolve("invalid_key");
-          return;
-        }
-        resolve("probe_failed");
-      },
-    );
-  });
+export async function probeCursorKey(
+  key: string,
+): Promise<CursorKeyProbeResult> {
+  try {
+    await listCursorModelsForKey(key);
+    return "ok";
+  } catch (error) {
+    if (error instanceof CursorModelCatalogError) {
+      return error.reason === "invalid_key" ? "invalid_key" : "probe_failed";
+    }
+    return "probe_failed";
+  }
 }
