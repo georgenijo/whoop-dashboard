@@ -217,7 +217,24 @@ def render_blocks(blocks: list[dict[str, Any]], filt: str | None) -> None:
 # ---------- Subcommands ----------
 
 def cmd_thread(args: argparse.Namespace) -> int:
-    sql = "SELECT id, role, content, blocks, created_at, status FROM chat_messages WHERE thread_id = ?"
+    has_attachments = bool(q(
+        args,
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+        "AND name = 'chat_message_attachments' LIMIT 1",
+    ))
+    attachment_columns = ""
+    if has_attachments:
+        attachment_columns = (
+            ", (SELECT COUNT(*) FROM chat_message_attachments ma "
+            "WHERE ma.message_id = m.id) AS attachment_count"
+            ", (SELECT group_concat(ma.attachment_id, ',') "
+            "FROM chat_message_attachments ma WHERE ma.message_id = m.id "
+            "ORDER BY ma.ordinal) AS attachment_ids"
+        )
+    sql = (
+        "SELECT m.id, m.role, m.content, m.blocks, m.created_at, m.status"
+        f"{attachment_columns} FROM chat_messages m WHERE m.thread_id = ?"
+    )
     params: tuple = (args.id,)
     if args.since:
         sql += " AND created_at >= ?"
@@ -261,6 +278,12 @@ def cmd_thread(args: argparse.Namespace) -> int:
         status = r.get("status") or ""
         status_str = DIM(f" [{status}]") if status and status != "complete" else ""
         print(f"{DIM(ts)}  {role_color(role)}{status_str}  #{r['id']}")
+        if r.get("attachment_count"):
+            attachment_ids = (r.get("attachment_ids") or "").split(",")
+            print(DIM(
+                f"  attachments ({r['attachment_count']}): "
+                + ", ".join(attachment_ids)
+            ))
 
         blocks_raw = r.get("blocks")
         if blocks_raw:

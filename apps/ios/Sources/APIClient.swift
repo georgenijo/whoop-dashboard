@@ -24,6 +24,77 @@ struct SyncResponse: Decodable {
     let error: String?
 }
 
+struct MultipartFile: Equatable {
+    let fieldName: String
+    let filename: String
+    let mimeType: String
+    let data: Data
+
+    init(
+        fieldName: String = "images",
+        filename: String,
+        mimeType: String,
+        data: Data
+    ) {
+        self.fieldName = fieldName
+        self.filename = filename
+        self.mimeType = mimeType
+        self.data = data
+    }
+}
+
+enum MultipartFormData {
+    static func contentType(boundary: String) -> String {
+        "multipart/form-data; boundary=\(boundary)"
+    }
+
+    static func encode(
+        fields: [String: String],
+        files: [MultipartFile],
+        boundary: String
+    ) -> Data {
+        var body = Data()
+        for (name, value) in fields.sorted(by: { $0.key < $1.key }) {
+            body.appendUTF8("--\(boundary)\r\n")
+            body.appendUTF8(
+                "Content-Disposition: form-data; name=\"\(quoted(name))\"\r\n\r\n"
+            )
+            body.appendUTF8(value)
+            body.appendUTF8("\r\n")
+        }
+        for file in files {
+            body.appendUTF8("--\(boundary)\r\n")
+            body.appendUTF8(
+                "Content-Disposition: form-data; name=\"\(quoted(file.fieldName))\"; "
+                    + "filename=\"\(quoted(file.filename))\"\r\n"
+            )
+            body.appendUTF8("Content-Type: \(singleLine(file.mimeType))\r\n\r\n")
+            body.append(file.data)
+            body.appendUTF8("\r\n")
+        }
+        body.appendUTF8("--\(boundary)--\r\n")
+        return body
+    }
+
+    private static func quoted(_ value: String) -> String {
+        singleLine(value)
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+    }
+
+    private static func singleLine(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\r", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+    }
+}
+
+private extension Data {
+    mutating func appendUTF8(_ value: String) {
+        append(contentsOf: value.utf8)
+    }
+}
+
 final class APIClient {
     let baseURL: URL
     private let session: URLSession
@@ -112,7 +183,71 @@ final class APIClient {
         var request = makeRequest(path: path, query: query, method: "POST", bodyData: bodyData)
         request.timeoutInterval = 130
         request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        return try await openSSERequest(request, path: path)
+    }
 
+    func openMultipartSSE(
+        _ path: String,
+        query: [URLQueryItem]? = nil,
+        fields: [String: String],
+        files: [MultipartFile]
+    ) async throws -> (
+        headers: HTTPURLResponse,
+        lines: AsyncLineSequence<URLSession.AsyncBytes>
+    ) {
+        let boundary = "CoachBoundary-\(UUID().uuidString)"
+        let body = MultipartFormData.encode(
+            fields: fields,
+            files: files,
+            boundary: boundary
+        )
+        var request = makeRequest(path: path, query: query, method: "POST", bodyData: body)
+        request.timeoutInterval = 130
+        request.setValue(
+            MultipartFormData.contentType(boundary: boundary),
+            forHTTPHeaderField: "Content-Type"
+        )
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        return try await openSSERequest(request, path: path)
+    }
+
+    func getData(_ path: String, query: [URLQueryItem]? = nil) async throws -> Data {
+        let request = makeRequest(path: path, query: query, method: "GET", bodyData: nil)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            ClientLogger.shared.error(
+                "api_failure",
+                details: ["endpoint": path, "error": String(describing: error)]
+            )
+            throw APIError.network(error)
+        }
+
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.badResponse
+        }
+        switch http.statusCode {
+        case 200..<300:
+            return data
+        case 401:
+            if request.value(forHTTPHeaderField: "Authorization") != nil {
+                await handleUnauthorized()
+            }
+            throw APIError.unauthorized
+        default:
+            throw APIError.serverError(http.statusCode)
+        }
+    }
+
+    private func openSSERequest(
+        _ request: URLRequest,
+        path: String
+    ) async throws -> (
+        headers: HTTPURLResponse,
+        lines: AsyncLineSequence<URLSession.AsyncBytes>
+    ) {
         let bytes: URLSession.AsyncBytes
         let response: URLResponse
         do {

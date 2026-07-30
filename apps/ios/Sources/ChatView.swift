@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 struct ChatView: View {
@@ -17,6 +18,11 @@ struct ChatView: View {
     @State private var activeTools: [ToolChip] = []
     @State private var recoveryStatus: RecoveryStatus?
     @State private var showAbandonRecoveryConfirmation = false
+    @State private var photoPickerItems: [PhotosPickerItem] = []
+    @State private var pendingImages: [PendingChatImage] = []
+    @State private var isPreparingImages = false
+    @State private var selectedAttachment: ChatAttachment?
+    @State private var attachmentCache = ChatAttachmentCache()
 
     init(threadId: Int?, initialTitle: String?) {
         self.initialTitle = initialTitle
@@ -41,14 +47,14 @@ struct ChatView: View {
 
     enum ChatRow: Identifiable, Hashable {
         case persisted(ChatMessage)
-        case optimistic(id: UUID, content: String)
+        case optimistic(id: UUID, content: String, attachments: [PendingChatImage])
         case streaming(id: UUID, content: String)
         case typing
 
         var id: String {
             switch self {
             case .persisted(let m): return "p-\(m.id)"
-            case .optimistic(let id, _): return "o-\(id.uuidString)"
+            case .optimistic(let id, _, _): return "o-\(id.uuidString)"
             case .streaming(let id, _): return "s-\(id.uuidString)"
             case .typing: return "typing"
             }
@@ -90,6 +96,17 @@ struct ChatView: View {
             guard let id = note.object as? Int, id == threadId, !isSending else { return }
             recoveryStatus = nil
             Task { await loadHistory() }
+        }
+        .onChange(of: photoPickerItems) { _, items in
+            guard !items.isEmpty else { return }
+            Task { await prepareSelectedPhotos(items) }
+        }
+        .sheet(item: $selectedAttachment) { attachment in
+            ChatAttachmentViewer(
+                attachment: attachment,
+                api: api,
+                cache: attachmentCache
+            )
         }
         .confirmationDialog(
             "Stop waiting for this reply?",
@@ -221,7 +238,12 @@ struct ChatView: View {
                 ScrollView {
                     LazyVStack(spacing: 14) {
                         ForEach(rows) { row in
-                            MessageBubble(row: row)
+                            MessageBubble(
+                                row: row,
+                                api: api,
+                                cache: attachmentCache,
+                                onAttachmentTap: { selectedAttachment = $0 }
+                            )
                                 .id(row.id)
                         }
                     }
@@ -260,52 +282,167 @@ struct ChatView: View {
     }
 
     private var composer: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 13))
+        VStack(alignment: .leading, spacing: 8) {
+            if !pendingImages.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(pendingImages) { image in
+                            ZStack(alignment: .topTrailing) {
+                                if let thumbnail = image.image {
+                                    Image(uiImage: thumbnail)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 66, height: 66)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                }
+                                Button {
+                                    removePendingImage(image.id)
+                                } label: {
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(Color.white)
+                                        .frame(width: 20, height: 20)
+                                        .background(Color.black.opacity(0.78), in: Circle())
+                                }
+                                .offset(x: 5, y: -5)
+                                .disabled(isSending)
+                                .accessibilityLabel("Remove selected image")
+                            }
+                            .padding(.top, 5)
+                            .padding(.trailing, 5)
+                        }
+                    }
+                }
+                Text(
+                    "Images are stored with this thread and sent to your selected Coach provider."
+                )
+                .font(Theme.FontStyle.sans(10.5))
+                .foregroundStyle(Theme.Palette.fg3)
+                Text("Image analysis can be wrong and isn’t a medical diagnosis.")
+                    .font(Theme.FontStyle.sans(10.5))
                     .foregroundStyle(Theme.Palette.fg3)
-                TextField("Ask your data…", text: $input, axis: .vertical)
-                    .font(Theme.FontStyle.sans(13))
-                    .foregroundStyle(Theme.Palette.fg0)
-                    .lineLimit(1...5)
-                    .disabled(isSending)
-                    .textFieldStyle(.plain)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .background(Color.black.opacity(0.4), in: Capsule())
-            .overlay(Capsule().strokeBorder(Theme.Palette.borderDefault, lineWidth: 1))
 
-            Button {
-                Task { await send() }
-            } label: {
-                Text("Send")
-                    .font(Theme.FontStyle.sans(11.5, weight: .semibold))
-                    .foregroundStyle(Color.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 9)
-                    .background(
-                        LinearGradient(
-                            colors: [Color(hex: "#8b6fff"), Color(hex: "#6a4dff")],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        in: Capsule()
-                    )
-                    .shadow(color: Theme.Palette.ai.opacity(0.45), radius: 8, y: 3)
-                    .opacity(canSend ? 1 : 0.4)
+            if isPreparingImages {
+                HStack(spacing: 7) {
+                    ProgressView()
+                        .controlSize(.mini)
+                    Text("Preparing images…")
+                        .font(Theme.FontStyle.sans(11))
+                        .foregroundStyle(Theme.Palette.fg2)
+                }
             }
-            .disabled(!canSend)
+
+            HStack(spacing: 8) {
+                PhotosPicker(
+                    selection: $photoPickerItems,
+                    maxSelectionCount: max(1, 3 - pendingImages.count),
+                    matching: .images
+                ) {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Theme.Palette.fg1)
+                        .frame(width: 36, height: 36)
+                        .background(Color.black.opacity(0.4), in: Circle())
+                        .overlay(
+                            Circle().strokeBorder(
+                                Theme.Palette.borderDefault,
+                                lineWidth: 1
+                            )
+                        )
+                }
+                .disabled(isSending || isPreparingImages || pendingImages.count >= 3)
+                .accessibilityLabel("Choose photos")
+                .accessibilityValue("\(pendingImages.count) of 3 selected")
+
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Theme.Palette.fg3)
+                    TextField("Ask your data…", text: $input, axis: .vertical)
+                        .font(Theme.FontStyle.sans(13))
+                        .foregroundStyle(Theme.Palette.fg0)
+                        .lineLimit(1...5)
+                        .disabled(isSending)
+                        .textFieldStyle(.plain)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(Color.black.opacity(0.4), in: Capsule())
+                .overlay(Capsule().strokeBorder(Theme.Palette.borderDefault, lineWidth: 1))
+
+                Button {
+                    Task { await send() }
+                } label: {
+                    Text("Send")
+                        .font(Theme.FontStyle.sans(11.5, weight: .semibold))
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(
+                            LinearGradient(
+                                colors: [Color(hex: "#8b6fff"), Color(hex: "#6a4dff")],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            in: Capsule()
+                        )
+                        .shadow(color: Theme.Palette.ai.opacity(0.45), radius: 8, y: 3)
+                        .opacity(canSend ? 1 : 0.4)
+                }
+                .disabled(!canSend)
+            }
         }
         .padding(.horizontal, Theme.Spacing.md)
         .padding(.vertical, 10)
     }
 
     private var canSend: Bool {
-        !isSending
-            && recoveryStatus == nil
-            && !input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        ChatComposerRules.canSend(
+            text: input,
+            imageCount: pendingImages.count,
+            isSending: isSending,
+            isRecovering: recoveryStatus != nil,
+            isPreparingImages: isPreparingImages
+        )
+    }
+
+    @MainActor
+    private func prepareSelectedPhotos(_ items: [PhotosPickerItem]) async {
+        isPreparingImages = true
+        defer {
+            isPreparingImages = false
+            photoPickerItems = []
+        }
+
+        do {
+            var additions: [PendingChatImage] = []
+            for item in items {
+                try Task.checkCancellation()
+                guard let data = try await item.loadTransferable(type: Data.self) else {
+                    throw ChatImageProcessingError.invalidImage
+                }
+                try Task.checkCancellation()
+                additions.append(try ChatImageNormalizer.normalize(data))
+            }
+            try Task.checkCancellation()
+            guard pendingImages.count + additions.count <= 3 else {
+                sendError = "You can attach up to 3 images."
+                return
+            }
+            pendingImages.append(contentsOf: additions)
+            sendError = nil
+        } catch is CancellationError {
+            return
+        } catch {
+            sendError = (error as? LocalizedError)?.errorDescription
+                ?? "That photo could not be prepared."
+        }
+    }
+
+    private func removePendingImage(_ id: UUID) {
+        pendingImages.removeAll { $0.id == id }
+        sendError = nil
     }
 
     private var latestPersistedMessageId: Int? {
@@ -321,6 +458,15 @@ struct ChatView: View {
             let turn = chatInFlight.inFlight[threadId]
         else { return latestPersistedMessageId }
         return turn.baselineMessageId
+    }
+
+    private var optimisticDraft: ChatDraft? {
+        rows.reversed().compactMap { row -> ChatDraft? in
+            if case .optimistic(_, let content, let attachments) = row {
+                return ChatDraft(text: content, images: attachments)
+            }
+            return nil
+        }.first
     }
 
     @MainActor
@@ -349,16 +495,22 @@ struct ChatView: View {
     @MainActor
     private func send() async {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !isSending else { return }
+        guard canSend else { return }
 
         isSending = true
         sendError = nil
         recoveryStatus = nil
+        let sentDraft = ChatDraft(text: input, images: pendingImages)
         let baselineMessageId = latestPersistedMessageId
         let optimisticId = UUID()
-        rows.append(.optimistic(id: optimisticId, content: trimmed))
+        rows.append(
+            .optimistic(
+                id: optimisticId,
+                content: trimmed,
+                attachments: sentDraft.images
+            )
+        )
         rows.append(.typing)
-        input = ""
         streamingAssistant = nil
         activeTools = []
         defer {
@@ -388,12 +540,18 @@ struct ChatView: View {
         }
 
         do {
-            let stream = ChatService(api: api).send(threadId: threadId, content: trimmed)
+            let stream = ChatService(api: api).send(
+                threadId: threadId,
+                content: trimmed,
+                images: sentDraft.images
+            )
             for try await event in stream {
                 switch event {
                 case .threadId(let id):
                     threadId = id
                     markInFlight(id)
+                    input = ""
+                    pendingImages = []
 
                 case .textDelta(let delta):
                     appendStreamingDelta(delta)
@@ -418,14 +576,22 @@ struct ChatView: View {
                     activeTools = []
                     commitAssistant(reply: reply)
                     clearInFlight()
+                    photoPickerItems = []
 
                 case .error(_, let message, _):
                     sawError = true
                     activeTools = []
-                    // Server persisted any partial; keep the streamed row.
-                    rows.removeAll { if case .typing = $0 { return true }; return false }
-                    streamingAssistant = nil
                     sendError = message
+                    if !sentDraft.images.isEmpty {
+                        rollbackOptimistic(
+                            optimisticId: optimisticId,
+                            restore: sentDraft
+                        )
+                    } else {
+                        // Preserve the existing text-only partial-stream behavior.
+                        rows.removeAll { if case .typing = $0 { return true }; return false }
+                        streamingAssistant = nil
+                    }
                     clearInFlight()
                 }
             }
@@ -448,15 +614,18 @@ struct ChatView: View {
                         await reconcileDroppedTurn(baselineMessageId: baselineMessageId)
                     }
                 } else {
-                    handleUnconfirmedThreadDrop(optimisticId: optimisticId, content: trimmed)
+                    handleUnconfirmedThreadDrop(
+                        optimisticId: optimisticId,
+                        draft: sentDraft
+                    )
                 }
             }
         } catch APIError.unauthorized {
-            rollbackOptimistic(optimisticId: optimisticId, restore: trimmed)
+            rollbackOptimistic(optimisticId: optimisticId, restore: sentDraft)
             clearInFlight()
         } catch APIError.serverError(let code) {
             sendError = ChatView.friendlySendError(forStatus: code)
-            rollbackOptimistic(optimisticId: optimisticId, restore: trimmed)
+            rollbackOptimistic(optimisticId: optimisticId, restore: sentDraft)
             clearInFlight()
         } catch is CancellationError {
             // View popped / task cancelled: silent drop. Keep the turn in-flight.
@@ -473,13 +642,16 @@ struct ChatView: View {
                         await reconcileDroppedTurn(baselineMessageId: baselineMessageId)
                     }
                 } else {
-                    handleUnconfirmedThreadDrop(optimisticId: optimisticId, content: trimmed)
+                    handleUnconfirmedThreadDrop(
+                        optimisticId: optimisticId,
+                        draft: sentDraft
+                    )
                 }
             } else if !sawDone && !sawError {
                 // Open succeeded but no event resolved the turn and the error is
                 // not a recognized transport drop: surface a generic banner.
                 sendError = "Could not send. Please try again."
-                rollbackOptimistic(optimisticId: optimisticId, restore: trimmed)
+                rollbackOptimistic(optimisticId: optimisticId, restore: sentDraft)
                 clearInFlight()
             }
         }
@@ -517,6 +689,9 @@ struct ChatView: View {
                     detail.messages,
                     afterMessageId: baselineMessageId
                 ) {
+                    if let optimisticDraft {
+                        clearDraft(ifMatching: optimisticDraft)
+                    }
                     rows = detail.messages.map { .persisted($0) }
                     chatInFlight.inFlight.removeValue(forKey: threadId)
                     recoveryStatus = nil
@@ -542,8 +717,8 @@ struct ChatView: View {
     }
 
     @MainActor
-    private func handleUnconfirmedThreadDrop(optimisticId: UUID, content: String) {
-        rollbackOptimistic(optimisticId: optimisticId, restore: content)
+    private func handleUnconfirmedThreadDrop(optimisticId: UUID, draft: ChatDraft) {
+        rollbackOptimistic(optimisticId: optimisticId, restore: draft)
         sendError = "Connection lost before the new thread could be confirmed. Check your threads before retrying."
     }
 
@@ -604,12 +779,20 @@ struct ChatView: View {
 
     private static func friendlySendError(forStatus code: Int) -> String {
         switch code {
+        case 400:
+            return "The message or image fields were invalid. Check the draft and try again."
+        case 413:
+            return "The selected images exceed Coach’s upload limits."
+        case 415:
+            return "One of the selected images uses an unsupported format."
+        case 422:
+            return "One of the selected images could not be read."
         case 402:
             return "Anthropic credits exhausted. Top up your Anthropic account, or add a personal key in Settings."
         case 429:
             return "Rate limited by Anthropic. Try again in a moment."
         case 503:
-            return "Anthropic is temporarily unavailable. Try again shortly."
+            return "Coach or secure attachment storage is temporarily unavailable. Try again shortly."
         case 502:
             return "Anthropic returned an error. Try again."
         case 500:
@@ -619,27 +802,67 @@ struct ChatView: View {
         }
     }
 
-    private func rollbackOptimistic(optimisticId: UUID, restore content: String) {
+    private func rollbackOptimistic(optimisticId: UUID, restore draft: ChatDraft) {
+        let streamingId = streamingAssistant?.id
         rows.removeAll { row in
             if case .typing = row { return true }
-            if case .optimistic(let id, _) = row, id == optimisticId { return true }
+            if case .optimistic(let id, _, _) = row, id == optimisticId { return true }
+            if case .streaming(let id, _) = row, id == streamingId { return true }
             return false
         }
-        if input.isEmpty { input = content }
+        streamingAssistant = nil
+        let restored = ChatComposerRules.restoring(
+            draft,
+            over: ChatDraft(text: input, images: pendingImages)
+        )
+        input = restored.text
+        pendingImages = restored.images
+    }
+
+    private func clearDraft(ifMatching draft: ChatDraft) {
+        if input.trimmingCharacters(in: .whitespacesAndNewlines)
+            == draft.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        {
+            input = ""
+        }
+        if pendingImages == draft.images {
+            pendingImages = []
+        }
     }
 }
 
 private struct MessageBubble: View {
     let row: ChatView.ChatRow
+    let api: APIClient
+    let cache: ChatAttachmentCache
+    let onAttachmentTap: (ChatAttachment) -> Void
 
     var body: some View {
         switch row {
         case .persisted(let message):
-            bubble(role: message.role, content: message.content, dimmed: false)
-        case .optimistic(_, let content):
-            bubble(role: .user, content: content, dimmed: true)
+            bubble(
+                role: message.role,
+                content: message.content,
+                attachments: message.attachments,
+                pendingAttachments: [],
+                dimmed: false
+            )
+        case .optimistic(_, let content, let attachments):
+            bubble(
+                role: .user,
+                content: content,
+                attachments: [],
+                pendingAttachments: attachments,
+                dimmed: true
+            )
         case .streaming(_, let content):
-            bubble(role: .assistant, content: content, dimmed: false)
+            bubble(
+                role: .assistant,
+                content: content,
+                attachments: [],
+                pendingAttachments: [],
+                dimmed: false
+            )
         case .typing:
             HStack(spacing: 8) {
                 ThinkingDots()
@@ -654,10 +877,21 @@ private struct MessageBubble: View {
     }
 
     @ViewBuilder
-    private func bubble(role: ChatMessage.Role, content: String, dimmed: Bool) -> some View {
+    private func bubble(
+        role: ChatMessage.Role,
+        content: String,
+        attachments: [ChatAttachment],
+        pendingAttachments: [PendingChatImage],
+        dimmed: Bool
+    ) -> some View {
         HStack {
             if role == .user { Spacer(minLength: 40) }
-            bubbleContent(role: role, content: content)
+            bubbleContent(
+                role: role,
+                content: content,
+                attachments: attachments,
+                pendingAttachments: pendingAttachments
+            )
                 .padding(.horizontal, 14)
                 .padding(.vertical, 11)
                 .background(bubbleBackground(role: role, dimmed: dimmed))
@@ -671,13 +905,61 @@ private struct MessageBubble: View {
     }
 
     @ViewBuilder
-    private func bubbleContent(role: ChatMessage.Role, content: String) -> some View {
+    private func bubbleContent(
+        role: ChatMessage.Role,
+        content: String,
+        attachments: [ChatAttachment],
+        pendingAttachments: [PendingChatImage]
+    ) -> some View {
         if role == .assistant {
             MarkdownView(content: content)
                 .font(Theme.FontStyle.sans(13))
         } else {
-            Text(content)
-                .font(Theme.FontStyle.sans(13))
+            VStack(alignment: .leading, spacing: 8) {
+                if !attachments.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 7) {
+                            ForEach(attachments) { attachment in
+                                Button {
+                                    onAttachmentTap(attachment)
+                                } label: {
+                                    ChatAttachmentImage(
+                                        attachment: attachment,
+                                        api: api,
+                                        cache: cache,
+                                        contentMode: .fill
+                                    )
+                                    .frame(width: 92, height: 92)
+                                    .background(Color.black.opacity(0.2))
+                                    .clipShape(RoundedRectangle(cornerRadius: 9))
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Open attached image")
+                            }
+                        }
+                    }
+                }
+                if !pendingAttachments.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 7) {
+                            ForEach(pendingAttachments) { attachment in
+                                if let image = attachment.image {
+                                    Image(uiImage: image)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fill)
+                                        .frame(width: 92, height: 92)
+                                        .clipShape(RoundedRectangle(cornerRadius: 9))
+                                        .accessibilityLabel("Pending attached image")
+                                }
+                            }
+                        }
+                    }
+                }
+                if !content.isEmpty {
+                    Text(content)
+                        .font(Theme.FontStyle.sans(13))
+                }
+            }
         }
     }
 
@@ -704,6 +986,78 @@ private struct MessageBubble: View {
             UnevenRoundedRectangle(cornerRadii: .init(topLeading: 14, bottomLeading: 14, bottomTrailing: 4, topTrailing: 14))
         } else {
             UnevenRoundedRectangle(cornerRadii: .init(topLeading: 14, bottomLeading: 4, bottomTrailing: 14, topTrailing: 14))
+        }
+    }
+}
+
+private struct ChatAttachmentImage: View {
+    let attachment: ChatAttachment
+    let api: APIClient
+    let cache: ChatAttachmentCache
+    let contentMode: ContentMode
+
+    @State private var image: UIImage?
+    @State private var failed = false
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: contentMode)
+            } else if failed {
+                Image(systemName: "photo.badge.exclamationmark")
+                    .foregroundStyle(Theme.Palette.fg3)
+            } else {
+                ProgressView()
+                    .controlSize(.small)
+            }
+        }
+        .task(id: attachment.id) {
+            do {
+                let data = try await cache.data(for: attachment, api: api)
+                try Task.checkCancellation()
+                guard let loaded = UIImage(data: data) else {
+                    failed = true
+                    return
+                }
+                image = loaded
+            } catch is CancellationError {
+                return
+            } catch {
+                failed = true
+            }
+        }
+    }
+}
+
+private struct ChatAttachmentViewer: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let attachment: ChatAttachment
+    let api: APIClient
+    let cache: ChatAttachmentCache
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                ChatAttachmentImage(
+                    attachment: attachment,
+                    api: api,
+                    cache: cache,
+                    contentMode: .fit
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .padding()
+            }
+            .navigationTitle("Attached image")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
     }
 }
