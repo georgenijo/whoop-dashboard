@@ -2,17 +2,28 @@
 
 import DOMPurify from "dompurify";
 import { marked } from "marked";
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import CoachWorkDisclosure from "./CoachWorkDisclosure";
-import type { ComposerMessage } from "./useChatSend";
+import type {
+  ComposerAttachment,
+  ComposerMessage,
+} from "./useChatSend";
 
-export default function MessageBubble({ msg }: { msg: ComposerMessage }) {
+type Props = {
+  msg: ComposerMessage;
+  onAttachmentClick?: (
+    attachments: ComposerAttachment[],
+    index: number,
+    trigger: HTMLButtonElement,
+  ) => void;
+};
+
+export default function MessageBubble({ msg, onAttachmentClick }: Props) {
   const isUser = msg.role === "user";
   const isAborted = !isUser && !msg.streaming && msg.status === "aborted";
-  const [html, setHtml] = useState<string | null>(null);
-  useEffect(() => {
-    if (isUser) return;
-    setHtml(DOMPurify.sanitize(marked.parse(msg.content) as string));
+  const html = useMemo(() => {
+    if (isUser) return null;
+    return DOMPurify.sanitize(marked.parse(msg.content) as string);
   }, [isUser, msg.content]);
 
   // Don't render empty aborted assistant bubbles (race between abort + tool flush).
@@ -26,7 +37,41 @@ export default function MessageBubble({ msg }: { msg: ComposerMessage }) {
         }`}
       >
         {isUser ? (
-          msg.content
+          <>
+            {msg.attachments && msg.attachments.length > 0 ? (
+              <div className="coach-message-attachments">
+                {msg.attachments.map((attachment, index) => (
+                  <button
+                    type="button"
+                    className="coach-message-thumbnail"
+                    key={attachment.id}
+                    onClick={(event) =>
+                      onAttachmentClick?.(
+                        msg.attachments ?? [],
+                        index,
+                        event.currentTarget,
+                      )
+                    }
+                    aria-label={`Open attached image ${index + 1} of ${
+                      msg.attachments?.length ?? 0
+                    }`}
+                  >
+                    {/* Authenticated same-origin URLs include the session cookie. */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={attachment.url}
+                      alt={`Attachment ${index + 1}`}
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {msg.content ? (
+              <div className="coach-user-message-text">{msg.content}</div>
+            ) : null}
+          </>
         ) : (
           <>
             {msg.workLog ? (

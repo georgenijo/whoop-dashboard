@@ -35,6 +35,11 @@ export default function CoachWorkspace({
     input,
     setInput,
     loading,
+    preparingImages,
+    pendingImages,
+    attachmentError,
+    addImages,
+    removeImage,
     progressLabel,
     mobileOpen,
     setMobileOpen,
@@ -103,8 +108,13 @@ export default function CoachWorkspace({
             input={input}
             setInput={setInput}
             loading={loading}
+            preparingImages={preparingImages}
+            pendingImages={pendingImages}
+            attachmentError={attachmentError}
             progressLabel={progressLabel}
             inputRef={inputRef}
+            onAddImages={addImages}
+            onRemoveImage={removeImage}
             onSubmit={() => void send(input)}
             onKeyDown={handleKeyDown}
           />

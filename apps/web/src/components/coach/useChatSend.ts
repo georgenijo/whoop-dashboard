@@ -17,6 +17,31 @@ import {
 } from "react";
 
 export type ChatMessageStatus = "complete" | "aborted";
+export type ChatAttachment = {
+  id: string;
+  url: string;
+  mime_type: "image/jpeg";
+  width: number;
+  height: number;
+  size_bytes: number;
+};
+
+export type ComposerAttachment = {
+  id: string;
+  url: string;
+  mime_type: string;
+  width?: number;
+  height?: number;
+  size_bytes: number;
+  pending?: boolean;
+};
+
+export type PendingChatImage = {
+  id: string;
+  file: File;
+  previewUrl: string;
+};
+
 export type ChatMessage = {
   id: number;
   role: "user" | "assistant";
@@ -24,6 +49,7 @@ export type ChatMessage = {
   created_at: string;
   status?: ChatMessageStatus;
   work_log?: CoachWorkLog | null;
+  attachments: ChatAttachment[];
 };
 
 export type ComposerMessage = {
@@ -33,6 +59,7 @@ export type ComposerMessage = {
   status?: ChatMessageStatus;
   workLog?: CoachWorkLog | null;
   workStartedAt?: number;
+  attachments?: ComposerAttachment[];
 };
 
 type UseChatSendParams = {
@@ -49,6 +76,9 @@ type SendParams = Omit<UseChatSendParams, "initialMessages"> & {
   setMessages: Dispatch<SetStateAction<ComposerMessage[]>>;
   setInput: Dispatch<SetStateAction<string>>;
   setLoading: Dispatch<SetStateAction<boolean>>;
+  setPreparingImages: Dispatch<SetStateAction<boolean>>;
+  pendingImages: PendingChatImage[];
+  setPendingImages: (images: PendingChatImage[]) => void;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   abortRef: RefObject<AbortController | null>;
 };
@@ -247,13 +277,15 @@ function failAssistant(
 function applyThreadHeader(
   response: Response,
   setThreadId: Dispatch<SetStateAction<number>>,
-) {
+): number | null {
   const value = response.headers.get("x-thread-id");
-  if (!value) return;
+  if (!value) return null;
   const nextThreadId = Number(value);
   if (Number.isInteger(nextThreadId) && nextThreadId > 0) {
     setThreadId(nextThreadId);
+    return nextThreadId;
   }
+  return null;
 }
 
 function isAbortError(error: unknown): boolean {
@@ -266,6 +298,7 @@ function toComposerMessages(messages: ChatMessage[]): ComposerMessage[] {
     content: message.content,
     status: message.status,
     workLog: message.work_log ?? null,
+    attachments: message.attachments,
   }));
 }
 
@@ -280,9 +313,25 @@ function withoutPendingTurn(messages: ComposerMessage[]): ComposerMessage[] {
 
 async function postMessage(
   userMessage: ComposerMessage,
+  images: PendingChatImage[],
   threadId: number,
   signal: AbortSignal,
 ): Promise<Response> {
+  if (images.length > 0) {
+    const formData = new FormData();
+    formData.set("message", userMessage.content);
+    formData.set("thread_id", String(threadId));
+    formData.set("days", "9999");
+    for (const image of images) {
+      formData.append("images", image.file);
+    }
+    return fetch("/api/chat", {
+      method: "POST",
+      body: formData,
+      signal,
+    });
+  }
+
   return fetch("/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -292,6 +341,57 @@ async function postMessage(
       days: 9999,
     }),
     signal,
+  });
+}
+
+async function refreshPersistedMessages(
+  threadId: number,
+): Promise<ComposerMessage[] | null> {
+  try {
+    const response = await fetch(
+      `/api/chat/history?thread_id=${encodeURIComponent(threadId)}`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) return null;
+    return toComposerMessages((await response.json()) as ChatMessage[]);
+  } catch {
+    return null;
+  }
+}
+
+async function responseErrorMessage(response: Response): Promise<string> {
+  const body = await response.text();
+  try {
+    const parsed = JSON.parse(body) as unknown;
+    if (isRecord(parsed) && typeof parsed.error === "string") {
+      return parsed.error;
+    }
+  } catch {
+    // Plain-text errors remain valid for legacy and infrastructure responses.
+  }
+  return body || `Server error ${response.status}`;
+}
+
+function releasePreviewUrls(images: PendingChatImage[]) {
+  for (const image of images) URL.revokeObjectURL(image.previewUrl);
+}
+
+function optimisticAttachments(
+  images: PendingChatImage[],
+): ComposerAttachment[] {
+  return images.map((image) => ({
+    id: image.id,
+    url: image.previewUrl,
+    mime_type: image.file.type,
+    size_bytes: image.file.size,
+    pending: true,
+  }));
+}
+
+async function yieldForPreparingState(images: PendingChatImage[]) {
+  if (images.length === 0 || typeof requestAnimationFrame !== "function") return;
+  await new Promise<void>((resolve) => {
+    requestAnimationFrame(() => resolve());
   });
 }
 
@@ -435,15 +535,20 @@ async function readChatStream(
 }
 
 async function sendChatMessage(params: SendParams) {
-  if (!params.text.trim()) return;
+  if (!params.text.trim() && params.pendingImages.length === 0) return;
   params.setBadApiKey?.(false);
 
-  const userMessage: ComposerMessage = { role: "user", content: params.text };
+  const draftText = params.text;
+  const draftImages = params.pendingImages;
+  const userMessage: ComposerMessage = {
+    role: "user",
+    content: params.text,
+    attachments: optimisticAttachments(draftImages),
+  };
   const nextMessages = [...withoutPendingTurn(params.messages), userMessage];
   params.setMessages(nextMessages);
-  params.setInput("");
-  if (params.inputRef.current) params.inputRef.current.style.height = "auto";
   params.setLoading(true);
+  params.setPreparingImages(draftImages.length > 0);
 
   params.abortRef.current?.abort();
   const controller = new AbortController();
@@ -464,13 +569,17 @@ async function sendChatMessage(params: SendParams) {
   let badApiKey = false;
 
   try {
+    await yieldForPreparingState(draftImages);
     const response = await postMessage(
       userMessage,
+      draftImages,
       params.threadId,
       controller.signal,
     );
     if (!isCurrent()) return;
-    applyThreadHeader(response, params.setThreadId);
+    params.setPreparingImages(false);
+    const responseThreadId =
+      applyThreadHeader(response, params.setThreadId) ?? params.threadId;
     if (!response.ok) {
       if (response.status === 401) {
         try {
@@ -484,8 +593,11 @@ async function sendChatMessage(params: SendParams) {
           // Fall through to the generic error path.
         }
       }
-      throw new Error((await response.text()) || `Server error ${response.status}`);
+      throw new Error(await responseErrorMessage(response));
     }
+    params.setInput("");
+    params.setPendingImages([]);
+    if (params.inputRef.current) params.inputRef.current.style.height = "auto";
 
     await readChatStream(response, {
       appendText: (text) =>
@@ -506,11 +618,30 @@ async function sendChatMessage(params: SendParams) {
     if (!isCurrent()) return;
     if (badApiKey) {
       params.setMessages((previous) => previous.slice(0, assistantIndex));
+      params.setInput(draftText);
+      params.setPendingImages(draftImages);
       return;
     }
+    if (draftImages.length > 0) {
+      const persistedMessages = await refreshPersistedMessages(responseThreadId);
+      if (persistedMessages) {
+        params.setMessages(persistedMessages);
+      } else {
+        params.setMessages((previous) =>
+          previous.map((message) => ({
+            ...message,
+            attachments: message.attachments?.filter(
+              (attachment) => !attachment.pending,
+            ),
+          })),
+        );
+      }
+    }
+    releasePreviewUrls(draftImages);
     void params.refreshThreads();
   } catch (error) {
     if (isAbortError(error)) {
+      releasePreviewUrls(draftImages);
       if (isCurrent()) {
         params.setMessages((previous) => previous.slice(0, assistantIndex));
       }
@@ -518,6 +649,8 @@ async function sendChatMessage(params: SendParams) {
       return;
     }
     if (!isCurrent()) return;
+    params.setInput(draftText);
+    params.setPendingImages(draftImages);
     failAssistant(
       params.setMessages,
       assistantIndex,
@@ -527,6 +660,7 @@ async function sendChatMessage(params: SendParams) {
     if (isCurrent()) {
       params.abortRef.current = null;
       params.setLoading(false);
+      params.setPreparingImages(false);
       params.inputRef.current?.focus();
     }
   }
@@ -544,20 +678,85 @@ export function useChatSend({
   );
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [preparingImages, setPreparingImages] = useState(false);
+  const [pendingImages, setPendingImagesState] = useState<PendingChatImage[]>([]);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const pendingImagesRef = useRef<PendingChatImage[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const activeMessage = [...messages]
     .reverse()
     .find((message) => message.streaming && message.role === "assistant");
 
+  const setPendingImages = useCallback((images: PendingChatImage[]) => {
+    pendingImagesRef.current = images;
+    setPendingImagesState(images);
+  }, []);
+
+  const addImages = useCallback(
+    (files: File[]) => {
+      const supported = files.filter((file) =>
+        ["image/jpeg", "image/png", "image/webp"].includes(file.type),
+      );
+      if (supported.length !== files.length) {
+        setAttachmentError("Choose JPEG, PNG, or WebP images.");
+        return;
+      }
+      if (supported.some((file) => file.size > 8 * 1024 * 1024)) {
+        setAttachmentError("Each image must be 8 MB or smaller.");
+        return;
+      }
+      const available = 3 - pendingImagesRef.current.length;
+      if (available <= 0 || supported.length > available) {
+        setAttachmentError("You can attach up to 3 images.");
+        return;
+      }
+      const additions = supported.map((file) => ({
+        id: crypto.randomUUID(),
+        file,
+        previewUrl: URL.createObjectURL(file),
+      }));
+      setAttachmentError(null);
+      setPendingImages([...pendingImagesRef.current, ...additions]);
+    },
+    [setPendingImages],
+  );
+
+  const removeImage = useCallback(
+    (id: string) => {
+      const image = pendingImagesRef.current.find((item) => item.id === id);
+      if (image) URL.revokeObjectURL(image.previewUrl);
+      setPendingImages(
+        pendingImagesRef.current.filter((item) => item.id !== id),
+      );
+      setAttachmentError(null);
+    },
+    [setPendingImages],
+  );
+
+  /* eslint-disable react-hooks/set-state-in-effect -- A server-driven thread
+     change intentionally resets all local composer state in one effect. */
   useEffect(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    releasePreviewUrls(pendingImagesRef.current);
+    setPendingImages([]);
     setMessages(toComposerMessages(initialMessages));
     setInput("");
     setLoading(false);
+    setPreparingImages(false);
+    setAttachmentError(null);
     if (inputRef.current) inputRef.current.style.height = "auto";
-  }, [initialMessages, threadId]);
+  }, [initialMessages, setPendingImages, threadId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  useEffect(
+    () => () => {
+      releasePreviewUrls(pendingImagesRef.current);
+      pendingImagesRef.current = [];
+    },
+    [],
+  );
 
   const send = useCallback(
     (text: string) =>
@@ -569,12 +768,23 @@ export function useChatSend({
         setMessages,
         setInput,
         setLoading,
+        setPreparingImages,
+        pendingImages,
+        setPendingImages,
         inputRef,
         abortRef,
         refreshThreads,
         setBadApiKey,
       }),
-    [messages, refreshThreads, setBadApiKey, setThreadId, threadId],
+    [
+      messages,
+      pendingImages,
+      refreshThreads,
+      setBadApiKey,
+      setPendingImages,
+      setThreadId,
+      threadId,
+    ],
   );
 
   return {
@@ -582,6 +792,11 @@ export function useChatSend({
     input,
     setInput,
     loading,
+    preparingImages,
+    pendingImages,
+    attachmentError,
+    addImages,
+    removeImage,
     inputRef,
     send,
     progress: activeMessage?.workLog ?? null,

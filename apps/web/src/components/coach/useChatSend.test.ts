@@ -254,6 +254,7 @@ describe("useChatSend work logs", () => {
           content: "New thread",
           created_at: "2026-07-30T00:00:00Z",
           work_log: persisted,
+          attachments: [],
         },
       ],
     });
@@ -266,8 +267,190 @@ describe("useChatSend work logs", () => {
           content: "New thread",
           status: undefined,
           workLog: persisted,
+          attachments: [],
         },
       ]);
     });
+  });
+});
+
+describe("useChatSend image attachments", () => {
+  const createObjectUrl = vi.fn<(file: Blob) => string>();
+  const revokeObjectUrl = vi.fn<(url: string) => void>();
+
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    createObjectUrl.mockReset();
+    revokeObjectUrl.mockReset();
+    createObjectUrl.mockImplementation(
+      () => `blob:preview-${createObjectUrl.mock.calls.length}`,
+    );
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectUrl,
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectUrl,
+    });
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      (callback: FrameRequestCallback) => {
+        callback(0);
+        return 1;
+      },
+    );
+  });
+
+  it("sends image-only multipart, refreshes persisted attachments, and releases previews", async () => {
+    const pendingResponse = deferred<Response>();
+    const fetchMock = vi
+      .fn()
+      .mockImplementationOnce(() => pendingResponse.promise)
+      .mockResolvedValueOnce(
+        Response.json([
+          {
+            id: 11,
+            role: "user",
+            content: "",
+            created_at: "2026-07-30T00:00:00Z",
+            status: "complete",
+            work_log: null,
+            attachments: [
+              {
+                id: "stored-image",
+                url: "/api/chat/attachments/stored-image",
+                mime_type: "image/jpeg",
+                width: 800,
+                height: 600,
+                size_bytes: 120_000,
+              },
+            ],
+          },
+          {
+            id: 12,
+            role: "assistant",
+            content: "A visible label.",
+            created_at: "2026-07-30T00:00:01Z",
+            status: "complete",
+            work_log: null,
+            attachments: [],
+          },
+        ]),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderChat();
+    const file = new File(["jpeg"], "meal.jpg", { type: "image/jpeg" });
+
+    act(() => result.current.addImages([file]));
+    await waitFor(() => expect(result.current.pendingImages).toHaveLength(1));
+
+    let sendPromise = Promise.resolve();
+    act(() => {
+      sendPromise = result.current.send("");
+    });
+    await waitFor(() => {
+      expect(result.current.messages[0].attachments).toEqual([
+        expect.objectContaining({
+          url: "blob:preview-1",
+          pending: true,
+        }),
+      ]);
+      expect(result.current.preparingImages).toBe(true);
+    });
+
+    await act(async () => {
+      pendingResponse.resolve(
+        new Response(
+          streamResponse([
+            sse("text_delta", { text: "A visible label." }),
+            sse("done", { reply: "A visible label.", work_log: null }),
+          ]).body,
+          { headers: { "x-thread-id": "7" } },
+        ),
+      );
+      await sendPromise;
+    });
+
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    const body = request.body as FormData;
+    expect(request.headers).toBeUndefined();
+    expect(body.get("message")).toBe("");
+    expect(body.get("thread_id")).toBe("1");
+    expect(body.get("days")).toBe("9999");
+    expect(body.getAll("images")).toEqual([file]);
+    expect(result.current.pendingImages).toEqual([]);
+    expect(result.current.input).toBe("");
+    expect(result.current.messages[0].attachments).toEqual([
+      expect.objectContaining({
+        id: "stored-image",
+        url: "/api/chat/attachments/stored-image",
+      }),
+    ]);
+    expect(revokeObjectUrl).toHaveBeenCalledWith("blob:preview-1");
+  });
+
+  it("restores the exact text and selected files after a provider stream failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        streamResponse([
+          sse("error", {
+            message: "The selected Coach provider rejected the request.",
+          }),
+        ]),
+      ),
+    );
+    const { result } = renderChat();
+    const file = new File(["png"], "injury.png", { type: "image/png" });
+
+    act(() => {
+      result.current.setInput("What do you notice?");
+      result.current.addImages([file]);
+    });
+    await waitFor(() => expect(result.current.pendingImages).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.send("What do you notice?");
+    });
+
+    expect(result.current.input).toBe("What do you notice?");
+    expect(result.current.pendingImages[0].file).toBe(file);
+    expect(result.current.messages.at(-1)?.content).toContain(
+      "selected Coach provider rejected",
+    );
+    expect(revokeObjectUrl).not.toHaveBeenCalled();
+  });
+
+  it("enforces the selection limit and releases URLs on remove, thread switch, and unmount", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json([])));
+    const { result, rerender, unmount } = renderChat();
+    const files = [1, 2, 3, 4].map(
+      (index) =>
+        new File([String(index)], `${index}.jpg`, { type: "image/jpeg" }),
+    );
+
+    act(() => result.current.addImages(files));
+    expect(result.current.pendingImages).toEqual([]);
+    expect(result.current.attachmentError).toBe(
+      "You can attach up to 3 images.",
+    );
+
+    act(() => result.current.addImages([files[0]]));
+    await waitFor(() => expect(result.current.pendingImages).toHaveLength(1));
+    const firstId = result.current.pendingImages[0].id;
+    act(() => result.current.removeImage(firstId));
+    expect(revokeObjectUrl).toHaveBeenCalledWith("blob:preview-1");
+
+    act(() => result.current.addImages([files[1]]));
+    await waitFor(() => expect(result.current.pendingImages).toHaveLength(1));
+    rerender({ id: 2, messages: [] });
+    await waitFor(() => expect(result.current.pendingImages).toEqual([]));
+    expect(revokeObjectUrl).toHaveBeenCalledWith("blob:preview-2");
+
+    act(() => result.current.addImages([files[2]]));
+    await waitFor(() => expect(result.current.pendingImages).toHaveLength(1));
+    unmount();
+    expect(revokeObjectUrl).toHaveBeenCalledWith("blob:preview-3");
   });
 });
