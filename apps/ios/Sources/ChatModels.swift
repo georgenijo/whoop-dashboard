@@ -28,6 +28,7 @@ struct ChatMessage: Decodable, Identifiable, Hashable {
     let role: Role
     let content: String
     let createdAt: Date
+    let attachments: [ChatAttachment]
 
     enum Role: String, Decodable, Hashable {
         case user
@@ -35,8 +36,49 @@ struct ChatMessage: Decodable, Identifiable, Hashable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, role, content
+        case id, role, content, attachments
         case createdAt = "created_at"
+    }
+
+    init(
+        id: Int,
+        role: Role,
+        content: String,
+        createdAt: Date,
+        attachments: [ChatAttachment] = []
+    ) {
+        self.id = id
+        self.role = role
+        self.content = content
+        self.createdAt = createdAt
+        self.attachments = attachments
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(Int.self, forKey: .id)
+        role = try container.decode(Role.self, forKey: .role)
+        content = try container.decode(String.self, forKey: .content)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        attachments = try container.decodeIfPresent(
+            [ChatAttachment].self,
+            forKey: .attachments
+        ) ?? []
+    }
+}
+
+struct ChatAttachment: Decodable, Identifiable, Hashable {
+    let id: String
+    let url: String
+    let mimeType: String
+    let width: Int
+    let height: Int
+    let sizeBytes: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id, url, width, height
+        case mimeType = "mime_type"
+        case sizeBytes = "size_bytes"
     }
 }
 

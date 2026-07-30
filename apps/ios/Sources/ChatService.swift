@@ -88,7 +88,11 @@ struct ChatService {
         try await api.get("/api/threads/\(id)")
     }
 
-    func send(threadId: Int?, content: String) -> AsyncThrowingStream<ChatStreamEvent, Error> {
+    func send(
+        threadId: Int?,
+        content: String,
+        images: [PendingChatImage] = []
+    ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
         struct Body: Encodable {
             let messages: [Message]
             let threadId: Int?
@@ -121,11 +125,36 @@ struct ChatService {
         return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    let (headers, lines) = try await api.openSSE(
-                        "/api/chat",
-                        query: [URLQueryItem(name: "stream", value: "true")],
-                        body: body
-                    )
+                    let headers: HTTPURLResponse
+                    let lines: AsyncLineSequence<URLSession.AsyncBytes>
+                    if images.isEmpty {
+                        (headers, lines) = try await api.openSSE(
+                            "/api/chat",
+                            query: [URLQueryItem(name: "stream", value: "true")],
+                            body: body
+                        )
+                    } else {
+                        var fields = [
+                            "message": content,
+                            "days": "9999",
+                        ]
+                        if let threadId {
+                            fields["thread_id"] = String(threadId)
+                        }
+                        let files = images.enumerated().map { index, image in
+                            MultipartFile(
+                                filename: "image-\(index + 1).jpg",
+                                mimeType: "image/jpeg",
+                                data: image.jpegData
+                            )
+                        }
+                        (headers, lines) = try await api.openMultipartSSE(
+                            "/api/chat",
+                            query: [URLQueryItem(name: "stream", value: "true")],
+                            fields: fields,
+                            files: files
+                        )
+                    }
                     if let raw = headers.value(forHTTPHeaderField: "x-thread-id"),
                         let id = Int(raw) {
                         continuation.yield(.threadId(id))
