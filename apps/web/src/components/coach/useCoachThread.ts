@@ -58,7 +58,20 @@ export function useCoachThread(
     handleDeleteThread,
   } = useThreadList({ initialThreadId, initialThreads, onNavigate: closeMobile });
 
-  const { messages, input, setInput, loading, inputRef, send, progressLabel } = useChatSend({
+  const {
+    messages,
+    input,
+    setInput,
+    loading,
+    preparingImages,
+    pendingImages,
+    attachmentError,
+    addImages,
+    removeImage,
+    inputRef,
+    send,
+    progressLabel,
+  } = useChatSend({
     initialMessages,
     threadId,
     setThreadId,
@@ -83,6 +96,11 @@ export function useCoachThread(
     input,
     setInput,
     loading,
+    preparingImages,
+    pendingImages,
+    attachmentError,
+    addImages,
+    removeImage,
     progressLabel,
     mobileOpen,
     setMobileOpen,

@@ -1,13 +1,28 @@
 "use client";
 
-import { useEffect, type KeyboardEvent, type RefObject } from "react";
+import { Paperclip, X } from "lucide-react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type DragEvent,
+  type KeyboardEvent,
+  type RefObject,
+} from "react";
+import type { PendingChatImage } from "./useChatSend";
 
 type Props = {
   input: string;
   setInput: (value: string) => void;
   loading: boolean;
+  preparingImages: boolean;
+  pendingImages: PendingChatImage[];
+  attachmentError?: string | null;
   progressLabel?: string | null;
   inputRef: RefObject<HTMLTextAreaElement | null>;
+  onAddImages: (files: File[]) => void;
+  onRemoveImage: (id: string) => void;
   onSubmit: () => void;
   onKeyDown: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
 };
@@ -16,20 +31,134 @@ export default function ChatInput({
   input,
   setInput,
   loading,
+  preparingImages,
+  pendingImages,
+  attachmentError,
   progressLabel,
   inputRef,
+  onAddImages,
+  onRemoveImage,
   onSubmit,
   onKeyDown,
 }: Props) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragActive, setDragActive] = useState(false);
+
   useEffect(() => {
     if (input === "" && inputRef.current) {
       inputRef.current.style.height = "auto";
     }
   }, [input, inputRef]);
 
+  const addImageFiles = (files: File[]) => {
+    if (files.length > 0) onAddImages(files);
+  };
+
+  const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(event.clipboardData.items)
+      .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null);
+    if (files.length > 0) {
+      event.preventDefault();
+      addImageFiles(files);
+    }
+  };
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDragActive(false);
+    if (loading) return;
+    addImageFiles(
+      Array.from(event.dataTransfer.files).filter((file) =>
+        file.type.startsWith("image/"),
+      ),
+    );
+  };
+
+  const atLimit = pendingImages.length >= 3;
+
   return (
-    <div className="coach-composer">
+    <div
+      className={`coach-composer ${dragActive ? "is-dragging" : ""}`}
+      onDragEnter={(event) => {
+        event.preventDefault();
+        if (!loading) setDragActive(true);
+      }}
+      onDragOver={(event) => event.preventDefault()}
+      onDragLeave={(event) => {
+        const relatedTarget = event.relatedTarget;
+        if (
+          !(relatedTarget instanceof Node) ||
+          !event.currentTarget.contains(relatedTarget)
+        ) {
+          setDragActive(false);
+        }
+      }}
+      onDrop={handleDrop}
+    >
+      {pendingImages.length > 0 ? (
+        <>
+          <div className="coach-attachment-previews" aria-label="Attached images">
+            {pendingImages.map((image, index) => (
+              <div className="coach-attachment-preview" key={image.id}>
+                {/* The object URL is local and released by useChatSend. */}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={image.previewUrl}
+                  alt={`Selected image ${index + 1}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => onRemoveImage(image.id)}
+                  aria-label={`Remove selected image ${index + 1}`}
+                  disabled={loading}
+                >
+                  <X size={13} aria-hidden />
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="coach-attachment-notice">
+            Images are stored with this thread and sent to your selected Coach
+            provider.
+          </p>
+          <p className="coach-medical-image-note">
+            Image analysis can be wrong and isn’t a medical diagnosis.
+          </p>
+        </>
+      ) : null}
+      {attachmentError ? (
+        <p className="coach-attachment-error" role="alert">
+          {attachmentError}
+        </p>
+      ) : null}
       <div className="coach-input-shell">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          hidden
+          onChange={(event) => {
+            addImageFiles(Array.from(event.target.files ?? []));
+            event.target.value = "";
+          }}
+        />
+        <button
+          type="button"
+          className="coach-attach"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={loading || atLimit}
+          aria-label="Attach images"
+          aria-describedby={atLimit ? "coach-image-limit" : undefined}
+          title={atLimit ? "You can attach up to 3 images." : "Attach images"}
+        >
+          <Paperclip size={18} strokeWidth={1.8} aria-hidden />
+          <span className="sr-only">
+            {pendingImages.length} of 3 images selected
+          </span>
+        </button>
         <textarea
           ref={inputRef}
           value={input}
@@ -39,6 +168,7 @@ export default function ChatInput({
             e.target.style.height = `${e.target.scrollHeight}px`;
           }}
           onKeyDown={onKeyDown}
+          onPaste={handlePaste}
           placeholder="Ask about your recovery, sleep, strain..."
           rows={1}
           disabled={loading}
@@ -48,7 +178,7 @@ export default function ChatInput({
           type="button"
           className="coach-send"
           onClick={onSubmit}
-          disabled={!input.trim() || loading}
+          disabled={(!input.trim() && pendingImages.length === 0) || loading}
           aria-label="Send message"
           data-track="coach:send"
         >
@@ -56,8 +186,18 @@ export default function ChatInput({
         </button>
       </div>
       <div className="coach-footer">
-        <span>Enter to send · Shift+Enter for newline</span>
-        <span>{loading ? progressLabel ?? "Thinking..." : " "}</span>
+        <span id="coach-image-limit">
+          {atLimit
+            ? "3 image limit reached"
+            : "Enter to send · Shift+Enter for newline"}
+        </span>
+        <span>
+          {preparingImages
+            ? "Preparing images…"
+            : loading
+              ? progressLabel ?? "Thinking..."
+              : " "}
+        </span>
       </div>
     </div>
   );
