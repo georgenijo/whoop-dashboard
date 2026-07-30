@@ -1,11 +1,17 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+// @vitest-environment node
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import sharp from "sharp";
 
 vi.mock("server-only", () => ({}));
 
 const testState = vi.hoisted(() => ({
   afterCallbacks: [] as Array<() => void | Promise<void>>,
   thread: { id: 42, title: "existing" } as { id: number; title: string | null },
-  conversation: [] as Array<{ role: "user" | "assistant"; content: string }>,
+  conversation: [] as Array<{
+    role: "user" | "assistant";
+    contentBlocks: unknown[];
+    images: [];
+  }>,
   provider: "anthropic" as "anthropic" | "cursor",
 }));
 
@@ -126,6 +132,31 @@ function makeRequest(body: unknown, query?: string): Request {
   });
 }
 
+async function makePng(): Promise<Buffer> {
+  return sharp({
+    create: {
+      width: 12,
+      height: 8,
+      channels: 4,
+      background: { r: 100, g: 40, b: 200, alpha: 0.5 },
+    },
+  })
+    .png()
+    .toBuffer();
+}
+
+function makeMultipartRequest(
+  form: FormData,
+  query = "stream=false",
+  headers?: HeadersInit,
+): Request {
+  return new Request(`http://localhost/api/chat?${query}`, {
+    method: "POST",
+    headers,
+    body: form,
+  });
+}
+
 async function readEntireStream(stream: ReadableStream<Uint8Array>): Promise<string> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -138,6 +169,10 @@ async function readEntireStream(stream: ReadableStream<Uint8Array>): Promise<str
   out += decoder.decode();
   return out;
 }
+
+beforeEach(() => {
+  process.env.VAULT_KEY = Buffer.alloc(32, 3).toString("base64");
+});
 
 afterEach(() => {
   runAndPersistImpl = async () => "ok";
@@ -318,5 +353,115 @@ describe("POST /api/chat — SSE wiring", () => {
     const body = (await res.json()) as { thread_id: number; reply: string };
     expect(body.reply).toBe("json reply");
     expect(body.thread_id).toBe(42);
+  });
+});
+
+describe("POST /api/chat — multipart images", () => {
+  it("keeps JSON text-only requests compatible while passing a provider-neutral turn", async () => {
+    let received: unknown;
+    runAndPersistImpl = async (_uid, _thread, turn) => {
+      received = turn;
+      return "ok";
+    };
+    const res = await POST(
+      makeRequest(
+        { messages: [{ role: "user", content: "plain text" }], thread_id: 42 },
+        "stream=false",
+      ),
+    );
+
+    expect(res.status).toBe(200);
+    expect(received).toEqual({
+      displayText: "plain text",
+      modelText: "plain text",
+      images: [],
+    });
+  });
+
+  it("accepts multipart text-only, image-only, and captioned image turns", async () => {
+    const turns: Array<{
+      displayText: string;
+      modelText: string;
+      images: Array<{ mimeType: string }>;
+    }> = [];
+    runAndPersistImpl = async (_uid, _thread, turn) => {
+      turns.push(turn as (typeof turns)[number]);
+      return "ok";
+    };
+
+    const textOnly = new FormData();
+    textOnly.set("message", "multipart text");
+    textOnly.set("thread_id", "42");
+    expect((await POST(makeMultipartRequest(textOnly))).status).toBe(200);
+
+    const bytes = await makePng();
+    const imageOnly = new FormData();
+    imageOnly.set("thread_id", "42");
+    imageOnly.append("images", new Blob([bytes], { type: "image/png" }), "secret.png");
+    expect((await POST(makeMultipartRequest(imageOnly))).status).toBe(200);
+
+    const captioned = new FormData();
+    captioned.set("thread_id", "42");
+    captioned.set("message", "What is shown?");
+    captioned.append("images", new Blob([bytes], { type: "image/png" }), "secret.png");
+    expect((await POST(makeMultipartRequest(captioned))).status).toBe(200);
+
+    expect(turns[0]).toMatchObject({ displayText: "multipart text", images: [] });
+    expect(turns[1].displayText).toBe("");
+    expect(turns[1].modelText).toContain("Analyze the attached image");
+    expect(turns[1].images[0].mimeType).toBe("image/jpeg");
+    expect(turns[2]).toMatchObject({
+      displayText: "What is shown?",
+      modelText: "What is shown?",
+    });
+  });
+
+  it("returns structured count, format, and request-size errors before streaming", async () => {
+    const bytes = await makePng();
+    const four = new FormData();
+    four.set("thread_id", "42");
+    for (let index = 0; index < 4; index += 1) {
+      four.append("images", new Blob([bytes], { type: "image/png" }), `${index}.png`);
+    }
+    const tooMany = await POST(makeMultipartRequest(four));
+    expect(tooMany.status).toBe(413);
+    expect(await tooMany.json()).toMatchObject({ code: "too_many_images" });
+
+    const svg = new FormData();
+    svg.set("thread_id", "42");
+    svg.append("images", new Blob(["<svg/>"], { type: "image/svg+xml" }), "image.svg");
+    const unsupported = await POST(makeMultipartRequest(svg));
+    expect(unsupported.status).toBe(415);
+    expect(await unsupported.json()).toMatchObject({ code: "unsupported_image" });
+
+    const oversized = new FormData();
+    oversized.set("message", "never parsed");
+    const requestTooLarge = await POST(
+      makeMultipartRequest(oversized, "stream=false", {
+        "content-length": String(31 * 1024 * 1024),
+      }),
+    );
+    expect(requestTooLarge.status).toBe(413);
+    expect(await requestTooLarge.json()).toMatchObject({
+      code: "request_too_large",
+    });
+  });
+
+  it("fails image storage closed without breaking multipart text-only chat", async () => {
+    delete process.env.VAULT_KEY;
+    const bytes = await makePng();
+    const image = new FormData();
+    image.set("thread_id", "42");
+    image.append("images", new Blob([bytes], { type: "image/png" }), "image.png");
+    const unavailable = await POST(makeMultipartRequest(image));
+    expect(unavailable.status).toBe(503);
+    expect(await unavailable.json()).toMatchObject({
+      code: "attachment_storage_unavailable",
+    });
+
+    const text = new FormData();
+    text.set("thread_id", "42");
+    text.set("message", "text still works");
+    expect((await POST(makeMultipartRequest(text))).status).toBe(200);
   });
 });

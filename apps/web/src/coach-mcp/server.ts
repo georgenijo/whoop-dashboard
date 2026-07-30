@@ -21,6 +21,7 @@ import {
   newToolTurnState,
   type ToolTurnState,
 } from "@/lib/coach/tools";
+import { viewChatImage } from "./chat-image-tool";
 
 // Tools surfaced to Composer. CROSS-PROVIDER NOTE (issue #421): prod runs the
 // Cursor (Composer) coach, not Anthropic, so a tool registered ONLY in the
@@ -43,9 +44,11 @@ const EXPOSED_TOOL_NAMES = new Set([
   "query_daily_snapshot",
   "query_workout_plans",
   "save_workout_plan",
+  "view_chat_image",
 ]);
 
 const USER_ID = Number(process.env.COACH_MCP_USER_ID);
+const ATTACHMENT_MANIFEST = process.env.COACH_MCP_ATTACHMENT_MANIFEST ?? "";
 
 // LOAD-BEARING INVARIANT: one MCP process == one coach turn. cursor-loop.ts
 // spawns a FRESH server process per coach turn and tears it down at the end,
@@ -79,11 +82,32 @@ function replyError(id: JsonRpcId, code: number, message: string) {
 }
 
 function listTools() {
-  return TOOLS.filter((t) => EXPOSED_TOOL_NAMES.has(t.name)).map((t) => ({
+  const tools: Array<{
+    name: string;
+    description: string;
+    inputSchema: unknown;
+  }> = TOOLS.filter((t) => EXPOSED_TOOL_NAMES.has(t.name)).map((t) => ({
     name: t.name,
     description: t.description,
     inputSchema: t.input_schema,
   }));
+  tools.push({
+    name: "view_chat_image",
+    description:
+      "View one private image attached to this Coach conversation. Call this before analyzing an attachment marker in the transcript.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        attachment_id: {
+          type: "string",
+          description: "Opaque attachment UUID shown in the transcript.",
+        },
+      },
+      required: ["attachment_id"],
+      additionalProperties: false,
+    },
+  });
+  return tools;
 }
 
 async function callTool(id: JsonRpcId, params: unknown) {
@@ -93,6 +117,14 @@ async function callTool(id: JsonRpcId, params: unknown) {
     return replyError(id, -32601, `Unknown or unavailable tool: ${name}`);
   }
   try {
+    if (name === "view_chat_image") {
+      const image = await viewChatImage(p.arguments, ATTACHMENT_MANIFEST);
+      reply(id, {
+        content: [{ type: "image", ...image }],
+        isError: false,
+      });
+      return;
+    }
     const result = await executeTool(name, p.arguments ?? {}, {
       userId: USER_ID,
       turnState: TURN_STATE,

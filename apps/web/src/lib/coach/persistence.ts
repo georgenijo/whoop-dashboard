@@ -1,6 +1,5 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
-import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import type { AuthSource } from "@/lib/auth";
 import {
   addChatLog,
@@ -22,6 +21,10 @@ import { type ToolDetail, chatLogToolSummaries } from "./tools";
 import { resolveCoachProvider } from "./provider";
 import { runCursorTurn } from "./cursor-loop";
 import { forModule } from "@/lib/logger";
+import type {
+  CoachConversationMessage,
+  CoachUserTurn,
+} from "./image-types";
 
 const log = forModule("coach.persistence");
 
@@ -51,8 +54,8 @@ export function createCoachTurnHandle(threadId: number): CoachTurnHandle {
 export async function runAndPersistCoachTurn(
   userId: number,
   thread: { id: number },
-  lastUser: string,
-  conversation: MessageParam[],
+  turn: CoachUserTurn,
+  conversation: CoachConversationMessage[],
   days: number | null,
   source: AuthSource,
   apiKey: string,
@@ -62,7 +65,9 @@ export async function runAndPersistCoachTurn(
 ): Promise<string> {
   const startedAt = new Date().toISOString();
   const startMs = Date.now();
-  const promptPreview = lastUser.slice(0, 200);
+  const promptPreview = turn.displayText
+    ? turn.displayText.slice(0, 200)
+    : `[image message: ${turn.images.length} attachments]`;
   const toolDetails: ToolDetail[] = [];
   const usage: Usage = {
     input_tokens_total: 0,
@@ -77,8 +82,13 @@ export async function runAndPersistCoachTurn(
 
   const buildDetails = () =>
     JSON.stringify({
-      full_prompt: lastUser,
-      prompt_chars: lastUser.length,
+      full_prompt: turn.displayText,
+      prompt_chars: turn.displayText.length,
+      attachments: turn.images.map(({ id, width, height }) => ({
+        id,
+        width,
+        height,
+      })),
       iterations: detailState.iterations,
       tools: chatLogToolSummaries(toolDetails),
       usage,
@@ -98,7 +108,7 @@ export async function runAndPersistCoachTurn(
             userId,
             model: selection.model,
             threadId: thread.id,
-            newUserText: lastUser,
+            turn,
             conversation,
             toolDetails,
             usage,
@@ -109,7 +119,7 @@ export async function runAndPersistCoachTurn(
         : await runAnthropicSdk(
             userId,
             thread.id,
-            lastUser,
+            turn,
             conversation,
             toolDetails,
             usage,

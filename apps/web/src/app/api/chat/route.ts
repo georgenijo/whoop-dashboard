@@ -1,4 +1,3 @@
-import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { after } from "next/server";
 import {
   createChatThread,
@@ -21,6 +20,16 @@ import { resolveCoachProvider } from "@/lib/coach/provider";
 import { classifyChatError } from "@/lib/coach/error-mapping";
 import { deriveTitleFromText } from "@/lib/coach/title";
 import { forModule } from "@/lib/logger";
+import {
+  ChatImageError,
+  MAX_MULTIPART_BODY_BYTES,
+  normalizeImageFiles,
+} from "@/lib/coach/images";
+import type { CoachUserTurn } from "@/lib/coach/image-types";
+import {
+  assertVaultKeyConfigured,
+  VaultMissingKeyError,
+} from "@/lib/crypto/vault";
 
 const chatLog = forModule("api.chat");
 
@@ -60,10 +69,104 @@ function parseThreadId(value: unknown): number | null {
 }
 
 async function parseChatRequest(req: Request): Promise<{
-  lastUser: string;
+  turn: CoachUserTurn;
   requestedThreadId: number | null;
   days: number | null;
 }> {
+  if (req.headers.get("content-type")?.toLowerCase().startsWith("multipart/form-data")) {
+    const contentLength = Number(req.headers.get("content-length"));
+    if (
+      Number.isFinite(contentLength) &&
+      contentLength > MAX_MULTIPART_BODY_BYTES
+    ) {
+      throw new ChatImageError(
+        "request_too_large",
+        413,
+        "Image request exceeds the 30 MB upload limit.",
+      );
+    }
+
+    let form: FormData;
+    try {
+      form = await req.formData();
+    } catch {
+      throw new ChatImageError(
+        "invalid_request",
+        400,
+        "Request body must be valid multipart form data.",
+      );
+    }
+    const messageValue = form.get("message");
+    if (messageValue !== null && typeof messageValue !== "string") {
+      throw new ChatImageError("invalid_request", 400, "message must be text.");
+    }
+    const displayText = messageValue ?? "";
+    const imageValues = form.getAll("images");
+    if (
+      imageValues.some(
+        (value) =>
+          typeof value === "string" ||
+          typeof (value as Blob).arrayBuffer !== "function",
+      )
+    ) {
+      throw new ChatImageError("invalid_request", 400, "images must be files.");
+    }
+    const files = imageValues as File[];
+    if (!displayText.trim() && files.length === 0) {
+      throw new ChatImageError(
+        "invalid_request",
+        400,
+        "Enter a message or attach at least one image.",
+      );
+    }
+
+    const requestedThreadId = parseThreadId(form.get("thread_id"));
+    if (Number.isNaN(requestedThreadId as number)) {
+      throw new ChatImageError(
+        "invalid_request",
+        400,
+        "thread_id must be a positive integer.",
+      );
+    }
+    const rawDays = form.get("days");
+    const days =
+      rawDays === null || rawDays === ""
+        ? null
+        : typeof rawDays === "string" && Number.isInteger(Number(rawDays))
+          ? Number(rawDays)
+          : Number.NaN;
+    if (Number.isNaN(days)) {
+      throw new ChatImageError("invalid_request", 400, "days must be an integer.");
+    }
+
+    if (files.length > 0) {
+      try {
+        assertVaultKeyConfigured();
+      } catch (error) {
+        if (error instanceof VaultMissingKeyError) {
+          throw new ChatImageError(
+            "attachment_storage_unavailable",
+            503,
+            "Encrypted attachment storage is unavailable.",
+          );
+        }
+        throw error;
+      }
+    }
+    const images = await normalizeImageFiles(files);
+    return {
+      turn: {
+        displayText,
+        modelText:
+          displayText.trim() ||
+          "Analyze the attached image(s) and explain what is relevant to my question, health, or training.",
+        images,
+      },
+      requestedThreadId,
+      days,
+    };
+  }
+
   let body: {
     messages: ChatMessageInput[];
     days?: number | null;
@@ -95,7 +198,11 @@ async function parseChatRequest(req: Request): Promise<{
   }
 
   return {
-    lastUser: lastMessage.content,
+    turn: {
+      displayText: lastMessage.content,
+      modelText: lastMessage.content,
+      images: [],
+    },
     requestedThreadId,
     days: body.days ?? null,
   };
@@ -196,7 +303,7 @@ export async function POST(req: Request) {
       }
     }
 
-    const { lastUser, requestedThreadId, days } = await parseChatRequest(req);
+    const { turn, requestedThreadId, days } = await parseChatRequest(req);
 
     const thread =
       requestedThreadId == null
@@ -206,13 +313,19 @@ export async function POST(req: Request) {
       return new Response("Error: thread not found", { status: 404 });
     }
 
-    const conversation = getChatThreadConversation(user.id, thread.id) as MessageParam[];
+    const conversation = getChatThreadConversation(user.id, thread.id);
     const shouldAutoTitle =
       !thread.title?.trim() &&
       !conversation.some((message) => message.role === "assistant");
-    conversation.push({ role: "user", content: lastUser });
+    const titleSeed = turn.displayText.trim()
+      ? turn.displayText
+      : "Image analysis.";
     const enableTitleRefinement = shouldAutoTitle
-      ? registerTitleRefinement(thread.id, lastUser, apiKey)
+      ? registerTitleRefinement(
+          thread.id,
+          titleSeed,
+          turn.displayText.trim() ? apiKey : null,
+        )
       : () => undefined;
 
     if (!wantsStream(req)) {
@@ -220,7 +333,7 @@ export async function POST(req: Request) {
         const reply = await runAndPersistCoachTurn(
           user.id,
           thread,
-          lastUser,
+          turn,
           conversation,
           days,
           source,
@@ -229,7 +342,7 @@ export async function POST(req: Request) {
           { signal: req.signal },
         );
         if (shouldAutoTitle) {
-          persistDeterministicTitle(thread.id, lastUser);
+          persistDeterministicTitle(thread.id, titleSeed);
           enableTitleRefinement();
         }
         return Response.json({ thread_id: thread.id, reply });
@@ -309,7 +422,7 @@ export async function POST(req: Request) {
           const reply = await runAndPersistCoachTurn(
             user.id,
             thread,
-            lastUser,
+            turn,
             conversation,
             days,
             source,
@@ -347,7 +460,7 @@ export async function POST(req: Request) {
           // in Next's post-response lifecycle and must never hold the SSE
           // connection open.
           if (shouldAutoTitle) {
-            persistDeterministicTitle(thread.id, lastUser);
+            persistDeterministicTitle(thread.id, titleSeed);
             enableTitleRefinement();
           }
           send("done", { reply });
@@ -394,6 +507,12 @@ export async function POST(req: Request) {
 
     return chatStreamResponse(stream, thread.id);
   } catch (err) {
+    if (err instanceof ChatImageError) {
+      return Response.json(
+        { error: err.message, code: err.code },
+        { status: err.status },
+      );
+    }
     if (err instanceof Response) return err;
     throw err;
   }

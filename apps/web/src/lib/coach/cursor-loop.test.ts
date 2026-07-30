@@ -43,6 +43,7 @@ import {
   parseCursorTerminalResult,
   runCursorTurn,
   selectRecentPrefetchTool,
+  type RunCursorTurnArgs,
 } from "./cursor-loop";
 import type { DetailState, Usage } from "./loop";
 import { CURSOR_COMPOSER_MODEL } from "./provider";
@@ -69,7 +70,7 @@ function baseArgs(
   onTextDelta = vi.fn(),
   signal?: AbortSignal,
   model = CURSOR_COMPOSER_MODEL,
-) {
+): RunCursorTurnArgs {
   const usage: Usage = {
     input_tokens_total: 0,
     output_tokens_total: 0,
@@ -81,10 +82,12 @@ function baseArgs(
     userId: 1,
     model,
     threadId: 10,
-    newUserText: "How am I doing?",
-    conversation: [
-      { role: "user" as const, content: "How am I doing?" },
-    ],
+    turn: {
+      displayText: "How am I doing?",
+      modelText: "How am I doing?",
+      images: [],
+    },
+    conversation: [],
     toolDetails: [],
     usage,
     detailState,
@@ -373,5 +376,98 @@ describe("runCursorTurn Cursor lifecycle details", () => {
 
     await expect(turn).rejects.toMatchObject({ name: "AbortError" });
     expect(onTextDelta).toHaveBeenCalledWith("Partial answer");
+  });
+
+  it("counts view_chat_image but never persists or logs its base64 result", async () => {
+    const child = fakeChild();
+    spawnMock.mockReturnValue(child);
+    const args = baseArgs({ iterations: 0 });
+    const attachmentId = "10000000-0000-4000-8000-000000000001";
+    args.turn.images = [
+      {
+        id: attachmentId,
+        mimeType: "image/jpeg",
+        width: 1,
+        height: 1,
+        bytes: Buffer.from("distinctive-jpeg"),
+        sha256: "a".repeat(64),
+      },
+    ];
+    const turn = runCursorTurn(args);
+    await waitForSpawn();
+
+    child.stdout.write(
+      `${JSON.stringify({
+        type: "tool_call",
+        subtype: "started",
+        call_id: "image-tool",
+        tool_call: {
+          startedAtMs: "100",
+          mcpToolCall: {
+            args: {
+              toolName: "view_chat_image",
+              args: { attachment_id: attachmentId },
+            },
+          },
+        },
+      })}\n`,
+    );
+    child.stdout.write(
+      `${JSON.stringify({
+        type: "tool_call",
+        subtype: "completed",
+        call_id: "image-tool",
+        tool_call: {
+          completedAtMs: "110",
+          mcpToolCall: {
+            result: {
+              success: {
+                isError: false,
+                content: [
+                  {
+                    image: {
+                      data: Buffer.from("distinctive-jpeg").toString("base64"),
+                      mimeType: "image/jpeg",
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      })}\n`,
+    );
+    child.stdout.write(
+      `${JSON.stringify({
+        type: "assistant",
+        message: { content: [{ type: "text", text: "I read the image." }] },
+      })}\n`,
+    );
+    child.stdout.write(
+      `${JSON.stringify({ type: "result", subtype: "success" })}\n`,
+    );
+    child.emit("close", 0);
+
+    const result = await turn;
+    const serialized = JSON.stringify({
+      messages: result.messages,
+      toolDetails: args.toolDetails,
+    });
+    expect(result.iterations).toBe(2);
+    expect(args.toolDetails).toEqual([
+      expect.objectContaining({
+        name: "view_chat_image",
+        input: { attachment_id: attachmentId },
+        status: "ok",
+      }),
+    ]);
+    expect(serialized).not.toContain(
+      Buffer.from("distinctive-jpeg").toString("base64"),
+    );
+    expect(
+      result.messages.some((message) =>
+        JSON.stringify(message.blocks).includes("view_chat_image"),
+      ),
+    ).toBe(false);
   });
 });

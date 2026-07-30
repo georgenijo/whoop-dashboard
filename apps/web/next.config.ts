@@ -24,6 +24,9 @@ const allowedDevOrigins = process.env.COACH_DEV_ORIGINS?.split(",")
 const nextConfig: NextConfig = {
   devIndicators: false,
   allowedDevOrigins,
+  experimental: {
+    proxyClientMaxBodySize: "30mb",
+  },
   env: {
     COACH_BUILD_SHA: resolveBuildSha(),
     COACH_BUILD_TIME: new Date().toISOString(),

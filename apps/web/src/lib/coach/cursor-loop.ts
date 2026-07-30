@@ -16,7 +16,6 @@ import { existsSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import type { MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { getUserSettings, type ChatMessageInsert } from "@/lib/db";
 import { dbPath } from "@/lib/db/connection";
 import { buildCursorSystemPrompt } from "./prompts";
@@ -27,6 +26,15 @@ import {
   newToolTurnState,
   type ToolDetail,
 } from "./tools";
+import {
+  flattenCursorConversation,
+  selectActiveImageContext,
+} from "./conversation";
+import type {
+  CoachConversationMessage,
+  CoachImage,
+  CoachUserTurn,
+} from "./image-types";
 
 // Hard reaper for the cursor-agent subprocess tree, NOT a quality-of-answer
 // policy. cursor-agent is spawned detached (own process group) and spawns the
@@ -49,6 +57,10 @@ const PLAN_INTENT_PATTERN = /\b(plan|program|split|routine)\b/i;
 // exits within a few milliseconds after it; cap an abnormal post-result tail
 // without returning early and leaving cursor-agent/MCP children unreaped.
 const TERMINAL_CLOSE_GRACE_MS = 250;
+
+function isViewChatImageTool(name: string): boolean {
+  return name === "view_chat_image" || name.endsWith("-view_chat_image");
+}
 
 // cursor-agent registers every workspace it is pointed at under
 // `~/.cursor/projects/<path-with-slashes-as-dashes>` and never reaps them.
@@ -133,8 +145,8 @@ export type RunCursorTurnArgs = {
   userId: number;
   model: string;
   threadId: number;
-  newUserText: string;
-  conversation: MessageParam[];
+  turn: CoachUserTurn;
+  conversation: CoachConversationMessage[];
   toolDetails: ToolDetail[];
   usage: Usage;
   detailState: DetailState;
@@ -150,34 +162,8 @@ export type RunCursorTurnResult = {
 
 // ---- prompt assembly -------------------------------------------------------
 
-function messageText(m: MessageParam): string {
-  const c = m.content;
-  if (typeof c === "string") return c.trim();
-  if (Array.isArray(c)) {
-    return c
-      .filter((b): b is { type: "text"; text: string } => {
-        const t = (b as { type?: unknown }).type;
-        return t === "text" && typeof (b as { text?: unknown }).text === "string";
-      })
-      .map((b) => b.text)
-      .join("")
-      .trim();
-  }
-  return "";
-}
-
-// Flatten prior Anthropic-shaped history to a plain transcript. Composer takes
-// a single prompt, not structured tool blocks; it has fresh MCP tool access, so
-// prior tool_use/tool_result rows are dropped and only human-readable text is
-// carried for context. Truncated to the most recent MAX_TRANSCRIPT_CHARS.
-function flattenConversation(conversation: MessageParam[]): string {
-  const lines: string[] = [];
-  for (const m of conversation) {
-    const text = messageText(m);
-    if (!text) continue;
-    lines.push(`${m.role === "user" ? "User" : "Assistant"}: ${text}`);
-  }
-  let out = lines.join("\n");
+function truncateTranscript(transcript: string): string {
+  let out = transcript;
   if (out.length > MAX_TRANSCRIPT_CHARS) {
     out = "…\n" + out.slice(out.length - MAX_TRANSCRIPT_CHARS);
   }
@@ -265,25 +251,29 @@ async function preloadRecentContext(
 
 function buildPrompt(
   userId: number,
-  newUserText: string,
-  conversation: MessageParam[],
+  turn: CoachUserTurn,
+  conversation: CoachConversationMessage[],
+  activeIds: ReadonlySet<string>,
   preloadedContext: PreloadedContext | null,
 ): string {
   const system = buildCursorSystemPrompt(
     new Date(),
     getUserSettings(userId)?.coach_goals ?? null,
   );
-  // The route appends the current user message as the LAST `conversation` entry
-  // before invoking the turn (same contract as the Anthropic path). Drop it here
-  // so it isn't duplicated — it's surfaced under "Current request" below.
-  const transcript = flattenConversation(conversation.slice(0, -1));
+  const transcript = truncateTranscript(
+    flattenCursorConversation(conversation, activeIds),
+  );
+  const currentImageMarkers = turn.images.map(
+    (image) =>
+      `[Attached image ${image.id}; call view_chat_image with this attachment_id before analyzing it.]`,
+  );
   return [
     system,
     preloadedContext
       ? `\n\n## Preloaded authoritative Whoop data\nThe server already ran ${preloadedContext.toolName} for ${preloadedContext.dateRange.start_date} through ${preloadedContext.dateRange.end_date} immediately before this turn. Treat this exactly like successful tool output. Do NOT call that query again for the covered dates unless the user explicitly asks you to refresh.\n${JSON.stringify(preloadedContext.data)}`
       : "",
     transcript ? `\n\n## Conversation so far\n${transcript}` : "",
-    `\n\n## Current request\n${newUserText}`,
+    `\n\n## Current request\n${[...currentImageMarkers, turn.modelText].join("\n")}`,
   ].join("");
 }
 
@@ -411,11 +401,21 @@ function countRows(parsed: unknown): number | null {
 
 // ---- workspace -------------------------------------------------------------
 
-async function makeWorkspace(userId: number): Promise<string> {
+async function makeWorkspace(userId: number, images: CoachImage[]): Promise<string> {
   const ws = await mkdtemp(path.join(tmpdir(), "coach-cursor-"));
   try {
     const dotCursor = path.join(ws, ".cursor");
+    const attachmentDir = path.join(ws, "attachments");
+    const manifestPath = path.join(ws, "attachment-manifest.json");
     await mkdir(dotCursor, { recursive: true });
+    await mkdir(attachmentDir, { recursive: true, mode: 0o700 });
+    const manifest: Record<string, string> = {};
+    for (const image of images) {
+      const imagePath = path.join(attachmentDir, `${image.id}.jpg`);
+      await writeFile(imagePath, image.bytes, { mode: 0o600 });
+      manifest[image.id] = imagePath;
+    }
+    await writeFile(manifestPath, JSON.stringify(manifest), { mode: 0o600 });
     // Read-only containment: allow ONLY our MCP tools, deny shell/write/fetch
     // and even file reads (ask-mode can read workspace files otherwise). The
     // empty workspace + Read(**) deny means there is nothing to leak.
@@ -441,6 +441,7 @@ async function makeWorkspace(userId: number): Promise<string> {
             env: {
               PATH: process.env.PATH ?? "",
               COACH_MCP_USER_ID: String(userId),
+              COACH_MCP_ATTACHMENT_MANIFEST: manifestPath,
               WHOOP_DB_PATH: dbPath(),
               NODE_PATH: path.join(APP_ROOT, "node_modules"),
             },
@@ -467,7 +468,7 @@ export async function runCursorTurn(
   const {
     userId,
     model,
-    newUserText,
+    turn,
     conversation,
     toolDetails,
     detailState,
@@ -479,11 +480,14 @@ export async function runCursorTurn(
   // The user turn, persisted in the same shape as the Anthropic path.
   messages.push({
     role: "user",
-    content: newUserText,
-    blocks: [{ type: "text", text: newUserText }],
+    content: turn.displayText,
+    blocks: turn.displayText
+      ? [{ type: "text", text: turn.displayText }]
+      : [],
+    attachments: turn.images,
   });
 
-  const selectedPrefetchTool = selectRecentPrefetchTool(newUserText);
+  const selectedPrefetchTool = selectRecentPrefetchTool(turn.modelText);
   const shouldPrefetch = selectedPrefetchTool != null;
   const prefetchInput = { intent: "recent_context" };
   if (selectedPrefetchTool) {
@@ -496,7 +500,7 @@ export async function runCursorTurn(
   let preloadedContext: PreloadedContext | null = null;
   let prefetchError: string | null = null;
   try {
-    preloadedContext = await preloadRecentContext(userId, newUserText);
+    preloadedContext = await preloadRecentContext(userId, turn.modelText);
   } catch (error) {
     // Fail open: Cursor still has its normal MCP tools, so a transient preload
     // problem should not take down the turn.
@@ -512,11 +516,13 @@ export async function runCursorTurn(
       ...(prefetchError ? { error: prefetchError } : {}),
     });
   }
+  const imageContext = selectActiveImageContext(conversation, turn);
   const promptStartedMs = Date.now();
   const prompt = buildPrompt(
     userId,
-    newUserText,
+    turn,
     conversation,
+    imageContext.activeIds,
     preloadedContext,
   );
   const promptBuildMs = Date.now() - promptStartedMs;
@@ -564,7 +570,7 @@ export async function runCursorTurn(
   detailState.cursor = cursorDetail;
   options.signal?.throwIfAborted();
   const workspaceStartedMs = Date.now();
-  const ws = await makeWorkspace(userId);
+  const ws = await makeWorkspace(userId, imageContext.images);
   cursorDetail.timing.workspace_prep_ms = Date.now() - workspaceStartedMs;
 
   let reply = "";
@@ -825,7 +831,15 @@ export async function runCursorTurn(
               phase: "started",
               at_ms: elapsedMs,
             });
-            options.onToolUseStart?.({ name, input: a?.args });
+            if (isViewChatImageTool(name)) {
+              options.onToolProgress?.({
+                tool: name,
+                stage: "reviewing",
+                message: "Reviewing image…",
+              });
+            } else {
+              options.onToolUseStart?.({ name, input: a?.args });
+            }
             return;
           }
           if (evt.subtype === "completed") {
@@ -853,6 +867,36 @@ export async function runCursorTurn(
             const resultText = rejected
               ? `MCP call rejected: ${rejected.reason ?? "unknown reason"}`
               : success?.content?.[0]?.text?.text ?? "";
+            if (isViewChatImageTool(name)) {
+              const attachmentId =
+                input &&
+                typeof input === "object" &&
+                typeof (input as { attachment_id?: unknown }).attachment_id === "string"
+                  ? (input as { attachment_id: string }).attachment_id
+                  : "unknown";
+              toolDetails.push({
+                name,
+                input: { attachment_id: attachmentId },
+                duration_ms: durationMs,
+                rows: null,
+                status: isError ? "error" : "ok",
+                ...(isError ? { error: "Image retrieval failed." } : {}),
+              });
+              options.onToolUseEnd?.({
+                name,
+                duration_ms: durationMs,
+                rows: null,
+                status: isError ? "error" : "ok",
+                ...(isError ? { error: "Image retrieval failed." } : {}),
+              });
+              if (toolCalls > MAX_CURSOR_TOOL_CALLS) {
+                throw new CursorAgentError(
+                  "agent",
+                  `Cursor turn exceeded ${MAX_CURSOR_TOOL_CALLS} tool calls`,
+                );
+              }
+              return;
+            }
             let parsed: unknown = resultText;
             try {
               parsed = JSON.parse(resultText);
