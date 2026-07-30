@@ -1,4 +1,11 @@
 "use client";
+
+import {
+  newRunningWorkLog,
+  parseCoachWorkLog,
+  type CoachToolActivity,
+  type CoachWorkLog,
+} from "@/lib/coach/work-log-types";
 import {
   useCallback,
   useEffect,
@@ -16,23 +23,16 @@ export type ChatMessage = {
   content: string;
   created_at: string;
   status?: ChatMessageStatus;
+  work_log?: CoachWorkLog | null;
 };
-export type ToolProgress = {
-  name: string;
-  state: "running" | "done";
-  /** Mid-tool progress sub-state (e.g. "fetching_sleep" for trigger_whoop_sync). */
-  stage?: string;
-  stageMessage?: string;
-  duration_ms?: number;
-  rows?: number | null;
-  status?: "ok" | "error";
-};
+
 export type ComposerMessage = {
   role: "user" | "assistant";
   content: string;
   streaming?: boolean;
-  progress?: ToolProgress | null;
   status?: ChatMessageStatus;
+  workLog?: CoachWorkLog | null;
+  workStartedAt?: number;
 };
 
 type UseChatSendParams = {
@@ -40,7 +40,7 @@ type UseChatSendParams = {
   threadId: number;
   setThreadId: Dispatch<SetStateAction<number>>;
   refreshThreads: () => Promise<unknown>;
-  setBadApiKey?: (v: boolean) => void;
+  setBadApiKey?: (value: boolean) => void;
 };
 
 type SendParams = Omit<UseChatSendParams, "initialMessages"> & {
@@ -51,134 +51,248 @@ type SendParams = Omit<UseChatSendParams, "initialMessages"> & {
   setLoading: Dispatch<SetStateAction<boolean>>;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   abortRef: RefObject<AbortController | null>;
-  setBadApiKey?: (v: boolean) => void;
+};
+
+type ToolStartEvent = { id: string; name: string; input: unknown };
+type ToolEndEvent = {
+  id: string;
+  name: string;
+  duration_ms: number | null;
+  rows: number | null;
+  status: "ok" | "error";
+  error?: string;
+  response?: unknown;
+};
+type ToolProgressEvent = {
+  id?: string;
+  tool: string;
+  stage: string;
+  message?: string;
 };
 type StreamHandlers = {
   appendText: (text: string) => void;
-  setProgress: (progress: ToolProgress | null) => void;
-  mergeProgressStage: (event: { tool: string; stage: string; message?: string }) => void;
+  startTool: (event: ToolStartEvent) => void;
+  endTool: (event: ToolEndEvent) => void;
+  progressTool: (event: ToolProgressEvent) => void;
+  done: (reply: string, workLog: CoachWorkLog | null) => void;
   badApiKey?: (event: { origin: string }) => void;
 };
 
-function setAssistantMessage(
-  setMessages: Dispatch<SetStateAction<ComposerMessage[]>>,
-  index: number,
-  content: string
-) {
-  setMessages((prev) => {
-    const updated = [...prev];
-    updated[index] = { role: "assistant", content };
-    return updated;
-  });
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function updateAssistantMessage(
   setMessages: Dispatch<SetStateAction<ComposerMessage[]>>,
   index: number,
-  update: (message: ComposerMessage) => ComposerMessage
+  update: (message: ComposerMessage) => ComposerMessage,
 ) {
-  setMessages((prev) => {
-    const current = prev[index];
-    if (!current) return prev;
-    const updated = [...prev];
-    updated[index] = update(current);
-    return updated;
+  setMessages((previous) => {
+    const current = previous[index];
+    if (!current) return previous;
+    const next = [...previous];
+    next[index] = update(current);
+    return next;
   });
 }
 
 function appendAssistantText(
   setMessages: Dispatch<SetStateAction<ComposerMessage[]>>,
   index: number,
-  text: string
+  text: string,
 ) {
   updateAssistantMessage(setMessages, index, (message) => ({
     ...message,
     content: `${message.content}${text}`,
-    progress: null,
   }));
 }
 
-function setAssistantProgress(
-  setMessages: Dispatch<SetStateAction<ComposerMessage[]>>,
-  index: number,
-  progress: ToolProgress | null
-) {
-  updateAssistantMessage(setMessages, index, (message) => ({
-    ...message,
-    progress,
-  }));
+function activeWorkLog(message: ComposerMessage): CoachWorkLog {
+  return message.workLog ?? newRunningWorkLog();
 }
 
-function mergeAssistantProgressStage(
+function startAssistantTool(
   setMessages: Dispatch<SetStateAction<ComposerMessage[]>>,
   index: number,
-  event: { tool: string; stage: string; message?: string }
+  event: ToolStartEvent,
 ) {
   updateAssistantMessage(setMessages, index, (message) => {
-    const cur = message.progress;
-    // Merge rule:
-    //  - same tool (or no current progress) → preserve everything, only
-    //    overwrite stage / stageMessage. Keeps `state: "running"` from the
-    //    earlier `tool_use_start`.
-    //  - different tool (or no current name match) → start a fresh
-    //    running record with stage; clears stale duration/rows/status.
-    //    Today the producer only emits `tool_progress` for the running
-    //    tool, so this branch should be unreachable; warn so a producer
-    //    bug surfaces instead of silently re-mounting state.
-    if (!cur || cur.name !== event.tool) {
-      if (cur) {
-        console.warn("[useChatSend] tool_progress for non-current tool", {
-          current: cur.name,
-          received: event.tool,
-        });
-      }
-      return {
-        ...message,
-        progress: {
-          name: event.tool,
-          state: "running",
-          stage: event.stage,
-          stageMessage: event.message,
-        },
-      };
-    }
+    const workLog = activeWorkLog(message);
+    const note = message.content.trim();
+    const notes = note ? [...workLog.notes, note] : workLog.notes;
+    const tools = workLog.tools.some((tool) => tool.id === event.id)
+      ? workLog.tools
+      : [
+          ...workLog.tools,
+          {
+            id: event.id,
+            name: event.name,
+            input: event.input,
+            state: "running" as const,
+            status: null,
+            duration_ms: null,
+            rows: null,
+          },
+        ];
     return {
       ...message,
-      progress: {
-        ...cur,
-        stage: event.stage,
-        stageMessage: event.message,
-      },
+      content: "",
+      workLog: { ...workLog, notes, tools },
     };
   });
 }
 
-function applyThreadHeader(res: Response, setThreadId: Dispatch<SetStateAction<number>>) {
-  const value = res.headers.get("x-thread-id");
-  if (!value) return;
-  const nextThreadId = Number(value);
-  if (Number.isInteger(nextThreadId) && nextThreadId > 0) setThreadId(nextThreadId);
+function findToolIndex(
+  tools: CoachToolActivity[],
+  id: string | undefined,
+  name: string,
+): number {
+  if (id) {
+    const exact = tools.findIndex((tool) => tool.id === id);
+    if (exact >= 0) return exact;
+  }
+  for (let index = tools.length - 1; index >= 0; index -= 1) {
+    const tool = tools[index];
+    if (tool.name === name && tool.state === "running") return index;
+  }
+  return -1;
 }
 
-function isAbortError(err: unknown): boolean { return err instanceof DOMException && err.name === "AbortError"; }
+function endAssistantTool(
+  setMessages: Dispatch<SetStateAction<ComposerMessage[]>>,
+  index: number,
+  event: ToolEndEvent,
+) {
+  updateAssistantMessage(setMessages, index, (message) => {
+    const workLog = activeWorkLog(message);
+    const tools = [...workLog.tools];
+    const toolIndex = findToolIndex(tools, event.id, event.name);
+    const completed: CoachToolActivity = {
+      ...(toolIndex >= 0
+        ? tools[toolIndex]
+        : {
+            id: event.id,
+            name: event.name,
+            input: {},
+          }),
+      state: "complete",
+      status: event.status,
+      duration_ms: event.duration_ms,
+      rows: event.rows,
+      ...(event.error ? { error: event.error } : {}),
+      ...(event.response === undefined ? {} : { response: event.response }),
+    };
+    if (toolIndex >= 0) tools[toolIndex] = completed;
+    else tools.push(completed);
+    return { ...message, workLog: { ...workLog, tools } };
+  });
+}
+
+function progressAssistantTool(
+  setMessages: Dispatch<SetStateAction<ComposerMessage[]>>,
+  index: number,
+  event: ToolProgressEvent,
+) {
+  updateAssistantMessage(setMessages, index, (message) => {
+    const workLog = activeWorkLog(message);
+    const tools = [...workLog.tools];
+    const toolIndex = findToolIndex(tools, event.id, event.tool);
+    if (toolIndex < 0) return message;
+    tools[toolIndex] = {
+      ...tools[toolIndex],
+      stage: event.stage,
+      stage_message: event.message,
+    };
+    return { ...message, workLog: { ...workLog, tools } };
+  });
+}
+
+function finishAssistant(
+  setMessages: Dispatch<SetStateAction<ComposerMessage[]>>,
+  index: number,
+  reply: string,
+  authoritativeWorkLog: CoachWorkLog | null,
+) {
+  updateAssistantMessage(setMessages, index, (message) => ({
+    ...message,
+    content: reply,
+    streaming: false,
+    workLog: authoritativeWorkLog ?? {
+      ...activeWorkLog(message),
+      status: "complete",
+      duration_ms:
+        message.workStartedAt == null ? null : Date.now() - message.workStartedAt,
+    },
+  }));
+}
+
+function failAssistant(
+  setMessages: Dispatch<SetStateAction<ComposerMessage[]>>,
+  index: number,
+  messageText: string,
+) {
+  updateAssistantMessage(setMessages, index, (message) => ({
+    ...message,
+    content: `**Error:** ${messageText}`,
+    streaming: false,
+    workLog: {
+      ...activeWorkLog(message),
+      status: "error",
+      duration_ms:
+        message.workStartedAt == null ? null : Date.now() - message.workStartedAt,
+    },
+  }));
+}
+
+function applyThreadHeader(
+  response: Response,
+  setThreadId: Dispatch<SetStateAction<number>>,
+) {
+  const value = response.headers.get("x-thread-id");
+  if (!value) return;
+  const nextThreadId = Number(value);
+  if (Number.isInteger(nextThreadId) && nextThreadId > 0) {
+    setThreadId(nextThreadId);
+  }
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
 
 function toComposerMessages(messages: ChatMessage[]): ComposerMessage[] {
-  return messages.map((m) => ({ role: m.role, content: m.content, status: m.status }));
+  return messages.map((message) => ({
+    role: message.role,
+    content: message.content,
+    status: message.status,
+    workLog: message.work_log ?? null,
+  }));
 }
 
 function withoutPendingTurn(messages: ComposerMessage[]): ComposerMessage[] {
-  const last = messages[messages.length - 1];
+  const last = messages.at(-1);
   if (!last?.streaming) return messages;
   const withoutAssistant = messages.slice(0, -1);
-  return withoutAssistant.at(-1)?.role === "user" ? withoutAssistant.slice(0, -1) : withoutAssistant;
+  return withoutAssistant.at(-1)?.role === "user"
+    ? withoutAssistant.slice(0, -1)
+    : withoutAssistant;
 }
 
-async function postMessage(userMsg: ComposerMessage, threadId: number, signal: AbortSignal): Promise<Response> {
-  return fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: [{ role: userMsg.role, content: userMsg.content }], thread_id: threadId, days: 9999 }), signal });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+async function postMessage(
+  userMessage: ComposerMessage,
+  threadId: number,
+  signal: AbortSignal,
+): Promise<Response> {
+  return fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      messages: [{ role: userMessage.role, content: userMessage.content }],
+      thread_id: threadId,
+      days: 9999,
+    }),
+    signal,
+  });
 }
 
 function parseSsePayload(event: string, data: string): Record<string, unknown> {
@@ -190,62 +304,32 @@ function parseSsePayload(event: string, data: string): Record<string, unknown> {
   }
 }
 
-function toolLabel(name: string): string {
-  return name.replace(/^query_/, "").replaceAll("_", " ");
+export function workPhaseLabel(
+  workLog: CoachWorkLog | null | undefined,
+  hasVisibleText = false,
+): string | null {
+  if (!workLog || workLog.status !== "running") return null;
+  const running = [...workLog.tools].reverse().find((tool) => tool.state === "running");
+  if (running?.stage_message) return running.stage_message;
+  if (running?.stage) return running.stage.replaceAll("_", " ");
+  if (running) return `Running ${running.name.replaceAll("_", " ")}…`;
+  if (workLog.tools.length > 0) return "Analyzing results…";
+  if (hasVisibleText) return "Writing response…";
+  return "Thinking…";
 }
 
-function formatDuration(ms: number | undefined): string {
-  if (ms == null) return "";
-  if (ms >= 1000) return `${(ms / 1000).toFixed(ms < 10000 ? 1 : 0)}s`;
-  return `${ms}ms`;
-}
+async function readChatStream(
+  response: Response,
+  handlers: StreamHandlers,
+): Promise<void> {
+  if (!response.body) throw new Error("Coach stream did not include a response body");
 
-function formatStage(stage: string): string {
-  return stage.replaceAll("_", " ");
-}
-
-export function formatToolProgressLabel(progress: ToolProgress | null | undefined): string | null {
-  if (!progress) return null;
-  const name = toolLabel(progress.name);
-  if (progress.state === "running") {
-    if (progress.name === "trigger_whoop_sync") {
-      return progress.stage
-        ? `Coach is running sync… (${formatStage(progress.stage)})`
-        : "Coach is running sync…";
-    }
-    return `Coach is running ${name}…`;
-  }
-  const duration = formatDuration(progress.duration_ms);
-  if (progress.name === "trigger_whoop_sync") {
-    if (progress.status === "error") {
-      return duration ? `Sync failed in ${duration}` : "Sync failed";
-    }
-    return duration ? `Synced Whoop in ${duration}` : "Synced Whoop";
-  }
-  if (progress.status === "error") {
-    return duration ? `Query ${name} failed in ${duration}` : `Query ${name} failed`;
-  }
-  return duration ? `Queried ${name} in ${duration}` : `Queried ${name}`;
-}
-
-function latestProgress(messages: ComposerMessage[]): ToolProgress | null {
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    const message = messages[i];
-    if (message?.streaming) return message.progress ?? null;
-  }
-  return null;
-}
-
-async function readChatStream(res: Response, handlers: StreamHandlers): Promise<string> {
-  if (!res.body) throw new Error("Coach stream did not include a response body");
-
-  const reader = res.body.getReader();
+  const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let eventName = "message";
   let dataLines: string[] = [];
   let sawDone = false;
-  let finalReply = "";
 
   const dispatch = () => {
     const event = eventName;
@@ -256,62 +340,61 @@ async function readChatStream(res: Response, handlers: StreamHandlers): Promise<
 
     const payload = parseSsePayload(event, data);
     if (event === "text_delta") {
-      const text = payload.text;
-      if (typeof text === "string") handlers.appendText(text);
-      return;
-    }
-    if (event === "tool_use_start") {
-      const name = payload.name;
-      if (typeof name === "string") {
-        handlers.setProgress({ name, state: "running" });
-      }
-      return;
-    }
-    if (event === "tool_use_end") {
-      const name = payload.name;
-      if (typeof name === "string") {
-        handlers.setProgress({
-          name,
-          state: "done",
-          duration_ms: typeof payload.duration_ms === "number" ? payload.duration_ms : undefined,
-          rows: typeof payload.rows === "number" || payload.rows === null ? payload.rows : undefined,
-          status: payload.status === "error" ? "error" : "ok",
-        });
-      }
-      return;
-    }
-    if (event === "tool_progress") {
-      const tool = payload.tool;
-      const stage = payload.stage;
-      if (typeof tool === "string" && typeof stage === "string") {
-        handlers.mergeProgressStage({
-          tool,
-          stage,
-          message: typeof payload.message === "string" ? payload.message : undefined,
-        });
-      }
-      return;
-    }
-    if (event === "done") {
+      if (typeof payload.text === "string") handlers.appendText(payload.text);
+    } else if (event === "tool_use_start" && typeof payload.name === "string") {
+      handlers.startTool({
+        id:
+          typeof payload.id === "string"
+            ? payload.id
+            : `legacy:${payload.name}:${Date.now()}`,
+        name: payload.name,
+        input: payload.input ?? {},
+      });
+    } else if (event === "tool_use_end" && typeof payload.name === "string") {
+      handlers.endTool({
+        id: typeof payload.id === "string" ? payload.id : "",
+        name: payload.name,
+        duration_ms:
+          typeof payload.duration_ms === "number" ? payload.duration_ms : null,
+        rows:
+          typeof payload.rows === "number" || payload.rows === null
+            ? payload.rows
+            : null,
+        status: payload.status === "error" ? "error" : "ok",
+        ...(typeof payload.error === "string" ? { error: payload.error } : {}),
+        ...(Object.hasOwn(payload, "response") ? { response: payload.response } : {}),
+      });
+    } else if (
+      event === "tool_progress" &&
+      typeof payload.tool === "string" &&
+      typeof payload.stage === "string"
+    ) {
+      handlers.progressTool({
+        ...(typeof payload.id === "string" ? { id: payload.id } : {}),
+        tool: payload.tool,
+        stage: payload.stage,
+        ...(typeof payload.message === "string" ? { message: payload.message } : {}),
+      });
+    } else if (event === "done") {
       sawDone = true;
-      finalReply = typeof payload.reply === "string" ? payload.reply : "";
-      return;
-    }
-    if (event === "error") {
-      // Distinct path for the BYOK 401: the route emits an SSE `error` event
-      // with `kind: "bad_api_key"`. Surface that via the dedicated handler
-      // (which flips banner state in the hook) and treat the stream as
-      // terminated — no assistant error bubble, no thrown Error.
+      handlers.done(
+        typeof payload.reply === "string" ? payload.reply : "",
+        parseCoachWorkLog(payload.work_log),
+      );
+    } else if (event === "error") {
       if (payload.kind === "bad_api_key") {
         handlers.badApiKey?.({
           origin:
             typeof payload.origin === "string" ? payload.origin : "unknown",
         });
         sawDone = true;
-        return;
+      } else {
+        throw new Error(
+          typeof payload.message === "string"
+            ? payload.message
+            : "Coach stream failed",
+        );
       }
-      const message = typeof payload.message === "string" ? payload.message : "Coach stream failed";
-      throw new Error(message);
     }
   };
 
@@ -321,12 +404,10 @@ async function readChatStream(res: Response, handlers: StreamHandlers): Promise<
       return;
     }
     if (line.startsWith(":")) return;
-
     const colonIndex = line.indexOf(":");
     const field = colonIndex === -1 ? line : line.slice(0, colonIndex);
     let value = colonIndex === -1 ? "" : line.slice(colonIndex + 1);
     if (value.startsWith(" ")) value = value.slice(1);
-
     if (field === "event") eventName = value;
     if (field === "data") dataLines.push(value);
   };
@@ -346,27 +427,19 @@ async function readChatStream(res: Response, handlers: StreamHandlers): Promise<
     }
     const tail = decoder.decode();
     if (tail) consume(tail);
-    if (buffer) {
-      processLine(buffer);
-      buffer = "";
-    }
+    if (buffer) processLine(buffer);
   } finally {
     reader.releaseLock();
   }
-
   if (!sawDone) throw new Error("Connection lost before Coach finished.");
-  return finalReply;
 }
 
 async function sendChatMessage(params: SendParams) {
   if (!params.text.trim()) return;
-
-  // Banner state is owned by the hook; reset on every new send so a previous
-  // rejection doesn't visually stick after the user fixes their key.
   params.setBadApiKey?.(false);
 
-  const userMsg: ComposerMessage = { role: "user", content: params.text };
-  const nextMessages = [...withoutPendingTurn(params.messages), userMsg];
+  const userMessage: ComposerMessage = { role: "user", content: params.text };
+  const nextMessages = [...withoutPendingTurn(params.messages), userMessage];
   params.setMessages(nextMessages);
   params.setInput("");
   if (params.inputRef.current) params.inputRef.current.style.height = "auto";
@@ -375,42 +448,56 @@ async function sendChatMessage(params: SendParams) {
   params.abortRef.current?.abort();
   const controller = new AbortController();
   params.abortRef.current = controller;
-
-  const assistantIdx = nextMessages.length;
-  params.setMessages((prev) => [...prev, { role: "assistant", content: "", streaming: true }]);
+  const assistantIndex = nextMessages.length;
+  const workStartedAt = Date.now();
+  params.setMessages((previous) => [
+    ...previous,
+    {
+      role: "assistant",
+      content: "",
+      streaming: true,
+      workLog: newRunningWorkLog(),
+      workStartedAt,
+    },
+  ]);
   const isCurrent = () => params.abortRef.current === controller;
   let badApiKey = false;
 
   try {
-    const res = await postMessage(userMsg, params.threadId, controller.signal);
+    const response = await postMessage(
+      userMessage,
+      params.threadId,
+      controller.signal,
+    );
     if (!isCurrent()) return;
-    applyThreadHeader(res, params.setThreadId);
-    if (!res.ok) {
-      if (res.status === 401) {
-        // Non-stream BYOK rejection — same kind as the SSE error, but lands
-        // here when the route returned the JSON 401 path. Surface via the
-        // banner and drop the empty assistant placeholder so no error bubble
-        // is rendered.
+    applyThreadHeader(response, params.setThreadId);
+    if (!response.ok) {
+      if (response.status === 401) {
         try {
-          const body = (await res.clone().json()) as { kind?: string };
+          const body = (await response.clone().json()) as { kind?: string };
           if (body.kind === "bad_api_key") {
             params.setBadApiKey?.(true);
-            params.setMessages((prev) => prev.slice(0, assistantIdx));
+            params.setMessages((previous) => previous.slice(0, assistantIndex));
             return;
           }
         } catch {
-          // Fall through to the generic error path below.
+          // Fall through to the generic error path.
         }
       }
-      const reply = await res.text();
-      throw new Error(reply || `Server error ${res.status}`);
+      throw new Error((await response.text()) || `Server error ${response.status}`);
     }
 
-    const reply = await readChatStream(res, {
-      appendText: (text) => appendAssistantText(params.setMessages, assistantIdx, text),
-      setProgress: (progress) => setAssistantProgress(params.setMessages, assistantIdx, progress),
-      mergeProgressStage: (event) =>
-        mergeAssistantProgressStage(params.setMessages, assistantIdx, event),
+    await readChatStream(response, {
+      appendText: (text) =>
+        appendAssistantText(params.setMessages, assistantIndex, text),
+      startTool: (event) =>
+        startAssistantTool(params.setMessages, assistantIndex, event),
+      endTool: (event) =>
+        endAssistantTool(params.setMessages, assistantIndex, event),
+      progressTool: (event) =>
+        progressAssistantTool(params.setMessages, assistantIndex, event),
+      done: (reply, workLog) =>
+        finishAssistant(params.setMessages, assistantIndex, reply, workLog),
       badApiKey: () => {
         badApiKey = true;
         params.setBadApiKey?.(true);
@@ -418,22 +505,24 @@ async function sendChatMessage(params: SendParams) {
     });
     if (!isCurrent()) return;
     if (badApiKey) {
-      // Streamed 401: remove the empty placeholder so the banner is the
-      // sole signal of the failure (no error bubble).
-      params.setMessages((prev) => prev.slice(0, assistantIdx));
+      params.setMessages((previous) => previous.slice(0, assistantIndex));
       return;
     }
-    setAssistantMessage(params.setMessages, assistantIdx, reply);
     void params.refreshThreads();
-  } catch (err) {
-    if (isAbortError(err)) {
-      if (isCurrent()) params.setMessages((prev) => prev.slice(0, assistantIdx));
+  } catch (error) {
+    if (isAbortError(error)) {
+      if (isCurrent()) {
+        params.setMessages((previous) => previous.slice(0, assistantIndex));
+      }
       void params.refreshThreads();
       return;
     }
     if (!isCurrent()) return;
-    const errMsg = err instanceof Error ? err.message : String(err);
-    setAssistantMessage(params.setMessages, assistantIdx, `**Error:** ${errMsg}`);
+    failAssistant(
+      params.setMessages,
+      assistantIndex,
+      error instanceof Error ? error.message : String(error),
+    );
   } finally {
     if (isCurrent()) {
       params.abortRef.current = null;
@@ -450,34 +539,43 @@ export function useChatSend({
   refreshThreads,
   setBadApiKey,
 }: UseChatSendParams) {
-  const [messages, setMessages] = useState<ComposerMessage[]>(toComposerMessages(initialMessages));
+  const [messages, setMessages] = useState<ComposerMessage[]>(
+    toComposerMessages(initialMessages),
+  );
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const progress = latestProgress(messages);
+  const activeMessage = [...messages]
+    .reverse()
+    .find((message) => message.streaming && message.role === "assistant");
 
   useEffect(() => {
-    abortRef.current?.abort(); abortRef.current = null;
+    abortRef.current?.abort();
+    abortRef.current = null;
     setMessages(toComposerMessages(initialMessages));
     setInput("");
     setLoading(false);
     if (inputRef.current) inputRef.current.style.height = "auto";
   }, [initialMessages, threadId]);
 
-  const send = useCallback((text: string) => sendChatMessage({
-    text,
-    messages,
-    threadId,
-    setThreadId,
-    setMessages,
-    setInput,
-    setLoading,
-    inputRef,
-    abortRef,
-    refreshThreads,
-    setBadApiKey,
-  }), [messages, refreshThreads, setThreadId, threadId, setBadApiKey]);
+  const send = useCallback(
+    (text: string) =>
+      sendChatMessage({
+        text,
+        messages,
+        threadId,
+        setThreadId,
+        setMessages,
+        setInput,
+        setLoading,
+        inputRef,
+        abortRef,
+        refreshThreads,
+        setBadApiKey,
+      }),
+    [messages, refreshThreads, setBadApiKey, setThreadId, threadId],
+  );
 
   return {
     messages,
@@ -486,7 +584,10 @@ export function useChatSend({
     loading,
     inputRef,
     send,
-    progress,
-    progressLabel: formatToolProgressLabel(progress),
+    progress: activeMessage?.workLog ?? null,
+    progressLabel: workPhaseLabel(
+      activeMessage?.workLog,
+      Boolean(activeMessage?.content),
+    ),
   };
 }

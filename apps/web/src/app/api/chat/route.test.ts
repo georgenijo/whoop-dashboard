@@ -63,15 +63,25 @@ vi.mock("@/lib/coach/provider", () => ({
 
 type RunOpts = {
   onTextDelta?: (text: string) => void;
-  onToolUseStart?: (event: { name: string; input: unknown }) => void;
+  onToolUseStart?: (event: { id: string; name: string; input: unknown }) => void;
   onToolUseEnd?: (event: {
+    id: string;
     name: string;
     duration_ms: number;
     rows: number | null;
     status: "ok" | "error";
     error?: string;
+    response?: unknown;
   }) => void;
-  onToolProgress?: (event: { tool: string; stage: string; message?: string }) => void;
+  onToolProgress?: (event: { id: string; tool: string; stage: string; message?: string }) => void;
+};
+
+const completedWorkLog = {
+  version: 1 as const,
+  status: "complete" as const,
+  duration_ms: 12,
+  notes: [],
+  tools: [],
 };
 
 let runAndPersistImpl: (
@@ -84,7 +94,10 @@ let runAndPersistImpl: (
   apiKey: unknown,
   apiKeyOrigin: unknown,
   options: RunOpts,
-) => Promise<string> = async () => "ok";
+) => Promise<{ reply: string; workLog: typeof completedWorkLog }> = async () => ({
+  reply: "ok",
+  workLog: completedWorkLog,
+});
 
 vi.mock("@/lib/coach/persistence", () => ({
   runAndPersistCoachTurn: vi.fn(
@@ -175,7 +188,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  runAndPersistImpl = async () => "ok";
+  runAndPersistImpl = async () => ({ reply: "ok", workLog: completedWorkLog });
   testState.afterCallbacks.length = 0;
   testState.thread = { id: 42, title: "existing" };
   testState.conversation = [];
@@ -184,15 +197,33 @@ afterEach(() => {
 });
 
 describe("POST /api/chat — SSE wiring", () => {
-  it("relays tool_progress events from the coach loop to the SSE stream", async () => {
+  it("relays stable tool ids, progress, and bounded results to the SSE stream", async () => {
     runAndPersistImpl = async (_uid, _t, _u, _c, _d, _s, _k, _ko, options) => {
-      options.onToolProgress?.({ tool: "trigger_whoop_sync", stage: "fetching_sleep" });
+      options.onToolUseStart?.({
+        id: "sync-1",
+        name: "trigger_whoop_sync",
+        input: { force: false },
+      });
       options.onToolProgress?.({
+        id: "sync-1",
+        tool: "trigger_whoop_sync",
+        stage: "fetching_sleep",
+      });
+      options.onToolProgress?.({
+        id: "sync-1",
         tool: "trigger_whoop_sync",
         stage: "upserting",
         message: "writing rows",
       });
-      return "final reply";
+      options.onToolUseEnd?.({
+        id: "sync-1",
+        name: "trigger_whoop_sync",
+        duration_ms: 97,
+        rows: 30,
+        status: "ok",
+        response: { success: true },
+      });
+      return { reply: "final reply", workLog: completedWorkLog };
     };
 
     const res = await POST(
@@ -205,17 +236,28 @@ describe("POST /api/chat — SSE wiring", () => {
     const text = await readEntireStream(res.body as ReadableStream<Uint8Array>);
 
     expect(text).toContain(
-      'event: tool_progress\ndata: {"tool":"trigger_whoop_sync","stage":"fetching_sleep"}\n\n',
+      'event: tool_use_start\ndata: {"id":"sync-1","name":"trigger_whoop_sync","input":{"force":false}}\n\n',
     );
     expect(text).toContain(
-      'event: tool_progress\ndata: {"tool":"trigger_whoop_sync","stage":"upserting","message":"writing rows"}\n\n',
+      'event: tool_progress\ndata: {"id":"sync-1","tool":"trigger_whoop_sync","stage":"fetching_sleep"}\n\n',
     );
-    expect(text).toMatch(/event: done\ndata: \{"reply":"final reply"\}\n\n/);
+    expect(text).toContain(
+      'event: tool_progress\ndata: {"id":"sync-1","tool":"trigger_whoop_sync","stage":"upserting","message":"writing rows"}\n\n',
+    );
+    expect(text).toContain(
+      'event: tool_use_end\ndata: {"id":"sync-1","name":"trigger_whoop_sync","duration_ms":97,"rows":30,"status":"ok","response":{"success":true}}\n\n',
+    );
+    expect(text).toContain(
+      `event: done\ndata: ${JSON.stringify({ reply: "final reply", work_log: completedWorkLog })}\n\n`,
+    );
   });
 
   it("makes done terminal and refines an immediate deterministic title after the response", async () => {
     testState.thread = { id: 42, title: null };
-    runAndPersistImpl = async () => "final reply";
+    runAndPersistImpl = async () => ({
+      reply: "final reply",
+      workLog: completedWorkLog,
+    });
 
     const res = await POST(
       makeRequest({
@@ -229,7 +271,9 @@ describe("POST /api/chat — SSE wiring", () => {
       42,
       "Compare my recovery this month",
     );
-    expect(text).toBe(': ready\n\nevent: done\ndata: {"reply":"final reply"}\n\n');
+    expect(text).toBe(
+      `: ready\n\nevent: done\ndata: ${JSON.stringify({ reply: "final reply", work_log: completedWorkLog })}\n\n`,
+    );
     expect(titleChatThread).not.toHaveBeenCalled();
     expect(testState.afterCallbacks).toHaveLength(1);
 
@@ -269,7 +313,10 @@ describe("POST /api/chat — SSE wiring", () => {
     vi.mocked(setChatThreadTitle).mockImplementationOnce(() => {
       throw new Error("database unavailable");
     });
-    runAndPersistImpl = async () => "final reply";
+    runAndPersistImpl = async () => ({
+      reply: "final reply",
+      workLog: completedWorkLog,
+    });
 
     const res = await POST(
       makeRequest({
@@ -280,7 +327,9 @@ describe("POST /api/chat — SSE wiring", () => {
     const text = await readEntireStream(res.body as ReadableStream<Uint8Array>);
 
     expect(res.status).toBe(200);
-    expect(text).toContain('event: done\ndata: {"reply":"final reply"}\n\n');
+    expect(text).toContain(
+      `event: done\ndata: ${JSON.stringify({ reply: "final reply", work_log: completedWorkLog })}\n\n`,
+    );
     expect(text).not.toContain("event: error");
   });
 
@@ -289,7 +338,7 @@ describe("POST /api/chat — SSE wiring", () => {
     // the idle window must not receive the separate watchdog heartbeat.
     runAndPersistImpl = async () => {
       await new Promise((r) => setTimeout(r, 50));
-      return "ok";
+      return { reply: "ok", workLog: completedWorkLog };
     };
 
     const res = await POST(
@@ -314,7 +363,7 @@ describe("POST /api/chat — SSE wiring", () => {
       });
       runAndPersistImpl = async () => {
         await gate;
-        return "ok";
+        return { reply: "ok", workLog: completedWorkLog };
       };
 
       const res = await POST(
@@ -339,7 +388,10 @@ describe("POST /api/chat — SSE wiring", () => {
   });
 
   it("returns JSON on the ?stream=false path with no SSE bytes (iOS regression guard)", async () => {
-    runAndPersistImpl = async () => "json reply";
+    runAndPersistImpl = async () => ({
+      reply: "json reply",
+      workLog: completedWorkLog,
+    });
 
     const res = await POST(
       makeRequest(
@@ -350,9 +402,14 @@ describe("POST /api/chat — SSE wiring", () => {
 
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toMatch(/application\/json/);
-    const body = (await res.json()) as { thread_id: number; reply: string };
+    const body = (await res.json()) as {
+      thread_id: number;
+      reply: string;
+      work_log: typeof completedWorkLog;
+    };
     expect(body.reply).toBe("json reply");
     expect(body.thread_id).toBe(42);
+    expect(body.work_log).toEqual(completedWorkLog);
   });
 });
 

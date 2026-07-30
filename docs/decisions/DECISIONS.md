@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-07-30: Coach work receipts persist bounded visible operations
+
+**Decision:** Persist a versioned, bounded JSON work receipt only on each new turn's final visible assistant message. Receipts contain user-visible pre-tool commentary plus redacted tool inputs, status, timing, row counts, errors, and bounded results. Do not reconstruct receipts from `chat_logs`, expose hidden model reasoning, send receipts back to the model, backfill historical turns, or attach receipts to intermediate tool rows.
+
+**Rationale:** A final-message receipt gives the web client durable progressive disclosure across reloads without duplicating model context or treating operational logs as a reconstructable source of truth. Version validation, secret-key redaction, and the existing 12KB response-capture policy keep the client-safe payload explicit and bounded while preserving the exact tool history users need to inspect.
+
+**Status:** active
+
+**References:** `apps/web/src/lib/coach/work-log-types.ts`, `apps/web/src/lib/coach/work-log.ts`, `apps/web/src/lib/db/coach.ts`, `apps/web/src/components/coach/CoachWorkDisclosure.tsx`
+
+---
+
 ## 2026-07-30: Coach image uploads are persistent, encrypted, and provider-complete
 
 **Decision:** Coach accepts up to three image-only or captioned images per turn on web and iOS, encrypts normalized JPEG bytes in SQLite, retains them until thread deletion, and exposes at most the six newest images to model context. The feature does not ship until both Anthropic vision blocks and Cursor's contained per-turn MCP image tool pass live recognition; it never silently changes providers. Medical images receive visible observations, ranked possibilities with explicit uncertainty, red flags, follow-up questions, and clinician guidance, never a confirmed image-only diagnosis.

@@ -342,3 +342,75 @@ describe("chat attachment persistence", () => {
     expect(conversation[0].images).toEqual([]);
   });
 });
+
+describe("chat message work logs", () => {
+  const workLog = {
+    version: 1 as const,
+    status: "complete" as const,
+    duration_ms: 321,
+    notes: ["Checking recent recovery."],
+    tools: [
+      {
+        id: "tool-1",
+        name: "query_recovery",
+        input: { start_date: "2026-07-01" },
+        state: "complete" as const,
+        status: "ok" as const,
+        duration_ms: 44,
+        rows: 3,
+        response: [{ recovery_score: 72 }],
+      },
+    ],
+  };
+
+  it("round-trips a receipt and leaves old NULL rows unchanged", () => {
+    const threadId = insertThread(1);
+    insertMessage(threadId, "assistant", "Historical answer", []);
+    coach.addChatMessages(threadId, [
+      { role: "assistant", content: "New answer", blocks: [], work_log: workLog },
+    ]);
+
+    const messages = coach.getChatThreadMessages(1, threadId);
+
+    expect(messages[0].work_log).toBeNull();
+    expect(messages[1].work_log).toEqual(workLog);
+  });
+
+  it("returns malformed and unsupported receipts as null", () => {
+    const threadId = insertThread(1);
+    const malformedId = insertMessage(threadId, "assistant", "Malformed", []);
+    const unsupportedId = insertMessage(threadId, "assistant", "Unsupported", []);
+    const db = new Database(dbFile);
+    try {
+      db.prepare("UPDATE chat_messages SET work_log = ? WHERE id = ?").run(
+        "{bad",
+        malformedId,
+      );
+      db.prepare("UPDATE chat_messages SET work_log = ? WHERE id = ?").run(
+        JSON.stringify({ ...workLog, version: 2 }),
+        unsupportedId,
+      );
+    } finally {
+      db.close();
+    }
+
+    expect(
+      coach.getChatThreadMessages(1, threadId).map((message) => message.work_log),
+    ).toEqual([null, null]);
+  });
+
+  it("never includes work-log data in model conversation history", () => {
+    const threadId = insertThread(1);
+    coach.addChatMessages(threadId, [
+      { role: "assistant", content: "Visible answer", work_log: workLog },
+    ]);
+
+    expect(coach.getChatThreadConversation(1, threadId)).toEqual([
+      {
+        role: "assistant",
+        contentBlocks: [{ type: "text", text: "Visible answer" }],
+        images: [],
+      },
+    ]);
+  });
+});

@@ -739,6 +739,22 @@ body {
   color: var(--fg-0);
 }
 
+.coach-message.assistant.has-work-log {
+  width: min(820px, 92%);
+  max-width: min(820px, 92%);
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.coach-message.assistant.has-work-log > .prose-coach {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 14px 14px 14px 4px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.05);
+}
+
 .coach-message-stopped {
   display: inline;
   margin-left: 6px;
@@ -747,69 +763,205 @@ body {
   color: var(--fg-3);
 }
 
-.coach-thinking {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.coach-thinking-dots {
-  display: flex;
-  gap: 4px;
-}
-
-.coach-thinking-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #7b61ff;
-  display: inline-block;
-  animation: coach-thinking-dot 1.2s ease-in-out infinite;
-}
-
-.coach-thinking-label {
+.coach-work-disclosure {
+  color: var(--fg-2);
   font-size: 12px;
-  color: var(--fg-3);
+  min-width: 0;
 }
 
-.coach-tool-progress {
+.coach-work-disclosure > summary,
+.coach-tool-call > summary,
+.coach-previous-tools > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.coach-work-disclosure > summary::-webkit-details-marker,
+.coach-tool-call > summary::-webkit-details-marker,
+.coach-previous-tools > summary::-webkit-details-marker {
+  display: none;
+}
+
+.coach-work-disclosure > summary {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  width: fit-content;
+  min-height: 30px;
   max-width: 100%;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(123, 97, 255, 0.28);
-  background: rgba(123, 97, 255, 0.12);
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  color: var(--fg-3);
+  font-weight: 600;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.coach-work-disclosure > summary:hover,
+.coach-work-disclosure > summary:focus-visible {
   color: var(--fg-1);
-  font-size: 12px;
-  line-height: 1.2;
+  border-color: rgba(123, 97, 255, 0.24);
+  background: rgba(123, 97, 255, 0.07);
+  outline: none;
+}
+
+.coach-work-heartbeat,
+.coach-tool-state {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #7b61ff;
+}
+
+.coach-work-disclosure.running .coach-work-heartbeat,
+.coach-tool-call.running .coach-tool-state {
+  animation: coach-work-pulse 1.25s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(123, 97, 255, 0.4);
+}
+
+.coach-work-disclosure.complete .coach-work-heartbeat,
+.coach-tool-call.complete .coach-tool-state {
+  background: #777187;
+}
+
+.coach-work-disclosure.error .coach-work-heartbeat,
+.coach-work-disclosure.aborted .coach-work-heartbeat,
+.coach-tool-call.error .coach-tool-state {
+  background: #ff6b6b;
+}
+
+.coach-work-caret {
+  width: 7px;
+  height: 7px;
+  margin-left: 1px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+  transition: transform 0.15s;
+}
+
+.coach-work-disclosure[open] > summary .coach-work-caret {
+  transform: rotate(225deg) translate(-1px, -1px);
+}
+
+.coach-work-body {
+  margin: 3px 0 4px 10px;
+  padding: 9px 0 2px 14px;
+  border-left: 1px solid rgba(123, 97, 255, 0.22);
+  min-width: 0;
+}
+
+.coach-work-note {
+  max-width: 700px;
+  margin: 0 0 9px;
+  color: var(--fg-2);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.coach-work-phase,
+.coach-work-empty {
+  margin: 2px 0 9px;
+  color: var(--fg-3);
+  font-size: 11px;
+}
+
+.coach-tool-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.coach-tool-call,
+.coach-previous-tools {
+  min-width: 0;
+  border-radius: 9px;
+  border: 1px solid rgba(255,255,255,0.055);
+  background: rgba(255,255,255,0.025);
+}
+
+.coach-tool-call > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.coach-tool-label {
+  color: var(--fg-1);
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 
-.coach-tool-progress.done {
-  border-color: rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.05);
+.coach-tool-meta {
+  margin-left: auto;
+  color: var(--fg-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.coach-tool-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 4px 10px 12px 25px;
+}
+
+.coach-work-field {
+  min-width: 0;
+}
+
+.coach-work-field > span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--fg-3);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.coach-work-field code,
+.coach-work-field pre {
   color: var(--fg-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
 }
 
-.coach-tool-progress-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #7b61ff;
-  flex-shrink: 0;
-  animation: coach-thinking-dot 1.2s ease-in-out infinite;
+.coach-work-field pre {
+  max-width: 100%;
+  margin: 0;
+  padding: 8px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.22);
 }
 
-.coach-tool-progress.done .coach-tool-progress-dot {
-  animation: none;
-  opacity: 0.75;
+.coach-work-field.error pre {
+  color: #ff8c8c;
 }
 
-.prose-coach + .coach-tool-progress {
-  margin-top: 8px;
+.coach-tool-response {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.coach-previous-tools > summary {
+  padding: 8px 10px;
+  color: var(--fg-2);
+  font-weight: 600;
+}
+
+.coach-previous-tools > .coach-tool-list {
+  padding: 0 7px 7px;
 }
 
 .coach-empty {
@@ -983,6 +1135,18 @@ body {
   40% { transform: scale(1); opacity: 1; }
 }
 
+@keyframes coach-work-pulse {
+  0%, 100% { transform: scale(0.78); opacity: 0.52; box-shadow: 0 0 0 0 rgba(123, 97, 255, 0.34); }
+  50% { transform: scale(1); opacity: 1; box-shadow: 0 0 0 5px rgba(123, 97, 255, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coach-work-disclosure.running .coach-work-heartbeat,
+  .coach-tool-call.running .coach-tool-state {
+    animation: none;
+  }
+}
+
 /* =========================== MOBILE =========================== */
 @media (max-width: 768px) {
   .aurora::before, .aurora::after { filter: blur(80px); opacity: 0.4; }
@@ -1056,6 +1220,22 @@ body {
   }
   .coach-message {
     max-width: 92%;
+  }
+  .coach-message.assistant.has-work-log {
+    width: 100%;
+    max-width: 100%;
+  }
+  .coach-tool-call > summary {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .coach-tool-meta {
+    width: 100%;
+    margin-left: 15px;
+    text-align: left;
+  }
+  .coach-tool-detail {
+    padding-left: 10px;
   }
   .coach-empty-title {
     font-size: 19px;
