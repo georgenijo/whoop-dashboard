@@ -1,5 +1,9 @@
 import "server-only";
 import { type DB, hasTable, openWrite, safeWriteQuery } from "./connection";
+import {
+  parseCoachWorkLog,
+  type CoachWorkLog,
+} from "@/lib/coach/work-log-types";
 
 // Cap the conversation history sent to the model to keep input-token cost bounded.
 // Only applies to model-input fetches (getChatThreadConversation / getChatConversation).
@@ -30,12 +34,14 @@ export type ChatMessage = {
   content: string;
   created_at: string;
   status: ChatMessageStatus;
+  work_log: CoachWorkLog | null;
 };
 
 export type ChatMessageInsert = {
   role: "user" | "assistant";
   content: string;
   blocks?: unknown;
+  work_log?: CoachWorkLog;
 };
 
 function visibleChatMessageClause(alias: string): string {
@@ -246,7 +252,7 @@ export function getChatThreadMessages(userId: number, threadId: number): ChatMes
       const visibleMessage = visibleChatMessageClause("chat_messages");
       const rows = db
         .prepare(
-          `SELECT id, role, content, created_at, status FROM chat_messages WHERE thread_id = ? AND ${visibleMessage} ORDER BY id ASC`
+          `SELECT id, role, content, created_at, status, work_log FROM chat_messages WHERE thread_id = ? AND ${visibleMessage} ORDER BY id ASC`
         )
         .all(threadId) as {
           id: number;
@@ -254,6 +260,7 @@ export function getChatThreadMessages(userId: number, threadId: number): ChatMes
           content: string;
           created_at: string;
           status: string | null;
+          work_log: string | null;
         }[];
       return rows.map((row) => ({
         id: row.id,
@@ -261,6 +268,7 @@ export function getChatThreadMessages(userId: number, threadId: number): ChatMes
         content: row.content,
         created_at: row.created_at,
         status: row.status === "aborted" ? "aborted" : "complete",
+        work_log: parseCoachWorkLog(row.work_log),
       }));
     }) ?? []
   );
@@ -373,7 +381,7 @@ export function addChatMessages(
   if (!db) return;
   try {
     const insert = db.prepare(
-      "INSERT INTO chat_messages (thread_id, role, content, blocks, created_at, status) VALUES (?, ?, ?, ?, ?, ?)"
+      "INSERT INTO chat_messages (thread_id, role, content, blocks, work_log, created_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)"
     );
     const touch = db.prepare("UPDATE chat_threads SET updated_at = datetime('now') WHERE id = ?");
     // When status='aborted', only the final assistant row in the batch
@@ -393,6 +401,7 @@ export function addChatMessages(
           message.role,
           message.content,
           message.blocks === undefined ? null : JSON.stringify(message.blocks),
+          message.work_log === undefined ? null : JSON.stringify(message.work_log),
           new Date().toISOString(),
           idx === lastAssistantIdx ? "aborted" : "complete"
         );

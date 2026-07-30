@@ -355,6 +355,7 @@ describe("chatLogToolSummaries", () => {
   it("passes a small array response through verbatim", () => {
     const rows = [{ date: "2026-05-12", recovery_score: 67 }];
     const detail: ToolDetail = {
+      id: "recovery-1",
       name: "query_recovery",
       input: { start_date: "2026-05-12", end_date: "2026-05-12" },
       duration_ms: 4,
@@ -380,6 +381,7 @@ describe("chatLogToolSummaries", () => {
       raw: { score: { recovery_score: i }, note: "padded".repeat(10) },
     }));
     const detail: ToolDetail = {
+      id: "recovery-2",
       name: "query_recovery",
       input: { start_date: "2026-01-01", end_date: "2026-12-31" },
       duration_ms: 12,
@@ -401,6 +403,7 @@ describe("chatLogToolSummaries", () => {
 
   it("omits the response key entirely when the ToolDetail has no response", () => {
     const detail: ToolDetail = {
+      id: "recovery-3",
       name: "query_recovery",
       input: {},
       duration_ms: 1,

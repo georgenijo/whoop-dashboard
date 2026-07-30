@@ -47,6 +47,46 @@ function columns(db: Database.Database, table: string): string[] {
 }
 
 describe("Phase D — domain tables carry user_id", () => {
+  it("fresh schema includes chat_messages.work_log", () => {
+    const file = newDbFile();
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    try {
+      expect(columns(db!, "chat_messages")).toContain("work_log");
+    } finally {
+      db?.close();
+    }
+  });
+
+  it("lazily adds work_log to an older chat schema without losing rows", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE chat_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        blocks TEXT,
+        created_at TEXT NOT NULL,
+        status TEXT DEFAULT 'complete'
+      );
+      INSERT INTO chat_messages (role, content, created_at)
+      VALUES ('assistant', 'kept', '2026-07-30T00:00:00Z');
+    `);
+    raw.close();
+    process.env.WHOOP_DB_PATH = file;
+
+    const db = conn.openWrite();
+    try {
+      expect(columns(db!, "chat_messages")).toContain("work_log");
+      expect(
+        db!.prepare("SELECT content FROM chat_messages WHERE id = 1").get(),
+      ).toEqual({ content: "kept" });
+    } finally {
+      db?.close();
+    }
+  });
+
   it("fresh DB: every domain table has user_id + composite index", () => {
     const file = newDbFile();
     process.env.WHOOP_DB_PATH = file;

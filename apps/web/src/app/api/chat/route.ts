@@ -217,7 +217,7 @@ export async function POST(req: Request) {
 
     if (!wantsStream(req)) {
       try {
-        const reply = await runAndPersistCoachTurn(
+        const { reply, workLog } = await runAndPersistCoachTurn(
           user.id,
           thread,
           lastUser,
@@ -232,7 +232,11 @@ export async function POST(req: Request) {
           persistDeterministicTitle(thread.id, lastUser);
           enableTitleRefinement();
         }
-        return Response.json({ thread_id: thread.id, reply });
+        return Response.json({
+          thread_id: thread.id,
+          reply,
+          work_log: workLog,
+        });
       } catch (err) {
         const classified = classifyChatError(err);
         if (classified.kind !== "bad_api_key") {
@@ -306,7 +310,7 @@ export async function POST(req: Request) {
         }, HEARTBEAT_CHECK_MS);
 
         try {
-          const reply = await runAndPersistCoachTurn(
+          const { reply, workLog } = await runAndPersistCoachTurn(
             user.id,
             thread,
             lastUser,
@@ -318,17 +322,21 @@ export async function POST(req: Request) {
             {
               signal: abortController.signal,
               onTextDelta: (text) => send("text_delta", { text }),
-              onToolUseStart: ({ name, input }) => send("tool_use_start", { name, input }),
-              onToolUseEnd: ({ name, duration_ms, rows, status, error }) =>
+              onToolUseStart: ({ id, name, input }) =>
+                send("tool_use_start", { id, name, input }),
+              onToolUseEnd: ({ id, name, duration_ms, rows, status, error, response }) =>
                 send("tool_use_end", {
+                  id,
                   name,
                   duration_ms,
                   rows,
                   status,
                   ...(error ? { error } : {}),
+                  ...(response === undefined ? {} : { response }),
                 }),
-              onToolProgress: ({ tool, stage, message }) =>
+              onToolProgress: ({ id, tool, stage, message }) =>
                 send("tool_progress", {
+                  id,
                   tool,
                   stage,
                   ...(message ? { message } : {}),
@@ -350,7 +358,7 @@ export async function POST(req: Request) {
             persistDeterministicTitle(thread.id, lastUser);
             enableTitleRefinement();
           }
-          send("done", { reply });
+          send("done", { reply, work_log: workLog });
           close();
           return;
         } catch (err) {

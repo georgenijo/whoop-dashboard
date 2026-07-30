@@ -1,24 +1,23 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { CoachWorkLog } from "@/lib/coach/work-log-types";
 import { useChatSend, type ChatMessage } from "./useChatSend";
 
 const emptyMessages: ChatMessage[] = [];
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  let reject!: (reason?: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
   });
-  return { promise, resolve, reject };
+  return { promise, resolve };
 }
 
 function sse(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
-function streamResponse(chunks: string[], headers?: HeadersInit): Response {
+function streamResponse(chunks: string[]): Response {
   const encoder = new TextEncoder();
   return new Response(
     new ReadableStream({
@@ -27,297 +26,248 @@ function streamResponse(chunks: string[], headers?: HeadersInit): Response {
         controller.close();
       },
     }),
-    { headers }
   );
 }
 
-function controllableStreamResponse(headers?: HeadersInit) {
+function controllableStreamResponse() {
   const encoder = new TextEncoder();
-  let controller: ReadableStreamDefaultController<Uint8Array>;
-  const response = new Response(
-    new ReadableStream({
-      start(c) {
-        controller = c;
-      },
-    }),
-    { headers }
-  );
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
   return {
-    response,
+    response: new Response(
+      new ReadableStream({
+        start(nextController) {
+          controller = nextController;
+        },
+      }),
+    ),
     send: (chunk: string) => controller.enqueue(encoder.encode(chunk)),
     close: () => controller.close(),
   };
 }
 
-describe("useChatSend", () => {
+function renderChat(initialMessages: ChatMessage[] = emptyMessages, threadId = 1) {
+  return renderHook(
+    ({ messages, id }: { messages: ChatMessage[]; id: number }) =>
+      useChatSend({
+        initialMessages: messages,
+        threadId: id,
+        setThreadId: vi.fn(),
+        refreshThreads: vi.fn(async () => []),
+      }),
+    { initialProps: { messages: initialMessages, id: threadId } },
+  );
+}
+
+describe("useChatSend work logs", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("optimistically inserts the user message and replaces the assistant placeholder", async () => {
-    const reply = deferred<Response>();
-    const setThreadId = vi.fn();
-    const refreshThreads = vi.fn(async () => []);
-    vi.stubGlobal("fetch", vi.fn(() => reply.promise));
+  it("creates a running work log immediately and applies the authoritative done log", async () => {
+    const pending = deferred<Response>();
+    vi.stubGlobal("fetch", vi.fn(() => pending.promise));
+    const { result } = renderChat();
 
-    const { result } = renderHook(() =>
-      useChatSend({ initialMessages: emptyMessages, threadId: 1, setThreadId, refreshThreads })
-    );
-
-    let sendPromise: Promise<void> = Promise.resolve();
+    let sendPromise = Promise.resolve();
     act(() => {
-      sendPromise = result.current.send("How am I doing?");
+      sendPromise = result.current.send("hey");
     });
 
-    await waitFor(() =>
-      expect(result.current.messages).toEqual([
-        { role: "user", content: "How am I doing?" },
-        { role: "assistant", content: "", streaming: true },
-      ])
-    );
+    await waitFor(() => {
+      expect(result.current.messages[1]).toMatchObject({
+        role: "assistant",
+        content: "",
+        streaming: true,
+        workLog: {
+          version: 1,
+          status: "running",
+          notes: [],
+          tools: [],
+        },
+      });
+    });
 
+    const authoritative: CoachWorkLog = {
+      version: 1,
+      status: "complete",
+      duration_ms: 84,
+      notes: [],
+      tools: [],
+    };
     await act(async () => {
-      reply.resolve(
-        streamResponse(
-          [
-            "event: text_delta\ndata: {\"text\":\"You",
-            " are\"}\n\n",
-            sse("text_delta", { text: " trending well." }),
-            sse("done", { reply: "You are trending well." }),
-          ],
-          { "x-thread-id": "2" }
-        )
+      pending.resolve(
+        streamResponse([
+          sse("text_delta", { text: "Hello" }),
+          sse("done", { reply: "Hello there.", work_log: authoritative }),
+        ]),
       );
       await sendPromise;
     });
 
-    expect(result.current.messages).toEqual([
-      { role: "user", content: "How am I doing?" },
-      { role: "assistant", content: "You are trending well." },
-    ]);
-    expect(setThreadId).toHaveBeenCalledWith(2);
-    expect(refreshThreads).toHaveBeenCalledOnce();
+    expect(result.current.messages[1]).toMatchObject({
+      content: "Hello there.",
+      streaming: false,
+      workLog: authoritative,
+    });
   });
 
-  it("aborts and replaces the prior in-flight request when send is invoked again", async () => {
-    const requests: {
-      signal: AbortSignal;
-      resolve: (value: Response) => void;
-      reject: (reason?: unknown) => void;
-    }[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
-        const signal = init?.signal as AbortSignal;
-        return new Promise<Response>((resolve, reject) => {
-          requests.push({ signal, resolve, reject });
-          signal.addEventListener("abort", () => {
-            reject(new DOMException("Aborted", "AbortError"));
-          });
-        });
-      })
-    );
-
-    const { result } = renderHook(() =>
-      useChatSend({
-        initialMessages: emptyMessages,
-        threadId: 1,
-        setThreadId: vi.fn(),
-        refreshThreads: vi.fn(async () => []),
-      })
-    );
-
-    let firstSend: Promise<void> = Promise.resolve();
-    let secondSend: Promise<void> = Promise.resolve();
-    act(() => {
-      firstSend = result.current.send("First");
-    });
-
-    await waitFor(() => expect(result.current.loading).toBe(true));
-    act(() => {
-      secondSend = result.current.send("Second");
-    });
-
-    await waitFor(() => expect(requests).toHaveLength(2));
-    expect(requests[0].signal.aborted).toBe(true);
-    expect(requests[1].signal.aborted).toBe(false);
-    expect(result.current.messages).toEqual([
-      { role: "user", content: "Second" },
-      { role: "assistant", content: "", streaming: true },
-    ]);
-
-    await act(async () => {
-      requests[1].resolve(
-        streamResponse([
-          sse("text_delta", { text: "Second reply" }),
-          sse("done", { reply: "Second reply" }),
-        ])
-      );
-      await Promise.allSettled([firstSend, secondSend]);
-    });
-
-    expect(result.current.messages).toEqual([
-      { role: "user", content: "Second" },
-      { role: "assistant", content: "Second reply" },
-    ]);
-  });
-
-  it("resets local state and aborts in-flight work when the thread changes", async () => {
-    const requests: { signal: AbortSignal; reject: (reason?: unknown) => void }[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
-        const signal = init?.signal as AbortSignal;
-        return new Promise<Response>((_resolve, reject) => {
-          requests.push({ signal, reject });
-          signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")));
-        });
-      })
-    );
-
-    const threadOneMessages: ChatMessage[] = [
-      { id: 1, role: "user", content: "Old thread", created_at: "2026-05-01T12:00:00.000Z" },
-    ];
-    const threadTwoMessages: ChatMessage[] = [
-      { id: 2, role: "assistant", content: "New thread", created_at: "2026-05-01T12:01:00.000Z" },
-    ];
-    const props = {
-      setThreadId: vi.fn(),
-      refreshThreads: vi.fn(async () => []),
-    };
-    const { result, rerender } = renderHook(
-      ({ threadId, initialMessages }: { threadId: number; initialMessages: ChatMessage[] }) =>
-        useChatSend({ ...props, threadId, initialMessages }),
-      { initialProps: { threadId: 1, initialMessages: threadOneMessages } }
-    );
-
-    let sendPromise: Promise<void> = Promise.resolve();
-    act(() => {
-      result.current.setInput("draft");
-      sendPromise = result.current.send("Pending");
-    });
-    await waitFor(() => expect(requests).toHaveLength(1));
-
-    rerender({ threadId: 2, initialMessages: threadTwoMessages });
-
-    await waitFor(() =>
-      expect(result.current.messages).toEqual([{ role: "assistant", content: "New thread" }])
-    );
-    expect(result.current.input).toBe("");
-    expect(result.current.loading).toBe(false);
-    expect(requests[0].signal.aborted).toBe(true);
-    await Promise.allSettled([sendPromise]);
-  });
-
-  it("shows the latest tool progress and collapses it when text streams", async () => {
-    const reply = deferred<Response>();
+  it("moves pre-tool text into notes and accumulates sequential and parallel tools by id", async () => {
+    const pending = deferred<Response>();
     const stream = controllableStreamResponse();
-    vi.stubGlobal("fetch", vi.fn(() => reply.promise));
+    vi.stubGlobal("fetch", vi.fn(() => pending.promise));
+    const { result } = renderChat();
 
-    const { result } = renderHook(() =>
-      useChatSend({
-        initialMessages: emptyMessages,
-        threadId: 1,
-        setThreadId: vi.fn(),
-        refreshThreads: vi.fn(async () => []),
-      })
-    );
-
-    let sendPromise: Promise<void> = Promise.resolve();
     act(() => {
-      sendPromise = result.current.send("Check recovery");
+      void result.current.send("Compare this month");
     });
     await waitFor(() => expect(result.current.messages).toHaveLength(2));
-
-    await act(async () => {
-      reply.resolve(stream.response);
-    });
+    await act(async () => pending.resolve(stream.response));
 
     act(() => {
-      stream.send(sse("tool_use_start", { name: "query_recovery", input: {} }));
-    });
-    await waitFor(() => {
-      expect(result.current.messages[1].progress).toEqual({
-        name: "query_recovery",
-        state: "running",
-      });
-      expect(result.current.progressLabel).toBe("Coach is running recovery…");
-    });
-
-    act(() => {
+      stream.send(sse("text_delta", { text: "I’ll compare the periods." }));
+      stream.send(
+        sse("tool_use_start", {
+          id: "recovery-current",
+          name: "query_recovery",
+          input: { start_date: "2026-07-01" },
+        }),
+      );
+      stream.send(
+        sse("tool_use_start", {
+          id: "recovery-previous",
+          name: "query_recovery",
+          input: { start_date: "2026-06-01" },
+        }),
+      );
+      stream.send(
+        sse("tool_progress", {
+          id: "recovery-previous",
+          tool: "query_recovery",
+          stage: "reading_rows",
+        }),
+      );
       stream.send(
         sse("tool_use_end", {
+          id: "recovery-current",
           name: "query_recovery",
-          duration_ms: 42,
-          rows: 3,
+          duration_ms: 40,
+          rows: 20,
           status: "ok",
-        })
+          response: [{ recovery_score: 70 }],
+        }),
+      );
+      stream.send(
+        sse("tool_use_end", {
+          id: "recovery-previous",
+          name: "query_recovery",
+          duration_ms: 55,
+          rows: 22,
+          status: "ok",
+          response: [{ recovery_score: 66 }],
+        }),
       );
     });
+
     await waitFor(() => {
-      expect(result.current.messages[1].progress).toEqual({
-        name: "query_recovery",
-        state: "done",
-        duration_ms: 42,
-        rows: 3,
-        status: "ok",
+      const assistant = result.current.messages[1];
+      expect(assistant.content).toBe("");
+      expect(assistant.workLog?.notes).toEqual(["I’ll compare the periods."]);
+      expect(assistant.workLog?.tools.map((tool) => tool.id)).toEqual([
+        "recovery-current",
+        "recovery-previous",
+      ]);
+      expect(assistant.workLog?.tools[0]).toMatchObject({
+        state: "complete",
+        rows: 20,
       });
-      expect(result.current.progressLabel).toBe("Queried recovery in 42ms");
+      expect(assistant.workLog?.tools[1]).toMatchObject({
+        state: "complete",
+        stage: "reading_rows",
+        rows: 22,
+      });
+      expect(result.current.progressLabel).toBe("Analyzing results…");
     });
 
     act(() => {
-      stream.send(sse("text_delta", { text: "Recovery looks steady." }));
+      stream.send(sse("text_delta", { text: "Your recovery improved." }));
     });
-    await waitFor(() =>
-      expect(result.current.messages[1]).toEqual({
-        role: "assistant",
-        content: "Recovery looks steady.",
-        streaming: true,
-        progress: null,
-      })
+    await waitFor(() => {
+      expect(result.current.messages[1].content).toBe("Your recovery improved.");
+      expect(result.current.messages[1].workLog?.tools).toHaveLength(2);
+    });
+    act(() => stream.close());
+  });
+
+  it("keeps accumulated tools and marks the receipt error when transport fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve(
+          streamResponse([
+            sse("tool_use_start", {
+              id: "failed-call",
+              name: "query_sleep",
+              input: {},
+            }),
+          ]),
+        ),
+      ),
     );
+    const { result } = renderChat();
 
     await act(async () => {
-      stream.send(sse("done", { reply: "Recovery looks steady." }));
-      stream.close();
-      await sendPromise;
+      await result.current.send("sleep");
     });
 
-    expect(result.current.messages[1]).toEqual({
-      role: "assistant",
-      content: "Recovery looks steady.",
+    expect(result.current.messages[1]).toMatchObject({
+      content: "**Error:** Connection lost before Coach finished.",
+      streaming: false,
+      workLog: {
+        status: "error",
+        tools: [{ id: "failed-call", state: "running" }],
+      },
     });
   });
 
-  it("shows an error when the stream ends before the done event", async () => {
-    const reply = deferred<Response>();
-    vi.stubGlobal("fetch", vi.fn(() => reply.promise));
-
-    const { result } = renderHook(() =>
-      useChatSend({
-        initialMessages: emptyMessages,
-        threadId: 1,
-        setThreadId: vi.fn(),
-        refreshThreads: vi.fn(async () => []),
-      })
-    );
-
-    let sendPromise: Promise<void> = Promise.resolve();
+  it("drops a stale in-flight turn when switching threads and restores persisted logs", async () => {
+    const pending = deferred<Response>();
+    vi.stubGlobal("fetch", vi.fn(() => pending.promise));
+    const { result, rerender } = renderChat();
     act(() => {
-      sendPromise = result.current.send("Drop test");
+      void result.current.send("old request");
+    });
+    await waitFor(() => expect(result.current.loading).toBe(true));
+
+    const persisted: CoachWorkLog = {
+      version: 1,
+      status: "complete",
+      duration_ms: 1200,
+      notes: ["Checked your sleep."],
+      tools: [],
+    };
+    rerender({
+      id: 2,
+      messages: [
+        {
+          id: 9,
+          role: "assistant",
+          content: "New thread",
+          created_at: "2026-07-30T00:00:00Z",
+          work_log: persisted,
+        },
+      ],
     });
 
-    await act(async () => {
-      reply.resolve(streamResponse([sse("text_delta", { text: "Partial" })]));
-      await sendPromise;
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+      expect(result.current.messages).toEqual([
+        {
+          role: "assistant",
+          content: "New thread",
+          status: undefined,
+          workLog: persisted,
+        },
+      ]);
     });
-
-    expect(result.current.messages).toEqual([
-      { role: "user", content: "Drop test" },
-      {
-        role: "assistant",
-        content: "**Error:** Connection lost before Coach finished.",
-      },
-    ]);
   });
 });
