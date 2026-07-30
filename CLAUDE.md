@@ -155,6 +155,13 @@ Admin routes use a separate gate keyed on `ADMIN_APPLE_SUB` env (fail-closed if 
 
 VM (Ubuntu) runs `whoop-web.service` (systemd) on port 8501.
 
+Pull requests and pushes to `main` run the web test/build workflow. Once the
+one-time Tailscale workload-identity setup is enabled, verified pushes to
+`main` deploy through the protected `production` GitHub environment. The
+workflow delegates to `scripts/deploy`; it does not duplicate deployment logic
+or copy application runtime secrets into GitHub. See
+`docs/operations/environment-and-deploy.md`.
+
 **Use `scripts/deploy`** — do not hand-run the steps below. The script snapshots
 the DB, pulls, runs the build *detached* (a dropped ssh session does not kill
 `next build`, and the orphan keeps the lock), restarts, then **verifies** that
