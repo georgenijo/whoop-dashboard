@@ -135,27 +135,9 @@ Ubuntu VM, `whoop-web.service` (systemd) on port 8501. **Backup the DB before an
 
 ## Environment
 
-```
-# Whoop OAuth
-WHOOP_CLIENT_ID
-WHOOP_CLIENT_SECRET
-WHOOP_REDIRECT_URI       # default: http://localhost:3000/api/auth/callback
-WHOOP_STATE_SECRET       # HMAC signing key for OAuth state nonce — required
-
-# Vault (encrypts integrations.access_token/refresh_token + user_settings.anthropic_key)
-VAULT_KEY                # base64 32-byte symmetric key — required for any encrypted column
-
-# Session
-JWT_SIGNING_KEY          # base64 32-byte signing key
-
-# Coach
-ANTHROPIC_API_KEY        # server fallback; per-user keys live in user_settings.anthropic_key
-
-# DB
-WHOOP_DB_PATH            # optional override for shared/whoop_data.db
-
-# iOS (Sign in with Apple + APNs) — see .env.example for the APPLE_* / APNS_* set
-```
+Copy `.env.example` to `apps/web/.env.local` for local development. The
+canonical variable inventory, production locations, and secret boundaries are
+documented in `docs/operations/environment-and-deploy.md`.
 
 ## Status
 

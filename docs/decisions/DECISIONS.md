@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-07-30: CI verifies every web change and CD delegates to the production deploy script
+
+**Decision:** Add GitHub Actions verification (`npm ci`, tests, build, and deploy-script syntax) for pull requests and `main`, then deploy verified `main` commits through a protected `production` environment using an ephemeral Tailscale workload identity. GitHub receives only the Tailscale federation client ID/audience; application runtime secrets remain in the VM's canonical `apps/web/.env.local`. The deploy job is serialized, opt-in through `PRODUCTION_DEPLOY_ENABLED`, and invokes `scripts/deploy --ref "$GITHUB_SHA"` as the single implementation of backup, build, restart, verification, and rollback reporting.
+
+**Rationale:** CI should prove the exact commit before production changes, while deployment must preserve the hardened SQLite online-backup and health-verification behavior already encoded in `scripts/deploy`. Workload identity avoids a permanent runner or long-lived SSH/auth key, environment approval creates an explicit production boundary, and the enable flag lets the workflow merge safely before the one-time tailnet policy and federation credential are configured.
+
+**Status:** active
+
+**References:** `.github/workflows/ci.yml`, `scripts/deploy`, `docs/operations/environment-and-deploy.md`
+
+---
+
 ## 2026-07-30: Coach work receipts persist bounded visible operations
 
 **Decision:** Persist a versioned, bounded JSON work receipt only on each new turn's final visible assistant message. Receipts contain user-visible pre-tool commentary plus redacted tool inputs, status, timing, row counts, errors, and bounded results. Do not reconstruct receipts from `chat_logs`, expose hidden model reasoning, send receipts back to the model, backfill historical turns, or attach receipts to intermediate tool rows.

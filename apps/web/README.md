@@ -9,10 +9,13 @@ on port 8501) during the migration window.
 
 ```bash
 cd apps/web
-cp .env.local.example .env.local   # fill in WHOOP_CLIENT_ID + WHOOP_CLIENT_SECRET
-pnpm install
-pnpm dev                           # http://localhost:3000
+cp ../../.env.example .env.local   # fill in the variables needed for your flow
+npm install
+npm run dev                        # http://localhost:3000
 ```
+
+See `../../docs/operations/environment-and-deploy.md` for the canonical
+variable inventory and production configuration locations.
 
 Set the Whoop developer app's redirect URI to
 `http://localhost:3000/api/auth/callback` if you intend to run the OAuth flow
