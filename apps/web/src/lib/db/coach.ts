@@ -1,6 +1,18 @@
 import "server-only";
 import { type DB, hasTable, openWrite, safeWriteQuery } from "./connection";
 import {
+  type ChatAttachment,
+  type ChatAttachmentInsert,
+  type CoachConversationMessage,
+  type CoachImage,
+} from "@/lib/coach/image-types";
+import {
+  assertKeyVersionSupported,
+  CURRENT_KEY_VERSION,
+  decryptBytes,
+  encryptBytes,
+} from "@/lib/crypto/vault";
+import {
   parseCoachWorkLog,
   type CoachWorkLog,
 } from "@/lib/coach/work-log-types";
@@ -34,6 +46,7 @@ export type ChatMessage = {
   content: string;
   created_at: string;
   status: ChatMessageStatus;
+  attachments: ChatAttachment[];
   work_log: CoachWorkLog | null;
 };
 
@@ -41,7 +54,21 @@ export type ChatMessageInsert = {
   role: "user" | "assistant";
   content: string;
   blocks?: unknown;
+  attachments?: ChatAttachmentInsert[];
   work_log?: CoachWorkLog;
+};
+
+type AttachmentRow = {
+  id: string;
+  message_id: number;
+  mime_type: "image/jpeg";
+  width: number;
+  height: number;
+  size_bytes: number;
+  sha256: string;
+  ciphertext: Buffer;
+  key_version: number;
+  ordinal: number;
 };
 
 function visibleChatMessageClause(alias: string): string {
@@ -63,6 +90,45 @@ function hasChatThread(db: DB, threadId: number, userId?: number): boolean {
   return !!row;
 }
 
+function attachmentRows(db: DB, messageIds: number[]): AttachmentRow[] {
+  if (messageIds.length === 0 || !hasTable(db, "chat_attachments")) return [];
+  const placeholders = messageIds.map(() => "?").join(",");
+  return db
+    .prepare(
+      `SELECT
+         a.id, ma.message_id, a.mime_type, a.width, a.height,
+         a.size_bytes, a.sha256, a.ciphertext, a.key_version, ma.ordinal
+       FROM chat_message_attachments ma
+       JOIN chat_attachments a ON a.id = ma.attachment_id
+       WHERE ma.message_id IN (${placeholders})
+       ORDER BY ma.message_id, ma.ordinal`
+    )
+    .all(...messageIds) as AttachmentRow[];
+}
+
+function attachmentDto(row: AttachmentRow): ChatAttachment {
+  return {
+    id: row.id,
+    url: `/api/chat/attachments/${row.id}`,
+    mime_type: row.mime_type,
+    width: row.width,
+    height: row.height,
+    size_bytes: row.size_bytes,
+  };
+}
+
+function attachmentImage(row: AttachmentRow): CoachImage {
+  assertKeyVersionSupported(row.key_version);
+  return {
+    id: row.id,
+    mimeType: row.mime_type,
+    width: row.width,
+    height: row.height,
+    bytes: decryptBytes(row.ciphertext),
+    sha256: row.sha256,
+  };
+}
+
 export function getChatThreads(userId: number): ChatThreadSummary[] {
   return (
     safeWriteQuery((db) => {
@@ -77,7 +143,13 @@ export function getChatThreads(userId: number): ChatThreadSummary[] {
             t.updated_at,
             COUNT(m.id) AS message_count,
             (
-              SELECT m2.content
+              SELECT CASE
+                WHEN m2.content = '' AND EXISTS (
+                  SELECT 1 FROM chat_message_attachments ma
+                  WHERE ma.message_id = m2.id
+                ) THEN 'Image attachment'
+                ELSE m2.content
+              END
               FROM chat_messages m2
               WHERE m2.thread_id = t.id AND ${previewM2}
               ORDER BY m2.id DESC
@@ -170,6 +242,7 @@ export function deleteChatThread(threadId: number, userId: number): boolean {
       "SELECT id FROM chat_threads WHERE id = ? AND user_id = ? LIMIT 1"
     );
     const deleteMessages = db.prepare("DELETE FROM chat_messages WHERE thread_id = ?");
+    const deleteAttachments = db.prepare("DELETE FROM chat_attachments WHERE thread_id = ?");
     // Lane F's chat_logs.thread_id REFERENCES chat_threads(id) has no
     // ON DELETE action, so any log row pointing at this thread blocks the
     // parent delete via FK. Drop the log rows in the same transaction.
@@ -179,6 +252,7 @@ export function deleteChatThread(threadId: number, userId: number): boolean {
       const thread = getThread.get(threadId, userId) as { id: number } | undefined;
       if (!thread) return false;
       deleteMessages.run(threadId);
+      deleteAttachments.run(threadId);
       deleteLogs.run(threadId);
       deleteThread.run(threadId, userId);
       return true;
@@ -222,7 +296,13 @@ export function getChatThreadSummary(userId: number, threadId: number): ChatThre
             t.updated_at,
             COUNT(m.id) AS message_count,
             (
-              SELECT m2.content
+              SELECT CASE
+                WHEN m2.content = '' AND EXISTS (
+                  SELECT 1 FROM chat_message_attachments ma
+                  WHERE ma.message_id = m2.id
+                ) THEN 'Image attachment'
+                ELSE m2.content
+              END
               FROM chat_messages m2
               WHERE m2.thread_id = t.id AND ${previewM2}
               ORDER BY m2.id DESC
@@ -262,12 +342,19 @@ export function getChatThreadMessages(userId: number, threadId: number): ChatMes
           status: string | null;
           work_log: string | null;
         }[];
+      const attachmentMap = new Map<number, ChatAttachment[]>();
+      for (const attachment of attachmentRows(db, rows.map((row) => row.id))) {
+        const list = attachmentMap.get(attachment.message_id) ?? [];
+        list.push(attachmentDto(attachment));
+        attachmentMap.set(attachment.message_id, list);
+      }
       return rows.map((row) => ({
         id: row.id,
         role: row.role,
         content: row.content,
         created_at: row.created_at,
         status: row.status === "aborted" ? "aborted" : "complete",
+        attachments: attachmentMap.get(row.id) ?? [],
         work_log: parseCoachWorkLog(row.work_log),
       }));
     }) ?? []
@@ -277,45 +364,76 @@ export function getChatThreadMessages(userId: number, threadId: number): ChatMes
 export function getChatThreadConversation(
   userId: number,
   threadId: number
-): {
-  role: "user" | "assistant";
-  content: unknown;
-}[] {
+): CoachConversationMessage[] {
   return (
     safeWriteQuery((db) => {
       if (!hasTable(db, "chat_messages") || !hasTable(db, "chat_threads")) {
-        return [] as { role: "user" | "assistant"; content: unknown }[];
+        return [] as CoachConversationMessage[];
       }
       if (!hasChatThread(db, threadId, userId)) {
-        return [] as { role: "user" | "assistant"; content: unknown }[];
+        return [] as CoachConversationMessage[];
       }
       const rows = db
         .prepare(
-          "SELECT role, content, blocks FROM chat_messages WHERE thread_id = ? AND (status IS NULL OR status != 'aborted') ORDER BY id DESC LIMIT ?"
+          "SELECT id, role, content, blocks FROM chat_messages WHERE thread_id = ? AND (status IS NULL OR status != 'aborted') ORDER BY id DESC LIMIT ?"
         )
         .all(threadId, MAX_HISTORY_ROWS) as {
+          id: number;
           role: "user" | "assistant";
           content: string;
           blocks: string | null;
         }[];
       rows.reverse();
+      const imageMap = new Map<number, CoachImage[]>();
+      const unavailableImageMessages = new Set<number>();
+      for (const attachment of attachmentRows(db, rows.map((row) => row.id))) {
+        try {
+          const list = imageMap.get(attachment.message_id) ?? [];
+          list.push(attachmentImage(attachment));
+          imageMap.set(attachment.message_id, list);
+        } catch {
+          // A missing/rotated vault key must not break text-only Coach turns.
+          // The attachment endpoint still fails closed; model history keeps the
+          // surrounding text and asks for a reattachment instead of inventing.
+          unavailableImageMessages.add(attachment.message_id);
+        }
+      }
       const conversation = rows.map((row) => {
+        const unavailableMarker = unavailableImageMessages.has(row.id)
+          ? [{
+              type: "text",
+              text:
+                "[An attached image is unavailable to the model. Ask the user to reattach it before making a fresh visual analysis.]",
+            }]
+          : [];
         if (row.blocks !== null) {
           try {
+            const parsed = JSON.parse(row.blocks) as unknown;
             return {
               role: row.role,
-              content: JSON.parse(row.blocks),
+              contentBlocks: Array.isArray(parsed)
+                ? [...parsed, ...unavailableMarker]
+                : [{ type: "text", text: row.content }, ...unavailableMarker],
+              images: imageMap.get(row.id) ?? [],
             };
           } catch {
             return {
               role: row.role,
-              content: row.content,
+              contentBlocks: [
+                { type: "text", text: row.content },
+                ...unavailableMarker,
+              ],
+              images: imageMap.get(row.id) ?? [],
             };
           }
         }
         return {
           role: row.role,
-          content: row.content,
+          contentBlocks: [
+            { type: "text", text: row.content },
+            ...unavailableMarker,
+          ],
+          images: imageMap.get(row.id) ?? [],
         };
       });
       // Anthropic rejects orphan tool_result (no preceding tool_use in window),
@@ -323,8 +441,8 @@ export function getChatThreadConversation(
       let cut = 0;
       while (cut < conversation.length) {
         const msg = conversation[cut];
-        if (msg.role !== "user" || !Array.isArray(msg.content)) break;
-        const hasToolResult = (msg.content as { type?: unknown }[]).some(
+        if (msg.role !== "user") break;
+        const hasToolResult = (msg.contentBlocks as { type?: unknown }[]).some(
           (block) => block && block.type === "tool_result"
         );
         if (!hasToolResult) break;
@@ -339,10 +457,7 @@ export function getChatMessages(threadId = 1): ChatMessage[] {
   return getChatThreadMessages(1, threadId);
 }
 
-export function getChatConversation(threadId = 1): {
-  role: "user" | "assistant";
-  content: unknown;
-}[] {
+export function getChatConversation(threadId = 1): CoachConversationMessage[] {
   return getChatThreadConversation(1, threadId);
 }
 
@@ -354,10 +469,7 @@ export function getLegacyChatMessages(): ChatMessage[] {
   return getChatMessages(1);
 }
 
-export function getLegacyChatConversation(): {
-  role: "user" | "assistant";
-  content: unknown;
-}[] {
+export function getLegacyChatConversation(): CoachConversationMessage[] {
   return getChatConversation(1);
 }
 
@@ -383,6 +495,18 @@ export function addChatMessages(
     const insert = db.prepare(
       "INSERT INTO chat_messages (thread_id, role, content, blocks, work_log, created_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)"
     );
+    const threadOwner = db.prepare(
+      "SELECT user_id FROM chat_threads WHERE id = ? LIMIT 1"
+    );
+    const insertAttachment = db.prepare(
+      `INSERT INTO chat_attachments (
+         id, thread_id, user_id, mime_type, width, height, size_bytes,
+         sha256, ciphertext, key_version
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    const linkAttachment = db.prepare(
+      "INSERT INTO chat_message_attachments (message_id, attachment_id, ordinal) VALUES (?, ?, ?)"
+    );
     const touch = db.prepare("UPDATE chat_threads SET updated_at = datetime('now') WHERE id = ?");
     // When status='aborted', only the final assistant row in the batch
     // represents the interrupted reply; earlier rows (user prompt, prior
@@ -395,8 +519,10 @@ export function addChatMessages(
       return -1;
     })();
     const writeTurn = db.transaction((rows: ChatMessageInsert[]) => {
+      const owner = threadOwner.get(threadId) as { user_id: number } | undefined;
+      if (!owner) throw new Error("chat thread not found");
       rows.forEach((message, idx) => {
-        insert.run(
+        const inserted = insert.run(
           threadId,
           message.role,
           message.content,
@@ -405,6 +531,23 @@ export function addChatMessages(
           new Date().toISOString(),
           idx === lastAssistantIdx ? "aborted" : "complete"
         );
+        const messageId = Number(inserted.lastInsertRowid);
+        message.attachments?.forEach((attachment, ordinal) => {
+          const ciphertext = encryptBytes(attachment.bytes);
+          insertAttachment.run(
+            attachment.id,
+            threadId,
+            owner.user_id,
+            attachment.mimeType,
+            attachment.width,
+            attachment.height,
+            attachment.bytes.length,
+            attachment.sha256,
+            ciphertext,
+            CURRENT_KEY_VERSION,
+          );
+          linkAttachment.run(messageId, attachment.id, ordinal);
+        });
       });
       touch.run(threadId);
     });
@@ -418,8 +561,43 @@ export function clearChatMessages(threadId = 1): void {
   const db = openWrite();
   if (!db) return;
   try {
-    db.prepare("DELETE FROM chat_messages WHERE thread_id = ?").run(threadId);
-    db.prepare("UPDATE chat_threads SET updated_at = datetime('now') WHERE id = ?").run(threadId);
+    const clear = db.transaction(() => {
+      db.prepare("DELETE FROM chat_messages WHERE thread_id = ?").run(threadId);
+      db.prepare("DELETE FROM chat_attachments WHERE thread_id = ?").run(threadId);
+      db.prepare("UPDATE chat_threads SET updated_at = datetime('now') WHERE id = ?").run(threadId);
+    });
+    clear();
+  } finally {
+    db.close();
+  }
+}
+
+export function getChatAttachmentForUser(
+  userId: number,
+  attachmentId: string,
+): (ChatAttachment & { bytes: Buffer; sha256: string }) | null {
+  const db = openWrite();
+  if (!db) return null;
+  try {
+    if (!hasTable(db, "chat_attachments")) return null;
+    const row = db
+      .prepare(
+        `SELECT
+           a.id, ma.message_id, a.mime_type, a.width, a.height,
+           a.size_bytes, a.sha256, a.ciphertext, a.key_version, ma.ordinal
+         FROM chat_attachments a
+         JOIN chat_message_attachments ma ON ma.attachment_id = a.id
+         JOIN chat_threads t ON t.id = a.thread_id
+         WHERE a.id = ? AND a.user_id = ? AND t.user_id = ?
+         LIMIT 1`
+      )
+      .get(attachmentId, userId, userId) as AttachmentRow | undefined;
+    if (!row) return null;
+    return {
+      ...attachmentDto(row),
+      bytes: attachmentImage(row).bytes,
+      sha256: row.sha256,
+    };
   } finally {
     db.close();
   }

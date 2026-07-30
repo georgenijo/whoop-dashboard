@@ -18,6 +18,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-07-30: Coach image uploads are persistent, encrypted, and provider-complete
+
+**Decision:** Coach accepts up to three image-only or captioned images per turn on web and iOS, encrypts normalized JPEG bytes in SQLite, retains them until thread deletion, and exposes at most the six newest images to model context. The feature does not ship until both Anthropic vision blocks and Cursor's contained per-turn MCP image tool pass live recognition; it never silently changes providers. Medical images receive visible observations, ranked possibilities with explicit uncertainty, red flags, follow-up questions, and clinician guidance, never a confirmed image-only diagnosis.
+
+**Rationale:** Persistent cross-device threads require durable tenant-scoped storage, while encrypted BLOBs keep sensitive health/body images inside the existing canonical backup and vault boundary without public URLs or base64 in message JSON. Equal provider support avoids uploads behaving differently under a user's selected model, and the medical boundary preserves useful analysis without claiming reliability the vision providers do not offer for diagnosis or complex scans.
+
+**Status:** active
+
+**References:** issues #451, #452, #453, #454; `apps/web/src/lib/coach/`, `apps/web/src/lib/db/coach.ts`, `apps/ios/Sources/ChatView.swift`
+
+---
+
 ## 2026-07-30: Cursor catalog uses the public HTTP endpoint on Node 20
 
 **Decision:** Fetch each credential's account-scoped model catalog from Cursor's `GET /v1/models` endpoint with Bearer authentication, matching the official SDK's catalog request and response shape. Keep the existing contained `cursor-agent` subprocess loop for Coach execution and do not ship `@cursor/sdk` in the web runtime.

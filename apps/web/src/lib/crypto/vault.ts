@@ -55,25 +55,20 @@ function loadKey(): Uint8Array {
   return new Uint8Array(bufToBytes(buf));
 }
 
-export function encrypt(plaintext: string): string {
+export function encryptBytes(plaintext: Uint8Array): Buffer {
   const key = loadKey();
   const nonce = new Uint8Array(nacl.randomBytes(NONCE_BYTES));
-  const message = new Uint8Array(new TextEncoder().encode(plaintext));
+  const message = new Uint8Array(plaintext);
   const sealed = nacl.secretbox(message, nonce, key);
   const out = new Uint8Array(nonce.length + sealed.length);
   out.set(nonce, 0);
   out.set(sealed, nonce.length);
-  return Buffer.from(out).toString("base64");
+  return Buffer.from(out);
 }
 
-export function decrypt(b64: string): string {
+export function decryptBytes(ciphertext: Uint8Array): Buffer {
   const key = loadKey();
-  let blob: Buffer;
-  try {
-    blob = Buffer.from(b64, "base64");
-  } catch {
-    throw new VaultDecryptError("ciphertext is not valid base64");
-  }
+  const blob = Buffer.from(ciphertext);
   if (blob.length < NONCE_BYTES + nacl.secretbox.overheadLength) {
     throw new VaultDecryptError("ciphertext too short");
   }
@@ -81,7 +76,21 @@ export function decrypt(b64: string): string {
   const sealed = new Uint8Array(bufToBytes(blob).subarray(NONCE_BYTES));
   const opened = nacl.secretbox.open(sealed, nonce, key);
   if (opened === null) throw new VaultDecryptError();
-  return new TextDecoder().decode(opened);
+  return Buffer.from(opened);
+}
+
+export function encrypt(plaintext: string): string {
+  return encryptBytes(new TextEncoder().encode(plaintext)).toString("base64");
+}
+
+export function decrypt(b64: string): string {
+  let blob: Buffer;
+  try {
+    blob = Buffer.from(b64, "base64");
+  } catch {
+    throw new VaultDecryptError("ciphertext is not valid base64");
+  }
+  return new TextDecoder().decode(decryptBytes(blob));
 }
 
 /**

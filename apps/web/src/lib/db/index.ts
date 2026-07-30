@@ -126,6 +126,7 @@ export {
   addChatMessage,
   addChatMessages,
   clearChatMessages,
+  getChatAttachmentForUser,
 } from "./coach";
 
 export type { ChatLog, ChatThreadInfo, SyncLog, RouteLog } from "./logs";

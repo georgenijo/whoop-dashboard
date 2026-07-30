@@ -12,6 +12,11 @@ import type {
 } from "@anthropic-ai/sdk/resources/messages";
 import { getUserSettings, type ChatMessageInsert } from "@/lib/db";
 import { BadApiKeyError, type ApiKeyOrigin } from "./api-key";
+import { buildAnthropicConversation } from "./conversation";
+import type {
+  CoachConversationMessage,
+  CoachUserTurn,
+} from "./image-types";
 import { COACH_MODEL, buildSystemPrompt } from "./prompts";
 import {
   TOOLS,
@@ -252,8 +257,8 @@ async function streamMessage(
 export async function runAnthropicSdk(
   userId: number,
   threadId: number,
-  newUserText: string,
-  conversation: MessageParam[],
+  turn: CoachUserTurn,
+  history: CoachConversationMessage[],
   toolDetails: ToolDetail[],
   usage: Usage,
   detailState: DetailState,
@@ -328,9 +333,13 @@ export async function runAnthropicSdk(
   const messagesToPersist: ChatMessageInsert[] = accumulator ?? [];
   messagesToPersist.push({
     role: "user",
-    content: newUserText,
-    blocks: [{ type: "text", text: newUserText }],
+    content: turn.displayText,
+    blocks: turn.displayText
+      ? [{ type: "text", text: turn.displayText }]
+      : [],
+    attachments: turn.images,
   });
+  const conversation: MessageParam[] = buildAnthropicConversation(history, turn);
 
   const pendingAssistant: ChatMessageInsert = {
     role: "assistant",

@@ -123,6 +123,28 @@ export function openWrite(): DB | null {
         status TEXT DEFAULT 'complete'
       );
       CREATE INDEX IF NOT EXISTS idx_chat_messages_id ON chat_messages(id);
+      CREATE TABLE IF NOT EXISTS chat_attachments (
+        id TEXT PRIMARY KEY,
+        thread_id INTEGER NOT NULL REFERENCES chat_threads(id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        mime_type TEXT NOT NULL,
+        width INTEGER NOT NULL,
+        height INTEGER NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        sha256 TEXT NOT NULL,
+        ciphertext BLOB NOT NULL,
+        key_version INTEGER NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_chat_attachments_user_thread
+        ON chat_attachments(user_id, thread_id);
+      CREATE TABLE IF NOT EXISTS chat_message_attachments (
+        message_id INTEGER NOT NULL REFERENCES chat_messages(id) ON DELETE CASCADE,
+        attachment_id TEXT NOT NULL REFERENCES chat_attachments(id) ON DELETE CASCADE,
+        ordinal INTEGER NOT NULL,
+        PRIMARY KEY (message_id, attachment_id),
+        UNIQUE (message_id, ordinal)
+      );
       CREATE TABLE IF NOT EXISTS chat_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         started_at TEXT NOT NULL,
