@@ -17,6 +17,9 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 **Status:** active
 
 **References:** #501, #492, `apps/web/src/lib/security-headers.ts`, `apps/web/src/proxy.ts`, `apps/web/next.config.ts`, `apps/web/src/components/ClientLogBootstrap.tsx`, `apps/web/src/app/(dashboard)/logs/page.tsx`
+
+---
+
 ## 2026-08-16: Split-brain user merge resolves conflicts survivor-wins
 
 **Decision:** `mergeUserInto` merges every table that carries a `user_id`, using one of two strategies. Surrogate-keyed tables (`USER_FK_TABLES`) get a bare `UPDATE ... SET user_id`. The seven tables where `user_id` sits in a PRIMARY KEY or UNIQUE index (`USER_FK_CONFLICT_TABLES`: `recovery`, `cycles`, `daily_summary`, `sleep`, `integrations`, `user_settings`, `device_tokens`) are merged **survivor wins** — non-colliding loser rows are repointed, colliding loser rows are deleted, and the per-table drop count is logged on the merge line at warn level. Both strategies run inside the existing merge transaction. `KNOWN_UNMERGED_USER_FK_TABLES` must stay empty; a table left unmerged is not a safe parking spot.
@@ -158,6 +161,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 **Status:** superseded by 2026-08-06 Coach next-draft and explicit thinking-off decision
 
 **References:** PR #471, `apps/web/src/components/coach/CoachModelPicker.tsx`, `apps/web/src/lib/coach/loop.ts`, `apps/web/src/lib/db/user_settings.ts`
+
+---
+
+## 2026-07-30: Cursor LSP containment stays, implemented as an allowlist shim PATH
+
+**Decision:** Keep #460's goal — Cursor must not resolve `npx`, so its optional ~119 MiB typescript-language-server never starts in the per-turn sandbox — but implement it as a per-turn `.shim-bin` directory inside the throwaway workspace, symlinking exactly the tools the cursor-agent bash launcher resolves via PATH (bash, env, basename, dirname, realpath, readlink), with the child PATH pointing only there. Never set the child PATH to empty, and never restore a system bin directory. `COACH_CURSOR_CHILD_PATH` remains the runtime escape hatch.
+
+**Rationale:** #460 emptied PATH on the assumption that an absolute agent binary needs no PATH, but cursor-agent's entrypoint is a `#!/usr/bin/env bash` launcher script — the empty PATH failed its shebang and broke every production Cursor turn for ~2.5h (exit 127, thread 126). Restoring `/usr/bin` is not an option because `npx` lives there next to `bash`, which would resurrect the LSP on a 512M-capped service. An allowlist shim gives the launcher exactly what it needs and nothing more; spawn-env changes to this path must be smoke-tested against the real launcher, not mocked `spawn` (see PR #464, issue #467 for the auto-update canary).
+
+**Status:** active
+
+**References:** `apps/web/src/lib/coach/cursor-loop.ts` (`prepareCursorShimBin`, `cursorAgentChildPath`), PR #464, PR #460, issue #467
 
 ---
 
