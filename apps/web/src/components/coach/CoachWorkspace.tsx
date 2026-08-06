@@ -1,8 +1,10 @@
 "use client";
 
 import { Menu } from "lucide-react";
+import { useState } from "react";
 import BadApiKeyBanner from "@/components/coach/BadApiKeyBanner";
 import ChatInput from "@/components/coach/ChatInput";
+import CoachModelPicker from "@/components/coach/CoachModelPicker";
 import MessageList from "@/components/coach/MessageList";
 import SuggestionChips from "@/components/coach/SuggestionChips";
 import ThreadSidebar from "@/components/coach/ThreadSidebar";
@@ -16,6 +18,7 @@ type CoachWorkspaceProps = {
   initialThreadId: number;
   initialThreads: ThreadSummary[];
   initialMessages: ChatMessage[];
+  initialModelPref: string;
 };
 
 function formatCount(n: number): string {
@@ -26,7 +29,9 @@ export default function CoachWorkspace({
   initialThreadId,
   initialThreads,
   initialMessages,
+  initialModelPref,
 }: CoachWorkspaceProps) {
+  const [modelSaving, setModelSaving] = useState(false);
   const {
     threads,
     threadId,
@@ -65,14 +70,21 @@ export default function CoachWorkspace({
           <h1>{threadTitle}</h1>
           <div className="coach-subtitle">{threadMeta}</div>
         </div>
-        <button
-          type="button"
-          className="coach-mobile-threads"
-          onClick={() => setMobileOpen(true)}
-        >
-          <Menu size={16} strokeWidth={1.8} aria-hidden />
-          Threads
-        </button>
+        <div className="coach-topbar-actions">
+          <CoachModelPicker
+            initialModelPref={initialModelPref}
+            disabled={loading}
+            onSavingChange={setModelSaving}
+          />
+          <button
+            type="button"
+            className="coach-mobile-threads"
+            onClick={() => setMobileOpen(true)}
+          >
+            <Menu size={16} strokeWidth={1.8} aria-hidden />
+            Threads
+          </button>
+        </div>
       </div>
 
       <div className="coach-shell">
@@ -96,7 +108,10 @@ export default function CoachWorkspace({
                 <div className="coach-empty-copy">
                   Keep one thread per topic. The sidebar stays with you across devices.
                 </div>
-                <SuggestionChips onSelect={(text) => void send(text)} />
+                <SuggestionChips
+                  disabled={modelSaving}
+                  onSelect={(text) => void send(text)}
+                />
               </div>
             ) : (
               <MessageList messages={messages} />
@@ -108,6 +123,7 @@ export default function CoachWorkspace({
             input={input}
             setInput={setInput}
             loading={loading}
+            modelChanging={modelSaving}
             preparingImages={preparingImages}
             pendingImages={pendingImages}
             attachmentError={attachmentError}

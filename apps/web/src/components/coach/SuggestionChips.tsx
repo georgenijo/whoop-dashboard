@@ -7,7 +7,13 @@ const SUGGESTIONS = [
   "What should I focus on to improve HRV?",
 ];
 
-export default function SuggestionChips({ onSelect }: { onSelect: (text: string) => void }) {
+export default function SuggestionChips({
+  onSelect,
+  disabled = false,
+}: {
+  onSelect: (text: string) => void;
+  disabled?: boolean;
+}) {
   return (
     <div className="coach-suggestions">
       {SUGGESTIONS.map((suggestion) => (
@@ -16,6 +22,7 @@ export default function SuggestionChips({ onSelect }: { onSelect: (text: string)
           type="button"
           className="coach-suggestion"
           onClick={() => onSelect(suggestion)}
+          disabled={disabled}
         >
           {suggestion}
         </button>
