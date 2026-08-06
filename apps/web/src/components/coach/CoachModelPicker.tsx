@@ -1,7 +1,13 @@
 "use client";
 
-import { BrainCircuit, ChevronDown } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  BrainCircuit,
+  Check,
+  ChevronDown,
+  KeyRound,
+  LoaderCircle,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const ANTHROPIC_PREF = "anthropic:claude-sonnet-4-6";
 
@@ -18,6 +24,13 @@ type CursorModelCatalogStatus =
   | "invalid_key"
   | "unavailable";
 
+type ModelOption = {
+  value: string;
+  label: string;
+  provider: "Anthropic" | "Cursor";
+  description: string;
+};
+
 type Props = {
   initialModelPref: string;
   disabled: boolean;
@@ -32,6 +45,28 @@ const STATUS_TITLE: Record<CursorModelCatalogStatus, string> = {
   unavailable: "Cursor model discovery is temporarily unavailable.",
 };
 
+const STATUS_DETAIL: Record<
+  Exclude<CursorModelCatalogStatus, "ready">,
+  { title: string; detail: string }
+> = {
+  loading: {
+    title: "Checking Cursor models",
+    detail: "Looking up the models available to your Cursor account.",
+  },
+  not_configured: {
+    title: "Connect Cursor for more models",
+    detail: "Add a Cursor API key to unlock its live model catalog.",
+  },
+  invalid_key: {
+    title: "Cursor key needs attention",
+    detail: "The configured key was rejected, so only Claude is available.",
+  },
+  unavailable: {
+    title: "Cursor catalog is offline",
+    detail: "Claude is available while model discovery recovers.",
+  },
+};
+
 function cursorModelId(modelPref: string): string | null {
   return modelPref.startsWith("cursor:")
     ? modelPref.slice("cursor:".length)
@@ -43,12 +78,15 @@ export default function CoachModelPicker({
   disabled,
   onSavingChange,
 }: Props) {
+  const controlRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const [modelPref, setModelPref] = useState(initialModelPref);
   const [cursorModels, setCursorModels] = useState<CursorModel[]>([]);
   const [catalogStatus, setCatalogStatus] =
     useState<CursorModelCatalogStatus>("loading");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -79,10 +117,13 @@ export default function CoachModelPicker({
     return () => controller.abort();
   }, []);
 
-  const options = useMemo(() => {
-    const cursorOptions = cursorModels.map((model) => ({
+  const options = useMemo<ModelOption[]>(() => {
+    const cursorOptions: ModelOption[] = cursorModels.map((model) => ({
       value: `cursor:${model.id}`,
-      label: `Cursor — ${model.display_name}`,
+      label: model.display_name,
+      provider: "Cursor",
+      description:
+        model.description || "Available through your Cursor account.",
     }));
     const selectedCursorId = cursorModelId(modelPref);
     if (
@@ -91,14 +132,50 @@ export default function CoachModelPicker({
     ) {
       cursorOptions.push({
         value: modelPref,
-        label: `Cursor — ${selectedCursorId} (saved)`,
+        label: selectedCursorId,
+        provider: "Cursor",
+        description: "Saved model. It is not in the current live catalog.",
       });
     }
     return [
-      { value: ANTHROPIC_PREF, label: "Claude Sonnet 4.6" },
+      {
+        value: ANTHROPIC_PREF,
+        label: "Claude Sonnet 4.6",
+        provider: "Anthropic",
+        description: "Balanced reasoning for thoughtful health coaching.",
+      },
       ...cursorOptions,
     ];
   }, [cursorModels, modelPref]);
+
+  const selectedOption =
+    options.find((option) => option.value === modelPref) ?? options[0];
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (
+        event.target instanceof Node &&
+        !controlRef.current?.contains(event.target)
+      ) {
+        setOpen(false);
+      }
+    }
+
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      triggerRef.current?.focus();
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
 
   async function saveModelPref(nextModelPref: string) {
     if (nextModelPref === modelPref || saving) return;
@@ -138,32 +215,111 @@ export default function CoachModelPicker({
   }
 
   return (
-    <div className="coach-model-control">
-      <label
-        className="coach-model-picker"
+    <div className="coach-model-control" ref={controlRef}>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`coach-model-trigger ${
+          selectedOption.provider === "Cursor" ? "is-cursor" : ""
+        }`}
+        aria-label={`Coach model: ${selectedOption.label}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        disabled={disabled || saving}
         title={error ?? STATUS_TITLE[catalogStatus]}
+        onClick={() => setOpen((current) => !current)}
       >
-        <BrainCircuit size={15} strokeWidth={1.8} aria-hidden />
-        <span className="coach-model-label">Model</span>
-        <select
-          value={modelPref}
-          disabled={disabled || saving}
-          aria-label="Coach model"
-          onChange={(event) => void saveModelPref(event.target.value)}
-        >
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <span className="coach-model-trigger-icon">
+          {saving ? (
+            <LoaderCircle size={14} strokeWidth={1.8} aria-hidden />
+          ) : (
+            <BrainCircuit size={14} strokeWidth={1.8} aria-hidden />
+          )}
+        </span>
+        <span className="coach-model-trigger-copy">
+          <span>{selectedOption.label.replace(/^Claude /, "")}</span>
+          <small>{saving ? "Switching…" : selectedOption.provider}</small>
+        </span>
         <ChevronDown
           className="coach-model-chevron"
-          size={14}
+          size={13}
           strokeWidth={1.8}
           aria-hidden
         />
-      </label>
+      </button>
+
+      {open ? (
+        <div className="coach-model-menu">
+          <div className="coach-model-menu-heading">
+            <span>Choose a model</span>
+            <small>Used for your next Coach reply</small>
+          </div>
+          <div
+            className="coach-model-options"
+            role="listbox"
+            aria-label="Coach models"
+          >
+            {options.map((option) => {
+              const selected = option.value === modelPref;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  className={`coach-model-option ${
+                    selected ? "is-selected" : ""
+                  }`}
+                  onClick={() => {
+                    setOpen(false);
+                    void saveModelPref(option.value);
+                  }}
+                >
+                  <span
+                    className={`coach-model-provider-mark ${
+                      option.provider === "Cursor" ? "is-cursor" : ""
+                    }`}
+                    aria-hidden
+                  >
+                    {option.provider === "Cursor" ? "C" : "A"}
+                  </span>
+                  <span className="coach-model-option-copy">
+                    <span className="coach-model-option-meta">
+                      {option.provider}
+                    </span>
+                    <strong>{option.label}</strong>
+                    <small>{option.description}</small>
+                  </span>
+                  <span className="coach-model-option-check" aria-hidden>
+                    {selected ? <Check size={15} strokeWidth={2.2} /> : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {catalogStatus !== "ready" ? (
+            <div className={`coach-model-catalog-state is-${catalogStatus}`}>
+              <span className="coach-model-catalog-icon" aria-hidden>
+                {catalogStatus === "loading" ? (
+                  <LoaderCircle size={15} strokeWidth={1.8} />
+                ) : (
+                  <KeyRound size={15} strokeWidth={1.8} />
+                )}
+              </span>
+              <span>
+                <strong>{STATUS_DETAIL[catalogStatus].title}</strong>
+                <small>{STATUS_DETAIL[catalogStatus].detail}</small>
+              </span>
+              {catalogStatus === "not_configured" ||
+              catalogStatus === "invalid_key" ? (
+                <a href="/settings">Manage key</a>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {error ? (
         <span className="coach-model-error" role="alert">
           {error}

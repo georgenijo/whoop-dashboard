@@ -8,6 +8,7 @@ import {
   type ClipboardEvent,
   type DragEvent,
   type KeyboardEvent,
+  type ReactNode,
   type RefObject,
 } from "react";
 import type { PendingChatImage } from "./useChatSend";
@@ -17,6 +18,7 @@ type Props = {
   setInput: (value: string) => void;
   loading: boolean;
   modelChanging: boolean;
+  modelPicker: ReactNode;
   preparingImages: boolean;
   pendingImages: PendingChatImage[];
   attachmentError?: string | null;
@@ -33,6 +35,7 @@ export default function ChatInput({
   setInput,
   loading,
   modelChanging,
+  modelPicker,
   preparingImages,
   pendingImages,
   attachmentError,
@@ -148,20 +151,6 @@ export default function ChatInput({
             event.target.value = "";
           }}
         />
-        <button
-          type="button"
-          className="coach-attach"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={disabled || atLimit}
-          aria-label="Attach images"
-          aria-describedby={atLimit ? "coach-image-limit" : undefined}
-          title={atLimit ? "You can attach up to 3 images." : "Attach images"}
-        >
-          <Paperclip size={18} strokeWidth={1.8} aria-hidden />
-          <span className="sr-only">
-            {pendingImages.length} of 3 images selected
-          </span>
-        </button>
         <textarea
           ref={inputRef}
           value={input}
@@ -177,18 +166,37 @@ export default function ChatInput({
           disabled={disabled}
           className="coach-input"
         />
-        <button
-          type="button"
-          className="coach-send"
-          onClick={onSubmit}
-          disabled={
-            (!input.trim() && pendingImages.length === 0) || disabled
-          }
-          aria-label="Send message"
-          data-track="coach:send"
-        >
-          ↑
-        </button>
+        <div className="coach-input-toolbar">
+          <div className="coach-input-tools">
+            <button
+              type="button"
+              className="coach-attach"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={disabled || atLimit}
+              aria-label="Attach images"
+              aria-describedby={atLimit ? "coach-image-limit" : undefined}
+              title={atLimit ? "You can attach up to 3 images." : "Attach images"}
+            >
+              <Paperclip size={18} strokeWidth={1.8} aria-hidden />
+              <span className="sr-only">
+                {pendingImages.length} of 3 images selected
+              </span>
+            </button>
+            {modelPicker}
+          </div>
+          <button
+            type="button"
+            className="coach-send"
+            onClick={onSubmit}
+            disabled={
+              (!input.trim() && pendingImages.length === 0) || disabled
+            }
+            aria-label="Send message"
+            data-track="coach:send"
+          >
+            ↑
+          </button>
+        </div>
       </div>
       <div className="coach-footer">
         <span id="coach-image-limit">

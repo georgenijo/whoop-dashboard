@@ -27,37 +27,52 @@ function catalogResponse() {
       {
         id: "gpt-5.5-high",
         display_name: "GPT-5.5 High",
-        description: null,
+        description: "Deep reasoning for complex questions.",
       },
     ],
   });
 }
 
+function renderPicker(
+  overrides: Partial<Parameters<typeof CoachModelPicker>[0]> = {},
+) {
+  const onSavingChange = vi.fn();
+  render(
+    <CoachModelPicker
+      initialModelPref="anthropic:claude-sonnet-4-6"
+      disabled={false}
+      onSavingChange={onSavingChange}
+      {...overrides}
+    />,
+  );
+  return { onSavingChange };
+}
+
+function openPicker() {
+  fireEvent.click(
+    screen.getByRole("button", {
+      name: /Coach model:/,
+    }),
+  );
+}
+
 describe("CoachModelPicker", () => {
   it("loads available Cursor models and persists a selection", async () => {
-    const onSavingChange = vi.fn();
     fetchMock
       .mockResolvedValueOnce(catalogResponse())
       .mockResolvedValueOnce(
         Response.json({ model_pref: "cursor:gpt-5.5-high" }),
       );
+    const { onSavingChange } = renderPicker();
 
-    render(
-      <CoachModelPicker
-        initialModelPref="anthropic:claude-sonnet-4-6"
-        disabled={false}
-        onSavingChange={onSavingChange}
-      />,
-    );
+    openPicker();
+    const cursorOption = await screen.findByRole("option", {
+      name: /GPT-5\.5 High/,
+    });
+    expect(screen.getByRole("listbox", { name: "Coach models" })).toBeVisible();
+    expect(cursorOption).toHaveTextContent("Deep reasoning for complex questions.");
 
-    const select = screen.getByRole("combobox", { name: "Coach model" });
-    await waitFor(() =>
-      expect(
-        screen.getByRole("option", { name: "Cursor — GPT-5.5 High" }),
-      ).toBeInTheDocument(),
-    );
-
-    fireEvent.change(select, { target: { value: "cursor:gpt-5.5-high" } });
+    fireEvent.click(cursorOption);
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenLastCalledWith("/api/settings", {
@@ -66,13 +81,16 @@ describe("CoachModelPicker", () => {
         body: JSON.stringify({ model_pref: "cursor:gpt-5.5-high" }),
       }),
     );
-    await waitFor(() => expect(select).toHaveValue("cursor:gpt-5.5-high"));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Coach model: GPT-5.5 High" }),
+      ).toBeInTheDocument(),
+    );
     expect(onSavingChange).toHaveBeenNthCalledWith(1, true);
     expect(onSavingChange).toHaveBeenLastCalledWith(false);
   });
 
   it("restores the previous model and surfaces an inline save error", async () => {
-    const onSavingChange = vi.fn();
     fetchMock
       .mockResolvedValueOnce(catalogResponse())
       .mockResolvedValueOnce(
@@ -81,58 +99,69 @@ describe("CoachModelPicker", () => {
           { status: 502 },
         ),
       );
+    renderPicker();
 
-    render(
-      <CoachModelPicker
-        initialModelPref="anthropic:claude-sonnet-4-6"
-        disabled={false}
-        onSavingChange={onSavingChange}
-      />,
+    openPicker();
+    fireEvent.click(
+      await screen.findByRole("option", { name: /GPT-5\.5 High/ }),
     );
-
-    const select = screen.getByRole("combobox", { name: "Coach model" });
-    await screen.findByRole("option", { name: "Cursor — GPT-5.5 High" });
-    fireEvent.change(select, { target: { value: "cursor:gpt-5.5-high" } });
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Cursor model catalog is unavailable",
     );
-    expect(select).toHaveValue("anthropic:claude-sonnet-4-6");
-    expect(onSavingChange).toHaveBeenLastCalledWith(false);
+    expect(
+      screen.getByRole("button", { name: "Coach model: Claude Sonnet 4.6" }),
+    ).toBeInTheDocument();
   });
 
   it("keeps a saved dynamic Cursor model visible while its catalog loads", () => {
     fetchMock.mockReturnValue(new Promise(() => {}));
+    renderPicker({ initialModelPref: "cursor:composer-2.5-fast" });
 
-    render(
-      <CoachModelPicker
-        initialModelPref="cursor:composer-2.5-fast"
-        disabled={false}
-        onSavingChange={vi.fn()}
-      />,
-    );
+    openPicker();
 
     expect(
       screen.getByRole("option", {
-        name: "Cursor — composer-2.5-fast (saved)",
+        name: /composer-2\.5-fast/,
       }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Coach model" })).toHaveValue(
-      "cursor:composer-2.5-fast",
+    expect(
+      screen.getByRole("button", {
+        name: "Coach model: composer-2.5-fast",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("explains why only Claude is available when Cursor rejects the key", async () => {
+    fetchMock.mockResolvedValue(
+      Response.json({ status: "invalid_key", models: [] }),
+    );
+    renderPicker();
+
+    openPicker();
+
+    expect(
+      await screen.findByText("Cursor key needs attention"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "The configured key was rejected, so only Claude is available.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Manage key" })).toHaveAttribute(
+      "href",
+      "/settings",
     );
   });
 
   it("cannot change models during an active Coach turn", () => {
     fetchMock.mockReturnValue(new Promise(() => {}));
+    renderPicker({ disabled: true });
 
-    render(
-      <CoachModelPicker
-        initialModelPref="anthropic:claude-sonnet-4-6"
-        disabled
-        onSavingChange={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByRole("combobox", { name: "Coach model" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", {
+        name: "Coach model: Claude Sonnet 4.6",
+      }),
+    ).toBeDisabled();
   });
 });

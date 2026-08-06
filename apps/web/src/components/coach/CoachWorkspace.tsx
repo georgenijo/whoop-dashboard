@@ -71,11 +71,6 @@ export default function CoachWorkspace({
           <div className="coach-subtitle">{threadMeta}</div>
         </div>
         <div className="coach-topbar-actions">
-          <CoachModelPicker
-            initialModelPref={initialModelPref}
-            disabled={loading}
-            onSavingChange={setModelSaving}
-          />
           <button
             type="button"
             className="coach-mobile-threads"
@@ -124,6 +119,13 @@ export default function CoachWorkspace({
             setInput={setInput}
             loading={loading}
             modelChanging={modelSaving}
+            modelPicker={
+              <CoachModelPicker
+                initialModelPref={initialModelPref}
+                disabled={loading}
+                onSavingChange={setModelSaving}
+              />
+            }
             preparingImages={preparingImages}
             pendingImages={pendingImages}
             attachmentError={attachmentError}

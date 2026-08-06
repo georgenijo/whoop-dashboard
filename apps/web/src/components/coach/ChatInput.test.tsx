@@ -22,6 +22,7 @@ function renderInput(
     setInput: vi.fn(),
     loading: false,
     modelChanging: false,
+    modelPicker: <button type="button">Model picker</button>,
     preparingImages: false,
     pendingImages: [],
     attachmentError: null,
