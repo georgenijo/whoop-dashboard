@@ -333,6 +333,11 @@ struct ChatView: View {
                 }
             }
 
+            HStack {
+                CoachModelPicker(disabled: isSending)
+                Spacer()
+            }
+
             HStack(spacing: 8) {
                 PhotosPicker(
                     selection: $photoPickerItems,

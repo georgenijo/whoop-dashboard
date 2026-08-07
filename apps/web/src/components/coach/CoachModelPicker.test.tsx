@@ -1,4 +1,5 @@
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -265,6 +266,7 @@ describe("CoachModelPicker", () => {
     fireEvent.click(customize);
     const back = screen.getByRole("button", { name: "Back to models" });
     expect(back.querySelector(".lucide-chevron-right")).not.toBeNull();
+    expect(back).toHaveFocus();
 
     fireEvent.click(back);
     expect(customize).toHaveFocus();
@@ -277,6 +279,85 @@ describe("CoachModelPicker", () => {
         name: "Claude Sonnet 4.6 customization",
       }),
     ).not.toBeInTheDocument();
+  });
+
+  it("keeps mobile panels inside the visual viewport as its height changes", () => {
+    const viewportState = { height: 390 };
+    const viewportListeners = new Map<
+      string,
+      EventListenerOrEventListenerObject
+    >();
+    const visualViewport = {
+      get height() {
+        return viewportState.height;
+      },
+      width: 844,
+      offsetTop: 0,
+      offsetLeft: 0,
+      scale: 1,
+      pageTop: 0,
+      pageLeft: 0,
+      onresize: null,
+      onscroll: null,
+      addEventListener: vi.fn(
+        (type: string, listener: EventListenerOrEventListenerObject) => {
+          viewportListeners.set(type, listener);
+        },
+      ),
+      removeEventListener: vi.fn((type: string) => {
+        viewportListeners.delete(type);
+      }),
+      dispatchEvent: vi.fn(),
+    } as unknown as VisualViewport;
+    vi.stubGlobal("visualViewport", visualViewport);
+    vi.stubGlobal("innerHeight", 390);
+    vi.stubGlobal("innerWidth", 844);
+    fetchMock.mockReturnValue(new Promise(() => {}));
+    renderPicker();
+
+    const trigger = screen.getByRole("button", { name: /Coach model:/ });
+    vi.spyOn(trigger, "getBoundingClientRect").mockReturnValue({
+      top: 300,
+      right: 820,
+      bottom: 338,
+      left: 620,
+      width: 200,
+      height: 38,
+      x: 620,
+      y: 300,
+      toJSON: () => ({}),
+    });
+
+    fireEvent.click(trigger);
+    const control = trigger.closest<HTMLElement>(".coach-model-control");
+    expect(control).not.toBeNull();
+    expect(
+      control?.style.getPropertyValue("--coach-model-mobile-max-height"),
+    ).toBe("278px");
+    expect(
+      control?.style.getPropertyValue("--coach-model-mobile-max-width"),
+    ).toBe("812px");
+    expect(
+      control?.style.getPropertyValue("--coach-model-mobile-right"),
+    ).toBe("24px");
+    expect(
+      control?.style.getPropertyValue("--coach-model-mobile-bottom"),
+    ).toBe("100px");
+
+    viewportState.height = 240;
+    const resizeListener = viewportListeners.get("resize");
+    act(() => {
+      const event = new Event("resize");
+      if (typeof resizeListener === "function") resizeListener(event);
+      else resizeListener?.handleEvent(event);
+    });
+
+    expect(
+      control?.style.getPropertyValue("--coach-model-mobile-max-height"),
+    ).toBe("216px");
+    expect(
+      control?.style.getPropertyValue("--coach-model-mobile-bottom"),
+    ).toBe("162px");
   });
 
   it("cannot change models during an active Coach turn", () => {

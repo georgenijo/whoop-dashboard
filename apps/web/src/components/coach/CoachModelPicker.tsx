@@ -97,6 +97,9 @@ export default function CoachModelPicker({
   const customizationId = useId();
   const controlRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const customizeButtonRef = useRef<HTMLButtonElement>(null);
+  const customizationBackRef = useRef<HTMLButtonElement>(null);
+  const restoreCustomizationFocusRef = useRef(false);
   const [modelPref, setModelPref] = useState(initialModelPref);
   const [coachEffort, setCoachEffort] = useState(initialCoachEffort);
   const [cursorModels, setCursorModels] = useState<CursorModel[]>([]);
@@ -176,6 +179,7 @@ export default function CoachModelPicker({
         event.target instanceof Node &&
         !controlRef.current?.contains(event.target)
       ) {
+        restoreCustomizationFocusRef.current = false;
         setOpen(false);
         setCustomizingModelPref(null);
       }
@@ -184,10 +188,8 @@ export default function CoachModelPicker({
     function handleKeyDown(event: globalThis.KeyboardEvent) {
       if (event.key !== "Escape") return;
       if (customizingModelPref) {
+        restoreCustomizationFocusRef.current = true;
         setCustomizingModelPref(null);
-        controlRef.current
-          ?.querySelector<HTMLButtonElement>(".coach-model-customize")
-          ?.focus();
         return;
       }
       setOpen(false);
@@ -202,10 +204,97 @@ export default function CoachModelPicker({
     };
   }, [customizingModelPref, open]);
 
+  useEffect(() => {
+    if (!open) return;
+
+    if (customizingModelPref) {
+      customizationBackRef.current?.focus();
+      return;
+    }
+
+    if (restoreCustomizationFocusRef.current) {
+      restoreCustomizationFocusRef.current = false;
+      customizeButtonRef.current?.focus();
+    }
+  }, [customizingModelPref, open]);
+
+  useEffect(() => {
+    const control = controlRef.current;
+    const trigger = triggerRef.current;
+    if (!open || !control || !trigger) return;
+
+    const updateMobilePlacement = () => {
+      const viewport = window.visualViewport;
+      const viewportTop = viewport?.offsetTop ?? 0;
+      const viewportLeft = viewport?.offsetLeft ?? 0;
+      const viewportHeight = viewport?.height ?? window.innerHeight;
+      const viewportWidth = viewport?.width ?? window.innerWidth;
+      const viewportBottom = viewportTop + viewportHeight;
+      const viewportRight = viewportLeft + viewportWidth;
+      const triggerRect = trigger.getBoundingClientRect();
+      const panelBottom = Math.max(
+        viewportTop + 108,
+        Math.min(triggerRect.top - 10, viewportBottom - 12),
+      );
+      const availableHeight = Math.max(
+        96,
+        Math.floor(panelBottom - viewportTop - 12),
+      );
+      const rightInset = Math.max(
+        16,
+        Math.floor(
+          window.innerWidth - Math.min(triggerRect.right, viewportRight - 16),
+        ),
+      );
+      const bottomInset = Math.max(
+        12,
+        Math.floor(window.innerHeight - panelBottom),
+      );
+
+      control.style.setProperty(
+        "--coach-model-mobile-max-height",
+        `${availableHeight}px`,
+      );
+      control.style.setProperty(
+        "--coach-model-mobile-max-width",
+        `${Math.max(1, Math.floor(viewportWidth - 32))}px`,
+      );
+      control.style.setProperty(
+        "--coach-model-mobile-right",
+        `${rightInset}px`,
+      );
+      control.style.setProperty(
+        "--coach-model-mobile-bottom",
+        `${bottomInset}px`,
+      );
+    };
+
+    updateMobilePlacement();
+    window.addEventListener("resize", updateMobilePlacement);
+    window.visualViewport?.addEventListener("resize", updateMobilePlacement);
+    window.visualViewport?.addEventListener("scroll", updateMobilePlacement);
+    return () => {
+      window.removeEventListener("resize", updateMobilePlacement);
+      window.visualViewport?.removeEventListener(
+        "resize",
+        updateMobilePlacement,
+      );
+      window.visualViewport?.removeEventListener(
+        "scroll",
+        updateMobilePlacement,
+      );
+      control.style.removeProperty("--coach-model-mobile-max-height");
+      control.style.removeProperty("--coach-model-mobile-max-width");
+      control.style.removeProperty("--coach-model-mobile-right");
+      control.style.removeProperty("--coach-model-mobile-bottom");
+    };
+  }, [open]);
+
   const customizingOption =
     options.find((option) => option.value === customizingModelPref) ?? null;
 
   function closeMenu() {
+    restoreCustomizationFocusRef.current = false;
     setOpen(false);
     setCustomizingModelPref(null);
   }
@@ -392,6 +481,7 @@ export default function CoachModelPicker({
                           </button>
                           {option.provider === "Anthropic" ? (
                             <button
+                              ref={customizeButtonRef}
                               type="button"
                               className="coach-model-customize"
                               aria-label={`Customize ${option.label}`}
@@ -399,9 +489,10 @@ export default function CoachModelPicker({
                               aria-expanded={
                                 customizingModelPref === option.value
                               }
-                              onClick={() =>
-                                setCustomizingModelPref(option.value)
-                              }
+                              onClick={() => {
+                                restoreCustomizationFocusRef.current = false;
+                                setCustomizingModelPref(option.value);
+                              }}
                             >
                               <ChevronLeft
                                 size={16}
@@ -450,12 +541,11 @@ export default function CoachModelPicker({
         >
           <div className="coach-model-customization-heading">
             <button
+              ref={customizationBackRef}
               type="button"
               onClick={() => {
+                restoreCustomizationFocusRef.current = true;
                 setCustomizingModelPref(null);
-                controlRef.current
-                  ?.querySelector<HTMLButtonElement>(".coach-model-customize")
-                  ?.focus();
               }}
               aria-label="Back to models"
             >
