@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-07: Model-picker follow-up is UI parity, not a selection-flow refactor
+
+**Decision:** Keep the existing model-first selection behavior and supported `None`, `Low`, `Medium`, `High`, and `Max` reasoning values unchanged. Limit the follow-up to model-list cleanup, responsive web positioning/scroll/focus accessibility, and an equivalent native iOS composer control backed by the existing settings and Cursor-catalog endpoints; file any larger flow redesign separately.
+
+**Rationale:** The intended interaction is the existing Cursor-inspired selector with its hierarchy inverted, and the reported problems are presentation and accessibility defects. Sharing the current server preferences across web and iOS delivers cross-client parity without reopening provider behavior, chat sending, or navigation architecture.
+
+**Status:** active
+
+**References:** `apps/web/src/components/coach/CoachModelPicker.tsx`, `apps/ios/Sources/CoachModelPicker.swift`, `apps/ios/Sources/CoachModelSelection.swift`
+
+---
+
 ## 2026-08-06: Coach supports next-draft composition and explicit thinking off
 
 **Decision:** Keep the Coach textarea editable while a turn is active, but allow only one in-flight turn and keep attachments, model changes, and Send disabled until it finishes. Clear submitted text immediately, preserve any follow-up draft through success or failure, and make the picker model-first: the primary panel lists models and a per-model submenu owns its supported customization. Anthropic adds a `None` reasoning setting that sends `thinking: { type: "disabled" }`; active levels continue to use adaptive thinking plus `output_config.effort`.
