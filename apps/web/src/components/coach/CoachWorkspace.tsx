@@ -1,11 +1,11 @@
 "use client";
 
 import { Menu } from "lucide-react";
-import dynamic from "next/dynamic";
 import { useState } from "react";
 import BadApiKeyBanner from "@/components/coach/BadApiKeyBanner";
 import ChatInput from "@/components/coach/ChatInput";
 import CoachModelPicker from "@/components/coach/CoachModelPicker";
+import MessageList from "@/components/coach/MessageList";
 import SuggestionChips from "@/components/coach/SuggestionChips";
 import ThreadSidebar from "@/components/coach/ThreadSidebar";
 import {
@@ -15,13 +15,6 @@ import {
 } from "@/components/coach/useCoachThread";
 import type { CoachEffort } from "@/lib/coach/provider";
 import type { CursorModelParamsByModel } from "@/lib/coach/cursor-model-params";
-
-// Message rendering sanitizes provider markdown with DOMPurify, which requires
-// a browser DOM. Keeping this island client-only avoids executing the browser
-// sanitizer during the server render while preserving sanitized HTML output.
-const MessageList = dynamic(() => import("@/components/coach/MessageList"), {
-  ssr: false,
-});
 
 type CoachWorkspaceProps = {
   initialThreadId: number;

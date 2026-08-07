@@ -2,7 +2,7 @@
 
 import DOMPurify from "dompurify";
 import { marked } from "marked";
-import { useMemo } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import CoachWorkDisclosure from "./CoachWorkDisclosure";
 import type {
   ComposerAttachment,
@@ -18,13 +18,22 @@ type Props = {
   ) => void;
 };
 
+const subscribeToBrowser = () => () => {};
+const browserSnapshot = () => true;
+const serverSnapshot = () => false;
+
 export default function MessageBubble({ msg, onAttachmentClick }: Props) {
   const isUser = msg.role === "user";
+  const isBrowser = useSyncExternalStore(
+    subscribeToBrowser,
+    browserSnapshot,
+    serverSnapshot,
+  );
   const isAborted = !isUser && !msg.streaming && msg.status === "aborted";
   const html = useMemo(() => {
-    if (isUser) return null;
+    if (isUser || !isBrowser) return null;
     return DOMPurify.sanitize(marked.parse(msg.content) as string);
-  }, [isUser, msg.content]);
+  }, [isBrowser, isUser, msg.content]);
 
   // Don't render empty aborted assistant bubbles (race between abort + tool flush).
   if (isAborted && msg.content === "") return null;
@@ -83,10 +92,16 @@ export default function MessageBubble({ msg, onAttachmentClick }: Props) {
               />
             ) : null}
             {msg.content ? (
-              <div
-                className="prose-coach"
-                dangerouslySetInnerHTML={{ __html: html ?? "" }}
-              />
+              isBrowser ? (
+                <div
+                  className="prose-coach"
+                  dangerouslySetInnerHTML={{ __html: html ?? "" }}
+                />
+              ) : (
+                <div className="prose-coach coach-markdown-fallback">
+                  {msg.content}
+                </div>
+              )
             ) : null}
             {isAborted ? (
               <span className="coach-message-stopped">(stopped)</span>

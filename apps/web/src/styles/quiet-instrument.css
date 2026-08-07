@@ -637,6 +637,7 @@ body:has(.coach-page) .bottom-nav { display: none; }
 .coach-message.assistant.has-work-log { padding-left: var(--s4); }
 .coach-message.assistant.has-work-log > .prose-coach { margin-top: var(--s3); padding-left: 0; }
 .prose-coach strong { color: var(--fg); font-weight: 550; }
+.coach-markdown-fallback { white-space: pre-wrap; }
 .coach-work-disclosure > summary { color: var(--fg-3); border: 0; border-radius: var(--r-sm); }
 .coach-work-disclosure > summary:hover,
 .coach-work-disclosure > summary:focus-visible { color: var(--fg); background: var(--bg-lift); border-color: transparent; }
