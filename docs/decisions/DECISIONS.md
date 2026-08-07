@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-07: Quiet Instrument constrains every web route through four layers
+
+**Decision:** Rebuild the web UI around a four-layer contract: closed tokens, twelve enum-only primitives, an intent router with per-route hierarchy, and machine-enforced lint rules. Interaction uses foreground/background contrast rather than an `--accent` token; hue is reserved for brand identity, metric identity, and semantic state. Every migrated route gets exactly one hero metric, at most six quiet metrics, at most two charts above the fold, and zero resting bordered containers except genuinely tappable or elevated surfaces.
+
+**Rationale:** The current surface drift comes from several simultaneously legal styling systems and undifferentiated information density, not from missing visual polish. A closed vocabulary plus numeric route budgets preserves all existing product behavior while making the quieter near-monochrome direction deterministic for future contributors and agents.
+
+**Status:** active
+
+**References:** `apps/web/src/styles/tokens.css`, `apps/web/src/components/primitives/`, `scripts/design-lint.mjs`, Open Design `design-system-v2.html`, Open Design `design-system.html`, PR #478
+
+---
+
 ## 2026-08-07: Cursor reasoning follows the live model-parameter catalog
 
 **Decision:** Preserve Cursor model `parameters` and `variants` from the account-scoped catalog, persist validated raw parameter selections per user and model, and pass them through the contained CLI using Cursor's bracket model syntax. Web and iOS expose a reasoning submenu only when that model advertises a controllable thinking, reasoning, effort, or thought-level parameter; fixed and unsupported models do not receive a synthetic control. Keep the direct HTTP catalog and `cursor-agent --mode ask` execution boundary instead of adding the Node 22-only SDK runtime.
