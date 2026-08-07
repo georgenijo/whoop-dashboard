@@ -8,7 +8,7 @@ import {
   KeyRound,
   LoaderCircle,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CoachEffort } from "@/lib/coach/provider";
 
 const ANTHROPIC_PREF = "anthropic:claude-sonnet-4-6";
@@ -30,7 +30,6 @@ type ModelOption = {
   value: string;
   label: string;
   provider: "Anthropic" | "Cursor";
-  description: string;
 };
 
 type Props = {
@@ -94,6 +93,8 @@ export default function CoachModelPicker({
   disabled,
   onSavingChange,
 }: Props) {
+  const menuId = useId();
+  const customizationId = useId();
   const controlRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [modelPref, setModelPref] = useState(initialModelPref);
@@ -142,8 +143,6 @@ export default function CoachModelPicker({
       value: `cursor:${model.id}`,
       label: model.display_name,
       provider: "Cursor",
-      description:
-        model.description || "Available through your Cursor account.",
     }));
     const selectedCursorId = cursorModelId(modelPref);
     if (
@@ -154,7 +153,6 @@ export default function CoachModelPicker({
         value: modelPref,
         label: selectedCursorId,
         provider: "Cursor",
-        description: "Saved model. It is not in the current live catalog.",
       });
     }
     return [
@@ -162,7 +160,6 @@ export default function CoachModelPicker({
         value: ANTHROPIC_PREF,
         label: "Claude Sonnet 4.6",
         provider: "Anthropic",
-        description: "Balanced reasoning for thoughtful health coaching.",
       },
       ...cursorOptions,
     ];
@@ -188,6 +185,9 @@ export default function CoachModelPicker({
       if (event.key !== "Escape") return;
       if (customizingModelPref) {
         setCustomizingModelPref(null);
+        controlRef.current
+          ?.querySelector<HTMLButtonElement>(".coach-model-customize")
+          ?.focus();
         return;
       }
       setOpen(false);
@@ -297,7 +297,7 @@ export default function CoachModelPicker({
             ? `; effort ${coachEffort}`
             : ""
         }`}
-        aria-haspopup="listbox"
+        aria-controls={menuId}
         aria-expanded={open}
         disabled={disabled || saving}
         title={error ?? STATUS_TITLE[catalogStatus]}
@@ -331,6 +331,9 @@ export default function CoachModelPicker({
           className={`coach-model-menu ${
             customizingOption ? "is-customizing" : ""
           }`}
+          id={menuId}
+          role="region"
+          aria-label="Choose a model"
         >
           <div className="coach-model-menu-heading">
             <span>Choose a model</span>
@@ -338,67 +341,79 @@ export default function CoachModelPicker({
           </div>
           <div
             className="coach-model-options"
-            role="listbox"
+            role="group"
             aria-label="Coach models"
           >
-            {options.map((option) => {
-              const selected = option.value === modelPref;
+            {(["Anthropic", "Cursor"] as const).map((provider) => {
+              const providerOptions = options.filter(
+                (option) => option.provider === provider,
+              );
+              if (providerOptions.length === 0) return null;
+
               return (
                 <div
-                  key={option.value}
-                  role="option"
-                  aria-selected={selected}
-                  aria-label={`${option.label}${
-                    selected ? ", selected" : ""
-                  }`}
-                  className={`coach-model-option ${
-                    selected ? "is-selected" : ""
-                  }`}
+                  className="coach-model-option-group"
+                  role="group"
+                  aria-label={`${provider} models`}
+                  key={provider}
                 >
-                  <button
-                    type="button"
-                    className="coach-model-option-select"
-                    aria-label={`Select ${option.label}`}
-                    onClick={() => {
-                      closeMenu();
-                      void saveModelPref(option.value);
-                    }}
-                  >
-                    <span
-                      className={`coach-model-provider-mark ${
-                        option.provider === "Cursor" ? "is-cursor" : ""
-                      }`}
-                      aria-hidden
-                    >
-                      {option.provider === "Cursor" ? "C" : "A"}
-                    </span>
-                    <span className="coach-model-option-copy">
-                      <span className="coach-model-option-meta">
-                        {option.provider}
-                      </span>
-                      <strong>{option.label}</strong>
-                      <small>{option.description}</small>
-                    </span>
-                  </button>
-                  {option.provider === "Anthropic" ? (
-                    <button
-                      type="button"
-                      className="coach-model-customize"
-                      aria-label={`Customize ${option.label}`}
-                      aria-haspopup="menu"
-                      aria-expanded={customizingModelPref === option.value}
-                      onClick={() => setCustomizingModelPref(option.value)}
-                    >
-                      {selected ? (
-                        <Check size={14} strokeWidth={2.2} aria-hidden />
-                      ) : null}
-                      <ChevronRight size={15} strokeWidth={1.8} aria-hidden />
-                    </button>
-                  ) : (
-                    <span className="coach-model-option-check" aria-hidden>
-                      {selected ? <Check size={15} strokeWidth={2.2} /> : null}
-                    </span>
-                  )}
+                  <div className="coach-model-option-group-label" aria-hidden>
+                    {provider}
+                  </div>
+                  <div className="coach-model-option-group-rows">
+                    {providerOptions.map((option) => {
+                      const selected = option.value === modelPref;
+                      return (
+                        <div
+                          key={option.value}
+                          className={`coach-model-option ${
+                            selected ? "is-selected" : ""
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            aria-pressed={selected}
+                            aria-label={`Select ${option.label}`}
+                            className="coach-model-option-select"
+                            onClick={() => {
+                              closeMenu();
+                              void saveModelPref(option.value);
+                            }}
+                          >
+                            <strong>{option.label}</strong>
+                            <span
+                              className="coach-model-option-check"
+                              aria-hidden
+                            >
+                              {selected ? (
+                                <Check size={15} strokeWidth={2.2} />
+                              ) : null}
+                            </span>
+                          </button>
+                          {option.provider === "Anthropic" ? (
+                            <button
+                              type="button"
+                              className="coach-model-customize"
+                              aria-label={`Customize ${option.label}`}
+                              aria-controls={customizationId}
+                              aria-expanded={
+                                customizingModelPref === option.value
+                              }
+                              onClick={() =>
+                                setCustomizingModelPref(option.value)
+                              }
+                            >
+                              <ChevronLeft
+                                size={16}
+                                strokeWidth={1.8}
+                                aria-hidden
+                              />
+                            </button>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               );
             })}
@@ -429,16 +444,27 @@ export default function CoachModelPicker({
       {open && customizingOption?.provider === "Anthropic" ? (
         <div
           className="coach-model-customization-menu"
-          role="menu"
+          id={customizationId}
+          role="region"
           aria-label={`${customizingOption.label} customization`}
         >
           <div className="coach-model-customization-heading">
             <button
               type="button"
-              onClick={() => setCustomizingModelPref(null)}
+              onClick={() => {
+                setCustomizingModelPref(null);
+                controlRef.current
+                  ?.querySelector<HTMLButtonElement>(".coach-model-customize")
+                  ?.focus();
+              }}
               aria-label="Back to models"
             >
-              <ChevronLeft size={15} strokeWidth={1.8} aria-hidden />
+              <ChevronRight
+                className="coach-model-back-icon"
+                size={16}
+                strokeWidth={1.8}
+                aria-hidden
+              />
             </button>
             <span>
               <small>Customize</small>
