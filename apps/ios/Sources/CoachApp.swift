@@ -1,5 +1,23 @@
 import SwiftUI
 
+enum DebugSession {
+    static var token: String? {
+        #if DEBUG
+        guard
+            let token = ProcessInfo.processInfo.environment["COACH_DEBUG_TOKEN"],
+            !token.isEmpty
+        else {
+            return nil
+        }
+        return token
+        #else
+        return nil
+        #endif
+    }
+
+    static var isActive: Bool { token != nil }
+}
+
 @main
 struct CoachApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
@@ -10,7 +28,7 @@ struct CoachApp: App {
         #if DEBUG
         // Local-test bypass: launch with SIMCTL_CHILD_COACH_DEBUG_TOKEN=<jwt> to
         // skip Sign in with Apple in the simulator. DEBUG-only; never shipped.
-        if let dbg = ProcessInfo.processInfo.environment["COACH_DEBUG_TOKEN"], !dbg.isEmpty {
+        if let dbg = DebugSession.token {
             _ = KeychainStore.saveSessionToken(dbg)
             _ = KeychainStore.saveSessionExpiresAt(Date().addingTimeInterval(60 * 60 * 24 * 30))
             return true
@@ -28,6 +46,7 @@ struct CoachApp: App {
     }()
 
     private let api = APIClient()
+    private let isDebugSession = DebugSession.isActive
     @State private var chatInFlight = ChatInFlightStore()
     @State private var wasBackgrounded = false
 
@@ -54,7 +73,11 @@ struct CoachApp: App {
                     isSignedIn = false
                 }
                 .onAppear {
-                    if isSignedIn {
+                    // Browser-mirrored simulators cannot render or control
+                    // Apple's secure permission sheets reliably. A Debug
+                    // session uses production-backed data and deliberately
+                    // skips device-only bootstrap prompts.
+                    if isSignedIn && !isDebugSession {
                         PushService.shared.requestAuthorizationIfNeeded()
                         Task { await HealthKitService.shared.bootstrap() }
                     }
@@ -68,7 +91,7 @@ struct CoachApp: App {
                             let store = chatInFlight
                             let client = api
                             Task { await Self.reconcileInFlight(store: store, api: client) }
-                            if isSignedIn {
+                            if isSignedIn && !isDebugSession {
                                 Task { await HealthKitService.shared.sync() }
                             }
                         }
@@ -92,8 +115,10 @@ struct CoachApp: App {
             AuthView(onSignedIn: {
                 isSignedIn = true
                 ClientLogger.shared.lifecycle("signin")
-                PushService.shared.requestAuthorizationIfNeeded()
-                Task { await HealthKitService.shared.bootstrap() }
+                if !isDebugSession {
+                    PushService.shared.requestAuthorizationIfNeeded()
+                    Task { await HealthKitService.shared.bootstrap() }
+                }
             })
         }
     }
