@@ -11,7 +11,9 @@ import {
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CoachEffort } from "@/lib/coach/provider";
 import {
+  cursorBooleanParameterValues,
   cursorModelParametersFor,
+  cursorReasoningValueLabel,
   isCursorReasoningParameter,
   type CursorModelOption,
   type CursorModelParameterDefinition,
@@ -21,11 +23,7 @@ import {
 const ANTHROPIC_PREF = "anthropic:claude-sonnet-4-6";
 
 type CursorModelCatalogStatus =
-  | "loading"
-  | "ready"
-  | "not_configured"
-  | "invalid_key"
-  | "unavailable";
+  "loading" | "ready" | "not_configured" | "invalid_key" | "unavailable";
 
 type ModelOption = {
   value: string;
@@ -181,16 +179,24 @@ export default function CoachModelPicker({
   const selectedCursorReasoning = (
     selectedOption.cursorModel?.parameters ?? []
   ).find(isCursorReasoningParameter);
+  const selectedCursorBooleanValues = selectedCursorReasoning
+    ? cursorBooleanParameterValues(selectedCursorReasoning)
+    : null;
   const selectedCursorParameterValue =
     selectedOption.cursorModel && selectedCursorReasoning
       ? cursorModelParametersFor(
           cursorModelParams,
           selectedOption.cursorModel,
-        ).find((parameter) => parameter.id === selectedCursorReasoning.id)?.value
+        ).find((parameter) => parameter.id === selectedCursorReasoning.id)
+          ?.value
       : undefined;
-  const selectedCursorEffortLabel = selectedCursorReasoning?.values.find(
-    (value) => value.value === selectedCursorParameterValue,
-  )?.display_name ?? selectedCursorParameterValue;
+  const selectedCursorReasoningLabel =
+    selectedCursorReasoning && selectedCursorParameterValue
+      ? cursorReasoningValueLabel(
+          selectedCursorReasoning,
+          selectedCursorParameterValue,
+        )
+      : undefined;
 
   useEffect(() => {
     if (!open) return;
@@ -317,6 +323,21 @@ export default function CoachModelPicker({
     (customizingOption?.cursorModel?.parameters ?? []).find(
       isCursorReasoningParameter,
     ) ?? null;
+  const customizingCursorBooleanValues = customizingCursorReasoning
+    ? cursorBooleanParameterValues(customizingCursorReasoning)
+    : null;
+  const customizingCursorSelectedValue =
+    customizingOption?.cursorModel && customizingCursorReasoning
+      ? cursorModelParametersFor(
+          cursorModelParams,
+          customizingOption.cursorModel,
+        ).find((parameter) => parameter.id === customizingCursorReasoning.id)
+          ?.value
+      : undefined;
+  const customizingCursorReasoningEnabled = Boolean(
+    customizingCursorBooleanValues &&
+    customizingCursorSelectedValue === customizingCursorBooleanValues.on.value,
+  );
 
   function closeMenu() {
     restoreCustomizationFocusRef.current = false;
@@ -339,9 +360,10 @@ export default function CoachModelPicker({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ model_pref: nextModelPref }),
       });
-      const data = (await response.json().catch(() => null)) as
-        | { model_pref?: string; error?: string }
-        | null;
+      const data = (await response.json().catch(() => null)) as {
+        model_pref?: string;
+        error?: string;
+      } | null;
       if (!response.ok) {
         throw new Error(
           data?.error || `Couldn't switch models (HTTP ${response.status}).`,
@@ -376,9 +398,10 @@ export default function CoachModelPicker({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ coach_effort: nextEffort }),
       });
-      const data = (await response.json().catch(() => null)) as
-        | { coach_effort?: CoachEffort; error?: string }
-        | null;
+      const data = (await response.json().catch(() => null)) as {
+        coach_effort?: CoachEffort;
+        error?: string;
+      } | null;
       if (!response.ok) {
         throw new Error(
           data?.error || `Couldn't change effort (HTTP ${response.status}).`,
@@ -429,9 +452,10 @@ export default function CoachModelPicker({
           },
         }),
       });
-      const data = (await response.json().catch(() => null)) as
-        | { cursor_model_params?: CursorModelParamsByModel; error?: string }
-        | null;
+      const data = (await response.json().catch(() => null)) as {
+        cursor_model_params?: CursorModelParamsByModel;
+        error?: string;
+      } | null;
       if (!response.ok) {
         throw new Error(
           data?.error ||
@@ -469,7 +493,9 @@ export default function CoachModelPicker({
           selectedOption.provider === "Anthropic"
             ? `; effort ${coachEffort}`
             : selectedCursorParameterValue
-              ? `; effort ${selectedCursorParameterValue}`
+              ? selectedCursorBooleanValues
+                ? `; ${selectedCursorReasoningLabel?.toLowerCase()}`
+                : `; effort ${selectedCursorParameterValue}`
               : ""
         }`}
         aria-controls={menuId}
@@ -484,15 +510,15 @@ export default function CoachModelPicker({
         <span className="coach-model-trigger-name">
           {selectedOption.label.replace(/^Claude /, "")}
         </span>
-        {selectedOption.provider === "Anthropic" || selectedCursorEffortLabel ? (
+        {selectedOption.provider === "Anthropic" ||
+        selectedCursorReasoningLabel ? (
           <span className="coach-model-trigger-effort">
             {saving
               ? "Saving…"
               : selectedOption.provider === "Anthropic"
-                ? EFFORT_OPTIONS.find(
-                    (option) => option.value === coachEffort,
-                  )?.label
-                : selectedCursorEffortLabel}
+                ? EFFORT_OPTIONS.find((option) => option.value === coachEffort)
+                    ?.label
+                : selectedCursorReasoningLabel}
           </span>
         ) : null}
         <ChevronDown
@@ -661,75 +687,112 @@ export default function CoachModelPicker({
             </div>
             <div
               className="coach-effort-options"
-              role="radiogroup"
-              aria-label="Thinking effort"
+              role={customizingCursorBooleanValues ? undefined : "radiogroup"}
+              aria-label={
+                customizingCursorBooleanValues ? undefined : "Thinking effort"
+              }
             >
-              {(customizingOption.provider === "Anthropic"
-                ? EFFORT_OPTIONS.map((option) => ({
-                    value: option.value,
-                    label: option.label,
-                    description: option.description,
-                    selected: coachEffort === option.value,
-                  }))
-                : (customizingCursorReasoning?.values ?? []).map((option) => {
-                    const selected = cursorModelParametersFor(
-                      cursorModelParams,
-                      customizingOption.cursorModel!,
-                    ).some(
-                      (parameter) =>
-                        parameter.id === customizingCursorReasoning?.id &&
-                        parameter.value === option.value,
-                    );
-                    return {
-                      value: option.value,
-                      label: option.display_name ?? option.value,
-                      description:
-                        option.value === "none" || option.value === "false"
-                          ? "No extended reasoning"
-                          : option.value === "low"
-                            ? "Fastest"
-                            : option.value === "medium"
-                              ? "Balanced"
-                              : option.value === "high"
-                                ? "Thorough"
-                                : "Deepest",
-                      selected,
-                    };
-                  })
-              ).map((option) => (
+              {customizingOption.provider === "Cursor" &&
+              customizingOption.cursorModel &&
+              customizingCursorReasoning &&
+              customizingCursorBooleanValues ? (
                 <button
-                  key={option.value}
                   type="button"
-                  role="radio"
-                  aria-checked={option.selected}
+                  role="switch"
+                  aria-label="Reasoning"
+                  aria-checked={customizingCursorReasoningEnabled}
                   className={
-                    option.selected ? "is-selected" : ""
+                    customizingCursorReasoningEnabled ? "is-selected" : ""
                   }
                   disabled={saving}
-                  onClick={() => {
-                    if (customizingOption.provider === "Anthropic") {
-                      void saveCoachEffort(option.value as CoachEffort);
-                    } else if (
-                      customizingOption.cursorModel &&
-                      customizingCursorReasoning
-                    ) {
-                      void saveCursorParameter(
-                        customizingOption.cursorModel,
-                        customizingCursorReasoning,
-                        option.value,
-                      );
-                    }
-                  }}
+                  onClick={() =>
+                    void saveCursorParameter(
+                      customizingOption.cursorModel!,
+                      customizingCursorReasoning,
+                      customizingCursorReasoningEnabled
+                        ? customizingCursorBooleanValues.off.value
+                        : customizingCursorBooleanValues.on.value,
+                    )
+                  }
                 >
                   <span>
-                    <strong>{option.label}</strong>
-                    <small>{option.description}</small>
+                    <strong>Reasoning</strong>
+                    <small>
+                      {customizingCursorReasoningEnabled
+                        ? "Enabled for the next reply"
+                        : "No extended reasoning"}
+                    </small>
                   </span>
-                  {option.selected ? (
+                  {customizingCursorReasoningEnabled ? (
                     <Check size={14} strokeWidth={2.2} aria-hidden />
                   ) : null}
                 </button>
-              ))}
+              ) : (
+                (customizingOption.provider === "Anthropic"
+                  ? EFFORT_OPTIONS.map((option) => ({
+                      value: option.value,
+                      label: option.label,
+                      description: option.description,
+                      selected: coachEffort === option.value,
+                    }))
+                  : (customizingCursorReasoning?.values ?? []).map((option) => {
+                      const selected = cursorModelParametersFor(
+                        cursorModelParams,
+                        customizingOption.cursorModel!,
+                      ).some(
+                        (parameter) =>
+                          parameter.id === customizingCursorReasoning?.id &&
+                          parameter.value === option.value,
+                      );
+                      return {
+                        value: option.value,
+                        label: option.display_name ?? option.value,
+                        description:
+                          option.value === "none" || option.value === "false"
+                            ? "No extended reasoning"
+                            : option.value === "low"
+                              ? "Fastest"
+                              : option.value === "medium"
+                                ? "Balanced"
+                                : option.value === "high"
+                                  ? "Thorough"
+                                  : "Deepest",
+                        selected,
+                      };
+                    })
+                ).map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={option.selected}
+                    className={option.selected ? "is-selected" : ""}
+                    disabled={saving}
+                    onClick={() => {
+                      if (customizingOption.provider === "Anthropic") {
+                        void saveCoachEffort(option.value as CoachEffort);
+                      } else if (
+                        customizingOption.cursorModel &&
+                        customizingCursorReasoning
+                      ) {
+                        void saveCursorParameter(
+                          customizingOption.cursorModel,
+                          customizingCursorReasoning,
+                          option.value,
+                        );
+                      }
+                    }}
+                  >
+                    <span>
+                      <strong>{option.label}</strong>
+                      <small>{option.description}</small>
+                    </span>
+                    {option.selected ? (
+                      <Check size={14} strokeWidth={2.2} aria-hidden />
+                    ) : null}
+                  </button>
+                ))
+              )}
             </div>
           </div>
         </div>

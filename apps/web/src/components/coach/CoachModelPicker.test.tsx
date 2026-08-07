@@ -52,6 +52,37 @@ function catalogResponse() {
   });
 }
 
+function booleanReasoningCatalogResponse() {
+  return Response.json({
+    status: "ready",
+    models: [
+      {
+        id: "claude-opus-5",
+        display_name: "Opus 5",
+        description: null,
+        parameters: [
+          {
+            id: "thinking",
+            display_name: "Reasoning",
+            values: [
+              { value: "true", display_name: null },
+              { value: "false", display_name: null },
+            ],
+          },
+        ],
+        variants: [
+          {
+            params: [{ id: "thinking", value: "true" }],
+            display_name: "Reasoning",
+            description: null,
+            is_default: true,
+          },
+        ],
+      },
+    ],
+  });
+}
+
 function renderPicker(
   overrides: Partial<Parameters<typeof CoachModelPicker>[0]> = {},
 ) {
@@ -249,17 +280,15 @@ describe("CoachModelPicker", () => {
   });
 
   it("persists the selected Cursor model's catalog-backed effort", async () => {
-    fetchMock
-      .mockResolvedValueOnce(catalogResponse())
-      .mockResolvedValueOnce(
-        Response.json({
-          model_pref: "cursor:gpt-5.5-high",
-          coach_effort: "high",
-          cursor_model_params: {
-            "gpt-5.5-high": [{ id: "effort", value: "high" }],
-          },
-        }),
-      );
+    fetchMock.mockResolvedValueOnce(catalogResponse()).mockResolvedValueOnce(
+      Response.json({
+        model_pref: "cursor:gpt-5.5-high",
+        coach_effort: "high",
+        cursor_model_params: {
+          "gpt-5.5-high": [{ id: "effort", value: "high" }],
+        },
+      }),
+    );
     renderPicker({ initialModelPref: "cursor:gpt-5.5-high" });
 
     openPicker();
@@ -288,6 +317,56 @@ describe("CoachModelPicker", () => {
           name: "Coach model: GPT-5.5 High; effort high",
         }),
       ).toBeInTheDocument(),
+    );
+  });
+
+  it("renders boolean Cursor reasoning as an on/off switch", async () => {
+    fetchMock
+      .mockResolvedValueOnce(booleanReasoningCatalogResponse())
+      .mockResolvedValueOnce(
+        Response.json({
+          cursor_model_params: {
+            "claude-opus-5": [{ id: "thinking", value: "false" }],
+          },
+        }),
+      );
+    renderPicker({
+      initialModelPref: "cursor:claude-opus-5",
+      initialCursorModelParams: {
+        "claude-opus-5": [{ id: "thinking", value: "true" }],
+      },
+    });
+
+    const trigger = await screen.findByRole("button", {
+      name: "Coach model: Opus 5; reasoning on",
+    });
+    expect(trigger).toHaveTextContent("Reasoning on");
+    expect(trigger).not.toHaveTextContent(/true|false/i);
+
+    fireEvent.click(trigger);
+    fireEvent.click(screen.getByRole("button", { name: "Customize Opus 5" }));
+    const reasoning = screen.getByRole("switch", { name: "Reasoning" });
+    expect(reasoning).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(reasoning);
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cursor_model_params: {
+            model_id: "claude-opus-5",
+            params: [{ id: "thinking", value: "false" }],
+          },
+        }),
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", {
+          name: "Coach model: Opus 5; reasoning off",
+        }),
+      ).toHaveTextContent("Reasoning off"),
     );
   });
 
@@ -400,12 +479,12 @@ describe("CoachModelPicker", () => {
     expect(
       control?.style.getPropertyValue("--coach-model-mobile-max-width"),
     ).toBe("812px");
-    expect(
-      control?.style.getPropertyValue("--coach-model-mobile-right"),
-    ).toBe("24px");
-    expect(
-      control?.style.getPropertyValue("--coach-model-mobile-bottom"),
-    ).toBe("100px");
+    expect(control?.style.getPropertyValue("--coach-model-mobile-right")).toBe(
+      "24px",
+    );
+    expect(control?.style.getPropertyValue("--coach-model-mobile-bottom")).toBe(
+      "100px",
+    );
 
     viewportState.height = 240;
     const resizeListener = viewportListeners.get("resize");
@@ -418,9 +497,9 @@ describe("CoachModelPicker", () => {
     expect(
       control?.style.getPropertyValue("--coach-model-mobile-max-height"),
     ).toBe("216px");
-    expect(
-      control?.style.getPropertyValue("--coach-model-mobile-bottom"),
-    ).toBe("162px");
+    expect(control?.style.getPropertyValue("--coach-model-mobile-bottom")).toBe(
+      "162px",
+    );
   });
 
   it("cannot change models during an active Coach turn", () => {

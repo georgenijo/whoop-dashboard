@@ -569,47 +569,81 @@ private struct CursorReasoningPicker: View {
                         .padding(.bottom, 12)
                 }
 
-                ForEach(parameter.values) { value in
-                    Button {
-                        Task { await selectValue(value.value) }
-                    } label: {
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(value.displayName ?? value.value)
-                                    .font(Theme.FontStyle.sans(14, weight: .semibold))
-                                    .foregroundStyle(Theme.Palette.fg0)
-                                Text(detail(for: value.value))
-                                    .font(Theme.FontStyle.sans(11.5))
-                                    .foregroundStyle(Theme.Palette.fg2)
+                if let booleanValues = parameter.booleanValues {
+                    let isOn = selectedValue == booleanValues.on.value
+                    Toggle(
+                        isOn: Binding(
+                            get: { isOn },
+                            set: { enabled in
+                                Task {
+                                    await selectValue(
+                                        enabled
+                                            ? booleanValues.on.value
+                                            : booleanValues.off.value
+                                    )
+                                }
                             }
-                            Spacer()
-                            if selectedValue == value.value {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(Theme.Palette.ai)
-                                    .accessibilityHidden(true)
-                            }
+                        )
+                    ) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Reasoning")
+                                .font(Theme.FontStyle.sans(14, weight: .semibold))
+                                .foregroundStyle(Theme.Palette.fg0)
+                            Text(isOn ? "Enabled for the next reply" : "No extended reasoning")
+                                .font(Theme.FontStyle.sans(11.5))
+                                .foregroundStyle(Theme.Palette.fg2)
                         }
-                        .padding(.horizontal, 16)
-                        .frame(minHeight: 62)
-                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .toggleStyle(.switch)
+                    .tint(Theme.Palette.ai)
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 62)
                     .disabled(isSaving)
-                    .accessibilityIdentifier(
-                        "coach-cursor-effort-\(model.id)-\(value.value)"
-                    )
-                    .accessibilityLabel(value.displayName ?? value.value)
-                    .accessibilityValue(
-                        selectedValue == value.value
-                            ? "Selected"
-                            : detail(for: value.value)
-                    )
+                    .accessibilityIdentifier("coach-cursor-reasoning-\(model.id)")
+                    .accessibilityValue(isOn ? "On" : "Off")
+                } else {
+                    ForEach(parameter.values) { value in
+                        Button {
+                            Task { await selectValue(value.value) }
+                        } label: {
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(parameter.displayLabel(for: value.value))
+                                        .font(Theme.FontStyle.sans(14, weight: .semibold))
+                                        .foregroundStyle(Theme.Palette.fg0)
+                                    Text(detail(for: value.value))
+                                        .font(Theme.FontStyle.sans(11.5))
+                                        .foregroundStyle(Theme.Palette.fg2)
+                                }
+                                Spacer()
+                                if selectedValue == value.value {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 14, weight: .semibold))
+                                        .foregroundStyle(Theme.Palette.ai)
+                                        .accessibilityHidden(true)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .frame(minHeight: 62)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(isSaving)
+                        .accessibilityIdentifier(
+                            "coach-cursor-effort-\(model.id)-\(value.value)"
+                        )
+                        .accessibilityLabel(parameter.displayLabel(for: value.value))
+                        .accessibilityValue(
+                            selectedValue == value.value
+                                ? "Selected"
+                                : detail(for: value.value)
+                        )
 
-                    if value.id != parameter.values.last?.id {
-                        Divider()
-                            .overlay(Theme.Palette.borderSubtle)
-                            .padding(.leading, 16)
+                        if value.id != parameter.values.last?.id {
+                            Divider()
+                                .overlay(Theme.Palette.borderSubtle)
+                                .padding(.leading, 16)
+                        }
                     }
                 }
             }
