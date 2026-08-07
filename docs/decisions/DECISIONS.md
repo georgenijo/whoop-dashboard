@@ -6,13 +6,25 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-06: Coach supports next-draft composition and explicit thinking off
+
+**Decision:** Keep the Coach textarea editable while a turn is active, but allow only one in-flight turn and keep attachments, model changes, and Send disabled until it finishes. Clear submitted text immediately, preserve any follow-up draft through success or failure, and make the picker model-first: the primary panel lists models and a per-model submenu owns its supported customization. Anthropic adds a `None` reasoning setting that sends `thinking: { type: "disabled" }`; active levels continue to use adaptive thinking plus `output_config.effort`.
+
+**Rationale:** Drafting the next question should not be coupled to model latency, while concurrent sends would abort or corrupt the active turn. A model-first hierarchy matches the selection task before revealing only settings that the chosen provider truly supports, and an explicit disabled state covers the no-thinking workflow without simulating “off” with a low effort value.
+
+**Status:** active
+
+**References:** `apps/web/src/components/coach/ChatInput.tsx`, `apps/web/src/components/coach/useChatSend.ts`, `apps/web/src/components/coach/CoachModelPicker.tsx`, `apps/web/src/lib/coach/loop.ts`
+
+---
+
 ## 2026-08-06: Coach composer owns model and provider-supported effort controls
 
 **Decision:** Keep the Coach model picker inside the message composer and align the compact trigger immediately before Send. Persist a per-user Coach effort preference; Anthropic Sonnet 4.6 exposes `low`, `medium`, `high`, and `max` through `output_config.effort`, while Cursor exposes only its live account-scoped model IDs because the production CLI has no documented independent effort flag.
 
 **Rationale:** Model and effort are per-turn choices users need at composition time, and the Claude-style right-aligned placement keeps both controls in the action path. Provider-aware controls ensure every visible option changes the real request instead of presenting a cosmetic or unsupported Cursor setting.
 
-**Status:** active
+**Status:** superseded by 2026-08-06 Coach next-draft and explicit thinking-off decision
 
 **References:** PR #471, `apps/web/src/components/coach/CoachModelPicker.tsx`, `apps/web/src/lib/coach/loop.ts`, `apps/web/src/lib/db/user_settings.ts`
 

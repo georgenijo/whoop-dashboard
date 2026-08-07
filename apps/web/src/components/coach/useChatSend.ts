@@ -376,6 +376,13 @@ function releasePreviewUrls(images: PendingChatImage[]) {
   for (const image of images) URL.revokeObjectURL(image.previewUrl);
 }
 
+function restoreDraftIfEmpty(
+  setInput: Dispatch<SetStateAction<string>>,
+  draftText: string,
+) {
+  setInput((current) => (current === "" ? draftText : current));
+}
+
 function optimisticAttachments(
   images: PendingChatImage[],
 ): ComposerAttachment[] {
@@ -536,6 +543,7 @@ async function readChatStream(
 
 async function sendChatMessage(params: SendParams) {
   if (!params.text.trim() && params.pendingImages.length === 0) return;
+  if (params.abortRef.current) return;
   params.setBadApiKey?.(false);
 
   const draftText = params.text;
@@ -549,8 +557,9 @@ async function sendChatMessage(params: SendParams) {
   params.setMessages(nextMessages);
   params.setLoading(true);
   params.setPreparingImages(draftImages.length > 0);
+  params.setInput("");
+  if (params.inputRef.current) params.inputRef.current.style.height = "auto";
 
-  params.abortRef.current?.abort();
   const controller = new AbortController();
   params.abortRef.current = controller;
   const assistantIndex = nextMessages.length;
@@ -587,6 +596,7 @@ async function sendChatMessage(params: SendParams) {
           if (body.kind === "bad_api_key") {
             params.setBadApiKey?.(true);
             params.setMessages((previous) => previous.slice(0, assistantIndex));
+            restoreDraftIfEmpty(params.setInput, draftText);
             return;
           }
         } catch {
@@ -595,9 +605,7 @@ async function sendChatMessage(params: SendParams) {
       }
       throw new Error(await responseErrorMessage(response));
     }
-    params.setInput("");
     params.setPendingImages([]);
-    if (params.inputRef.current) params.inputRef.current.style.height = "auto";
 
     await readChatStream(response, {
       appendText: (text) =>
@@ -618,7 +626,7 @@ async function sendChatMessage(params: SendParams) {
     if (!isCurrent()) return;
     if (badApiKey) {
       params.setMessages((previous) => previous.slice(0, assistantIndex));
-      params.setInput(draftText);
+      restoreDraftIfEmpty(params.setInput, draftText);
       params.setPendingImages(draftImages);
       return;
     }
@@ -649,7 +657,7 @@ async function sendChatMessage(params: SendParams) {
       return;
     }
     if (!isCurrent()) return;
-    params.setInput(draftText);
+    restoreDraftIfEmpty(params.setInput, draftText);
     params.setPendingImages(draftImages);
     failAssistant(
       params.setMessages,

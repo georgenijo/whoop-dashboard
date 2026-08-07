@@ -9,8 +9,9 @@ import { getUserSettings } from "@/lib/db";
 
 export type CoachProvider = "anthropic" | "cursor";
 export type CoachModelSelection = { provider: CoachProvider; model: string };
-export const COACH_EFFORTS = ["low", "medium", "high", "max"] as const;
+export const COACH_EFFORTS = ["off", "low", "medium", "high", "max"] as const;
 export type CoachEffort = (typeof COACH_EFFORTS)[number];
+export type ActiveCoachEffort = Exclude<CoachEffort, "off">;
 
 // Default chat model — must match the Anthropic loop's model constant.
 export const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
@@ -70,6 +71,22 @@ export function isCoachEffort(value: unknown): value is CoachEffort {
 
 export function parseCoachEffort(value: unknown): CoachEffort {
   return isCoachEffort(value) ? value : DEFAULT_COACH_EFFORT;
+}
+
+export function anthropicReasoningConfig(effort: CoachEffort):
+  | {
+      thinking: { type: "disabled" };
+    }
+  | {
+      thinking: { type: "adaptive" };
+      output_config: { effort: ActiveCoachEffort };
+    } {
+  return effort === "off"
+    ? { thinking: { type: "disabled" } }
+    : {
+        thinking: { type: "adaptive" },
+        output_config: { effort },
+      };
 }
 
 export function resolveCoachEffort(userId: number): CoachEffort {

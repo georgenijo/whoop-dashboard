@@ -111,6 +111,66 @@ describe("useChatSend work logs", () => {
     });
   });
 
+  it("preserves a follow-up draft while the active reply streams", async () => {
+    const pending = deferred<Response>();
+    const stream = controllableStreamResponse();
+    vi.stubGlobal("fetch", vi.fn(() => pending.promise));
+    const { result } = renderChat();
+
+    act(() => {
+      result.current.setInput("First question");
+    });
+    let sendPromise = Promise.resolve();
+    act(() => {
+      sendPromise = result.current.send("First question");
+    });
+
+    expect(result.current.input).toBe("");
+    expect(result.current.loading).toBe(true);
+
+    act(() => {
+      result.current.setInput("Follow-up draft");
+    });
+    await act(async () => pending.resolve(stream.response));
+    expect(result.current.input).toBe("Follow-up draft");
+
+    act(() => {
+      stream.send(sse("done", { reply: "First answer", work_log: null }));
+      stream.close();
+    });
+    await act(async () => sendPromise);
+
+    expect(result.current.input).toBe("Follow-up draft");
+  });
+
+  it("does not overwrite a follow-up draft when the active reply fails", async () => {
+    const pending = deferred<Response>();
+    const stream = controllableStreamResponse();
+    vi.stubGlobal("fetch", vi.fn(() => pending.promise));
+    const { result } = renderChat();
+
+    act(() => {
+      result.current.setInput("First question");
+    });
+    let sendPromise = Promise.resolve();
+    act(() => {
+      sendPromise = result.current.send("First question");
+    });
+    await act(async () => pending.resolve(stream.response));
+
+    act(() => {
+      result.current.setInput("Keep this follow-up");
+      stream.send(sse("error", { message: "Provider unavailable." }));
+      stream.close();
+    });
+    await act(async () => sendPromise);
+
+    expect(result.current.input).toBe("Keep this follow-up");
+    expect(result.current.messages.at(-1)?.content).toContain(
+      "Provider unavailable",
+    );
+  });
+
   it("moves pre-tool text into notes and accumulates sequential and parallel tools by id", async () => {
     const pending = deferred<Response>();
     const stream = controllableStreamResponse();

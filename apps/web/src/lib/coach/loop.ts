@@ -13,7 +13,11 @@ import type {
 import { getUserSettings, type ChatMessageInsert } from "@/lib/db";
 import { BadApiKeyError, type ApiKeyOrigin } from "./api-key";
 import { buildAnthropicConversation } from "./conversation";
-import { parseCoachEffort, type CoachEffort } from "./provider";
+import {
+  anthropicReasoningConfig,
+  parseCoachEffort,
+  type CoachEffort,
+} from "./provider";
 import type {
   CoachConversationMessage,
   CoachUserTurn,
@@ -361,8 +365,7 @@ export async function runAnthropicSdk(
 
   let response = await callModel({
     model: COACH_MODEL,
-    thinking: { type: "adaptive" },
-    output_config: { effort: coachEffort },
+    ...anthropicReasoningConfig(coachEffort),
     tools: TOOLS,
     max_tokens: MAX_OUTPUT_TOKENS,
     system: systemPrompt,
@@ -458,8 +461,7 @@ export async function runAnthropicSdk(
 
     response = await callModel({
       model: COACH_MODEL,
-      thinking: { type: "adaptive" },
-      output_config: { effort: coachEffort },
+      ...anthropicReasoningConfig(coachEffort),
       tools: TOOLS,
       max_tokens: MAX_OUTPUT_TOKENS,
       system: systemPrompt,
