@@ -18,7 +18,10 @@ type Props = {
   ) => void;
 };
 
-const subscribeToBrowser = () => () => {};
+const subscribeToBrowser = (notify: () => void) => {
+  const timeout = window.setTimeout(notify, 0);
+  return () => window.clearTimeout(timeout);
+};
 const browserSnapshot = () => true;
 const serverSnapshot = () => false;
 
