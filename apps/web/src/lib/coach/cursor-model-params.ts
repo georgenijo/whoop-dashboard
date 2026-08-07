@@ -40,9 +40,7 @@ const MAX_PARAMETERS_PER_MODEL = 8;
 
 export function isSafeCursorParameterToken(value: string): boolean {
   return (
-    value.length > 0 &&
-    value.length <= 100 &&
-    SAFE_PARAMETER_TOKEN.test(value)
+    value.length > 0 && value.length <= 100 && SAFE_PARAMETER_TOKEN.test(value)
   );
 }
 
@@ -60,6 +58,34 @@ export function isCursorReasoningParameter(
     name.includes("reasoning") ||
     name.includes("thought") ||
     name.includes("effort")
+  );
+}
+
+export function cursorBooleanParameterValues(
+  parameter: Pick<CursorModelParameterDefinition, "values">,
+): { on: CursorModelParameterValue; off: CursorModelParameterValue } | null {
+  if (parameter.values.length !== 2) return null;
+  const on = parameter.values.find(
+    (candidate) => candidate.value.trim().toLowerCase() === "true",
+  );
+  const off = parameter.values.find(
+    (candidate) => candidate.value.trim().toLowerCase() === "false",
+  );
+  return on && off ? { on, off } : null;
+}
+
+export function cursorReasoningValueLabel(
+  parameter: Pick<CursorModelParameterDefinition, "values">,
+  value: string,
+): string {
+  const booleanValues = cursorBooleanParameterValues(parameter);
+  if (booleanValues) {
+    if (value === booleanValues.on.value) return "Reasoning on";
+    if (value === booleanValues.off.value) return "Reasoning off";
+  }
+  return (
+    parameter.values.find((candidate) => candidate.value === value)
+      ?.display_name ?? value
   );
 }
 
@@ -106,7 +132,11 @@ export function parseCursorModelParamsByModel(
     const seen = new Set<string>();
     const params: CursorModelParameterSelection[] = [];
     for (const rawParam of rawParams.slice(0, MAX_PARAMETERS_PER_MODEL)) {
-      if (!rawParam || typeof rawParam !== "object" || Array.isArray(rawParam)) {
+      if (
+        !rawParam ||
+        typeof rawParam !== "object" ||
+        Array.isArray(rawParam)
+      ) {
         continue;
       }
       const { id, value: rawValue } = rawParam as {

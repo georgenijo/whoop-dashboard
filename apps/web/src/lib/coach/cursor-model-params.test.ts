@@ -1,11 +1,31 @@
 import { describe, expect, it } from "vitest";
 import {
+  cursorBooleanParameterValues,
   cursorModelArgument,
+  cursorReasoningValueLabel,
   isCursorReasoningParameter,
   parseCursorModelParamsByModel,
 } from "./cursor-model-params";
 
 describe("Cursor model parameters", () => {
+  it("presents boolean reasoning as an on/off control", () => {
+    const parameter = {
+      id: "thinking",
+      display_name: "Reasoning",
+      values: [
+        { value: "true", display_name: null },
+        { value: "false", display_name: null },
+      ],
+    };
+
+    expect(cursorBooleanParameterValues(parameter)).toEqual({
+      on: parameter.values[0],
+      off: parameter.values[1],
+    });
+    expect(cursorReasoningValueLabel(parameter, "true")).toBe("Reasoning on");
+    expect(cursorReasoningValueLabel(parameter, "false")).toBe("Reasoning off");
+  });
+
   it("formats validated parameters for cursor-agent", () => {
     expect(
       cursorModelArgument("claude-opus-4-8", [
