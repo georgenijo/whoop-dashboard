@@ -1989,15 +1989,69 @@ body {
     align-items: center;
     text-align: center;
   }
+  .coach-model-menu,
+  .coach-model-customization-menu {
+    position: fixed;
+    right: var(--coach-model-mobile-right, 16px);
+    bottom: var(
+      --coach-model-mobile-bottom,
+      calc(132px + env(safe-area-inset-bottom))
+    );
+    width: min(
+      340px,
+      var(--coach-model-mobile-max-width, calc(100vw - 32px))
+    );
+    max-height: var(
+      --coach-model-mobile-max-height,
+      calc(100dvh - 156px - env(safe-area-inset-top))
+    );
+    overscroll-behavior: contain;
+  }
   .coach-model-menu {
-    width: min(340px, calc(100vw - 56px));
+    display: flex;
+    flex-direction: column;
   }
   .coach-model-menu.is-customizing {
     visibility: hidden;
   }
   .coach-model-customization-menu {
-    right: 0;
-    width: min(340px, calc(100vw - 56px));
+    display: flex;
+    flex-direction: column;
+  }
+  .coach-model-menu-heading,
+  .coach-model-customization-heading {
+    flex: 0 0 auto;
+  }
+  .coach-model-options,
+  .coach-effort-section {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .coach-model-options {
+    flex: 1 1 auto;
+    max-height: none;
+  }
+  .coach-effort-section {
+    scrollbar-color: rgba(161,161,170,0.48) transparent;
+    scrollbar-width: thin;
+  }
+  .coach-effort-section::-webkit-scrollbar {
+    width: 8px;
+  }
+  .coach-effort-section::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .coach-effort-section::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: rgba(161,161,170,0.48);
+    background-clip: padding-box;
+  }
+  .coach-model-menu button,
+  .coach-model-customization-menu button {
+    touch-action: manipulation;
   }
   .coach-model-back-icon {
     transform: rotate(180deg);
@@ -2035,6 +2089,22 @@ body {
     backdrop-filter: blur(20px) saturate(140%);
     -webkit-backdrop-filter: blur(20px) saturate(140%);
     border-top: 1px solid rgba(255,255,255,0.06);
+  }
+}
+
+@media (max-width: 768px) and (max-height: 520px) {
+  .coach-model-menu-heading {
+    padding: 10px 12px 8px;
+  }
+  .coach-model-customization-heading {
+    gap: 6px;
+    padding: 4px 8px;
+  }
+  .coach-effort-section {
+    padding: 8px;
+  }
+  .coach-effort-heading {
+    margin-bottom: 5px;
   }
 }
 
