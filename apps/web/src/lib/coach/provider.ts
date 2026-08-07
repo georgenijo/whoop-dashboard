@@ -6,9 +6,14 @@ import "server-only";
 // migration, reuses the existing column. Unknown / NULL prefs fall back to the
 // Anthropic default, so legacy values and unset users keep working unchanged.
 import { getUserSettings } from "@/lib/db";
+import type { CursorModelParameterSelection } from "./cursor-model-params";
 
 export type CoachProvider = "anthropic" | "cursor";
-export type CoachModelSelection = { provider: CoachProvider; model: string };
+export type CoachModelSelection = {
+  provider: CoachProvider;
+  model: string;
+  parameters?: CursorModelParameterSelection[];
+};
 export const COACH_EFFORTS = ["off", "low", "medium", "high", "max"] as const;
 export type CoachEffort = (typeof COACH_EFFORTS)[number];
 export type ActiveCoachEffort = Exclude<CoachEffort, "off">;
@@ -106,9 +111,20 @@ export function cursorProviderEnabled(userId: number): boolean {
  * than failing the turn.
  */
 export function resolveCoachProvider(userId: number): CoachModelSelection {
-  const selection = parseModelPref(getUserSettings(userId)?.model_pref);
-  if (selection.provider === "cursor" && !cursorProviderEnabled(userId)) {
+  const settings = getUserSettings(userId);
+  const selection = parseModelPref(settings?.model_pref);
+  if (
+    selection.provider === "cursor" &&
+    !settings?.cursor_key &&
+    !process.env.CURSOR_API_KEY
+  ) {
     return ANTHROPIC_DEFAULT;
+  }
+  if (selection.provider === "cursor") {
+    return {
+      ...selection,
+      parameters: settings?.cursor_model_params?.[selection.model] ?? [],
+    };
   }
   return selection;
 }

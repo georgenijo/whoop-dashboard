@@ -10,14 +10,15 @@ import {
 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CoachEffort } from "@/lib/coach/provider";
+import {
+  cursorModelParametersFor,
+  isCursorReasoningParameter,
+  type CursorModelOption,
+  type CursorModelParameterDefinition,
+  type CursorModelParamsByModel,
+} from "@/lib/coach/cursor-model-params";
 
 const ANTHROPIC_PREF = "anthropic:claude-sonnet-4-6";
-
-type CursorModel = {
-  id: string;
-  display_name: string;
-  description: string | null;
-};
 
 type CursorModelCatalogStatus =
   | "loading"
@@ -30,11 +31,13 @@ type ModelOption = {
   value: string;
   label: string;
   provider: "Anthropic" | "Cursor";
+  cursorModel?: CursorModelOption;
 };
 
 type Props = {
   initialModelPref: string;
   initialCoachEffort: CoachEffort;
+  initialCursorModelParams?: CursorModelParamsByModel;
   disabled: boolean;
   onSavingChange: (saving: boolean) => void;
 };
@@ -90,6 +93,7 @@ function cursorModelId(modelPref: string): string | null {
 export default function CoachModelPicker({
   initialModelPref,
   initialCoachEffort,
+  initialCursorModelParams = {},
   disabled,
   onSavingChange,
 }: Props) {
@@ -102,7 +106,10 @@ export default function CoachModelPicker({
   const restoreCustomizationFocusRef = useRef(false);
   const [modelPref, setModelPref] = useState(initialModelPref);
   const [coachEffort, setCoachEffort] = useState(initialCoachEffort);
-  const [cursorModels, setCursorModels] = useState<CursorModel[]>([]);
+  const [cursorModelParams, setCursorModelParams] = useState(
+    initialCursorModelParams,
+  );
+  const [cursorModels, setCursorModels] = useState<CursorModelOption[]>([]);
   const [catalogStatus, setCatalogStatus] =
     useState<CursorModelCatalogStatus>("loading");
   const [saving, setSaving] = useState(false);
@@ -120,7 +127,7 @@ export default function CoachModelPicker({
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return (await response.json()) as {
           status: Exclude<CursorModelCatalogStatus, "loading">;
-          models: CursorModel[];
+          models: CursorModelOption[];
         };
       })
       .then((data) => {
@@ -146,6 +153,7 @@ export default function CoachModelPicker({
       value: `cursor:${model.id}`,
       label: model.display_name,
       provider: "Cursor",
+      cursorModel: model,
     }));
     const selectedCursorId = cursorModelId(modelPref);
     if (
@@ -170,6 +178,19 @@ export default function CoachModelPicker({
 
   const selectedOption =
     options.find((option) => option.value === modelPref) ?? options[0];
+  const selectedCursorReasoning = (
+    selectedOption.cursorModel?.parameters ?? []
+  ).find(isCursorReasoningParameter);
+  const selectedCursorParameterValue =
+    selectedOption.cursorModel && selectedCursorReasoning
+      ? cursorModelParametersFor(
+          cursorModelParams,
+          selectedOption.cursorModel,
+        ).find((parameter) => parameter.id === selectedCursorReasoning.id)?.value
+      : undefined;
+  const selectedCursorEffortLabel = selectedCursorReasoning?.values.find(
+    (value) => value.value === selectedCursorParameterValue,
+  )?.display_name ?? selectedCursorParameterValue;
 
   useEffect(() => {
     if (!open) return;
@@ -292,6 +313,10 @@ export default function CoachModelPicker({
 
   const customizingOption =
     options.find((option) => option.value === customizingModelPref) ?? null;
+  const customizingCursorReasoning =
+    (customizingOption?.cursorModel?.parameters ?? []).find(
+      isCursorReasoningParameter,
+    ) ?? null;
 
   function closeMenu() {
     restoreCustomizationFocusRef.current = false;
@@ -373,6 +398,65 @@ export default function CoachModelPicker({
     }
   }
 
+  async function saveCursorParameter(
+    model: CursorModelOption,
+    parameter: CursorModelParameterDefinition,
+    nextValue: string,
+  ) {
+    if (saving) return;
+    const previousParams = cursorModelParams;
+    const currentParams = cursorModelParametersFor(cursorModelParams, model);
+    const nextParams = [
+      ...currentParams.filter((candidate) => candidate.id !== parameter.id),
+      { id: parameter.id, value: nextValue },
+    ];
+    setCursorModelParams({
+      ...cursorModelParams,
+      [model.id]: nextParams,
+    });
+    setSaving(true);
+    setError(null);
+    onSavingChange(true);
+
+    try {
+      const response = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cursor_model_params: {
+            model_id: model.id,
+            params: nextParams,
+          },
+        }),
+      });
+      const data = (await response.json().catch(() => null)) as
+        | { cursor_model_params?: CursorModelParamsByModel; error?: string }
+        | null;
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            `Couldn't change Cursor reasoning (HTTP ${response.status}).`,
+        );
+      }
+      setCursorModelParams(
+        data?.cursor_model_params ?? {
+          ...cursorModelParams,
+          [model.id]: nextParams,
+        },
+      );
+    } catch (saveError) {
+      setCursorModelParams(previousParams);
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Couldn't change Cursor reasoning.",
+      );
+    } finally {
+      setSaving(false);
+      onSavingChange(false);
+    }
+  }
+
   return (
     <div className="coach-model-control" ref={controlRef}>
       <button
@@ -384,7 +468,9 @@ export default function CoachModelPicker({
         aria-label={`Coach model: ${selectedOption.label}${
           selectedOption.provider === "Anthropic"
             ? `; effort ${coachEffort}`
-            : ""
+            : selectedCursorParameterValue
+              ? `; effort ${selectedCursorParameterValue}`
+              : ""
         }`}
         aria-controls={menuId}
         aria-expanded={open}
@@ -398,13 +484,15 @@ export default function CoachModelPicker({
         <span className="coach-model-trigger-name">
           {selectedOption.label.replace(/^Claude /, "")}
         </span>
-        {selectedOption.provider === "Anthropic" ? (
+        {selectedOption.provider === "Anthropic" || selectedCursorEffortLabel ? (
           <span className="coach-model-trigger-effort">
             {saving
               ? "Saving…"
-              : EFFORT_OPTIONS.find(
-                  (option) => option.value === coachEffort,
-                )?.label}
+              : selectedOption.provider === "Anthropic"
+                ? EFFORT_OPTIONS.find(
+                    (option) => option.value === coachEffort,
+                  )?.label
+                : selectedCursorEffortLabel}
           </span>
         ) : null}
         <ChevronDown
@@ -479,7 +567,10 @@ export default function CoachModelPicker({
                               ) : null}
                             </span>
                           </button>
-                          {option.provider === "Anthropic" ? (
+                          {option.provider === "Anthropic" ||
+                          ((option.cursorModel?.parameters ?? []).find(
+                            isCursorReasoningParameter,
+                          )?.values.length ?? 0) > 1 ? (
                             <button
                               ref={customizeButtonRef}
                               type="button"
@@ -532,7 +623,9 @@ export default function CoachModelPicker({
         </div>
       ) : null}
 
-      {open && customizingOption?.provider === "Anthropic" ? (
+      {open &&
+      (customizingOption?.provider === "Anthropic" ||
+        (customizingOption?.cursorModel && customizingCursorReasoning)) ? (
         <div
           className="coach-model-customization-menu"
           id={customizationId}
@@ -571,23 +664,68 @@ export default function CoachModelPicker({
               role="radiogroup"
               aria-label="Thinking effort"
             >
-              {EFFORT_OPTIONS.map((option) => (
+              {(customizingOption.provider === "Anthropic"
+                ? EFFORT_OPTIONS.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                    description: option.description,
+                    selected: coachEffort === option.value,
+                  }))
+                : (customizingCursorReasoning?.values ?? []).map((option) => {
+                    const selected = cursorModelParametersFor(
+                      cursorModelParams,
+                      customizingOption.cursorModel!,
+                    ).some(
+                      (parameter) =>
+                        parameter.id === customizingCursorReasoning?.id &&
+                        parameter.value === option.value,
+                    );
+                    return {
+                      value: option.value,
+                      label: option.display_name ?? option.value,
+                      description:
+                        option.value === "none" || option.value === "false"
+                          ? "No extended reasoning"
+                          : option.value === "low"
+                            ? "Fastest"
+                            : option.value === "medium"
+                              ? "Balanced"
+                              : option.value === "high"
+                                ? "Thorough"
+                                : "Deepest",
+                      selected,
+                    };
+                  })
+              ).map((option) => (
                 <button
                   key={option.value}
                   type="button"
                   role="radio"
-                  aria-checked={coachEffort === option.value}
+                  aria-checked={option.selected}
                   className={
-                    coachEffort === option.value ? "is-selected" : ""
+                    option.selected ? "is-selected" : ""
                   }
                   disabled={saving}
-                  onClick={() => void saveCoachEffort(option.value)}
+                  onClick={() => {
+                    if (customizingOption.provider === "Anthropic") {
+                      void saveCoachEffort(option.value as CoachEffort);
+                    } else if (
+                      customizingOption.cursorModel &&
+                      customizingCursorReasoning
+                    ) {
+                      void saveCursorParameter(
+                        customizingOption.cursorModel,
+                        customizingCursorReasoning,
+                        option.value,
+                      );
+                    }
+                  }}
                 >
                   <span>
                     <strong>{option.label}</strong>
                     <small>{option.description}</small>
                   </span>
-                  {coachEffort === option.value ? (
+                  {option.selected ? (
                     <Check size={14} strokeWidth={2.2} aria-hidden />
                   ) : null}
                 </button>

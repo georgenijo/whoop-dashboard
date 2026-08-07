@@ -25,8 +25,8 @@ struct CoachModelPicker: View {
             HStack(spacing: 5) {
                 Text(selection.triggerLabel)
                     .lineLimit(1)
-                if selection.selectedOption.provider == .anthropic {
-                    Text(selection.effort.label)
+                if let reasoningLabel = triggerReasoningLabel {
+                    Text(reasoningLabel)
                         .foregroundStyle(Theme.Palette.fg2)
                 }
                 Image(systemName: "chevron.up")
@@ -78,7 +78,16 @@ struct CoachModelPicker: View {
         if model.provider == .anthropic {
             return "\(model.label), \(selection.effort.label) reasoning"
         }
+        if let reasoning = selection.selectedCursorReasoningLabel {
+            return "\(model.label), \(reasoning) reasoning"
+        }
         return model.label
+    }
+
+    private var triggerReasoningLabel: String? {
+        selection.selectedOption.provider == .anthropic
+            ? selection.effort.label
+            : selection.selectedCursorReasoningLabel
     }
 
     @MainActor
@@ -262,6 +271,36 @@ private struct CoachModelPickerSheet: View {
                 .accessibilityLabel("Customize \(option.label)")
                 .accessibilityValue("\(selection.effort.label) reasoning")
                 .accessibilityHint("Shows reasoning choices")
+            } else if
+                let model = selection.cursorModel(for: option),
+                let reasoning = model.reasoningParameter,
+                reasoning.values.count > 1
+            {
+                NavigationLink {
+                    CursorReasoningPicker(
+                        selection: $selection,
+                        model: model,
+                        parameter: reasoning,
+                        isSaving: $isSaving,
+                        errorMessage: $errorMessage
+                    )
+                } label: {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.Palette.ai)
+                        .frame(width: 48, height: 62)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(isLoading || isSaving || !hasLoadedSettings)
+                .accessibilityIdentifier("coach-model-customize-\(model.id)")
+                .accessibilityLabel("Customize \(option.label)")
+                .accessibilityValue(
+                    selection.cursorParameters(for: model).first(where: {
+                        $0.id == reasoning.id
+                    })?.value ?? "Default"
+                )
+                .accessibilityHint("Shows reasoning choices")
             }
         }
     }
@@ -370,6 +409,7 @@ private struct CoachModelPickerSheet: View {
                 .selectModel(option.id)
             selection.modelPref = saved.modelPref
             selection.effort = saved.coachEffort
+            selection.cursorModelParams = saved.cursorModelParams
             dismiss()
         } catch is CancellationError {
             selection.modelPref = previous
@@ -496,10 +536,162 @@ private struct CoachEffortPicker: View {
                 .selectEffort(effort)
             selection.modelPref = saved.modelPref
             selection.effort = saved.coachEffort
+            selection.cursorModelParams = saved.cursorModelParams
         } catch is CancellationError {
             selection.effort = previous
         } catch {
             selection.effort = previous
+            errorMessage = "Couldn’t change reasoning. Please try again."
+        }
+    }
+}
+
+private struct CursorReasoningPicker: View {
+    @Environment(\.api) private var api
+
+    @Binding var selection: CoachModelSelection
+    let model: CursorCoachModel
+    let parameter: CursorModelParameterDefinition
+    @Binding var isSaving: Bool
+    @Binding var errorMessage: String?
+
+    private var selectedValue: String? {
+        selection.cursorParameters(for: model).first(where: {
+            $0.id == parameter.id
+        })?.value
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                if let errorMessage {
+                    cursorErrorBanner(errorMessage)
+                        .padding(.bottom, 12)
+                }
+
+                ForEach(parameter.values) { value in
+                    Button {
+                        Task { await selectValue(value.value) }
+                    } label: {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(value.displayName ?? value.value)
+                                    .font(Theme.FontStyle.sans(14, weight: .semibold))
+                                    .foregroundStyle(Theme.Palette.fg0)
+                                Text(detail(for: value.value))
+                                    .font(Theme.FontStyle.sans(11.5))
+                                    .foregroundStyle(Theme.Palette.fg2)
+                            }
+                            Spacer()
+                            if selectedValue == value.value {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundStyle(Theme.Palette.ai)
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .frame(minHeight: 62)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isSaving)
+                    .accessibilityIdentifier(
+                        "coach-cursor-effort-\(model.id)-\(value.value)"
+                    )
+                    .accessibilityLabel(value.displayName ?? value.value)
+                    .accessibilityValue(
+                        selectedValue == value.value
+                            ? "Selected"
+                            : detail(for: value.value)
+                    )
+
+                    if value.id != parameter.values.last?.id {
+                        Divider()
+                            .overlay(Theme.Palette.borderSubtle)
+                            .padding(.leading, 16)
+                    }
+                }
+            }
+            .background(Theme.Palette.bg3, in: RoundedRectangle(cornerRadius: 16))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(Theme.Palette.borderDefault, lineWidth: 1)
+            )
+            .padding(Theme.Spacing.md)
+        }
+        .background(Theme.Palette.bg1)
+        .navigationTitle("Reasoning")
+        .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .bottom) {
+            if isSaving {
+                ProgressView("Saving…")
+                    .font(Theme.FontStyle.sans(11.5))
+                    .tint(Theme.Palette.ai)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Theme.Palette.bg3, in: Capsule())
+                    .padding(.bottom, 16)
+            }
+        }
+    }
+
+    private func detail(for value: String) -> String {
+        switch value {
+        case "none", "false": return "No extended reasoning"
+        case "low": return "Fastest"
+        case "medium": return "Balanced"
+        case "high": return "Thorough"
+        default: return "Deepest"
+        }
+    }
+
+    private func cursorErrorBanner(_ message: String) -> some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(Theme.Palette.danger)
+                .accessibilityHidden(true)
+            Text(message)
+                .font(Theme.FontStyle.sans(11.5))
+                .foregroundStyle(Theme.Palette.fg1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button {
+                errorMessage = nil
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .accessibilityLabel("Dismiss error")
+        }
+        .padding(12)
+        .background(
+            Theme.Palette.danger.opacity(0.12),
+            in: RoundedRectangle(cornerRadius: 12)
+        )
+    }
+
+    @MainActor
+    private func selectValue(_ value: String) async {
+        guard value != selectedValue, !isSaving else { return }
+        let previous = selection.cursorModelParams
+        let next = selection.cursorParameters(for: model)
+            .filter { $0.id != parameter.id }
+            + [CursorModelParameterSelection(id: parameter.id, value: value)]
+        selection.cursorModelParams[model.id] = next
+        isSaving = true
+        errorMessage = nil
+        defer { isSaving = false }
+
+        do {
+            let saved = try await CoachModelSelectionService(api: api)
+                .selectCursorParameters(modelID: model.id, params: next)
+            selection.modelPref = saved.modelPref
+            selection.effort = saved.coachEffort
+            selection.cursorModelParams = saved.cursorModelParams
+        } catch is CancellationError {
+            selection.cursorModelParams = previous
+        } catch {
+            selection.cursorModelParams = previous
             errorMessage = "Couldn’t change reasoning. Please try again."
         }
     }

@@ -147,6 +147,28 @@ describe("user_settings + vault", () => {
     });
   });
 
+  it("round-trips per-model Cursor parameters", async () => {
+    const { settings } = await loadModules();
+    settings.upsertUserSettings({
+      user_id: 1,
+      cursor_model_params: {
+        "gpt-5.5": [{ id: "effort", value: "high" }],
+        "claude-opus-4-8": [
+          { id: "effort", value: "xhigh" },
+          { id: "fast", value: "false" },
+        ],
+      },
+    });
+
+    expect(settings.getUserSettings(1)?.cursor_model_params).toEqual({
+      "gpt-5.5": [{ id: "effort", value: "high" }],
+      "claude-opus-4-8": [
+        { id: "effort", value: "xhigh" },
+        { id: "fast", value: "false" },
+      ],
+    });
+  });
+
   it("undefined input fields leave existing values untouched", async () => {
     const { settings } = await loadModules();
     settings.upsertUserSettings({

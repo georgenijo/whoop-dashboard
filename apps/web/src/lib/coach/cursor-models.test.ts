@@ -24,6 +24,23 @@ describe("listCursorModelsForKey", () => {
             id: "composer-2.5",
             displayName: "Composer 2.5",
             description: "Cursor's coding model",
+            parameters: [
+              {
+                id: "effort",
+                displayName: "Reasoning",
+                values: [
+                  { value: "medium", displayName: "Medium" },
+                  { value: "high", displayName: "High" },
+                ],
+              },
+            ],
+            variants: [
+              {
+                params: [{ id: "effort", value: "medium" }],
+                displayName: "Medium",
+                isDefault: true,
+              },
+            ],
           },
           {
             id: "gpt-5.5-high",
@@ -50,11 +67,31 @@ describe("listCursorModelsForKey", () => {
         id: "composer-2.5",
         display_name: "Composer 2.5",
         description: "Cursor's coding model",
+        parameters: [
+          {
+            id: "effort",
+            display_name: "Reasoning",
+            values: [
+              { value: "medium", display_name: "Medium" },
+              { value: "high", display_name: "High" },
+            ],
+          },
+        ],
+        variants: [
+          {
+            params: [{ id: "effort", value: "medium" }],
+            display_name: "Medium",
+            description: null,
+            is_default: true,
+          },
+        ],
       },
       {
         id: "gpt-5.5-high",
         display_name: "GPT-5.5 High",
         description: null,
+        parameters: [],
+        variants: [],
       },
     ]);
     expect(fetchMock).toHaveBeenCalledWith(

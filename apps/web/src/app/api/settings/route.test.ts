@@ -110,6 +110,90 @@ describe("/api/settings model preferences", () => {
     });
   });
 
+  it("validates and persists Cursor parameters from the live catalog", async () => {
+    db.getUserSettings.mockReturnValue({
+      cursor_key: "key_personal",
+      model_pref: "cursor:gpt-5.5",
+      cursor_model_params: {},
+    });
+    resolveCursorKeyMock.mockReturnValue({
+      key: "key_personal",
+      origin: "user",
+    });
+    listCursorModelsForKeyMock.mockResolvedValue([
+      {
+        id: "gpt-5.5",
+        display_name: "GPT-5.5",
+        description: null,
+        parameters: [
+          {
+            id: "effort",
+            display_name: "Reasoning",
+            values: [
+              { value: "medium", display_name: "Medium" },
+              { value: "high", display_name: "High" },
+            ],
+          },
+        ],
+        variants: [],
+      },
+    ]);
+
+    const response = await POST(
+      post({
+        cursor_model_params: {
+          model_id: "gpt-5.5",
+          params: [{ id: "effort", value: "high" }],
+        },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(db.upsertUserSettings).toHaveBeenCalledWith({
+      user_id: 7,
+      cursor_model_params: {
+        "gpt-5.5": [{ id: "effort", value: "high" }],
+      },
+    });
+  });
+
+  it("rejects Cursor parameter values missing from the live catalog", async () => {
+    db.getUserSettings.mockReturnValue({
+      cursor_key: "key_personal",
+      model_pref: "cursor:gpt-5.5",
+      cursor_model_params: {},
+    });
+    resolveCursorKeyMock.mockReturnValue({
+      key: "key_personal",
+      origin: "user",
+    });
+    listCursorModelsForKeyMock.mockResolvedValue([
+      {
+        id: "gpt-5.5",
+        parameters: [
+          {
+            id: "effort",
+            values: [{ value: "medium" }],
+          },
+        ],
+      },
+    ]);
+
+    const response = await POST(
+      post({
+        cursor_model_params: {
+          model_id: "gpt-5.5",
+          params: [{ id: "effort", value: "ultra" }],
+        },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "Cursor model parameter is not available",
+    });
+  });
+
   it("persists the option to turn Anthropic thinking off", async () => {
     db.getUserSettings.mockReturnValue({
       cursor_key: null,

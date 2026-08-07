@@ -78,7 +78,11 @@ export async function POST(req: Request) {
       return Response.json({ ok: false, code: "probe_failed" });
     }
 
-    upsertUserSettings({ user_id: user.id, cursor_key: trimmed });
+    upsertUserSettings({
+      user_id: user.id,
+      cursor_key: trimmed,
+      cursor_model_params: {},
+    });
     return Response.json({
       ok: true,
       present: true,
@@ -100,6 +104,7 @@ export async function DELETE(req: Request) {
       user_id: user.id,
       cursor_key: null,
       model_pref: ANTHROPIC_PREF,
+      cursor_model_params: {},
     });
     return Response.json({
       ...maskedFor(user.id),

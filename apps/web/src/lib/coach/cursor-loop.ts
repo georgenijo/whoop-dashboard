@@ -37,6 +37,11 @@ import type {
   CoachImage,
   CoachUserTurn,
 } from "./image-types";
+import {
+  cursorModelArgument,
+  isCursorReasoningParameter,
+  type CursorModelParameterSelection,
+} from "./cursor-model-params";
 
 // Hard reaper for the cursor-agent subprocess tree, NOT a quality-of-answer
 // policy. cursor-agent is spawned detached (own process group) and spawns the
@@ -224,6 +229,7 @@ function resolveMcpServerArgs(): string[] {
 export type RunCursorTurnArgs = {
   userId: number;
   model: string;
+  modelParameters?: CursorModelParameterSelection[];
   threadId: number;
   turn: CoachUserTurn;
   conversation: CoachConversationMessage[];
@@ -588,6 +594,7 @@ export async function runCursorTurn(
   const {
     userId,
     model,
+    modelParameters = [],
     turn,
     conversation,
     toolDetails,
@@ -595,6 +602,13 @@ export async function runCursorTurn(
     options,
   } = args;
   const { key, origin: keyOrigin } = resolveCursorKey(userId);
+  const modelArgument = cursorModelArgument(model, modelParameters);
+  detailState.effort = modelParameters.find((parameter) =>
+    isCursorReasoningParameter({
+      id: parameter.id,
+      display_name: null,
+    }),
+  )?.value;
   const messages: ChatMessageInsert[] = args.accumulator ?? [];
 
   // The user turn, persisted in the same shape as the Anthropic path.
@@ -667,6 +681,7 @@ export async function runCursorTurn(
   const promptBuildMs = Date.now() - promptStartedMs;
   const cursorDetail = {
     requested_model: model,
+    requested_parameters: modelParameters,
     resolved_model: null as string | null,
     prompt_chars: prompt.length,
     prefetch: {
@@ -730,7 +745,7 @@ export async function runCursorTurn(
         CURSOR_AGENT_BIN,
         [
           "-p",
-          "--model", model,
+          "--model", modelArgument,
           "--mode", "ask",
           "--approve-mcps",
           "--trust",

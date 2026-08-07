@@ -6,6 +6,7 @@ import {
   listCursorModelsForKey,
 } from "@/lib/coach/cursor-models";
 import { resolveCursorKey } from "@/lib/coach/cursor-key";
+import type { CursorModelParameterSelection } from "@/lib/coach/cursor-model-params";
 import {
   ANTHROPIC_PREF,
   cursorModelFromPref,
@@ -31,8 +32,65 @@ function settingsPayload(userId: number) {
         ? modelPrefForSelection(selection)
         : ANTHROPIC_PREF,
     coach_effort: parseCoachEffort(settings?.coach_effort),
+    cursor_model_params: settings?.cursor_model_params ?? {},
     cursor_available: cursorAvailable,
   };
+}
+
+type CursorModelParamsUpdate = {
+  model_id: string;
+  params: CursorModelParameterSelection[];
+};
+
+function parseCursorModelParamsUpdate(value: unknown): CursorModelParamsUpdate | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const { model_id: modelId, params } = value as {
+    model_id?: unknown;
+    params?: unknown;
+  };
+  if (
+    typeof modelId !== "string" ||
+    !modelId ||
+    modelId.length > 200 ||
+    /[\s\x00-\x1f\[\],=]/.test(modelId) ||
+    !Array.isArray(params) ||
+    params.length > 8
+  ) {
+    return null;
+  }
+  const seen = new Set<string>();
+  const parsed: CursorModelParameterSelection[] = [];
+  for (const param of params) {
+    if (!param || typeof param !== "object" || Array.isArray(param)) return null;
+    const { id, value: paramValue } = param as {
+      id?: unknown;
+      value?: unknown;
+    };
+    if (
+      typeof id !== "string" ||
+      typeof paramValue !== "string" ||
+      !id ||
+      !paramValue ||
+      seen.has(id)
+    ) {
+      return null;
+    }
+    seen.add(id);
+    parsed.push({ id, value: paramValue });
+  }
+  return { model_id: modelId, params: parsed };
+}
+
+function cursorCatalogErrorResponse(error: CursorModelCatalogError): Response {
+  return error.reason === "invalid_key"
+    ? Response.json(
+        { error: "Cursor rejected the configured API key" },
+        { status: 422 },
+      )
+    : Response.json(
+        { error: "Cursor model catalog is unavailable" },
+        { status: 502 },
+      );
 }
 
 export async function GET(req: Request) {
@@ -53,6 +111,7 @@ export async function POST(req: Request) {
       system_prompt?: string;
       model_pref?: string;
       coach_effort?: unknown;
+      cursor_model_params?: unknown;
     };
 
     if (typeof body.system_prompt === "string") {
@@ -88,16 +147,7 @@ export async function POST(req: Request) {
           }
         } catch (error) {
           if (error instanceof CursorModelCatalogError) {
-            if (error.reason === "invalid_key") {
-              return Response.json(
-                { error: "Cursor rejected the configured API key" },
-                { status: 422 },
-              );
-            }
-            return Response.json(
-              { error: "Cursor model catalog is unavailable" },
-              { status: 502 },
-            );
+            return cursorCatalogErrorResponse(error);
           }
           throw error;
         }
@@ -119,6 +169,60 @@ export async function POST(req: Request) {
       upsertUserSettings({
         user_id: user.id,
         coach_effort: body.coach_effort,
+      });
+    }
+
+    if (body.cursor_model_params !== undefined) {
+      const update = parseCursorModelParamsUpdate(body.cursor_model_params);
+      if (!update) {
+        return Response.json(
+          { error: "invalid cursor_model_params" },
+          { status: 400 },
+        );
+      }
+      if (!cursorProviderEnabled(user.id)) {
+        return Response.json(
+          { error: "Cursor provider is not available for this user" },
+          { status: 400 },
+        );
+      }
+
+      try {
+        const { key } = resolveCursorKey(user.id);
+        const models = await listCursorModelsForKey(key);
+        const model = models.find((candidate) => candidate.id === update.model_id);
+        if (!model) {
+          return Response.json(
+            { error: "Cursor model is not available for this account" },
+            { status: 400 },
+          );
+        }
+        const valid = update.params.every((param) => {
+          const definition = model.parameters.find(
+            (candidate) => candidate.id === param.id,
+          );
+          return definition?.values.some((value) => value.value === param.value);
+        });
+        if (!valid) {
+          return Response.json(
+            { error: "Cursor model parameter is not available" },
+            { status: 400 },
+          );
+        }
+      } catch (error) {
+        if (error instanceof CursorModelCatalogError) {
+          return cursorCatalogErrorResponse(error);
+        }
+        throw error;
+      }
+
+      const settings = getUserSettings(user.id);
+      upsertUserSettings({
+        user_id: user.id,
+        cursor_model_params: {
+          ...(settings?.cursor_model_params ?? {}),
+          [update.model_id]: update.params,
+        },
       });
     }
 

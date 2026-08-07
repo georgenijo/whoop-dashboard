@@ -6,13 +6,25 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-07: Cursor reasoning follows the live model-parameter catalog
+
+**Decision:** Preserve Cursor model `parameters` and `variants` from the account-scoped catalog, persist validated raw parameter selections per user and model, and pass them through the contained CLI using Cursor's bracket model syntax. Web and iOS expose a reasoning submenu only when that model advertises a controllable thinking, reasoning, effort, or thought-level parameter; fixed and unsupported models do not receive a synthetic control. Keep the direct HTTP catalog and `cursor-agent --mode ask` execution boundary instead of adding the Node 22-only SDK runtime.
+
+**Rationale:** Cursor models do not share one universal effort enum: the catalog supplies each account's allowed parameter IDs, values, variants, and defaults, while the current CLI accepts parameterized selections such as `gpt-5.5[effort=high]`. Persisting raw validated values avoids lossy mappings between `max`, `xhigh`, `extra-high`, boolean thinking, and fixed-effort models while preserving the production Node 20 and MCP-containment constraints.
+
+**Status:** active
+
+**References:** `apps/web/src/lib/coach/cursor-model-params.ts`, `apps/web/src/lib/coach/cursor-models.ts`, `apps/web/src/lib/coach/cursor-loop.ts`, `apps/ios/Sources/CoachModelSelection.swift`
+
+---
+
 ## 2026-08-07: Model-picker follow-up is UI parity, not a selection-flow refactor
 
 **Decision:** Keep the existing model-first selection behavior and supported `None`, `Low`, `Medium`, `High`, and `Max` reasoning values unchanged. Limit the follow-up to model-list cleanup, responsive web positioning/scroll/focus accessibility, and an equivalent native iOS composer control backed by the existing settings and Cursor-catalog endpoints; file any larger flow redesign separately.
 
 **Rationale:** The intended interaction is the existing Cursor-inspired selector with its hierarchy inverted, and the reported problems are presentation and accessibility defects. Sharing the current server preferences across web and iOS delivers cross-client parity without reopening provider behavior, chat sending, or navigation architecture.
 
-**Status:** active
+**Status:** superseded by 2026-08-07 Cursor parameter decision
 
 **References:** `apps/web/src/components/coach/CoachModelPicker.tsx`, `apps/ios/Sources/CoachModelPicker.swift`, `apps/ios/Sources/CoachModelSelection.swift`
 
