@@ -2,143 +2,357 @@
 
 # Whoop Dashboard
 
-Personal health analytics dashboard. Pulls recovery, sleep, strain, and workout data from the Whoop API, stores it in SQLite, and renders it in a Next.js web app with an LLM-powered coach.
+A personal health data hub for Whoop and Apple Health. The project combines a
+Next.js web app, a native SwiftUI app, a multi-tenant SQLite store, and an
+AI Coach that can analyze health data and author recovery-aware workout plans.
 
-Multi-tenant under the hood — every read/write is `user_id`-scoped (Phase D). Sign in with Apple on web and iOS; bring-your-own Whoop OAuth and Anthropic key.
+The web and iOS clients share the same authenticated `/api/*` backend. Whoop
+data arrives through OAuth syncs and signed webhooks; HealthKit workouts arrive
+from the iOS app and enrich or supplement the Whoop workout history.
+
+This is an active, production-oriented personal project. The application is
+multi-tenant, but the checked-in infrastructure and Apple identifiers are
+specific to the current deployment rather than a turnkey hosted service.
+
+## What it includes
+
+- Recovery, sleep, strain, workout, trend, personal-record, and all-time
+  analytics
+- A persistent AI Coach with Anthropic and Cursor provider support, selectable
+  models, configurable Anthropic reasoning effort, image attachments, and
+  expandable work receipts
+- Coach-authored workout plans that are shared between web and iOS
+- Sign in with Apple for web cookies and iOS bearer sessions
+- Per-user encrypted Whoop OAuth tokens and optional Anthropic/Cursor API keys
+- Manual seven-day Whoop syncs, signed real-time webhooks, and a replayable
+  webhook dead-letter queue
+- HealthKit workout and heart-rate ingestion from iOS, including duplicate
+  matching against Whoop workouts
+- APNs device registration, structured server/client logs, web-vitals capture,
+  and production build identity
+
+## Architecture
+
+```mermaid
+flowchart LR
+    whoop["Whoop API<br/>OAuth, sync, webhooks"] --> api["Next.js web + API"]
+    web["Web client<br/>SIWA cookie"] --> api
+    ios["SwiftUI iOS app<br/>SIWA bearer token"] --> api
+    health["Apple HealthKit<br/>workouts + heart rate"] --> ios
+    api --> db[("SQLite<br/>shared/whoop_data.db")]
+    api --> coach["Coach provider layer"]
+    coach --> anthropic["Anthropic API"]
+    coach --> cursor["Cursor agent + MCP"]
+```
+
+SQLite is the canonical store. Domain rows, integrations, settings, chat
+history, encrypted attachments, plans, logs, and device tokens all live in the
+same database and are scoped by `user_id` where applicable.
 
 ## Stack
 
-| Layer | Tech |
+| Layer | Technology |
 |---|---|
-| Web app | Next.js 16.2.4 (Turbopack, App Router) · React 19 · TypeScript · Tailwind 4 |
-| Charts | Recharts 3.8 |
-| AI coach | Anthropic SDK · Claude Sonnet 4.6 with adaptive thinking · 5 server-side tools (recovery/sleep/strain/workouts/journal) |
-| Markdown render | marked 18 + DOMPurify |
-| Data store | SQLite (WAL) via better-sqlite3 — `shared/whoop_data.db` |
-| Sync | Next.js `runWhoopSync` (`apps/web/src/lib/sync.ts`) — manual via `/api/sync`, real-time via `/api/whoop/webhook` |
-| Auth | Sign in with Apple (web + iOS) · per-user encrypted Whoop OAuth tokens in `integrations` table |
-| Deploy | Ubuntu VM, systemd unit `whoop-web.service`, nginx |
+| Web and API | Next.js 16.2.4 App Router · React 19.2 · TypeScript 5 · Tailwind 4 |
+| Native app | SwiftUI · iOS 17+ · Swift 5.9 · HealthKit · AuthenticationServices |
+| Charts and UI | Recharts 3.8 · Lucide · Geist |
+| Coach | Anthropic SDK 0.91 · Claude Sonnet 4.6 · Cursor model catalog and `cursor-agent` |
+| Content and images | marked 18 · DOMPurify · Sharp |
+| Data | SQLite WAL via better-sqlite3 12 |
+| Auth and encryption | Sign in with Apple · JOSE · TweetNaCl secretbox |
+| Operations | GitHub Actions · Tailscale · systemd · nginx · Oracle Cloud |
 
-## Repo layout
+## Repository layout
 
+```text
+apps/
+├── web/                 Next.js dashboard, API, sync, Coach, and DB layer
+└── ios/                 SwiftUI app generated from project.yml with xcodegen
+shared/                  Canonical SQLite database location
+scripts/                 Deploy, Coach inspection, benchmarks, and migrations
+streamlit/whoop/         Retained Python helpers for scripts and tests only
+tests/                   Python helper tests
+docs/                    Architecture, decisions, contracts, and operations
+infra/terraform/         Owner-specific Oracle Cloud provisioning baseline
+systemd/                 Active web unit plus retained legacy service files
+prompts/                 Repository task and build prompts
 ```
-apps/web/         Next.js app — dashboard, API, Whoop sync, Coach (active surface)
-streamlit/whoop/  Python helper modules (auth, integrations, vault) used by scripts/ + tests/ only
-shared/           shared SQLite store (whoop_data.db)
-scripts/          one-shot Python utilities (token migration, WAL smoke test)
-tests/            pytest suite for Python helpers
-tokens.json       legacy single-user OAuth file (gitignored); integrations table is source of truth
-docs/             architecture diagrams, decisions log, post-mortems
-```
 
-## Setup
+`shared/whoop_data.db` and its WAL sidecars are intentionally gitignored.
+`tokens.json` is a legacy, gitignored migration source; encrypted
+`integrations` rows are the runtime source of truth.
+
+## Local web development
+
+### Prerequisites
+
+- Node.js 20 and npm
+- A Whoop developer application for OAuth and live sync
+- Sign in with Apple web credentials for an interactive authenticated session
+- At least one Coach credential: Anthropic, Cursor, or a per-user key added
+  later in Settings
+- Python 3 only if you need the retained migration utilities or Python tests
+
+### Setup
 
 ```bash
-cp .env.example .env                  # fill WHOOP_CLIENT_ID, WHOOP_CLIENT_SECRET, VAULT_KEY, WHOOP_STATE_SECRET, JWT_SIGNING_KEY, ANTHROPIC_API_KEY
-python3 -m venv venv && source venv/bin/activate
-pip install -r requirements.txt       # only needed if you run scripts/ or tests/
-cd apps/web && npm install
+git clone https://github.com/georgenijo/whoop-dashboard.git
+cd whoop-dashboard
+
+# The file is not committed. openWrite() owns schema creation and migrations,
+# but intentionally refuses to create an absent database file.
+test -e shared/whoop_data.db || touch shared/whoop_data.db
+
+cp .env.example apps/web/.env.local
+cd apps/web
+npm ci
+npm run dev
 ```
 
-## Run
+Open <http://localhost:3000>. Build and test commands do not require production
+secrets, but using the application does require a valid authenticated user.
+
+For a complete local flow:
+
+1. Fill the Sign in with Apple, `JWT_SIGNING_KEY`, and `PUBLIC_ORIGIN`
+   variables in `apps/web/.env.local`. For browser sign-in during local
+   development, use a public HTTPS origin or tunnel registered with Apple.
+2. Set the web Services ID callback to
+   `${PUBLIC_ORIGIN}/api/auth/apple-web/callback`.
+3. Add `WHOOP_CLIENT_ID`, `WHOOP_CLIENT_SECRET`, `WHOOP_STATE_SECRET`, and
+   `VAULT_KEY`.
+4. Set the Whoop developer callback to
+   `http://localhost:3000/api/auth/callback`.
+5. Configure `ANTHROPIC_API_KEY` and/or `CURSOR_API_KEY`. Cursor turns also
+   require `cursor-agent` on the service path or
+   `COACH_CURSOR_AGENT_BIN` set to its absolute path.
+6. Sign in, complete the onboarding flow, connect Whoop, and run the first
+   sync.
+
+The auth proxy is dormant when `APPLE_SERVICES_ID` is unset so builds and
+limited diagnostics remain possible, but protected pages and API routes still
+have no development-user bypass.
+
+See [`.env.example`](.env.example) for generation commands and
+[the environment and deployment guide](docs/operations/environment-and-deploy.md)
+for the full variable inventory and secret boundaries.
+
+### Commands
+
+Run web commands from `apps/web/`.
+
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Start the development server on port 3000 |
+| `npm test` | Run the Vitest suite once |
+| `npm run test:watch` | Run Vitest in watch mode |
+| `npm run lint` | Run ESLint |
+| `npm run build` | Build the Coach MCP bundle and production Next.js app |
+| `npm run start` | Start a completed production build |
+| `npm run build:mcp` | Build only the Cursor Coach MCP server |
+
+The load-bearing DB test rejects unscoped SQL against the health-domain
+tables. A production build is required before repository changes are merged.
+
+### Optional Python helpers
 
 ```bash
-cd apps/web && npm run dev            # http://localhost:3000
-
-# Manual sync — hit /api/sync from the Settings page, or:
-curl -X POST http://localhost:3000/api/sync
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+pytest tests/
 ```
 
-First run: open the dashboard, sign in with Apple, hit Connect to Whoop, complete OAuth. Tokens land encrypted in the `integrations` table.
+These dependencies support vault/integration tests, migrations, and maintenance
+scripts. There is no active Python sync service or Streamlit UI.
 
-## Pages
+## iOS development
+
+The native app lives in `apps/ios/`. `Coach.xcodeproj` is generated and
+gitignored; `project.yml` is the source of truth.
+
+```bash
+brew install xcodegen
+cd apps/ios
+xcodegen generate
+open Coach.xcodeproj
+```
+
+Select the `Coach` scheme in Xcode and run it on an iOS 17+ simulator or signed
+device. The app currently targets `https://coach-api.georgenijo.com` by default;
+`APIClient.swift` and `ClientLogger.swift` own those endpoints. A Debug-only
+`COACH_DEBUG_TOKEN` environment variable can seed a simulator session.
+
+The iOS app provides Home, Trends, Stats, Coach, Plans, and Settings tabs.
+Trends contains the Recovery, Sleep, Strain, and Workouts surfaces. It also
+registers for push notifications and incrementally ingests HealthKit workouts
+with anchored background delivery.
+
+Xcode Cloud regenerates the project after cloning and archives changes under
+`apps/ios/**` from `main`. See [the iOS CI guide](apps/ios/CI.md) for the
+current workflow and signing identifiers.
+
+## Web surfaces
 
 | Path | Purpose |
 |---|---|
-| `/` | Overview — recovery ring, KPI strip, AI insight card, trend charts |
-| `/recovery` | Recovery score, HRV, RHR over time |
-| `/sleep` | Sleep stages, performance, efficiency, disturbances |
-| `/strain` | Daily strain, kilojoules, HR averages |
-| `/workouts` | Per-workout breakdown |
-| `/coach` | LLM chat with persistent threads + tool-use access to your data |
-| `/logs` | Sync history + chat call logs (with details dropdown) |
-| `/settings` | Connect/Disconnect Whoop, manual sync trigger, token info |
+| `/` | Recovery hero, KPI strip, AI insight, trends, and personal records |
+| `/recovery` | Recovery, HRV/RHR, illness, rebound, and overtraining signals |
+| `/sleep` | Sleep need, stages, debt, consistency, naps, and recovery relationships |
+| `/strain` | Daily strain, training balance, heart rate, and today’s workouts |
+| `/workouts` | Workout history, distance/zones, and detailed heart-rate analytics |
+| `/stats` | All-time totals, yearly comparisons, sport mix, records, and monthly rollups |
+| `/coach` | Persistent Coach threads, images, model picker, and tool work receipts |
+| `/plans` | Coach-authored, recovery-aware workout plans |
+| `/logs` | Unified sync, chat, route, server, client, and webhook diagnostics |
+| `/perf` | Web performance metrics and recent measurements |
+| `/settings` | Connections, Coach keys/model/prompt, preferences, and account controls |
+| `/welcome` | First-run goals, Whoop connection, and initial sync |
 
-## Coach (LLM tool-use)
+## Coach
 
-`/api/chat` runs an agentic loop with Claude Sonnet 4.6. The model has 5 read tools plus `trigger_whoop_sync`:
+`POST /api/chat` supports streaming SSE and non-streaming JSON responses.
+Conversations persist complete provider content blocks, tool calls/results,
+encrypted image attachments, and a bounded user-visible work receipt. New
+threads receive deterministic titles with an optional Haiku 4.5 refinement.
 
-- `query_recovery(start_date, end_date)`
-- `query_sleep(start_date, end_date)`
-- `query_strain(start_date, end_date)`
-- `query_workouts(start_date, end_date)`
-- `query_journal(start_date, end_date)`
+The shared tool layer contains:
 
-All read tools are user-scoped via `forUser(userId)` (`apps/web/src/lib/db/scoped.ts`). Conversations live in `chat_messages` keyed by `thread_id`. The model's `tool_use` and `tool_result` content blocks are persisted as JSON in the `blocks` column so multi-turn conversations preserve full tool context across reloads. Auto-titles via Haiku 4.5.
+- `query_recovery`
+- `query_sleep`
+- `query_strain`
+- `query_workouts`
+- `query_naps`
+- `query_journal`
+- `query_daily_snapshot`
+- `query_workout_plans`
+- `save_workout_plan`
+- `trigger_whoop_sync`
 
-Caps: 8 tool-use iterations, 16K output tokens. On `max_tokens` stop reason, partial reply is returned with a truncation marker.
+The Anthropic loop can use the complete set. Cursor runs in a throwaway
+per-turn workspace through a bundled stdio MCP server; it receives the scoped
+query and plan tools plus `view_chat_image`, while manual sync remains outside
+the Cursor MCP surface.
 
-## Data flow
+All data access is bound to the authenticated user. The Anthropic loop is
+capped at eight tool iterations and 16,384 output tokens. Personal encrypted
+keys take precedence over shared server fallbacks; Settings can validate,
+store, mask, and remove both Anthropic and Cursor keys.
 
-1. OAuth callback (`/api/auth/callback`) verifies HMAC `state`, exchanges the code, encrypts tokens into the `integrations` row, fetches `/v2/user/profile/basic` and captures `provider_user_id` for webhook routing.
-2. `runWhoopSync({ userId })` pulls last 7 days from Whoop in parallel and upserts to `recovery` / `cycles` / `sleep` / `workouts` with `user_id` stamped; `recomputeDailySummary(date, userId)` writes the per-day denormalized row.
-3. Whoop webhooks at `/api/whoop/webhook` resolve `evt.user_id` → local `users.id` via `lookupUserIdByProvider("whoop", …)` and upsert. Unknown Whoop user → 200 noop.
-4. Web pages and Coach tools read via `forUser(userId).all/get(...)` — tenant binding enforced; CI vitest blocks domain SQL outside the wrapper.
+## Data and authentication flow
 
-## Coach CLI
+1. Sign in with Apple creates or resolves a user and issues a signed JWT. Web
+   clients receive it in the `__Host-coach_session` cookie; iOS sends it as a
+   bearer token.
+2. Whoop OAuth carries the local user through an HMAC-signed state value.
+   Access and refresh tokens are encrypted into the user’s `integrations` row.
+3. `runWhoopSync({ userId })` fetches the latest seven days of cycles,
+   recovery, sleep, workouts, and body measurements in parallel, then upserts
+   tenant-scoped rows and recomputes `daily_summary`.
+4. Signed Whoop webhooks map the provider user ID back to a local user and
+   update or delete individual resources. Failures remain replayable in
+   `webhook_events`.
+5. The iOS HealthKit pipeline matches workouts by time and sport, enriches
+   existing Whoop rows with heart-rate streams where possible, and inserts
+   unmatched HealthKit-only workouts.
+6. Web pages, iOS routes, and Coach tools read through the same user-scoped DB
+   helpers.
 
-Inspect coach threads (chat_messages.blocks, chat_threads, chat_logs) on the prod VM without hand-rolled SSH+SQL round-trips. Local script, defaults to prod target.
+The public auth exemptions are deliberately narrow: sign-in/auth callbacks,
+the signed Whoop webhook, admin routes with their own bearer gate, static
+assets, and build-only `/api/health`.
+
+## Database rules
+
+- Keep the canonical database at `shared/whoop_data.db`; use `WHOOP_DB_PATH`
+  only when an environment intentionally stores it elsewhere.
+- Schema changes live in `apps/web/src/lib/db/connection.ts` and run lazily
+  through `openWrite()`.
+- Domain reads go through `forUser(userId)`; direct unscoped domain SQL is
+  blocked by tests.
+- Only scored Whoop recovery, cycle, and sleep records are processed. Workouts
+  do not use the same score-state gate.
+- Naps are stored but excluded from nightly sleep queries.
+- The database runs in WAL mode. Never back up a live deployment with a raw
+  file copy; use SQLite’s online backup API.
+
+## Production and deployment
+
+Production runs `whoop-web.service` on port 8501 behind nginx and the
+Cloudflare proxy. Cloudflare Access is not the application gate; Sign in with
+Apple and the app’s JWT validation protect the web surface. The iOS API uses
+the same Next.js routes with bearer authentication.
+
+The GitHub workflow runs `npm ci`, `npm test`, `npm run build`, and a deploy
+script syntax check for pull requests and `main`. When production deployment
+is enabled, a verified push to `main` connects through ephemeral Tailscale
+identity and calls:
 
 ```bash
-# Once per work session — opens persistent SSH ControlMaster (4h ControlPersist)
+scripts/deploy --ref "$GITHUB_SHA"
+```
+
+The deploy script creates and verifies an online SQLite backup, installs
+dependencies, builds the exact commit, restarts systemd, checks `/signin`, and
+confirms `/api/health` is serving the expected SHA. Deploys are serialized.
+
+Manual operator commands:
+
+```bash
+scripts/deploy --check       # read-only checkout/build drift report
+scripts/deploy               # deploy origin/main
+scripts/deploy --ref <sha>   # deploy an exact revision
+```
+
+Do not reproduce the deploy sequence with ad hoc SSH commands. Runtime
+application secrets stay on the VM and are not copied into GitHub Actions.
+
+## Operations and debugging
+
+`scripts/coach` is a read-only inspector for local or production Coach state:
+
+```bash
 scripts/coach login
-
-# Inspect
-scripts/coach threads --limit 10                # list newest threads
-scripts/coach threads --source ios --limit 10    # only threads with iOS log rows
-scripts/coach thread 49                          # full transcript
-scripts/coach thread 49 --tools                  # only tool_use + tool_result
-scripts/coach thread 49 --thinking               # only thinking blocks
-scripts/coach thread 49 --json                   # raw JSON (blocks decoded)
-scripts/coach thread 49 --since 2026-05-15
-scripts/coach search "trigger_whoop_sync"
-scripts/coach logs 49                            # chat_logs (timing, status) for thread
-scripts/coach syncs --limit 10                   # recent Whoop syncs (source, status, counts)
-scripts/coach syncs --source webhook             # filter by source: manual|webhook|cron|ios
-scripts/coach syncs --status error               # only failed syncs
-scripts/coach chat-detail 188                    # full chat_logs row + parsed details JSON
-scripts/coach settings --user 2                  # user_settings (key redacted)
-scripts/coach journal "5 min ago" --grep chat    # journalctl whoop-web window
-scripts/coach why 82                             # forensic: chat_logs + journal + user_settings delta for thread
-
-# Local dev DB instead of prod
+scripts/coach threads --limit 10
+scripts/coach thread 49 --tools
+scripts/coach logs 49
+scripts/coach syncs --status error
+scripts/coach why 82
 scripts/coach --local threads
-
-# Close session
 scripts/coach logout
 ```
 
-Login uses an OpenSSH ControlMaster socket at `~/.ssh/cm-coach-master` with `ControlPersist=4h`, so all subsequent commands skip the handshake. Read-only — no DB writes. Pairs with the `coach-debug` skill under `~/.claude/skills/coach-debug/`.
+The Cursor latency harness is documented in
+[`scripts/BENCH.md`](scripts/BENCH.md). Production configuration and recovery
+procedures live in
+[`docs/operations/environment-and-deploy.md`](docs/operations/environment-and-deploy.md).
 
-## Deploy
+## Legacy boundaries
 
-Ubuntu VM, `whoop-web.service` (systemd) on port 8501. **Backup the DB before any schema-touching deploy** — see `CLAUDE.md` "Deploy" section for the full recipe (scp the DB locally, deploy, verify row counts, rollback path on failure).
+- The Streamlit application and Python daily sync are retired.
+  `streamlit/whoop/` remains only because Python migrations and tests share its
+  vault/integration wire format.
+- `tokens.json` is not read by the active application. It exists only as an
+  input to the one-shot encrypted-token migration.
+- `systemd/whoop-web.service` is the active application unit. The older
+  Streamlit, Python sync, and tunnel units are retained as operational history
+  and should not be treated as the current architecture.
+- The rebuild documents under `docs/rebuild/` describe historical migration
+  work, not current implementation guidance.
 
-## Conventions
+## Project guidance
 
-- Only Whoop records with `score_state == "SCORED"` are processed
-- Naps excluded from sleep aggregations (`WHERE nap = 0`)
-- Whoop API base: `https://api.prod.whoop.com/developer` (v2 endpoints)
-- Schema migrations are lazy ALTERs / table rebuilds in `openWrite()` — idempotent, gated by `PRAGMA table_info` checks
-- Domain reads route through `forUser(userId)` — `user_id = ?` is always the trailing positional `?`
-- Co-Authored-By lines, Claude/Anthropic attribution on PRs/branches/issues — NOT allowed
+Before changing code, read [`AGENTS.md`](AGENTS.md), the relevant nested agent
+guidance, and the current Next.js documentation bundled under
+`apps/web/node_modules/next/dist/docs/`. Architectural and process decisions
+are recorded newest-first in
+[`docs/decisions/DECISIONS.md`](docs/decisions/DECISIONS.md).
 
-## Environment
+Repository changes must be made on a branch and merged through a pull request.
+At minimum, web changes must pass:
 
-Copy `.env.example` to `apps/web/.env.local` for local development. The
-canonical variable inventory, production locations, and secret boundaries are
-documented in `docs/operations/environment-and-deploy.md`.
-
-## Status
-
-Active. Phase D (data isolation) + Phase B-cleanup (CF Access dropped, bootstrap retired, SIWA-only gate) shipped. Phase E (onboarding wizard, /signup landing) is next — tracked at issue #328. Google Sign In is a follow-up (issue #329). Decisions log at `docs/decisions/DECISIONS.md` tracks ordering + open tradeoffs.
+```bash
+cd apps/web
+npm test
+npm run build
+```
