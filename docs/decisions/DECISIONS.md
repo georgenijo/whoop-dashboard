@@ -18,6 +18,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-07: Boolean Cursor reasoning uses on/off switches
+
+**Decision:** When Cursor exposes a reasoning parameter whose only values are `true` and `false`, web and iOS present one native-style Reasoning switch and label its state `Reasoning on` or `Reasoning off`. Continue persisting and forwarding Cursor's raw boolean tokens unchanged; non-boolean reasoning parameters retain their catalog-backed discrete choices.
+
+**Rationale:** Raw protocol values are correct for validation and CLI execution but are implementation details, not useful model-picker copy. A boolean switch communicates the actual choice consistently across clients without inventing a lossy mapping for models that expose effort levels instead.
+
+**Status:** active
+
+**References:** `apps/web/src/components/coach/CoachModelPicker.tsx`, `apps/web/src/lib/coach/cursor-model-params.ts`, `apps/ios/Sources/CoachModelPicker.swift`, `apps/ios/Sources/CoachModelSelection.swift`
+
+---
+
 ## 2026-08-07: Cursor reasoning follows the live model-parameter catalog
 
 **Decision:** Preserve Cursor model `parameters` and `variants` from the account-scoped catalog, persist validated raw parameter selections per user and model, and pass them through the contained CLI using Cursor's bracket model syntax. Web and iOS expose a reasoning submenu only when that model advertises a controllable thinking, reasoning, effort, or thought-level parameter; fixed and unsupported models do not receive a synthetic control. Keep the direct HTTP catalog and `cursor-agent --mode ask` execution boundary instead of adding the Node 22-only SDK runtime.

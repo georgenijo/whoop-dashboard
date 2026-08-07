@@ -145,6 +145,23 @@ struct CursorModelParameterDefinition: Decodable, Equatable {
             || normalizedName.contains("thought")
             || normalizedName.contains("effort")
     }
+
+    var booleanValues: (on: CursorModelParameterValue, off: CursorModelParameterValue)? {
+        guard values.count == 2 else { return nil }
+        guard
+            let on = values.first(where: { $0.value.lowercased() == "true" }),
+            let off = values.first(where: { $0.value.lowercased() == "false" })
+        else { return nil }
+        return (on, off)
+    }
+
+    func displayLabel(for value: String) -> String {
+        if let booleanValues {
+            if value == booleanValues.on.value { return "Reasoning on" }
+            if value == booleanValues.off.value { return "Reasoning off" }
+        }
+        return values.first(where: { $0.value == value })?.displayName ?? value
+    }
 }
 
 struct CursorModelVariant: Decodable, Equatable {
@@ -284,8 +301,7 @@ struct CoachModelSelection {
                 $0.id == reasoning.id
             })
         else { return nil }
-        return reasoning.values.first(where: { $0.value == selected.value })?
-            .displayName ?? selected.value
+        return reasoning.displayLabel(for: selected.value)
     }
 }
 
