@@ -12,6 +12,7 @@ import { requireAuthOrSignin } from "@/lib/auth";
 import {
   modelPrefForSelection,
   resolveCoachProvider,
+  resolveCoachEffort,
 } from "@/lib/coach/provider";
 
 export const dynamic = "force-dynamic";
@@ -59,6 +60,7 @@ export default async function CoachPage({
   const initialModelPref = modelPrefForSelection(
     resolveCoachProvider(user.id),
   );
+  const initialCoachEffort = resolveCoachEffort(user.id);
 
   return (
     <CoachWorkspace
@@ -67,6 +69,7 @@ export default async function CoachPage({
       initialThreads={threads}
       initialMessages={messages}
       initialModelPref={initialModelPref}
+      initialCoachEffort={initialCoachEffort}
     />
   );
 }

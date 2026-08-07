@@ -40,6 +40,7 @@ function renderPicker(
   render(
     <CoachModelPicker
       initialModelPref="anthropic:claude-sonnet-4-6"
+      initialCoachEffort="high"
       disabled={false}
       onSavingChange={onSavingChange}
       {...overrides}
@@ -110,7 +111,9 @@ describe("CoachModelPicker", () => {
       "Cursor model catalog is unavailable",
     );
     expect(
-      screen.getByRole("button", { name: "Coach model: Claude Sonnet 4.6" }),
+      screen.getByRole("button", {
+        name: "Coach model: Claude Sonnet 4.6; effort high",
+      }),
     ).toBeInTheDocument();
   });
 
@@ -154,13 +157,40 @@ describe("CoachModelPicker", () => {
     );
   });
 
+  it("persists Anthropic thinking effort from the model menu", async () => {
+    fetchMock
+      .mockResolvedValueOnce(catalogResponse())
+      .mockResolvedValueOnce(Response.json({ coach_effort: "max" }));
+    const { onSavingChange } = renderPicker();
+
+    openPicker();
+    fireEvent.click(screen.getByRole("radio", { name: /Max/ }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ coach_effort: "max" }),
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", {
+          name: "Coach model: Claude Sonnet 4.6; effort max",
+        }),
+      ).toBeInTheDocument(),
+    );
+    expect(onSavingChange).toHaveBeenNthCalledWith(1, true);
+    expect(onSavingChange).toHaveBeenLastCalledWith(false);
+  });
+
   it("cannot change models during an active Coach turn", () => {
     fetchMock.mockReturnValue(new Promise(() => {}));
     renderPicker({ disabled: true });
 
     expect(
       screen.getByRole("button", {
-        name: "Coach model: Claude Sonnet 4.6",
+        name: "Coach model: Claude Sonnet 4.6; effort high",
       }),
     ).toBeDisabled();
   });

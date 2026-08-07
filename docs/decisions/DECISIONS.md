@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-06: Coach composer owns model and provider-supported effort controls
+
+**Decision:** Keep the Coach model picker inside the message composer and align the compact trigger immediately before Send. Persist a per-user Coach effort preference; Anthropic Sonnet 4.6 exposes `low`, `medium`, `high`, and `max` through `output_config.effort`, while Cursor exposes only its live account-scoped model IDs because the production CLI has no documented independent effort flag.
+
+**Rationale:** Model and effort are per-turn choices users need at composition time, and the Claude-style right-aligned placement keeps both controls in the action path. Provider-aware controls ensure every visible option changes the real request instead of presenting a cosmetic or unsupported Cursor setting.
+
+**Status:** active
+
+**References:** PR #471, `apps/web/src/components/coach/CoachModelPicker.tsx`, `apps/web/src/lib/coach/loop.ts`, `apps/web/src/lib/db/user_settings.ts`
+
+---
+
 ## 2026-07-30: CI verifies every web change and CD delegates to the production deploy script
 
 **Decision:** Add GitHub Actions verification (`npm ci`, tests, build, and deploy-script syntax) for pull requests and `main`, then deploy verified `main` commits through a protected `production` environment using an ephemeral Tailscale workload identity. GitHub receives only the Tailscale federation client ID/audience; application runtime secrets remain in the VM's canonical `apps/web/.env.local`. The deploy job is serialized, opt-in through `PRODUCTION_DEPLOY_ENABLED`, and invokes `scripts/deploy --ref "$GITHUB_SHA"` as the single implementation of backup, build, restart, verification, and rollback reporting.

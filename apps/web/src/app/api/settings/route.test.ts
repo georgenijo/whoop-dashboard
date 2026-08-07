@@ -91,6 +91,40 @@ describe("/api/settings model preferences", () => {
     });
   });
 
+  it("persists a supported per-user Coach effort level", async () => {
+    db.getUserSettings.mockReturnValue({
+      cursor_key: null,
+      model_pref: "anthropic:claude-sonnet-4-6",
+      coach_effort: "max",
+    });
+
+    const response = await POST(post({ coach_effort: "max" }));
+
+    expect(response.status).toBe(200);
+    expect(db.upsertUserSettings).toHaveBeenCalledWith({
+      user_id: 7,
+      coach_effort: "max",
+    });
+    expect(await response.json()).toMatchObject({
+      coach_effort: "max",
+    });
+  });
+
+  it("rejects unsupported Coach effort levels", async () => {
+    db.getUserSettings.mockReturnValue({
+      cursor_key: null,
+      model_pref: "anthropic:claude-sonnet-4-6",
+    });
+
+    const response = await POST(post({ coach_effort: "xhigh" }));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "invalid coach_effort",
+    });
+    expect(db.upsertUserSettings).not.toHaveBeenCalled();
+  });
+
   it("rejects a Cursor model missing from the user's catalog", async () => {
     db.getUserSettings.mockReturnValue({
       cursor_key: "key_personal",

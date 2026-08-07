@@ -132,6 +132,21 @@ describe("user_settings + vault", () => {
     expect(got?.model_pref).toBe("m2");
   });
 
+  it("persists Coach effort without changing the selected model", async () => {
+    const { settings } = await loadModules();
+    settings.upsertUserSettings({
+      user_id: 1,
+      model_pref: "anthropic:claude-sonnet-4-6",
+      coach_effort: "high",
+    });
+    settings.upsertUserSettings({ user_id: 1, coach_effort: "max" });
+
+    expect(settings.getUserSettings(1)).toMatchObject({
+      model_pref: "anthropic:claude-sonnet-4-6",
+      coach_effort: "max",
+    });
+  });
+
   it("undefined input fields leave existing values untouched", async () => {
     const { settings } = await loadModules();
     settings.upsertUserSettings({

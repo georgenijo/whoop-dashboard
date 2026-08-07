@@ -1,13 +1,13 @@
 "use client";
 
 import {
-  BrainCircuit,
   Check,
   ChevronDown,
   KeyRound,
   LoaderCircle,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { CoachEffort } from "@/lib/coach/provider";
 
 const ANTHROPIC_PREF = "anthropic:claude-sonnet-4-6";
 
@@ -33,9 +33,21 @@ type ModelOption = {
 
 type Props = {
   initialModelPref: string;
+  initialCoachEffort: CoachEffort;
   disabled: boolean;
   onSavingChange: (saving: boolean) => void;
 };
+
+const EFFORT_OPTIONS: Array<{
+  value: CoachEffort;
+  label: string;
+  description: string;
+}> = [
+  { value: "low", label: "Low", description: "Fastest" },
+  { value: "medium", label: "Medium", description: "Balanced" },
+  { value: "high", label: "High", description: "Thorough" },
+  { value: "max", label: "Max", description: "Deepest" },
+];
 
 const STATUS_TITLE: Record<CursorModelCatalogStatus, string> = {
   loading: "Loading models available to your Cursor account…",
@@ -75,12 +87,14 @@ function cursorModelId(modelPref: string): string | null {
 
 export default function CoachModelPicker({
   initialModelPref,
+  initialCoachEffort,
   disabled,
   onSavingChange,
 }: Props) {
   const controlRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [modelPref, setModelPref] = useState(initialModelPref);
+  const [coachEffort, setCoachEffort] = useState(initialCoachEffort);
   const [cursorModels, setCursorModels] = useState<CursorModel[]>([]);
   const [catalogStatus, setCatalogStatus] =
     useState<CursorModelCatalogStatus>("loading");
@@ -214,6 +228,43 @@ export default function CoachModelPicker({
     }
   }
 
+  async function saveCoachEffort(nextEffort: CoachEffort) {
+    if (nextEffort === coachEffort || saving) return;
+
+    const previousEffort = coachEffort;
+    setCoachEffort(nextEffort);
+    setSaving(true);
+    setError(null);
+    onSavingChange(true);
+
+    try {
+      const response = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ coach_effort: nextEffort }),
+      });
+      const data = (await response.json().catch(() => null)) as
+        | { coach_effort?: CoachEffort; error?: string }
+        | null;
+      if (!response.ok) {
+        throw new Error(
+          data?.error || `Couldn't change effort (HTTP ${response.status}).`,
+        );
+      }
+      setCoachEffort(data?.coach_effort || nextEffort);
+    } catch (saveError) {
+      setCoachEffort(previousEffort);
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Couldn't change effort.",
+      );
+    } finally {
+      setSaving(false);
+      onSavingChange(false);
+    }
+  }
+
   return (
     <div className="coach-model-control" ref={controlRef}>
       <button
@@ -222,24 +273,29 @@ export default function CoachModelPicker({
         className={`coach-model-trigger ${
           selectedOption.provider === "Cursor" ? "is-cursor" : ""
         }`}
-        aria-label={`Coach model: ${selectedOption.label}`}
+        aria-label={`Coach model: ${selectedOption.label}${
+          selectedOption.provider === "Anthropic"
+            ? `; effort ${coachEffort}`
+            : ""
+        }`}
         aria-haspopup="listbox"
         aria-expanded={open}
         disabled={disabled || saving}
         title={error ?? STATUS_TITLE[catalogStatus]}
         onClick={() => setOpen((current) => !current)}
       >
-        <span className="coach-model-trigger-icon">
-          {saving ? (
-            <LoaderCircle size={14} strokeWidth={1.8} aria-hidden />
-          ) : (
-            <BrainCircuit size={14} strokeWidth={1.8} aria-hidden />
-          )}
+        <span className="coach-model-trigger-name">
+          {selectedOption.label.replace(/^Claude /, "")}
         </span>
-        <span className="coach-model-trigger-copy">
-          <span>{selectedOption.label.replace(/^Claude /, "")}</span>
-          <small>{saving ? "Switching…" : selectedOption.provider}</small>
-        </span>
+        {selectedOption.provider === "Anthropic" ? (
+          <span className="coach-model-trigger-effort">
+            {saving
+              ? "Saving…"
+              : EFFORT_OPTIONS.find(
+                  (option) => option.value === coachEffort,
+                )?.label}
+          </span>
+        ) : null}
         <ChevronDown
           className="coach-model-chevron"
           size={13}
@@ -297,6 +353,41 @@ export default function CoachModelPicker({
               );
             })}
           </div>
+
+          {selectedOption.provider === "Anthropic" ? (
+            <div className="coach-effort-section">
+              <div className="coach-effort-heading">
+                <span>Thinking effort</span>
+                <small>Controls depth, latency, and token use</small>
+              </div>
+              <div
+                className="coach-effort-options"
+                role="radiogroup"
+                aria-label="Thinking effort"
+              >
+                {EFFORT_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={coachEffort === option.value}
+                    className={
+                      coachEffort === option.value ? "is-selected" : ""
+                    }
+                    disabled={saving}
+                    onClick={() => void saveCoachEffort(option.value)}
+                  >
+                    <strong>{option.label}</strong>
+                    <small>{option.description}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="coach-effort-provider-note">
+              Effort is built into the selected Cursor model variant.
+            </div>
+          )}
 
           {catalogStatus !== "ready" ? (
             <div className={`coach-model-catalog-state is-${catalogStatus}`}>

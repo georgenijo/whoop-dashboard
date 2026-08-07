@@ -13,6 +13,7 @@ import type {
 import { getUserSettings, type ChatMessageInsert } from "@/lib/db";
 import { BadApiKeyError, type ApiKeyOrigin } from "./api-key";
 import { buildAnthropicConversation } from "./conversation";
+import { parseCoachEffort, type CoachEffort } from "./provider";
 import type {
   CoachConversationMessage,
   CoachUserTurn,
@@ -41,6 +42,7 @@ export type Usage = {
 
 export type DetailState = {
   iterations: number;
+  effort?: CoachEffort;
   persistence_ms?: number;
   cursor?: {
     requested_model: string;
@@ -326,6 +328,8 @@ export async function runAnthropicSdk(
   // third (uncached) block. Null/empty → byte-identical to the pre-Phase-E.1
   // two-block prompt, preserving the cache hit.
   const userSettings = getUserSettings(userId);
+  const coachEffort = parseCoachEffort(userSettings?.coach_effort);
+  detailState.effort = coachEffort;
   const systemPrompt = buildSystemPrompt(
     new Date(),
     userSettings?.coach_goals ?? null,
@@ -358,6 +362,7 @@ export async function runAnthropicSdk(
   let response = await callModel({
     model: COACH_MODEL,
     thinking: { type: "adaptive" },
+    output_config: { effort: coachEffort },
     tools: TOOLS,
     max_tokens: MAX_OUTPUT_TOKENS,
     system: systemPrompt,
@@ -454,6 +459,7 @@ export async function runAnthropicSdk(
     response = await callModel({
       model: COACH_MODEL,
       thinking: { type: "adaptive" },
+      output_config: { effort: coachEffort },
       tools: TOOLS,
       max_tokens: MAX_OUTPUT_TOKENS,
       system: systemPrompt,

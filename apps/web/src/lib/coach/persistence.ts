@@ -99,6 +99,7 @@ export async function runAndPersistCoachTurn(
       thread_id: thread.id,
       provider: selection.provider,
       model: selection.model,
+      effort: detailState.effort ?? null,
       timing: {
         persistence_ms: detailState.persistence_ms ?? null,
       },

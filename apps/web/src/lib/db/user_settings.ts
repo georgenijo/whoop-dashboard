@@ -23,6 +23,7 @@ export type UserSettings = {
   anthropic_key: string | null;
   cursor_key: string | null;
   model_pref: string | null;
+  coach_effort: string | null;
   timezone: string | null;
   monthly_token_cap: number | null;
   coach_goals: string[] | null;
@@ -37,6 +38,7 @@ export type UserSettingsInput = {
   anthropic_key?: string | null;
   cursor_key?: string | null;
   model_pref?: string | null;
+  coach_effort?: string | null;
   timezone?: string | null;
   monthly_token_cap?: number | null;
   coach_goals?: string[] | null;
@@ -67,6 +69,7 @@ function ensureUserSettingsTable(db: DB): void {
       cursor_key TEXT,
       cursor_key_version INTEGER,
       model_pref TEXT,
+      coach_effort TEXT,
       timezone TEXT,
       monthly_token_cap INTEGER,
       coach_goals TEXT,
@@ -91,6 +94,7 @@ type UserSettingsRowRaw = {
   cursor_key: string | null;
   cursor_key_version: number | null;
   model_pref: string | null;
+  coach_effort: string | null;
   timezone: string | null;
   monthly_token_cap: number | null;
   coach_goals: string | null;
@@ -116,7 +120,7 @@ export function getUserSettings(user_id: number): UserSettings | null {
       .prepare(
         `
         SELECT user_id, anthropic_key, anthropic_key_version, cursor_key,
-               cursor_key_version, model_pref, timezone, monthly_token_cap,
+               cursor_key_version, model_pref, coach_effort, timezone, monthly_token_cap,
                coach_goals, onboarded_at, tz, updated_at
         FROM user_settings
         WHERE user_id = ?
@@ -198,6 +202,7 @@ export function getUserSettings(user_id: number): UserSettings | null {
       anthropic_key: decryptedAnthropic,
       cursor_key: decryptedCursor,
       model_pref: row.model_pref,
+      coach_effort: row.coach_effort,
       timezone: row.timezone,
       monthly_token_cap: row.monthly_token_cap,
       coach_goals: parsedGoals,
@@ -236,7 +241,7 @@ export function upsertUserSettings(input: UserSettingsInput): void {
       .prepare(
         `
         SELECT anthropic_key, anthropic_key_version, cursor_key,
-               cursor_key_version, model_pref, timezone, monthly_token_cap,
+               cursor_key_version, model_pref, coach_effort, timezone, monthly_token_cap,
                coach_goals, onboarded_at, tz
         FROM user_settings
         WHERE user_id = ?
@@ -249,6 +254,7 @@ export function upsertUserSettings(input: UserSettingsInput): void {
           cursor_key: string | null;
           cursor_key_version: number | null;
           model_pref: string | null;
+          coach_effort: string | null;
           timezone: string | null;
           monthly_token_cap: number | null;
           coach_goals: string | null;
@@ -285,6 +291,10 @@ export function upsertUserSettings(input: UserSettingsInput): void {
 
     const nextModel =
       input.model_pref === undefined ? existing?.model_pref ?? null : input.model_pref;
+    const nextCoachEffort =
+      input.coach_effort === undefined
+        ? existing?.coach_effort ?? null
+        : input.coach_effort;
     const nextTz =
       input.timezone === undefined ? existing?.timezone ?? null : input.timezone;
     const nextCap =
@@ -310,15 +320,16 @@ export function upsertUserSettings(input: UserSettingsInput): void {
       `
       INSERT INTO user_settings (
         user_id, anthropic_key, anthropic_key_version, cursor_key,
-        cursor_key_version, model_pref, timezone, monthly_token_cap,
+        cursor_key_version, model_pref, coach_effort, timezone, monthly_token_cap,
         coach_goals, onboarded_at, tz, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET
         anthropic_key = excluded.anthropic_key,
         anthropic_key_version = excluded.anthropic_key_version,
         cursor_key = excluded.cursor_key,
         cursor_key_version = excluded.cursor_key_version,
         model_pref = excluded.model_pref,
+        coach_effort = excluded.coach_effort,
         timezone = excluded.timezone,
         monthly_token_cap = excluded.monthly_token_cap,
         coach_goals = excluded.coach_goals,
@@ -333,6 +344,7 @@ export function upsertUserSettings(input: UserSettingsInput): void {
       nextCursor,
       nextCursorVersion,
       nextModel,
+      nextCoachEffort,
       nextTz,
       nextCap,
       nextCoachGoals,

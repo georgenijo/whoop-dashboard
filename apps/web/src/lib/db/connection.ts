@@ -263,6 +263,7 @@ export function openWrite(): DB | null {
         cursor_key TEXT,
         cursor_key_version INTEGER,
         model_pref TEXT,
+        coach_effort TEXT,
         timezone TEXT,
         monthly_token_cap INTEGER,
         coach_goals TEXT,
@@ -517,6 +518,9 @@ export function openWrite(): DB | null {
     }
     if (!userSettingsCols.some((c) => c.name === "cursor_key_version")) {
       db.exec("ALTER TABLE user_settings ADD COLUMN cursor_key_version INTEGER");
+    }
+    if (!userSettingsCols.some((c) => c.name === "coach_effort")) {
+      db.exec("ALTER TABLE user_settings ADD COLUMN coach_effort TEXT");
     }
 
     // Phase D — data isolation. Add `user_id` to the five domain tables so

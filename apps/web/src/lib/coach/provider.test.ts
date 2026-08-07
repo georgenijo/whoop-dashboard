@@ -12,6 +12,7 @@ import {
   ANTHROPIC_PREF,
   CURSOR_PREF,
   cursorProviderEnabled,
+  parseCoachEffort,
   parseModelPref,
 } from "./provider";
 
@@ -56,6 +57,17 @@ describe("parseModelPref", () => {
       "anthropic",
     );
     expect(parseModelPref("cursor:--help").provider).toBe("anthropic");
+  });
+});
+
+describe("parseCoachEffort", () => {
+  it("accepts supported levels and defaults invalid values to high", () => {
+    expect(parseCoachEffort("low")).toBe("low");
+    expect(parseCoachEffort("medium")).toBe("medium");
+    expect(parseCoachEffort("high")).toBe("high");
+    expect(parseCoachEffort("max")).toBe("max");
+    expect(parseCoachEffort("xhigh")).toBe("high");
+    expect(parseCoachEffort(null)).toBe("high");
   });
 });
 

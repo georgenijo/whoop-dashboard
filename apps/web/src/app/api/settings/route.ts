@@ -10,11 +10,13 @@ import {
   ANTHROPIC_PREF,
   cursorModelFromPref,
   cursorProviderEnabled,
+  isCoachEffort,
   modelPrefForSelection,
+  parseCoachEffort,
   parseModelPref,
 } from "@/lib/coach/provider";
 
-// `system_prompt` is a global app_setting (shared); `model_pref` is per-user.
+// `system_prompt` is a global app_setting (shared); model + effort are per-user.
 function settingsPayload(userId: number) {
   const settings = getUserSettings(userId);
   const selection = parseModelPref(settings?.model_pref);
@@ -28,6 +30,7 @@ function settingsPayload(userId: number) {
       selection.provider === "cursor" && cursorAvailable
         ? modelPrefForSelection(selection)
         : ANTHROPIC_PREF,
+    coach_effort: parseCoachEffort(settings?.coach_effort),
     cursor_available: cursorAvailable,
   };
 }
@@ -49,6 +52,7 @@ export async function POST(req: Request) {
     const body = (await req.json()) as {
       system_prompt?: string;
       model_pref?: string;
+      coach_effort?: unknown;
     };
 
     if (typeof body.system_prompt === "string") {
@@ -103,6 +107,19 @@ export async function POST(req: Request) {
           model_pref: `cursor:${cursorModel}`,
         });
       }
+    }
+
+    if (body.coach_effort !== undefined) {
+      if (!isCoachEffort(body.coach_effort)) {
+        return Response.json(
+          { error: "invalid coach_effort" },
+          { status: 400 },
+        );
+      }
+      upsertUserSettings({
+        user_id: user.id,
+        coach_effort: body.coach_effort,
+      });
     }
 
     return Response.json(settingsPayload(user.id));

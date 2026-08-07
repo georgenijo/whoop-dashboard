@@ -182,20 +182,22 @@ export default function ChatInput({
                 {pendingImages.length} of 3 images selected
               </span>
             </button>
-            {modelPicker}
           </div>
-          <button
-            type="button"
-            className="coach-send"
-            onClick={onSubmit}
-            disabled={
-              (!input.trim() && pendingImages.length === 0) || disabled
-            }
-            aria-label="Send message"
-            data-track="coach:send"
-          >
-            ↑
-          </button>
+          <div className="coach-input-submit-controls">
+            {modelPicker}
+            <button
+              type="button"
+              className="coach-send"
+              onClick={onSubmit}
+              disabled={
+                (!input.trim() && pendingImages.length === 0) || disabled
+              }
+              aria-label="Send message"
+              data-track="coach:send"
+            >
+              ↑
+            </button>
+          </div>
         </div>
       </div>
       <div className="coach-footer">
