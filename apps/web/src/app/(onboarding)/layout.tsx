@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Welcome · Whoop+ Dashboard",
+  title: "Welcome · Coach",
   description: "Set up your dashboard, coach, and Whoop connection.",
 };
 

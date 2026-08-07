@@ -178,11 +178,23 @@ export default function WelcomeClient({
     return (
       <div style={SCREEN_STYLE}>
         <div style={HEADING_STYLE}>
-          whoop<span style={{ color: "var(--brand-strain)" }}>+</span>
+          <span
+            aria-hidden
+            style={{
+              display: "inline-block",
+              width: 7,
+              height: 7,
+              marginRight: 9,
+              borderRadius: 999,
+              background: "var(--brand)",
+              verticalAlign: "middle",
+            }}
+          />
+          Coach
         </div>
         <div style={SUBHEADING_STYLE}>
-          Your Whoop data, deeper. Trends, PRs, and a coach that answers in
-          plain English.
+          Your health data, made useful. Whoop trends, personal records, and a
+          coach that answers in plain English.
         </div>
         <div
           style={{
@@ -201,9 +213,10 @@ export default function WelcomeClient({
                 alignItems: "center",
                 gap: 10,
                 padding: "10px 12px",
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.08)",
-                borderRadius: 8,
+                background: "transparent",
+                border: 0,
+                borderTop: "var(--stroke) solid var(--rule)",
+                borderRadius: 0,
               }}
             >
               <span

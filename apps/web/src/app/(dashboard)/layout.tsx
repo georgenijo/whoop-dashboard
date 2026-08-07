@@ -26,9 +26,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Whoop+ Dashboard",
+  title: "Coach",
   description:
-    "Personal health command center — recovery, sleep, strain, and AI insight.",
+    "Personal health data, training insight, and AI coaching.",
 };
 
 export const viewport: Viewport = {

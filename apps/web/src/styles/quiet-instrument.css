@@ -11,9 +11,15 @@ body {
 }
 
 body {
+  margin: 0;
   font-size: var(--t-md);
   line-height: 1.65;
 }
+
+button,
+input,
+select,
+textarea { font: inherit; }
 
 ::selection { background: var(--bg-lift); }
 
@@ -361,6 +367,23 @@ body {
 .grid-main > .col { width: 100%; }
 .grid-main > .col:empty { display: none; }
 .recovery-value { color: var(--d-recovery); }
+
+.totals-strip {
+  gap: 0;
+  overflow: visible;
+  background: transparent;
+  border: 0;
+  border-top: var(--stroke) solid var(--rule);
+  border-radius: 0;
+}
+.totals-strip::before { display: none; }
+.total-cell {
+  padding: var(--s5) var(--s4);
+  background: transparent;
+  border: 0;
+}
+.total-cell + .total-cell { border-left: var(--stroke) solid var(--rule-soft); }
+.total-cell .val { color: var(--fg); font-family: var(--font-num); font-size: var(--t-hero); font-weight: 450; }
 
 .overview-disclosure { border-bottom: var(--stroke) solid var(--rule-soft); }
 .overview-disclosure > summary {
