@@ -627,7 +627,7 @@ body {
 
 .coach-model-trigger-effort {
   flex: 0 0 auto;
-  color: var(--fg-3);
+  color: var(--fg-2);
   font-size: 12px;
   font-weight: 550;
 }
@@ -648,7 +648,7 @@ body {
   z-index: 30;
   bottom: calc(100% + 10px);
   right: 0;
-  width: min(360px, calc(100vw - 52px));
+  width: min(340px, calc(100vw - 52px));
   overflow: hidden;
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 16px;
@@ -688,42 +688,83 @@ body {
 }
 
 .coach-model-menu-heading small {
-  color: var(--fg-3);
+  color: var(--fg-2);
   font-family: var(--font-sans);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .coach-model-options {
   display: grid;
-  gap: 6px;
+  gap: 7px;
   max-height: min(360px, 46vh);
   overflow-y: auto;
-  padding: 8px;
+  padding: 7px;
+  scrollbar-color: rgba(161,161,170,0.48) transparent;
+  scrollbar-width: thin;
+}
+
+.coach-model-options::-webkit-scrollbar {
+  width: 8px;
+}
+
+.coach-model-options::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.coach-model-options::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(161,161,170,0.48);
+  background-clip: padding-box;
+}
+
+.coach-model-option-group {
+  min-width: 0;
+}
+
+.coach-model-option-group + .coach-model-option-group {
+  padding-top: 7px;
+  border-top: 1px solid rgba(255,255,255,0.065);
+}
+
+.coach-model-option-group-label {
+  padding: 3px 9px 5px;
+  color: var(--fg-2);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 550;
+}
+
+.coach-model-option-group-rows {
+  display: grid;
+  gap: 2px;
 }
 
 .coach-model-option {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 24px;
+  grid-template-columns: minmax(0, 1fr) 42px;
   align-items: center;
   width: 100%;
-  border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: 9px;
   background: transparent;
   color: var(--fg-1);
   font-family: var(--font-sans);
   text-align: left;
-  cursor: pointer;
+  transition:
+    background 120ms ease,
+    box-shadow 120ms ease;
 }
 
 .coach-model-option-select {
-  grid-column: 1 / 3;
   min-width: 0;
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 10px;
+  min-height: 44px;
+  display: flex;
   align-items: center;
-  padding: 10px 4px 10px 10px;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 10px;
   border: 0;
+  border-radius: 9px;
   background: transparent;
   color: inherit;
   font-family: inherit;
@@ -731,74 +772,41 @@ body {
   cursor: pointer;
 }
 
-.coach-model-option:hover {
-  border-color: rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.045);
+.coach-model-option-select:only-child {
+  grid-column: 1 / -1;
+}
+
+.coach-model-option-select:hover {
+  background: rgba(255,255,255,0.055);
 }
 
 .coach-model-option.is-selected {
-  border-color: rgba(123,97,255,0.26);
-  background:
-    linear-gradient(90deg, rgba(123,97,255,0.14), rgba(123,97,255,0.04)),
-    rgba(255,255,255,0.02);
-}
-
-.coach-model-provider-mark {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border: 1px solid rgba(155,137,255,0.3);
-  border-radius: 10px;
   background: rgba(123,97,255,0.13);
-  color: #c5bbff;
-  font-size: 12px;
-  font-weight: 750;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+  box-shadow: inset 0 0 0 1px rgba(155,137,255,0.28);
 }
 
-.coach-model-provider-mark.is-cursor {
-  border-color: rgba(255,0,92,0.25);
-  background: rgba(255,0,92,0.1);
-  color: #ff8ab3;
-}
-
-.coach-model-option-copy {
+.coach-model-option-select strong {
   min-width: 0;
-  display: grid;
-}
-
-.coach-model-option-meta {
-  margin-bottom: 2px;
-  color: var(--fg-3);
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-}
-
-.coach-model-option-copy strong {
   overflow: hidden;
   color: var(--fg-0);
-  font-size: 12px;
-  font-weight: 650;
+  font-size: 13px;
+  font-weight: 580;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.coach-model-option-copy small {
-  margin-top: 4px;
-  overflow: hidden;
-  color: var(--fg-3);
-  font-size: 10px;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.coach-model-option-select:focus-visible,
+.coach-model-customize:focus-visible,
+.coach-model-customization-heading button:focus-visible,
+.coach-effort-options button:focus-visible {
+  outline: 2px solid rgba(155,137,255,0.92);
+  outline-offset: -2px;
 }
 
 .coach-model-option-check {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
   display: grid;
   place-items: center;
   border-radius: 999px;
@@ -806,28 +814,27 @@ body {
 }
 
 .coach-model-customize {
-  width: 28px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: 9px;
   background: transparent;
-  color: var(--fg-3);
+  color: var(--fg-2);
   cursor: pointer;
 }
 
-.coach-model-customize:hover,
-.coach-model-customize[aria-expanded="true"] {
-  background: rgba(123,97,255,0.12);
-  color: #c5bbff;
+.coach-model-customize:hover {
+  background: rgba(255,255,255,0.055);
+  color: var(--fg-0);
 }
 
-.coach-model-customize svg:first-child:not(:last-child) {
-  margin-right: -4px;
+.coach-model-customize[aria-expanded="true"] {
+  background: rgba(123,97,255,0.16);
+  color: #c5bbff;
 }
 
 .coach-model-catalog-state {
@@ -869,19 +876,19 @@ body {
 
 .coach-model-catalog-state strong {
   color: var(--fg-1);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 650;
 }
 
 .coach-model-catalog-state small {
-  color: var(--fg-3);
-  font-size: 9px;
+  color: var(--fg-2);
+  font-size: 10px;
   line-height: 1.35;
 }
 
 .coach-model-catalog-state a {
   color: #b5a8ff;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 650;
   text-decoration: none;
   white-space: nowrap;
@@ -900,13 +907,13 @@ body {
 
 .coach-effort-heading span {
   color: var(--fg-1);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 650;
 }
 
 .coach-effort-heading small {
-  color: var(--fg-3);
-  font-size: 9px;
+  color: var(--fg-2);
+  font-size: 11px;
 }
 
 .coach-effort-options {
@@ -921,7 +928,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 7px 9px;
+  padding: 6px 10px;
   border: 1px solid transparent;
   border-radius: 9px;
   background: transparent;
@@ -931,13 +938,13 @@ body {
 }
 
 .coach-effort-options button:hover:not(:disabled) {
-  border-color: rgba(123,97,255,0.32);
-  background: rgba(123,97,255,0.07);
+  border-color: rgba(255,255,255,0.09);
+  background: rgba(255,255,255,0.05);
 }
 
 .coach-effort-options button.is-selected {
-  border-color: rgba(123,97,255,0.45);
-  background: rgba(123,97,255,0.14);
+  border-color: rgba(155,137,255,0.34);
+  background: rgba(123,97,255,0.13);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
 }
 
@@ -950,21 +957,21 @@ body {
 
 .coach-effort-options strong {
   color: var(--fg-1);
-  font-size: 10px;
+  font-size: 13px;
   font-weight: 650;
 }
 
 .coach-effort-options small {
-  color: var(--fg-3);
-  font-size: 8px;
+  color: var(--fg-2);
+  font-size: 11px;
 }
 
 .coach-model-customization-menu {
   position: absolute;
   z-index: 31;
-  right: 368px;
+  right: 347px;
   bottom: calc(100% + 10px);
-  width: 248px;
+  width: 260px;
   overflow: hidden;
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 16px;
@@ -987,8 +994,9 @@ body {
 }
 
 .coach-model-customization-heading button {
-  width: 28px;
-  height: 28px;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
   display: grid;
   place-items: center;
   padding: 0;
@@ -1011,8 +1019,8 @@ body {
 }
 
 .coach-model-customization-heading small {
-  color: var(--fg-3);
-  font-size: 8px;
+  color: var(--fg-2);
+  font-size: 10px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1020,7 +1028,7 @@ body {
 .coach-model-customization-heading strong {
   overflow: hidden;
   color: var(--fg-0);
-  font-size: 12px;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1990,6 +1998,9 @@ body {
   .coach-model-customization-menu {
     right: 0;
     width: min(340px, calc(100vw - 56px));
+  }
+  .coach-model-back-icon {
+    transform: rotate(180deg);
   }
   .coach-image-lightbox {
     padding: 54px 12px;

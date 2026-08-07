@@ -67,15 +67,22 @@ describe("CoachModelPicker", () => {
     const { onSavingChange } = renderPicker();
 
     openPicker();
-    const cursorOption = await screen.findByRole("option", {
-      name: "GPT-5.5 High",
+    const cursorOption = await screen.findByRole("button", {
+      name: "Select GPT-5.5 High",
     });
-    expect(screen.getByRole("listbox", { name: "Coach models" })).toBeVisible();
-    expect(cursorOption).toHaveTextContent("Deep reasoning for complex questions.");
+    expect(
+      screen.getByRole("region", { name: "Choose a model" }),
+    ).toBeVisible();
+    expect(screen.getByRole("group", { name: "Coach models" })).toBeVisible();
+    expect(
+      screen.getByRole("group", { name: "Anthropic models" }),
+    ).toBeVisible();
+    expect(screen.getByRole("group", { name: "Cursor models" })).toBeVisible();
+    expect(
+      screen.queryByText("Deep reasoning for complex questions."),
+    ).not.toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Select GPT-5.5 High" }),
-    );
+    fireEvent.click(cursorOption);
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenLastCalledWith("/api/settings", {
@@ -126,10 +133,10 @@ describe("CoachModelPicker", () => {
     openPicker();
 
     expect(
-      screen.getByRole("option", {
-        name: /composer-2\.5-fast, selected/,
+      screen.getByRole("button", {
+        name: "Select composer-2.5-fast",
       }),
-    ).toBeInTheDocument();
+    ).toHaveAttribute("aria-pressed", "true");
     expect(
       screen.getByRole("button", {
         name: "Coach model: composer-2.5-fast",
@@ -170,7 +177,7 @@ describe("CoachModelPicker", () => {
       screen.getByRole("button", { name: "Customize Claude Sonnet 4.6" }),
     );
     expect(
-      screen.getByRole("menu", {
+      screen.getByRole("region", {
         name: "Claude Sonnet 4.6 customization",
       }),
     ).toBeVisible();
@@ -226,7 +233,9 @@ describe("CoachModelPicker", () => {
 
     openPicker();
 
-    expect(screen.getByRole("listbox", { name: "Coach models" })).toBeVisible();
+    expect(
+      screen.getByRole("region", { name: "Choose a model" }),
+    ).toBeVisible();
     expect(
       screen.queryByRole("radiogroup", { name: "Thinking effort" }),
     ).not.toBeInTheDocument();
@@ -241,6 +250,33 @@ describe("CoachModelPicker", () => {
     expect(
       screen.getByRole("button", { name: "Back to models" }),
     ).toBeVisible();
+  });
+
+  it("uses inverted submenu directions and restores focus when going back", () => {
+    fetchMock.mockResolvedValue(catalogResponse());
+    renderPicker();
+
+    openPicker();
+    const customize = screen.getByRole("button", {
+      name: "Customize Claude Sonnet 4.6",
+    });
+    expect(customize.querySelector(".lucide-chevron-left")).not.toBeNull();
+
+    fireEvent.click(customize);
+    const back = screen.getByRole("button", { name: "Back to models" });
+    expect(back.querySelector(".lucide-chevron-right")).not.toBeNull();
+
+    fireEvent.click(back);
+    expect(customize).toHaveFocus();
+
+    fireEvent.click(customize);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(customize).toHaveFocus();
+    expect(
+      screen.queryByRole("region", {
+        name: "Claude Sonnet 4.6 customization",
+      }),
+    ).not.toBeInTheDocument();
   });
 
   it("cannot change models during an active Coach turn", () => {
