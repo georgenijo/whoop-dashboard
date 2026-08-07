@@ -1,6 +1,7 @@
 /* Whoop+ Dashboard — Aurora refresh (ported from UI kit dashboard/styles.css)
    ------------------------------------------------------------------ */
 @import "./theme.css";
+@import "../styles/tokens.css";
 
 * { box-sizing: border-box; }
 html, body { height: 100%; }

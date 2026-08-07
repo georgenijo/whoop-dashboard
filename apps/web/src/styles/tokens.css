@@ -1,0 +1,97 @@
+/* =========================================================================
+   QUIET INSTRUMENT — DESIGN TOKENS
+
+   This contract is activation-scoped while existing routes are migrated.
+   Apply data-design-system="quiet-instrument" to a route boundary (or the
+   document root once migration is complete) to consume it.
+   ========================================================================= */
+[data-design-system="quiet-instrument"] {
+  /* Neutrals — barely-warm charcoal (hue 70), deliberately not max contrast. */
+  --bg: oklch(20% 0.004 70);
+  --bg-sunk: oklch(17.5% 0.004 70);
+  --bg-lift: oklch(24% 0.005 70);
+  --fg: oklch(90% 0.005 70);
+  --fg-hi: oklch(96% 0.005 70);
+  --fg-2: oklch(76% 0.005 70);
+  --fg-3: oklch(63% 0.006 70);
+  --rule: oklch(31% 0.005 70);
+  --rule-soft: oklch(25% 0.005 70);
+
+  /* Brand — reserved for the product mark and focus ring. */
+  --brand: oklch(66% 0.15 25);
+
+  /* State. */
+  --ok: oklch(74% 0.10 160);
+  --warn: oklch(80% 0.10 80);
+  --bad: oklch(70% 0.14 18);
+
+  /* Data — named by metric, with chroma capped at 0.09. */
+  --d-recovery: oklch(74% 0.09 165);
+  --d-strain: oklch(77% 0.09 85);
+  --d-sleep: oklch(72% 0.08 255);
+  --d-hrv: oklch(74% 0.08 300);
+  --d-rhr: oklch(72% 0.09 340);
+  --d-spo2: oklch(76% 0.06 205);
+
+  /* Type — sans prose, mono numerals. */
+  --t-hero: 40px;
+  --t-xl: 24px;
+  --t-lg: 17px;
+  --t-md: 15px;
+  --t-sm: 13px;
+  --t-xs: 11px;
+
+  --font-text: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-num: "SF Mono", "JetBrains Mono", "IBM Plex Mono", ui-monospace, Menlo, monospace;
+
+  /* Space. */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 36px;
+  --s7: 56px;
+  --s8: 88px;
+
+  /* Shape — one stroke width and no resting shadow. */
+  --r-sm: 3px;
+  --r-md: 6px;
+  --r-full: 999px;
+  --stroke: 1px;
+
+  /* Motion. */
+  --dur: 160ms;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /* Density multiplier. */
+  --dm: 1;
+}
+
+[data-design-system="quiet-instrument"][data-density="compact"],
+[data-density="compact"] [data-design-system="quiet-instrument"] {
+  --dm: 0.66;
+}
+
+[data-design-system="quiet-instrument"][data-theme="light"],
+[data-theme="light"] [data-design-system="quiet-instrument"] {
+  --bg: oklch(97% 0.003 70);
+  --bg-sunk: oklch(94% 0.004 70);
+  --bg-lift: oklch(99% 0.002 70);
+  --fg: oklch(26% 0.006 70);
+  --fg-hi: oklch(18% 0.006 70);
+  --fg-2: oklch(40% 0.006 70);
+  --fg-3: oklch(44% 0.006 70);
+  --rule: oklch(88% 0.005 70);
+  --rule-soft: oklch(93% 0.004 70);
+  --brand: oklch(52% 0.17 25);
+  --ok: oklch(45% 0.12 160);
+  --warn: oklch(46% 0.11 70);
+  --bad: oklch(50% 0.17 20);
+  --d-recovery: oklch(46% 0.09 165);
+  --d-strain: oklch(46% 0.09 85);
+  --d-sleep: oklch(46% 0.09 255);
+  --d-hrv: oklch(46% 0.09 300);
+  --d-rhr: oklch(46% 0.09 340);
+  --d-spo2: oklch(46% 0.07 205);
+}
