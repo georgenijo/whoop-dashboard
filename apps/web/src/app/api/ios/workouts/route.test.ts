@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { initIosTestDb, makeIosRequest } from "../_helpers.test";
 import { rmSync } from "node:fs";
+import { localToday } from "@/lib/ios/range";
 
 vi.mock("server-only", () => ({}));
 
@@ -40,7 +41,7 @@ afterAll(() => {
 
 describe("GET /api/ios/workouts", () => {
   it("returns 200 + shape on seeded DB; sport_frequency and zone_breakdown computed", async () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localToday();
     testDb.seedWorkout("w1", today, {
       sport: "running",
       duration_sec: 1800,

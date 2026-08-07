@@ -21,6 +21,8 @@ function renderInput(
     input: "",
     setInput: vi.fn(),
     loading: false,
+    modelChanging: false,
+    modelPicker: <button type="button">Model picker</button>,
     preparingImages: false,
     pendingImages: [],
     attachmentError: null,
@@ -107,5 +109,17 @@ describe("ChatInput image attachments", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "You can attach up to 3 images.",
     );
+  });
+
+  it("blocks composer actions while the model preference is changing", () => {
+    renderInput({
+      input: "How did I sleep?",
+      modelChanging: true,
+    });
+
+    expect(screen.getByRole("textbox")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Attach images" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+    expect(screen.getByText("Switching model…")).toBeInTheDocument();
   });
 });

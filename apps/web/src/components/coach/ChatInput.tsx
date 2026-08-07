@@ -8,6 +8,7 @@ import {
   type ClipboardEvent,
   type DragEvent,
   type KeyboardEvent,
+  type ReactNode,
   type RefObject,
 } from "react";
 import type { PendingChatImage } from "./useChatSend";
@@ -16,6 +17,8 @@ type Props = {
   input: string;
   setInput: (value: string) => void;
   loading: boolean;
+  modelChanging: boolean;
+  modelPicker: ReactNode;
   preparingImages: boolean;
   pendingImages: PendingChatImage[];
   attachmentError?: string | null;
@@ -31,6 +34,8 @@ export default function ChatInput({
   input,
   setInput,
   loading,
+  modelChanging,
+  modelPicker,
   preparingImages,
   pendingImages,
   attachmentError,
@@ -43,6 +48,7 @@ export default function ChatInput({
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
+  const disabled = loading || modelChanging;
 
   useEffect(() => {
     if (input === "" && inputRef.current) {
@@ -68,7 +74,7 @@ export default function ChatInput({
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setDragActive(false);
-    if (loading) return;
+    if (disabled) return;
     addImageFiles(
       Array.from(event.dataTransfer.files).filter((file) =>
         file.type.startsWith("image/"),
@@ -83,7 +89,7 @@ export default function ChatInput({
       className={`coach-composer ${dragActive ? "is-dragging" : ""}`}
       onDragEnter={(event) => {
         event.preventDefault();
-        if (!loading) setDragActive(true);
+        if (!disabled) setDragActive(true);
       }}
       onDragOver={(event) => event.preventDefault()}
       onDragLeave={(event) => {
@@ -112,7 +118,7 @@ export default function ChatInput({
                   type="button"
                   onClick={() => onRemoveImage(image.id)}
                   aria-label={`Remove selected image ${index + 1}`}
-                  disabled={loading}
+                  disabled={disabled}
                 >
                   <X size={13} aria-hidden />
                 </button>
@@ -145,20 +151,6 @@ export default function ChatInput({
             event.target.value = "";
           }}
         />
-        <button
-          type="button"
-          className="coach-attach"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={loading || atLimit}
-          aria-label="Attach images"
-          aria-describedby={atLimit ? "coach-image-limit" : undefined}
-          title={atLimit ? "You can attach up to 3 images." : "Attach images"}
-        >
-          <Paperclip size={18} strokeWidth={1.8} aria-hidden />
-          <span className="sr-only">
-            {pendingImages.length} of 3 images selected
-          </span>
-        </button>
         <textarea
           ref={inputRef}
           value={input}
@@ -171,19 +163,42 @@ export default function ChatInput({
           onPaste={handlePaste}
           placeholder="Ask about your recovery, sleep, strain..."
           rows={1}
-          disabled={loading}
+          disabled={disabled}
           className="coach-input"
         />
-        <button
-          type="button"
-          className="coach-send"
-          onClick={onSubmit}
-          disabled={(!input.trim() && pendingImages.length === 0) || loading}
-          aria-label="Send message"
-          data-track="coach:send"
-        >
-          ↑
-        </button>
+        <div className="coach-input-toolbar">
+          <div className="coach-input-tools">
+            <button
+              type="button"
+              className="coach-attach"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={disabled || atLimit}
+              aria-label="Attach images"
+              aria-describedby={atLimit ? "coach-image-limit" : undefined}
+              title={atLimit ? "You can attach up to 3 images." : "Attach images"}
+            >
+              <Paperclip size={18} strokeWidth={1.8} aria-hidden />
+              <span className="sr-only">
+                {pendingImages.length} of 3 images selected
+              </span>
+            </button>
+          </div>
+          <div className="coach-input-submit-controls">
+            {modelPicker}
+            <button
+              type="button"
+              className="coach-send"
+              onClick={onSubmit}
+              disabled={
+                (!input.trim() && pendingImages.length === 0) || disabled
+              }
+              aria-label="Send message"
+              data-track="coach:send"
+            >
+              ↑
+            </button>
+          </div>
+        </div>
       </div>
       <div className="coach-footer">
         <span id="coach-image-limit">
@@ -192,7 +207,9 @@ export default function ChatInput({
             : "Enter to send · Shift+Enter for newline"}
         </span>
         <span>
-          {preparingImages
+          {modelChanging
+            ? "Switching model…"
+            : preparingImages
             ? "Preparing images…"
             : loading
               ? progressLabel ?? "Thinking..."

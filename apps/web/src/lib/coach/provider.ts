@@ -9,6 +9,8 @@ import { getUserSettings } from "@/lib/db";
 
 export type CoachProvider = "anthropic" | "cursor";
 export type CoachModelSelection = { provider: CoachProvider; model: string };
+export const COACH_EFFORTS = ["low", "medium", "high", "max"] as const;
+export type CoachEffort = (typeof COACH_EFFORTS)[number];
 
 // Default chat model — must match the Anthropic loop's model constant.
 export const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
@@ -16,6 +18,7 @@ export const CURSOR_COMPOSER_MODEL = "composer-2.5-fast";
 
 export const ANTHROPIC_PREF = `anthropic:${DEFAULT_ANTHROPIC_MODEL}`;
 export const CURSOR_PREF = `cursor:${CURSOR_COMPOSER_MODEL}`;
+export const DEFAULT_COACH_EFFORT: CoachEffort = "high";
 
 const KNOWN: Record<string, CoachModelSelection> = {
   [ANTHROPIC_PREF]: { provider: "anthropic", model: DEFAULT_ANTHROPIC_MODEL },
@@ -56,6 +59,21 @@ export function modelPrefForSelection(
   selection: CoachModelSelection,
 ): string {
   return `${selection.provider}:${selection.model}`;
+}
+
+export function isCoachEffort(value: unknown): value is CoachEffort {
+  return (
+    typeof value === "string" &&
+    (COACH_EFFORTS as readonly string[]).includes(value)
+  );
+}
+
+export function parseCoachEffort(value: unknown): CoachEffort {
+  return isCoachEffort(value) ? value : DEFAULT_COACH_EFFORT;
+}
+
+export function resolveCoachEffort(userId: number): CoachEffort {
+  return parseCoachEffort(getUserSettings(userId)?.coach_effort);
 }
 
 /** Whether Cursor has either a personal key or the shared server fallback. */

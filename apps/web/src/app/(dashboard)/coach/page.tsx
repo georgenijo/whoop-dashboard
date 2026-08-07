@@ -9,6 +9,11 @@ import {
   getLatestChatThread,
 } from "@/lib/db";
 import { requireAuthOrSignin } from "@/lib/auth";
+import {
+  modelPrefForSelection,
+  resolveCoachProvider,
+  resolveCoachEffort,
+} from "@/lib/coach/provider";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +57,10 @@ export default async function CoachPage({
 
   const threads = getChatThreads(user.id);
   const messages = getChatThreadMessages(user.id, activeThread.id);
+  const initialModelPref = modelPrefForSelection(
+    resolveCoachProvider(user.id),
+  );
+  const initialCoachEffort = resolveCoachEffort(user.id);
 
   return (
     <CoachWorkspace
@@ -59,6 +68,8 @@ export default async function CoachPage({
       initialThreadId={activeThread.id}
       initialThreads={threads}
       initialMessages={messages}
+      initialModelPref={initialModelPref}
+      initialCoachEffort={initialCoachEffort}
     />
   );
 }
