@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-07: Simulator auth bypass stays behind trusted VM access
+
+**Decision:** Debug simulator launches may bypass Sign in with Apple by minting a normal 30-day user session inside `whoop-vm` over Tailscale SSH and injecting it through `COACH_DEBUG_TOKEN`. The launcher validates the session before installation and suppresses secure system permission prompts for that Debug process; Release builds retain Apple authentication and the normal HealthKit and notification flow. Do not add a public development-auth endpoint or embed credentials in the app or repository.
+
+**Rationale:** Browser-mirrored simulators cannot reliably render or control Apple's secure authorization sheets, but they still need valid production credentials to show the same data and threads as web. Reusing the existing JWT verifier behind authenticated Tailnet and sudo access provides the required developer convenience without creating an internet-facing backdoor or weakening production request authorization.
+
+**Status:** active
+
+**References:** `apps/ios/scripts/run-dev-simulator.sh`, `apps/ios/Sources/CoachApp.swift`, `apps/ios/Sources/APIClient.swift`
+
+---
+
 ## 2026-08-07: Boolean Cursor reasoning uses on/off switches
 
 **Decision:** When Cursor exposes a reasoning parameter whose only values are `true` and `false`, web and iOS present one native-style Reasoning switch and label its state `Reasoning on` or `Reasoning off`. Continue persisting and forwarding Cursor's raw boolean tokens unchanged; non-boolean reasoning parameters retain their catalog-backed discrete choices.

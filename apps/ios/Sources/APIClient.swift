@@ -316,7 +316,7 @@ final class APIClient {
         // Local-test bypass: prefer the launch-injected token so a fresh-sim
         // Keychain (AfterFirstUnlock refuses writes pre-unlock) doesn't leave
         // requests unauthenticated. DEBUG-only; never shipped.
-        if let dbg = ProcessInfo.processInfo.environment["COACH_DEBUG_TOKEN"], !dbg.isEmpty {
+        if let dbg = DebugSession.token {
             request.setValue("Bearer \(dbg)", forHTTPHeaderField: "Authorization")
         } else if let token = KeychainStore.loadSessionToken() {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
