@@ -7,6 +7,7 @@ import {
   getChatThreadMessages,
   getChatThreads,
   getLatestChatThread,
+  getUserSettings,
 } from "@/lib/db";
 import { requireAuthOrSignin } from "@/lib/auth";
 import {
@@ -61,6 +62,8 @@ export default async function CoachPage({
     resolveCoachProvider(user.id),
   );
   const initialCoachEffort = resolveCoachEffort(user.id);
+  const initialCursorModelParams =
+    getUserSettings(user.id)?.cursor_model_params ?? {};
 
   return (
     <CoachWorkspace
@@ -70,6 +73,7 @@ export default async function CoachPage({
       initialMessages={messages}
       initialModelPref={initialModelPref}
       initialCoachEffort={initialCoachEffort}
+      initialCursorModelParams={initialCursorModelParams}
     />
   );
 }

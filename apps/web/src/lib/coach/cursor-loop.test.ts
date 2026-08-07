@@ -269,9 +269,9 @@ describe("runCursorTurn Cursor lifecycle details", () => {
     const onTextDelta = vi.fn();
     const selectedModel = "gpt-5.5-high";
 
-    const turn = runCursorTurn(
-      baseArgs(detailState, onTextDelta, undefined, selectedModel),
-    );
+    const args = baseArgs(detailState, onTextDelta, undefined, selectedModel);
+    args.modelParameters = [{ id: "effort", value: "high" }];
+    const turn = runCursorTurn(args);
     await waitForSpawn();
 
     child.stdout.write(
@@ -353,6 +353,9 @@ describe("runCursorTurn Cursor lifecycle details", () => {
     const cursor = detailState.cursor;
     expect(cursor).toBeDefined();
     expect(cursor?.requested_model).toBe(selectedModel);
+    expect(cursor?.requested_parameters).toEqual([
+      { id: "effort", value: "high" },
+    ]);
     expect(cursor?.resolved_model).toBe("composer-2.5-resolved");
     expect(cursor?.prefetch).toMatchObject({
       attempted: true,
@@ -368,7 +371,9 @@ describe("runCursorTurn Cursor lifecycle details", () => {
       expect.objectContaining({ userId: 1 }),
     );
     const spawnArgs = spawnMock.mock.calls[0]?.[1] as string[];
-    expect(spawnArgs[spawnArgs.indexOf("--model") + 1]).toBe(selectedModel);
+    expect(spawnArgs[spawnArgs.indexOf("--model") + 1]).toBe(
+      `${selectedModel}[effort=high]`,
+    );
     expect(spawnArgs.at(-1)).toContain("Preloaded authoritative Whoop data");
     expect(cursor?.terminal_seen).toBe(true);
     expect(cursor?.terminal_subtype).toBe("success");

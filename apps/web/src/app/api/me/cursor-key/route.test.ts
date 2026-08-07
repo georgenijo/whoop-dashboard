@@ -84,6 +84,7 @@ describe("POST /api/me/cursor-key", () => {
     expect(upsertUserSettingsMock).toHaveBeenCalledWith({
       user_id: 1,
       cursor_key: key,
+      cursor_model_params: {},
     });
   });
 
@@ -149,6 +150,7 @@ describe("DELETE /api/me/cursor-key", () => {
       user_id: 1,
       cursor_key: null,
       model_pref: "anthropic:claude-sonnet-4-6",
+      cursor_model_params: {},
     });
   });
 
@@ -163,6 +165,7 @@ describe("DELETE /api/me/cursor-key", () => {
       user_id: 1,
       cursor_key: null,
       model_pref: "anthropic:claude-sonnet-4-6",
+      cursor_model_params: {},
     });
   });
 });

@@ -16,7 +16,6 @@ import { buildAnthropicConversation } from "./conversation";
 import {
   anthropicReasoningConfig,
   parseCoachEffort,
-  type CoachEffort,
 } from "./provider";
 import type {
   CoachConversationMessage,
@@ -46,10 +45,11 @@ export type Usage = {
 
 export type DetailState = {
   iterations: number;
-  effort?: CoachEffort;
+  effort?: string;
   persistence_ms?: number;
   cursor?: {
     requested_model: string;
+    requested_parameters: Array<{ id: string; value: string }>;
     resolved_model: string | null;
     prompt_chars: number;
     prefetch: {

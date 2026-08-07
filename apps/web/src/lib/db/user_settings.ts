@@ -16,6 +16,10 @@ import {
   decrypt,
   encrypt,
 } from "@/lib/crypto/vault";
+import {
+  parseCursorModelParamsByModel,
+  type CursorModelParamsByModel,
+} from "@/lib/coach/cursor-model-params";
 import { hasTable, openWrite, type DB } from "./connection";
 
 export type UserSettings = {
@@ -24,6 +28,7 @@ export type UserSettings = {
   cursor_key: string | null;
   model_pref: string | null;
   coach_effort: string | null;
+  cursor_model_params: CursorModelParamsByModel;
   timezone: string | null;
   monthly_token_cap: number | null;
   coach_goals: string[] | null;
@@ -39,6 +44,7 @@ export type UserSettingsInput = {
   cursor_key?: string | null;
   model_pref?: string | null;
   coach_effort?: string | null;
+  cursor_model_params?: CursorModelParamsByModel | null;
   timezone?: string | null;
   monthly_token_cap?: number | null;
   coach_goals?: string[] | null;
@@ -70,6 +76,7 @@ function ensureUserSettingsTable(db: DB): void {
       cursor_key_version INTEGER,
       model_pref TEXT,
       coach_effort TEXT,
+      cursor_model_params TEXT,
       timezone TEXT,
       monthly_token_cap INTEGER,
       coach_goals TEXT,
@@ -95,6 +102,7 @@ type UserSettingsRowRaw = {
   cursor_key_version: number | null;
   model_pref: string | null;
   coach_effort: string | null;
+  cursor_model_params: string | null;
   timezone: string | null;
   monthly_token_cap: number | null;
   coach_goals: string | null;
@@ -120,7 +128,8 @@ export function getUserSettings(user_id: number): UserSettings | null {
       .prepare(
         `
         SELECT user_id, anthropic_key, anthropic_key_version, cursor_key,
-               cursor_key_version, model_pref, coach_effort, timezone, monthly_token_cap,
+               cursor_key_version, model_pref, coach_effort, cursor_model_params,
+               timezone, monthly_token_cap,
                coach_goals, onboarded_at, tz, updated_at
         FROM user_settings
         WHERE user_id = ?
@@ -203,6 +212,9 @@ export function getUserSettings(user_id: number): UserSettings | null {
       cursor_key: decryptedCursor,
       model_pref: row.model_pref,
       coach_effort: row.coach_effort,
+      cursor_model_params: parseCursorModelParamsByModel(
+        row.cursor_model_params,
+      ),
       timezone: row.timezone,
       monthly_token_cap: row.monthly_token_cap,
       coach_goals: parsedGoals,
@@ -241,7 +253,8 @@ export function upsertUserSettings(input: UserSettingsInput): void {
       .prepare(
         `
         SELECT anthropic_key, anthropic_key_version, cursor_key,
-               cursor_key_version, model_pref, coach_effort, timezone, monthly_token_cap,
+               cursor_key_version, model_pref, coach_effort, cursor_model_params,
+               timezone, monthly_token_cap,
                coach_goals, onboarded_at, tz
         FROM user_settings
         WHERE user_id = ?
@@ -255,6 +268,7 @@ export function upsertUserSettings(input: UserSettingsInput): void {
           cursor_key_version: number | null;
           model_pref: string | null;
           coach_effort: string | null;
+          cursor_model_params: string | null;
           timezone: string | null;
           monthly_token_cap: number | null;
           coach_goals: string | null;
@@ -295,6 +309,14 @@ export function upsertUserSettings(input: UserSettingsInput): void {
       input.coach_effort === undefined
         ? existing?.coach_effort ?? null
         : input.coach_effort;
+    const nextCursorModelParams =
+      input.cursor_model_params === undefined
+        ? existing?.cursor_model_params ?? null
+        : input.cursor_model_params === null
+          ? null
+          : JSON.stringify(
+              parseCursorModelParamsByModel(input.cursor_model_params),
+            );
     const nextTz =
       input.timezone === undefined ? existing?.timezone ?? null : input.timezone;
     const nextCap =
@@ -320,9 +342,9 @@ export function upsertUserSettings(input: UserSettingsInput): void {
       `
       INSERT INTO user_settings (
         user_id, anthropic_key, anthropic_key_version, cursor_key,
-        cursor_key_version, model_pref, coach_effort, timezone, monthly_token_cap,
-        coach_goals, onboarded_at, tz, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        cursor_key_version, model_pref, coach_effort, cursor_model_params,
+        timezone, monthly_token_cap, coach_goals, onboarded_at, tz, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET
         anthropic_key = excluded.anthropic_key,
         anthropic_key_version = excluded.anthropic_key_version,
@@ -330,6 +352,7 @@ export function upsertUserSettings(input: UserSettingsInput): void {
         cursor_key_version = excluded.cursor_key_version,
         model_pref = excluded.model_pref,
         coach_effort = excluded.coach_effort,
+        cursor_model_params = excluded.cursor_model_params,
         timezone = excluded.timezone,
         monthly_token_cap = excluded.monthly_token_cap,
         coach_goals = excluded.coach_goals,
@@ -345,6 +368,7 @@ export function upsertUserSettings(input: UserSettingsInput): void {
       nextCursorVersion,
       nextModel,
       nextCoachEffort,
+      nextCursorModelParams,
       nextTz,
       nextCap,
       nextCoachGoals,

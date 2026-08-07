@@ -15,6 +15,7 @@ import {
   cursorProviderEnabled,
   parseCoachEffort,
   parseModelPref,
+  resolveCoachProvider,
 } from "./provider";
 
 describe("parseModelPref", () => {
@@ -109,5 +110,22 @@ describe("cursorProviderEnabled", () => {
     expect(cursorProviderEnabled(1)).toBe(true);
     delete process.env.CURSOR_API_KEY;
     expect(cursorProviderEnabled(1)).toBe(false);
+  });
+
+  it("resolves the selected model's persisted Cursor parameters", () => {
+    delete process.env.CURSOR_API_KEY;
+    getUserSettingsMock.mockReturnValue({
+      cursor_key: "crsr_personal",
+      model_pref: "cursor:gpt-5.5",
+      cursor_model_params: {
+        "gpt-5.5": [{ id: "effort", value: "high" }],
+      },
+    });
+
+    expect(resolveCoachProvider(1)).toEqual({
+      provider: "cursor",
+      model: "gpt-5.5",
+      parameters: [{ id: "effort", value: "high" }],
+    });
   });
 });

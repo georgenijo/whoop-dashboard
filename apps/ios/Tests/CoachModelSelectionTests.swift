@@ -83,6 +83,48 @@ final class CoachModelSelectionTests: XCTestCase {
 
         XCTAssertEqual(payload.modelPref, CoachModelOption.claude.id)
         XCTAssertEqual(payload.coachEffort, .max)
+        XCTAssertEqual(payload.cursorModelParams, [:])
         XCTAssertTrue(payload.cursorAvailable)
+    }
+
+    func testCatalogDecodesCursorReasoningParametersAndDefaults() throws {
+        let data = Data(
+            """
+            {
+              "status": "ready",
+              "models": [{
+                "id": "gpt-5.5",
+                "display_name": "GPT-5.5",
+                "description": null,
+                "parameters": [{
+                  "id": "effort",
+                  "display_name": "Reasoning",
+                  "values": [
+                    {"value": "medium", "display_name": "Medium"},
+                    {"value": "high", "display_name": "High"}
+                  ]
+                }],
+                "variants": [{
+                  "params": [{"id": "effort", "value": "medium"}],
+                  "display_name": "Medium",
+                  "description": null,
+                  "is_default": true
+                }]
+              }]
+            }
+            """.utf8
+        )
+
+        let payload = try JSONDecoder().decode(
+            CursorModelCatalogPayload.self,
+            from: data
+        )
+        let model = try XCTUnwrap(payload.models.first)
+
+        XCTAssertEqual(model.reasoningParameter?.id, "effort")
+        XCTAssertEqual(
+            model.defaultParameters,
+            [CursorModelParameterSelection(id: "effort", value: "medium")]
+        )
     }
 }

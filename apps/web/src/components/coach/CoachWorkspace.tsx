@@ -14,6 +14,7 @@ import {
   useCoachThread,
 } from "@/components/coach/useCoachThread";
 import type { CoachEffort } from "@/lib/coach/provider";
+import type { CursorModelParamsByModel } from "@/lib/coach/cursor-model-params";
 
 type CoachWorkspaceProps = {
   initialThreadId: number;
@@ -21,6 +22,7 @@ type CoachWorkspaceProps = {
   initialMessages: ChatMessage[];
   initialModelPref: string;
   initialCoachEffort: CoachEffort;
+  initialCursorModelParams: CursorModelParamsByModel;
 };
 
 function formatCount(n: number): string {
@@ -33,6 +35,7 @@ export default function CoachWorkspace({
   initialMessages,
   initialModelPref,
   initialCoachEffort,
+  initialCursorModelParams,
 }: CoachWorkspaceProps) {
   const [modelSaving, setModelSaving] = useState(false);
   const {
@@ -126,6 +129,7 @@ export default function CoachWorkspace({
               <CoachModelPicker
                 initialModelPref={initialModelPref}
                 initialCoachEffort={initialCoachEffort}
+                initialCursorModelParams={initialCursorModelParams}
                 disabled={loading}
                 onSavingChange={setModelSaving}
               />

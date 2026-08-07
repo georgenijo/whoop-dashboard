@@ -1,15 +1,20 @@
 import "server-only";
+import {
+  isSafeCursorParameterToken,
+  type CursorModelOption,
+  type CursorModelParameterDefinition,
+  type CursorModelParameterSelection,
+  type CursorModelVariant,
+} from "./cursor-model-params";
 
-export type CursorModelOption = {
-  id: string;
-  display_name: string;
-  description: string | null;
-};
+export type { CursorModelOption } from "./cursor-model-params";
 
 type CursorApiModel = {
   id?: unknown;
   displayName?: unknown;
   description?: unknown;
+  parameters?: unknown;
+  variants?: unknown;
 };
 
 export type CursorModelCatalogFailure = "invalid_key" | "unavailable";
@@ -38,7 +43,105 @@ function toOption(model: CursorApiModel): CursorModelOption | null {
       typeof model.description === "string"
         ? model.description.trim() || null
         : null,
+    parameters: toParameters(model.parameters),
+    variants: toVariants(model.variants),
   };
+}
+
+function toParameterSelections(value: unknown): CursorModelParameterSelection[] {
+  if (!Array.isArray(value)) return [];
+  const selections: CursorModelParameterSelection[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const { id, value: rawValue } = item as { id?: unknown; value?: unknown };
+    if (
+      typeof id !== "string" ||
+      typeof rawValue !== "string" ||
+      !isSafeCursorParameterToken(id) ||
+      !isSafeCursorParameterToken(rawValue) ||
+      seen.has(id)
+    ) {
+      continue;
+    }
+    seen.add(id);
+    selections.push({ id, value: rawValue });
+  }
+  return selections;
+}
+
+function toParameters(value: unknown): CursorModelParameterDefinition[] {
+  if (!Array.isArray(value)) return [];
+  const definitions: CursorModelParameterDefinition[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const { id, displayName, values } = item as {
+      id?: unknown;
+      displayName?: unknown;
+      values?: unknown;
+    };
+    if (
+      typeof id !== "string" ||
+      !isSafeCursorParameterToken(id) ||
+      seen.has(id) ||
+      !Array.isArray(values)
+    ) {
+      continue;
+    }
+    const parameterValues = values.flatMap((rawValue) => {
+      if (!rawValue || typeof rawValue !== "object" || Array.isArray(rawValue)) {
+        return [];
+      }
+      const { value: parameterValue, displayName: valueDisplayName } = rawValue as {
+        value?: unknown;
+        displayName?: unknown;
+      };
+      if (
+        typeof parameterValue !== "string" ||
+        !isSafeCursorParameterToken(parameterValue)
+      ) {
+        return [];
+      }
+      return [{
+        value: parameterValue,
+        display_name:
+          typeof valueDisplayName === "string"
+            ? valueDisplayName.trim() || null
+            : null,
+      }];
+    });
+    if (parameterValues.length === 0) continue;
+    seen.add(id);
+    definitions.push({
+      id,
+      display_name:
+        typeof displayName === "string" ? displayName.trim() || null : null,
+      values: parameterValues,
+    });
+  }
+  return definitions;
+}
+
+function toVariants(value: unknown): CursorModelVariant[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const { params, displayName, description, isDefault } = item as {
+      params?: unknown;
+      displayName?: unknown;
+      description?: unknown;
+      isDefault?: unknown;
+    };
+    if (typeof displayName !== "string" || !displayName.trim()) return [];
+    return [{
+      params: toParameterSelections(params),
+      display_name: displayName.trim(),
+      description:
+        typeof description === "string" ? description.trim() || null : null,
+      is_default: isDefault === true,
+    }];
+  });
 }
 
 /**

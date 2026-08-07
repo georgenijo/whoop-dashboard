@@ -29,6 +29,24 @@ function catalogResponse() {
         id: "gpt-5.5-high",
         display_name: "GPT-5.5 High",
         description: "Deep reasoning for complex questions.",
+        parameters: [
+          {
+            id: "effort",
+            display_name: "Reasoning",
+            values: [
+              { value: "medium", display_name: "Medium" },
+              { value: "high", display_name: "High" },
+            ],
+          },
+        ],
+        variants: [
+          {
+            params: [{ id: "effort", value: "medium" }],
+            display_name: "Medium",
+            description: null,
+            is_default: true,
+          },
+        ],
       },
     ],
   });
@@ -94,7 +112,9 @@ describe("CoachModelPicker", () => {
     );
     await waitFor(() =>
       expect(
-        screen.getByRole("button", { name: "Coach model: GPT-5.5 High" }),
+        screen.getByRole("button", {
+          name: "Coach model: GPT-5.5 High; effort medium",
+        }),
       ).toBeInTheDocument(),
     );
     expect(onSavingChange).toHaveBeenNthCalledWith(1, true);
@@ -226,6 +246,49 @@ describe("CoachModelPicker", () => {
         name: "Coach model: Claude Sonnet 4.6; effort off",
       }),
     ).toBeInTheDocument();
+  });
+
+  it("persists the selected Cursor model's catalog-backed effort", async () => {
+    fetchMock
+      .mockResolvedValueOnce(catalogResponse())
+      .mockResolvedValueOnce(
+        Response.json({
+          model_pref: "cursor:gpt-5.5-high",
+          coach_effort: "high",
+          cursor_model_params: {
+            "gpt-5.5-high": [{ id: "effort", value: "high" }],
+          },
+        }),
+      );
+    renderPicker({ initialModelPref: "cursor:gpt-5.5-high" });
+
+    openPicker();
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: "Customize GPT-5.5 High",
+      }),
+    );
+    fireEvent.click(screen.getByRole("radio", { name: /High/ }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cursor_model_params: {
+            model_id: "gpt-5.5-high",
+            params: [{ id: "effort", value: "high" }],
+          },
+        }),
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", {
+          name: "Coach model: GPT-5.5 High; effort high",
+        }),
+      ).toBeInTheDocument(),
+    );
   });
 
   it("shows models first and keeps reasoning in a model submenu", () => {
