@@ -7,8 +7,12 @@
 html, body { height: 100%; }
 body {
   overflow: hidden;
-  background: #05050a;
+  background: var(--bg);
 }
+
+/* Quiet Instrument shell: the atmospheric Aurora belonged to the superseded
+   surface. The live product now groups by rhythm and hairlines. */
+.aurora { display: none; }
 
 /* ---------- Ambient aurora — the one big visual flourish ---------- */
 .aurora {

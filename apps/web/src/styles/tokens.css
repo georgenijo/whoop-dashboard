@@ -66,6 +66,46 @@
 
   /* Density multiplier. */
   --dm: 1;
+
+  /* Legacy bridge. Existing routes consume these names until each one moves
+     onto the closed primitive vocabulary. Keeping the mapping here makes the
+     palette change immediate without forking the color system. */
+  --bg-0: var(--bg);
+  --bg-1: var(--bg-sunk);
+  --bg-2: var(--bg-lift);
+  --bg-3: var(--bg-lift);
+  --bg-4: var(--rule);
+  --fg-0: var(--fg-hi);
+  --fg-1: var(--fg);
+  --fg-4: var(--rule);
+  --border-subtle: var(--rule-soft);
+  --border-default: var(--rule);
+  --border-strong: var(--fg-3);
+  --brand-strain: var(--brand);
+  --brand-strain-dim: var(--bad);
+  --brand-strain-glow: color-mix(in oklch, var(--brand) 28%, transparent);
+  --metric-recovery: var(--d-recovery);
+  --metric-hrv: var(--d-hrv);
+  --metric-rhr: var(--d-rhr);
+  --metric-strain: var(--d-strain);
+  --metric-sleep-deep: var(--d-sleep);
+  --metric-sleep-rem: var(--d-hrv);
+  --metric-sleep-light: var(--d-recovery);
+  --metric-resp: var(--d-spo2);
+  --metric-spo2: var(--d-spo2);
+  --metric-skin-temp: var(--d-strain);
+  --zone-red: var(--bad);
+  --zone-yellow: var(--warn);
+  --zone-green: var(--ok);
+  --success: var(--ok);
+  --warning: var(--warn);
+  --danger: var(--bad);
+  --info: var(--d-spo2);
+  --ai: var(--d-hrv);
+  --font-display: var(--font-text);
+  --font-sans: var(--font-text);
+  --font-mono: var(--font-num);
+  --font-numeric: var(--font-num);
 }
 
 [data-design-system="quiet-instrument"][data-density="compact"],

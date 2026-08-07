@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "../globals.css";
+import "../../styles/quiet-instrument.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -23,7 +24,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#05050a",
+  themeColor: "oklch(20% 0.004 70)",
 };
 
 // Separate root layout for the (onboarding) route group — mirrors (auth)/.
@@ -36,6 +37,9 @@ export default function OnboardingLayout({
   return (
     <html
       lang="en"
+      data-design-system="quiet-instrument"
+      data-theme="dark"
+      data-density="comfortable"
       className={`${geistSans.variable} ${geistMono.variable}`}
       style={{ colorScheme: "dark" }}
     >

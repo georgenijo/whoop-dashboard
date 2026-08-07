@@ -32,10 +32,8 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sb-brand">
-        <div className="mark">W</div>
-        <span className="wm">
-          whoop<span className="plus">+</span>
-        </span>
+        <div className="mark" aria-hidden />
+        <span className="wm">Coach</span>
       </div>
 
       <div className="sb-nav">

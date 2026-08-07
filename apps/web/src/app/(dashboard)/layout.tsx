@@ -11,6 +11,7 @@ import WebVitalsReporter from "@/components/WebVitalsReporter";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { addRouteLog } from "@/lib/db";
 import "../globals.css";
+import "../../styles/quiet-instrument.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,7 +35,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  themeColor: "#05050a",
+  themeColor: "oklch(20% 0.004 70)",
 };
 
 export default async function RootLayout({
@@ -75,13 +76,15 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
+      data-design-system="quiet-instrument"
+      data-theme="dark"
+      data-density="comfortable"
       className={`${geistSans.variable} ${geistMono.variable}`}
       style={{ colorScheme: "dark" }}
     >
       <body>
         <ClientLogBootstrap />
         <WebVitalsReporter />
-        <div className="aurora" aria-hidden />
         <div className="app">
           <Suspense fallback={null}>
             <Sidebar />
