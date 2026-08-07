@@ -11,6 +11,7 @@ vi.mock("@/lib/db", () => ({
 import {
   ANTHROPIC_PREF,
   CURSOR_PREF,
+  anthropicReasoningConfig,
   cursorProviderEnabled,
   parseCoachEffort,
   parseModelPref,
@@ -62,12 +63,28 @@ describe("parseModelPref", () => {
 
 describe("parseCoachEffort", () => {
   it("accepts supported levels and defaults invalid values to high", () => {
+    expect(parseCoachEffort("off")).toBe("off");
     expect(parseCoachEffort("low")).toBe("low");
     expect(parseCoachEffort("medium")).toBe("medium");
     expect(parseCoachEffort("high")).toBe("high");
     expect(parseCoachEffort("max")).toBe("max");
     expect(parseCoachEffort("xhigh")).toBe("high");
     expect(parseCoachEffort(null)).toBe("high");
+  });
+});
+
+describe("anthropicReasoningConfig", () => {
+  it("disables thinking when effort is off", () => {
+    expect(anthropicReasoningConfig("off")).toEqual({
+      thinking: { type: "disabled" },
+    });
+  });
+
+  it("uses adaptive thinking for active effort levels", () => {
+    expect(anthropicReasoningConfig("max")).toEqual({
+      thinking: { type: "adaptive" },
+      output_config: { effort: "max" },
+    });
   });
 });
 

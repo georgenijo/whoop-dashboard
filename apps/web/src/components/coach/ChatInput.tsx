@@ -48,7 +48,7 @@ export default function ChatInput({
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
-  const disabled = loading || modelChanging;
+  const busy = loading || modelChanging;
 
   useEffect(() => {
     if (input === "" && inputRef.current) {
@@ -67,14 +67,14 @@ export default function ChatInput({
       .filter((file): file is File => file !== null);
     if (files.length > 0) {
       event.preventDefault();
-      addImageFiles(files);
+      if (!busy) addImageFiles(files);
     }
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setDragActive(false);
-    if (disabled) return;
+    if (busy) return;
     addImageFiles(
       Array.from(event.dataTransfer.files).filter((file) =>
         file.type.startsWith("image/"),
@@ -89,7 +89,7 @@ export default function ChatInput({
       className={`coach-composer ${dragActive ? "is-dragging" : ""}`}
       onDragEnter={(event) => {
         event.preventDefault();
-        if (!disabled) setDragActive(true);
+        if (!busy) setDragActive(true);
       }}
       onDragOver={(event) => event.preventDefault()}
       onDragLeave={(event) => {
@@ -118,7 +118,7 @@ export default function ChatInput({
                   type="button"
                   onClick={() => onRemoveImage(image.id)}
                   aria-label={`Remove selected image ${index + 1}`}
-                  disabled={disabled}
+                  disabled={busy}
                 >
                   <X size={13} aria-hidden />
                 </button>
@@ -159,11 +159,17 @@ export default function ChatInput({
             e.target.style.height = "auto";
             e.target.style.height = `${e.target.scrollHeight}px`;
           }}
-          onKeyDown={onKeyDown}
+          onKeyDown={(event) => {
+            if (busy && event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              return;
+            }
+            onKeyDown(event);
+          }}
           onPaste={handlePaste}
           placeholder="Ask about your recovery, sleep, strain..."
           rows={1}
-          disabled={disabled}
+          disabled={modelChanging}
           className="coach-input"
         />
         <div className="coach-input-toolbar">
@@ -172,7 +178,7 @@ export default function ChatInput({
               type="button"
               className="coach-attach"
               onClick={() => fileInputRef.current?.click()}
-              disabled={disabled || atLimit}
+              disabled={busy || atLimit}
               aria-label="Attach images"
               aria-describedby={atLimit ? "coach-image-limit" : undefined}
               title={atLimit ? "You can attach up to 3 images." : "Attach images"}
@@ -190,7 +196,7 @@ export default function ChatInput({
               className="coach-send"
               onClick={onSubmit}
               disabled={
-                (!input.trim() && pendingImages.length === 0) || disabled
+                (!input.trim() && pendingImages.length === 0) || busy
               }
               aria-label="Send message"
               data-track="coach:send"

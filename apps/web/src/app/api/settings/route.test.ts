@@ -110,6 +110,25 @@ describe("/api/settings model preferences", () => {
     });
   });
 
+  it("persists the option to turn Anthropic thinking off", async () => {
+    db.getUserSettings.mockReturnValue({
+      cursor_key: null,
+      model_pref: "anthropic:claude-sonnet-4-6",
+      coach_effort: "off",
+    });
+
+    const response = await POST(post({ coach_effort: "off" }));
+
+    expect(response.status).toBe(200);
+    expect(db.upsertUserSettings).toHaveBeenCalledWith({
+      user_id: 7,
+      coach_effort: "off",
+    });
+    expect(await response.json()).toMatchObject({
+      coach_effort: "off",
+    });
+  });
+
   it("rejects unsupported Coach effort levels", async () => {
     db.getUserSettings.mockReturnValue({
       cursor_key: null,

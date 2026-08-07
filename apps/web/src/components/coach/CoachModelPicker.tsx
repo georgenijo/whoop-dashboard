@@ -3,6 +3,8 @@
 import {
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   KeyRound,
   LoaderCircle,
 } from "lucide-react";
@@ -43,6 +45,7 @@ const EFFORT_OPTIONS: Array<{
   label: string;
   description: string;
 }> = [
+  { value: "off", label: "None", description: "No extended reasoning" },
   { value: "low", label: "Low", description: "Fastest" },
   { value: "medium", label: "Medium", description: "Balanced" },
   { value: "high", label: "High", description: "Thorough" },
@@ -101,6 +104,9 @@ export default function CoachModelPicker({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [customizingModelPref, setCustomizingModelPref] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -174,11 +180,16 @@ export default function CoachModelPicker({
         !controlRef.current?.contains(event.target)
       ) {
         setOpen(false);
+        setCustomizingModelPref(null);
       }
     }
 
     function handleKeyDown(event: globalThis.KeyboardEvent) {
       if (event.key !== "Escape") return;
+      if (customizingModelPref) {
+        setCustomizingModelPref(null);
+        return;
+      }
       setOpen(false);
       triggerRef.current?.focus();
     }
@@ -189,7 +200,15 @@ export default function CoachModelPicker({
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open]);
+  }, [customizingModelPref, open]);
+
+  const customizingOption =
+    options.find((option) => option.value === customizingModelPref) ?? null;
+
+  function closeMenu() {
+    setOpen(false);
+    setCustomizingModelPref(null);
+  }
 
   async function saveModelPref(nextModelPref: string) {
     if (nextModelPref === modelPref || saving) return;
@@ -282,7 +301,10 @@ export default function CoachModelPicker({
         aria-expanded={open}
         disabled={disabled || saving}
         title={error ?? STATUS_TITLE[catalogStatus]}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          if (open) closeMenu();
+          else setOpen(true);
+        }}
       >
         <span className="coach-model-trigger-name">
           {selectedOption.label.replace(/^Claude /, "")}
@@ -305,7 +327,11 @@ export default function CoachModelPicker({
       </button>
 
       {open ? (
-        <div className="coach-model-menu">
+        <div
+          className={`coach-model-menu ${
+            customizingOption ? "is-customizing" : ""
+          }`}
+        >
           <div className="coach-model-menu-heading">
             <span>Choose a model</span>
             <small>Used for your next Coach reply</small>
@@ -318,76 +344,65 @@ export default function CoachModelPicker({
             {options.map((option) => {
               const selected = option.value === modelPref;
               return (
-                <button
+                <div
                   key={option.value}
-                  type="button"
                   role="option"
                   aria-selected={selected}
+                  aria-label={`${option.label}${
+                    selected ? ", selected" : ""
+                  }`}
                   className={`coach-model-option ${
                     selected ? "is-selected" : ""
                   }`}
-                  onClick={() => {
-                    setOpen(false);
-                    void saveModelPref(option.value);
-                  }}
                 >
-                  <span
-                    className={`coach-model-provider-mark ${
-                      option.provider === "Cursor" ? "is-cursor" : ""
-                    }`}
-                    aria-hidden
+                  <button
+                    type="button"
+                    className="coach-model-option-select"
+                    aria-label={`Select ${option.label}`}
+                    onClick={() => {
+                      closeMenu();
+                      void saveModelPref(option.value);
+                    }}
                   >
-                    {option.provider === "Cursor" ? "C" : "A"}
-                  </span>
-                  <span className="coach-model-option-copy">
-                    <span className="coach-model-option-meta">
-                      {option.provider}
+                    <span
+                      className={`coach-model-provider-mark ${
+                        option.provider === "Cursor" ? "is-cursor" : ""
+                      }`}
+                      aria-hidden
+                    >
+                      {option.provider === "Cursor" ? "C" : "A"}
                     </span>
-                    <strong>{option.label}</strong>
-                    <small>{option.description}</small>
-                  </span>
-                  <span className="coach-model-option-check" aria-hidden>
-                    {selected ? <Check size={15} strokeWidth={2.2} /> : null}
-                  </span>
-                </button>
+                    <span className="coach-model-option-copy">
+                      <span className="coach-model-option-meta">
+                        {option.provider}
+                      </span>
+                      <strong>{option.label}</strong>
+                      <small>{option.description}</small>
+                    </span>
+                  </button>
+                  {option.provider === "Anthropic" ? (
+                    <button
+                      type="button"
+                      className="coach-model-customize"
+                      aria-label={`Customize ${option.label}`}
+                      aria-haspopup="menu"
+                      aria-expanded={customizingModelPref === option.value}
+                      onClick={() => setCustomizingModelPref(option.value)}
+                    >
+                      {selected ? (
+                        <Check size={14} strokeWidth={2.2} aria-hidden />
+                      ) : null}
+                      <ChevronRight size={15} strokeWidth={1.8} aria-hidden />
+                    </button>
+                  ) : (
+                    <span className="coach-model-option-check" aria-hidden>
+                      {selected ? <Check size={15} strokeWidth={2.2} /> : null}
+                    </span>
+                  )}
+                </div>
               );
             })}
           </div>
-
-          {selectedOption.provider === "Anthropic" ? (
-            <div className="coach-effort-section">
-              <div className="coach-effort-heading">
-                <span>Thinking effort</span>
-                <small>Controls depth, latency, and token use</small>
-              </div>
-              <div
-                className="coach-effort-options"
-                role="radiogroup"
-                aria-label="Thinking effort"
-              >
-                {EFFORT_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    role="radio"
-                    aria-checked={coachEffort === option.value}
-                    className={
-                      coachEffort === option.value ? "is-selected" : ""
-                    }
-                    disabled={saving}
-                    onClick={() => void saveCoachEffort(option.value)}
-                  >
-                    <strong>{option.label}</strong>
-                    <small>{option.description}</small>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="coach-effort-provider-note">
-              Effort is built into the selected Cursor model variant.
-            </div>
-          )}
 
           {catalogStatus !== "ready" ? (
             <div className={`coach-model-catalog-state is-${catalogStatus}`}>
@@ -408,6 +423,61 @@ export default function CoachModelPicker({
               ) : null}
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {open && customizingOption?.provider === "Anthropic" ? (
+        <div
+          className="coach-model-customization-menu"
+          role="menu"
+          aria-label={`${customizingOption.label} customization`}
+        >
+          <div className="coach-model-customization-heading">
+            <button
+              type="button"
+              onClick={() => setCustomizingModelPref(null)}
+              aria-label="Back to models"
+            >
+              <ChevronLeft size={15} strokeWidth={1.8} aria-hidden />
+            </button>
+            <span>
+              <small>Customize</small>
+              <strong>{customizingOption.label}</strong>
+            </span>
+          </div>
+          <div className="coach-effort-section">
+            <div className="coach-effort-heading">
+              <span>Reasoning</span>
+              <small>Applied to the next reply using this model</small>
+            </div>
+            <div
+              className="coach-effort-options"
+              role="radiogroup"
+              aria-label="Thinking effort"
+            >
+              {EFFORT_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={coachEffort === option.value}
+                  className={
+                    coachEffort === option.value ? "is-selected" : ""
+                  }
+                  disabled={saving}
+                  onClick={() => void saveCoachEffort(option.value)}
+                >
+                  <span>
+                    <strong>{option.label}</strong>
+                    <small>{option.description}</small>
+                  </span>
+                  {coachEffort === option.value ? (
+                    <Check size={14} strokeWidth={2.2} aria-hidden />
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       ) : null}
 

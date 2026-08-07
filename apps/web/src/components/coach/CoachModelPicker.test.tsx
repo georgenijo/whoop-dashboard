@@ -68,12 +68,14 @@ describe("CoachModelPicker", () => {
 
     openPicker();
     const cursorOption = await screen.findByRole("option", {
-      name: /GPT-5\.5 High/,
+      name: "GPT-5.5 High",
     });
     expect(screen.getByRole("listbox", { name: "Coach models" })).toBeVisible();
     expect(cursorOption).toHaveTextContent("Deep reasoning for complex questions.");
 
-    fireEvent.click(cursorOption);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Select GPT-5.5 High" }),
+    );
 
     await waitFor(() =>
       expect(fetchMock).toHaveBeenLastCalledWith("/api/settings", {
@@ -104,7 +106,7 @@ describe("CoachModelPicker", () => {
 
     openPicker();
     fireEvent.click(
-      await screen.findByRole("option", { name: /GPT-5\.5 High/ }),
+      await screen.findByRole("button", { name: "Select GPT-5.5 High" }),
     );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
@@ -125,7 +127,7 @@ describe("CoachModelPicker", () => {
 
     expect(
       screen.getByRole("option", {
-        name: /composer-2\.5-fast/,
+        name: /composer-2\.5-fast, selected/,
       }),
     ).toBeInTheDocument();
     expect(
@@ -164,6 +166,14 @@ describe("CoachModelPicker", () => {
     const { onSavingChange } = renderPicker();
 
     openPicker();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Customize Claude Sonnet 4.6" }),
+    );
+    expect(
+      screen.getByRole("menu", {
+        name: "Claude Sonnet 4.6 customization",
+      }),
+    ).toBeVisible();
     fireEvent.click(screen.getByRole("radio", { name: /Max/ }));
 
     await waitFor(() =>
@@ -182,6 +192,55 @@ describe("CoachModelPicker", () => {
     );
     expect(onSavingChange).toHaveBeenNthCalledWith(1, true);
     expect(onSavingChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it("can turn Anthropic thinking off", async () => {
+    fetchMock
+      .mockResolvedValueOnce(catalogResponse())
+      .mockResolvedValueOnce(Response.json({ coach_effort: "off" }));
+    renderPicker();
+
+    openPicker();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Customize Claude Sonnet 4.6" }),
+    );
+    fireEvent.click(screen.getByRole("radio", { name: /None/ }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenLastCalledWith("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ coach_effort: "off" }),
+      }),
+    );
+    expect(
+      screen.getByRole("button", {
+        name: "Coach model: Claude Sonnet 4.6; effort off",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows models first and keeps reasoning in a model submenu", () => {
+    fetchMock.mockResolvedValue(catalogResponse());
+    renderPicker();
+
+    openPicker();
+
+    expect(screen.getByRole("listbox", { name: "Coach models" })).toBeVisible();
+    expect(
+      screen.queryByRole("radiogroup", { name: "Thinking effort" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Customize Claude Sonnet 4.6" }),
+    );
+
+    expect(
+      screen.getByRole("radiogroup", { name: "Thinking effort" }),
+    ).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Back to models" }),
+    ).toBeVisible();
   });
 
   it("cannot change models during an active Coach turn", () => {

@@ -111,6 +111,23 @@ describe("ChatInput image attachments", () => {
     );
   });
 
+  it("keeps the draft editable but blocks submission during an active turn", () => {
+    const { props } = renderInput({
+      input: "Draft the follow-up",
+      loading: true,
+    });
+    const textbox = screen.getByRole("textbox");
+
+    expect(textbox).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+
+    fireEvent.change(textbox, { target: { value: "Next question" } });
+    expect(props.setInput).toHaveBeenCalledWith("Next question");
+
+    fireEvent.keyDown(textbox, { key: "Enter" });
+    expect(props.onKeyDown).not.toHaveBeenCalled();
+  });
+
   it("blocks composer actions while the model preference is changing", () => {
     renderInput({
       input: "How did I sleep?",
