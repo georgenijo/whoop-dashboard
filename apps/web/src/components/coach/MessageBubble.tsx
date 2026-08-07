@@ -31,6 +31,7 @@ export default function MessageBubble({ msg, onAttachmentClick }: Props) {
 
   return (
     <div className={`coach-message-row ${isUser ? "user" : "assistant"}`}>
+      <span className="coach-speaker">{isUser ? "You" : "Coach"}</span>
       <div
         className={`coach-message ${isUser ? "user" : "assistant"} ${
           msg.workLog ? "has-work-log" : ""

@@ -1,4 +1,3 @@
-import type { CSSProperties } from "react";
 import Link from "next/link";
 import { formatDelta, msToHoursNumber } from "@/lib/format";
 import type { CycleRow, RecoveryRow, SleepRow } from "@/lib/db";
@@ -7,19 +6,17 @@ type CardProps = {
   label: string;
   value: string;
   unit?: string;
-  color: string;
-  tint?: string;
+  metric: "hrv" | "rhr" | "sleep" | "strain" | "spo2";
   delta: { label: string; dir: "up" | "down" | "flat" };
   href: string;
 };
 
-function KPI({ label, value, unit, color, tint, delta, href }: CardProps) {
-  const style = { ["--kpi-tint" as keyof CSSProperties]: tint } as CSSProperties;
+function KPI({ label, value, unit, metric, delta, href }: CardProps) {
   return (
-    <Link href={href} className="kpi" style={{ ...style, textDecoration: "none", border: "none" }}>
+    <Link href={href} className={`kpi metric-${metric}`}>
       <div className="head">
         <span className="lbl">{label}</span>
-        <span className="dot" style={{ background: color, color }} />
+        <span className="dot" />
       </div>
       <div className="val">
         {value}
@@ -59,61 +56,50 @@ export default function KPIStrip(p: Props) {
   };
 
   return (
-    <section className="kpi-strip" aria-label="KPIs">
-      <KPI
-        label="Recovery"
-        value={p.latestRecovery?.recovery_score?.toFixed(0) ?? "—"}
-        unit="%"
-        color="#00d4aa"
-        tint="rgba(0,212,170,0.12)"
-        delta={formatDelta(p.latestRecovery?.recovery_score ?? null, p.previousRecovery?.recovery_score ?? null, { unit: "", precision: 0, ...recoveryDates })}
-        href="/recovery"
-      />
-      <KPI
-        label="HRV"
-        value={p.latestRecovery?.hrv?.toFixed(0) ?? "—"}
-        unit="ms"
-        color="#7b61ff"
-        tint="rgba(123,97,255,0.12)"
-        delta={formatDelta(p.latestRecovery?.hrv ?? null, p.previousRecovery?.hrv ?? null, { unit: " ms", precision: 0, ...recoveryDates })}
-        href="/recovery"
-      />
-      <KPI
-        label="RHR"
-        value={p.latestRecovery?.rhr?.toFixed(0) ?? "—"}
-        unit="bpm"
-        color="#ff6b6b"
-        tint="rgba(255,107,107,0.08)"
-        delta={formatDelta(p.latestRecovery?.rhr ?? null, p.previousRecovery?.rhr ?? null, { unit: " bpm", precision: 0, reverse: true, ...recoveryDates })}
-        href="/recovery"
-      />
-      <KPI
-        label="Sleep"
-        value={latestSleepHours != null ? latestSleepHours.toFixed(1) : "—"}
-        unit="h"
-        color="#00d4aa"
-        tint="rgba(0,212,170,0.08)"
-        delta={formatDelta(latestSleepHours, previousSleepHours, { unit: "h", precision: 1, ...sleepDates })}
-        href="/sleep"
-      />
-      <KPI
-        label="Strain"
-        value={p.latestCycle?.strain?.toFixed(1) ?? "—"}
-        unit=""
-        color="#ffaa00"
-        tint="rgba(255,170,0,0.08)"
-        delta={formatDelta(p.latestCycle?.strain ?? null, p.previousCycle?.strain ?? null, { unit: "", precision: 1, ...cycleDates })}
-        href="/strain"
-      />
-      <KPI
-        label="SpO2"
-        value={p.latestRecovery?.spo2?.toFixed(1) ?? "—"}
-        unit="%"
-        color="#00d4aa"
-        tint="rgba(0,212,170,0.08)"
-        delta={formatDelta(p.latestRecovery?.spo2 ?? null, p.previousRecovery?.spo2 ?? null, { unit: "%", precision: 1, ...recoveryDates })}
-        href="/recovery"
-      />
+    <section className="overview-metrics" aria-label="Today’s metrics">
+      <span className="overview-kicker">Today · change from prior reading</span>
+      <div className="kpi-strip">
+        <KPI
+          label="HRV"
+          value={p.latestRecovery?.hrv?.toFixed(0) ?? "—"}
+          unit="ms"
+          metric="hrv"
+          delta={formatDelta(p.latestRecovery?.hrv ?? null, p.previousRecovery?.hrv ?? null, { unit: " ms", precision: 0, ...recoveryDates })}
+          href="/recovery"
+        />
+        <KPI
+          label="RHR"
+          value={p.latestRecovery?.rhr?.toFixed(0) ?? "—"}
+          unit="bpm"
+          metric="rhr"
+          delta={formatDelta(p.latestRecovery?.rhr ?? null, p.previousRecovery?.rhr ?? null, { unit: " bpm", precision: 0, reverse: true, ...recoveryDates })}
+          href="/recovery"
+        />
+        <KPI
+          label="Sleep"
+          value={latestSleepHours != null ? latestSleepHours.toFixed(1) : "—"}
+          unit="h"
+          metric="sleep"
+          delta={formatDelta(latestSleepHours, previousSleepHours, { unit: "h", precision: 1, ...sleepDates })}
+          href="/sleep"
+        />
+        <KPI
+          label="Strain"
+          value={p.latestCycle?.strain?.toFixed(1) ?? "—"}
+          unit=""
+          metric="strain"
+          delta={formatDelta(p.latestCycle?.strain ?? null, p.previousCycle?.strain ?? null, { unit: "", precision: 1, ...cycleDates })}
+          href="/strain"
+        />
+        <KPI
+          label="SpO₂"
+          value={p.latestRecovery?.spo2?.toFixed(1) ?? "—"}
+          unit="%"
+          metric="spo2"
+          delta={formatDelta(p.latestRecovery?.spo2 ?? null, p.previousRecovery?.spo2 ?? null, { unit: "%", precision: 1, ...recoveryDates })}
+          href="/recovery"
+        />
+      </div>
     </section>
   );
 }
