@@ -183,6 +183,19 @@ device. The app currently targets `https://coach-api.georgenijo.com` by default;
 `APIClient.swift` and `ClientLogger.swift` own those endpoints. A Debug-only
 `COACH_DEBUG_TOKEN` environment variable can seed a simulator session.
 
+For the shared development simulator, use the launcher instead of signing in
+with Apple:
+
+```bash
+apps/ios/scripts/run-dev-simulator.sh [simulator-udid]
+```
+
+The launcher mints a normal 30-day session inside `whoop-vm` over Tailscale,
+validates it against the production API, builds a signed Debug app, and injects
+the session only into that simulator process. It never prints the signing key or
+session token, and Release builds continue to require Sign in with Apple. Set
+`COACH_DEV_USER_ID` to target a different development user.
+
 The iOS app provides Home, Trends, Stats, Coach, Plans, and Settings tabs.
 Trends contains the Recovery, Sleep, Strain, and Workouts surfaces. It also
 registers for push notifications and incrementally ingests HealthKit workouts

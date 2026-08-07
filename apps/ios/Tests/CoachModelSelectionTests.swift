@@ -127,4 +127,41 @@ final class CoachModelSelectionTests: XCTestCase {
             [CursorModelParameterSelection(id: "effort", value: "medium")]
         )
     }
+
+    func testBooleanCursorReasoningUsesOnOffPresentation() {
+        let parameter = CursorModelParameterDefinition(
+            id: "thinking",
+            displayName: "Reasoning",
+            values: [
+                CursorModelParameterValue(value: "true", displayName: nil),
+                CursorModelParameterValue(value: "false", displayName: nil),
+            ]
+        )
+
+        XCTAssertEqual(parameter.booleanValues?.on.value, "true")
+        XCTAssertEqual(parameter.booleanValues?.off.value, "false")
+        XCTAssertEqual(parameter.displayLabel(for: "true"), "Reasoning on")
+        XCTAssertEqual(parameter.displayLabel(for: "false"), "Reasoning off")
+
+        let selection = CoachModelSelection(
+            modelPref: "cursor:claude-opus-5",
+            effort: .high,
+            cursorStatus: .ready,
+            cursorModels: [
+                CursorCoachModel(
+                    id: "claude-opus-5",
+                    displayName: "Opus 5",
+                    description: nil,
+                    parameters: [parameter],
+                    variants: []
+                )
+            ],
+            cursorModelParams: [
+                "claude-opus-5": [
+                    CursorModelParameterSelection(id: "thinking", value: "true")
+                ]
+            ]
+        )
+        XCTAssertEqual(selection.selectedCursorReasoningLabel, "Reasoning on")
+    }
 }
