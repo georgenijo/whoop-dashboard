@@ -78,6 +78,7 @@ struct ChatView: View {
                 .frame(height: 1)
             composer
         }
+        .background(Theme.Palette.bg)
         .navigationTitle(initialTitle ?? "New chat")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -167,7 +168,6 @@ struct ChatView: View {
                         Circle()
                             .fill(Theme.Palette.recovery)
                             .frame(width: 5, height: 5)
-                            .shadow(color: Theme.Palette.recovery.opacity(0.7), radius: 3)
                         Text(chip.stage.map { "\(chip.name) · \($0)" } ?? chip.name)
                             .font(Theme.FontStyle.mono(10))
                             .foregroundStyle(Theme.Palette.fg2)
@@ -269,7 +269,6 @@ struct ChatView: View {
                 Image(systemName: "sparkles")
                     .font(.system(size: 30, weight: .light))
                     .foregroundStyle(Theme.Palette.ai)
-                    .shadow(color: Theme.Palette.ai.opacity(0.6), radius: 10)
             }
             Text("Ask the coach")
                 .font(Theme.FontStyle.sans(17, weight: .semibold))
@@ -348,10 +347,10 @@ struct ChatView: View {
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(Theme.Palette.fg1)
                         .frame(width: 36, height: 36)
-                        .background(Color.black.opacity(0.4), in: Circle())
+                        .background(Theme.Palette.bgLift, in: Circle())
                         .overlay(
                             Circle().strokeBorder(
-                                Theme.Palette.borderDefault,
+                                Theme.Palette.rule,
                                 lineWidth: 1
                             )
                         )
@@ -373,26 +372,24 @@ struct ChatView: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 9)
-                .background(Color.black.opacity(0.4), in: Capsule())
-                .overlay(Capsule().strokeBorder(Theme.Palette.borderDefault, lineWidth: 1))
+                .background(Theme.Palette.bgSunk, in: RoundedRectangle(cornerRadius: Theme.Radius.md))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.Radius.md)
+                        .strokeBorder(Theme.Palette.rule, lineWidth: 1)
+                )
 
                 Button {
                     Task { await send() }
                 } label: {
                     Text("Send")
                         .font(Theme.FontStyle.sans(11.5, weight: .semibold))
-                        .foregroundStyle(Color.white)
+                        .foregroundStyle(Theme.Palette.bgSunk)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 9)
                         .background(
-                            LinearGradient(
-                                colors: [Color(hex: "#8b6fff"), Color(hex: "#6a4dff")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            in: Capsule()
+                            Theme.Palette.brand,
+                            in: RoundedRectangle(cornerRadius: Theme.Radius.md)
                         )
-                        .shadow(color: Theme.Palette.ai.opacity(0.45), radius: 8, y: 3)
                         .opacity(canSend ? 1 : 0.4)
                 }
                 .disabled(!canSend)
@@ -889,24 +886,31 @@ private struct MessageBubble: View {
         pendingAttachments: [PendingChatImage],
         dimmed: Bool
     ) -> some View {
-        HStack {
-            if role == .user { Spacer(minLength: 40) }
+        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            Text(role == .user ? "YOU" : "COACH")
+                .font(Theme.FontStyle.sans(9.5, weight: .semibold))
+                .tracking(1.3)
+                .foregroundStyle(role == .user ? Theme.Palette.fg3 : Theme.Palette.ai)
             bubbleContent(
                 role: role,
                 content: content,
                 attachments: attachments,
                 pendingAttachments: pendingAttachments
             )
-                .padding(.horizontal, 14)
-                .padding(.vertical, 11)
-                .background(bubbleBackground(role: role, dimmed: dimmed))
-                .overlay(bubbleBorder(role: role))
-                .foregroundStyle(role == .user ? Theme.Palette.fg0 : Theme.Palette.fg1)
-                .clipShape(bubbleShape(role: role))
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: role == .user ? .trailing : .leading)
-            if role == .assistant { Spacer(minLength: 40) }
         }
+        .padding(.leading, role == .user ? Theme.Spacing.sm : 0)
+        .padding(.vertical, Theme.Spacing.xs)
+        .overlay(alignment: .leading) {
+            if role == .user {
+                Rectangle()
+                    .fill(Theme.Palette.rule)
+                    .frame(width: 1)
+            }
+        }
+        .foregroundStyle(role == .user ? Theme.Palette.fgHi : Theme.Palette.fg)
+        .opacity(dimmed ? 0.6 : 1)
+        .textSelection(.enabled)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     @ViewBuilder
@@ -968,31 +972,6 @@ private struct MessageBubble: View {
         }
     }
 
-    private func bubbleBackground(role: ChatMessage.Role, dimmed: Bool) -> some View {
-        Group {
-            if role == .user {
-                Color.white.opacity(dimmed ? 0.04 : 0.06)
-            } else {
-                Theme.Palette.ai.opacity(0.08)
-            }
-        }
-    }
-
-    private func bubbleBorder(role: ChatMessage.Role) -> some View {
-        bubbleShape(role: role)
-            .strokeBorder(
-                role == .user ? Theme.Palette.borderDefault : Theme.Palette.ai.opacity(0.22),
-                lineWidth: 1
-            )
-    }
-
-    private func bubbleShape(role: ChatMessage.Role) -> UnevenRoundedRectangle {
-        if role == .user {
-            UnevenRoundedRectangle(cornerRadii: .init(topLeading: 14, bottomLeading: 14, bottomTrailing: 4, topTrailing: 14))
-        } else {
-            UnevenRoundedRectangle(cornerRadii: .init(topLeading: 14, bottomLeading: 4, bottomTrailing: 14, topTrailing: 14))
-        }
-    }
 }
 
 private struct ChatAttachmentImage: View {

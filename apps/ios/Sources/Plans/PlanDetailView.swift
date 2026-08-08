@@ -21,12 +21,12 @@ struct PlanDetailView: View {
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
-                    .background(Color.white.opacity(0.025))
+                    .background(Theme.Palette.bgLift)
                     .overlay(
-                        RoundedRectangle(cornerRadius: Theme.Radius.lg)
-                            .strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1)
+                        RoundedRectangle(cornerRadius: Theme.Radius.md)
+                            .strokeBorder(Theme.Palette.rule, lineWidth: 1)
                     )
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
                 }
 
                 ForEach(Array(plan.plan.days.enumerated()), id: \.offset) { _, day in
@@ -35,6 +35,7 @@ struct PlanDetailView: View {
             }
             .padding()
         }
+        .background(Theme.Palette.bg)
         .navigationTitle(plan.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)

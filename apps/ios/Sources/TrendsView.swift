@@ -52,6 +52,7 @@ struct TrendsView: View {
                 }
                 .scrollContentBackground(.hidden)
             }
+            .background(Theme.Palette.bg)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(item: $destination) { metric in
                 switch metric {

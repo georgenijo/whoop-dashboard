@@ -101,6 +101,7 @@ struct WorkoutDetailView: View {
 
     var body: some View {
         content
+            .background(Theme.Palette.bg)
             .navigationTitle(navTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)

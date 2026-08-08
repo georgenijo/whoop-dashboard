@@ -68,7 +68,7 @@ private struct SportIcon: View {
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color.white.opacity(0.04))
+                .fill(Theme.Palette.ruleSoft)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
                         .strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1)

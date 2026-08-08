@@ -2,52 +2,71 @@ import SwiftUI
 
 enum Theme {
     enum Palette {
-        static let bg0 = Color(hex: "#000000")
-        static let bg1 = Color(hex: "#0a0a0b")
-        static let bg2 = Color(hex: "#121214")
-        static let bg3 = Color(hex: "#1a1a1e")
-        static let bg4 = Color(hex: "#242429")
+        // Quiet Instrument neutrals: barely-warm charcoal, deliberately below
+        // maximum contrast. These values are sRGB conversions of the web
+        // design system's canonical OKLCH tokens.
+        static let bg = Color(hex: "#171614")
+        static let bgSunk = Color(hex: "#12100f")
+        static let bgLift = Color(hex: "#211f1d")
+        static let fg = Color(hex: "#e0ddda")
+        static let fgHi = Color(hex: "#f4f1ee")
+        static let fg2 = Color(hex: "#b3b0ae")
+        static let fg3 = Color(hex: "#8b8985")
+        static let rule = Color(hex: "#32302e")
+        static let ruleSoft = Color(hex: "#23211f")
 
-        static let fg0 = Color(hex: "#ffffff")
-        static let fg1 = Color(hex: "#e7e7ea")
-        static let fg2 = Color(hex: "#a1a1aa")
-        static let fg3 = Color(hex: "#6b6b74")
-        static let fg4 = Color(hex: "#3f3f46")
+        // Brand is reserved for the product mark, focus, and primary actions.
+        static let brand = Color(hex: "#df6862")
 
-        static let borderSubtle = Color.white.opacity(0.06)
-        static let borderDefault = Color.white.opacity(0.10)
-        static let borderStrong = Color.white.opacity(0.18)
+        // State.
+        static let ok = Color(hex: "#6fbe95")
+        static let warn = Color(hex: "#e0b771")
+        static let bad = Color(hex: "#e8777d")
 
-        static let brandStrain = Color(hex: "#ff0043")
-        static let brandStrainDim = Color(hex: "#cc0036")
+        // Data colors stay metric-specific and intentionally low-chroma.
+        static let recovery = Color(hex: "#71bd9d")
+        static let strain = Color(hex: "#cfb070")
+        static let sleepDeep = Color(hex: "#83a7d6")
+        static let hrv = Color(hex: "#b2a0d6")
+        static let rhr = Color(hex: "#cb8eb6")
+        static let spo2 = Color(hex: "#83bdc3")
+        static let sleepRem = hrv
+        static let sleepLight = recovery
+        static let respiration = spo2
+        static let skinTemp = strain
 
-        static let recovery = Color(hex: "#00d4aa")
-        static let hrv = Color(hex: "#7b61ff")
-        static let rhr = Color(hex: "#ff6b6b")
-        static let strain = Color(hex: "#ffaa00")
-        static let sleepDeep = Color(hex: "#0055ff")
-        static let sleepRem = Color(hex: "#7b61ff")
-        static let sleepLight = Color(hex: "#00d4aa")
-        static let respiration = Color(hex: "#00aaff")
-        static let spo2 = Color(hex: "#00d4aa")
-        static let skinTemp = Color(hex: "#ffaa00")
+        static let zoneRed = bad
+        static let zoneYellow = warn
+        static let zoneGreen = ok
 
-        static let zoneRed = Color(hex: "#ff4444")
-        static let zoneYellow = Color(hex: "#ffaa00")
-        static let zoneGreen = Color(hex: "#00d4aa")
+        static let hrZone0 = fg3
+        static let hrZone1 = recovery
+        static let hrZone2 = spo2
+        static let hrZone3 = strain
+        static let hrZone4 = rhr
+        static let hrZone5 = bad
 
-        static let hrZone0 = Color(hex: "#666666")
-        static let hrZone1 = Color(hex: "#00d4aa")
-        static let hrZone2 = Color(hex: "#00aaff")
-        static let hrZone3 = Color(hex: "#ffaa00")
-        static let hrZone4 = Color(hex: "#ff6b6b")
-        static let hrZone5 = Color(hex: "#ff0000")
+        static let success = ok
+        static let warning = warn
+        static let danger = bad
+        static let info = spo2
+        static let ai = hrv
 
-        static let success = Color(hex: "#00d4aa")
-        static let warning = Color(hex: "#ffaa00")
-        static let danger = Color(hex: "#ff4444")
-        static let info = Color(hex: "#00aaff")
-        static let ai = Color(hex: "#7b61ff")
+        // Compatibility aliases keep existing feature views working while
+        // they move onto the semantic Quiet Instrument vocabulary.
+        static let bg0 = bg
+        static let bg1 = bgSunk
+        static let bg2 = bgLift
+        static let bg3 = bgLift
+        static let bg4 = rule
+        static let fg0 = fgHi
+        static let fg1 = fg
+        static let fg4 = rule
+        static let borderSubtle = ruleSoft
+        static let borderDefault = rule
+        static let borderStrong = fg3
+        static let brandStrain = brand
+        static let brandStrainDim = bad
     }
 
     enum Typeface {
@@ -97,16 +116,16 @@ enum Theme {
         static let xs: CGFloat = 8
         static let sm: CGFloat = 12
         static let md: CGFloat = 16
-        static let lg: CGFloat = 20
-        static let xl: CGFloat = 24
-        static let xxl: CGFloat = 32
+        static let lg: CGFloat = 24
+        static let xl: CGFloat = 36
+        static let xxl: CGFloat = 56
     }
 
     enum Radius {
-        static let sm: CGFloat = 4
-        static let md: CGFloat = 8
-        static let lg: CGFloat = 12
-        static let xl: CGFloat = 16
+        static let sm: CGFloat = 3
+        static let md: CGFloat = 6
+        static let lg: CGFloat = 6
+        static let xl: CGFloat = 6
         static let pill: CGFloat = 9999
     }
 }

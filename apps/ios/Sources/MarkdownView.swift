@@ -53,7 +53,7 @@ struct MarkdownView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(8)
-                .background(Color.black.opacity(0.08))
+                .background(Theme.Palette.bgSunk)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
     }

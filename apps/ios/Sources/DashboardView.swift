@@ -23,10 +23,10 @@ struct DashboardView: View {
                     Circle()
                         .fill(Theme.Palette.recovery)
                         .frame(width: 8, height: 8)
-                        .shadow(color: Theme.Palette.recovery.opacity(0.7), radius: 5)
                 }
                 content
             }
+            .background(Theme.Palette.bg)
             .toolbar(.hidden, for: .navigationBar)
             .refreshable { await load(showSpinner: false) }
             .navigationDestination(item: $detail) { href in
@@ -66,7 +66,8 @@ struct DashboardView: View {
                     }
                     RecoveryTrendCardView(points: payload.recoveryTrend)
                 }
-                .padding()
+                .padding(.horizontal, Theme.Spacing.md)
+                .padding(.bottom, Theme.Spacing.xl)
             }
         case .error(let message):
             VStack(spacing: 12) {
@@ -79,7 +80,7 @@ struct DashboardView: View {
                     Task { await load(showSpinner: true) }
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(Theme.Palette.recovery)
+                .tint(Theme.Palette.brand)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }

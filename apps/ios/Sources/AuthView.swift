@@ -10,40 +10,54 @@ struct AuthView: View {
     @State private var isExchanging = false
 
     var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            VStack(spacing: 8) {
-                Text("Coach")
-                    .font(.largeTitle)
-                    .bold()
-                Text("Your personal life intelligence")
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
+        ZStack {
+            Theme.Palette.bg
+                .ignoresSafeArea()
 
-            if let errorMessage {
-                Text(errorMessage)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-            }
+            VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
+                Spacer()
 
-            SignInWithAppleButton(.signIn) { request in
-                request.requestedScopes = [.email]
-            } onCompletion: { result in
-                handle(result)
-            }
-            .signInWithAppleButtonStyle(.black)
-            .frame(height: 50)
-            .padding(.horizontal)
-            .disabled(isExchanging)
+                VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                    Text("COACH")
+                        .font(Theme.FontStyle.sans(11, weight: .semibold))
+                        .tracking(1.8)
+                        .foregroundStyle(Theme.Palette.brand)
+                    Text("Your health,\nmade legible.")
+                        .font(Theme.FontStyle.sans(40, weight: .semibold))
+                        .foregroundStyle(Theme.Palette.fgHi)
+                    Text("Recovery, sleep, strain, and a coach that understands the whole picture.")
+                        .font(Theme.FontStyle.sans(15))
+                        .foregroundStyle(Theme.Palette.fg2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
-            if isExchanging {
-                ProgressView()
+                Spacer()
+
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(Theme.FontStyle.sans(12))
+                        .foregroundStyle(Theme.Palette.bad)
+                        .multilineTextAlignment(.leading)
+                }
+
+                SignInWithAppleButton(.signIn) { request in
+                    request.requestedScopes = [.email]
+                } onCompletion: { result in
+                    handle(result)
+                }
+                .signInWithAppleButtonStyle(.white)
+                .frame(height: 50)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
+                .disabled(isExchanging)
+
+                if isExchanging {
+                    ProgressView()
+                        .tint(Theme.Palette.fg2)
+                }
             }
+            .padding(.horizontal, Theme.Spacing.lg)
+            .padding(.bottom, Theme.Spacing.xl)
         }
-        .padding(.bottom, 40)
     }
 
     private func handle(_ result: Result<ASAuthorization, Error>) {

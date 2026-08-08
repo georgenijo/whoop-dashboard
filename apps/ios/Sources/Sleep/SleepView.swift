@@ -18,6 +18,7 @@ struct SleepView: View {
                 PageHeader("Sleep") { rangeMenu }
                 content
             }
+            .background(Theme.Palette.bg)
             .toolbar(.hidden, for: .navigationBar)
             .refreshable { await load(showSpinner: false) }
         }

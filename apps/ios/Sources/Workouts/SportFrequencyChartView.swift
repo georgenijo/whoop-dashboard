@@ -74,7 +74,6 @@ struct SportFrequencyChartView: View {
                     Circle()
                         .fill(Color(hex: item.colorHex))
                         .frame(width: 8, height: 8)
-                        .shadow(color: Color(hex: item.colorHex).opacity(0.7), radius: 3)
                     Text(item.sport)
                         .font(Theme.FontStyle.sans(11.5))
                         .foregroundStyle(Theme.Palette.fg1)

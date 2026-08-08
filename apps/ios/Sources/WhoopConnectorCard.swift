@@ -70,7 +70,6 @@ struct WhoopConnectorCard: View {
                 Circle()
                     .fill(badgeColor(for: status))
                     .frame(width: 6, height: 6)
-                    .shadow(color: badgeColor(for: status).opacity(0.7), radius: 3)
                 Text(badgeLabel(for: status))
                     .font(Theme.FontStyle.sans(11, weight: .medium))
                     .foregroundStyle(badgeColor(for: status))

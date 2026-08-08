@@ -18,6 +18,7 @@ struct StrainView: View {
                 PageHeader("Strain") { rangeMenu }
                 content
             }
+            .background(Theme.Palette.bg)
             .toolbar(.hidden, for: .navigationBar)
             .refreshable { await load(showSpinner: false) }
         }
@@ -138,13 +139,7 @@ private struct StrainHeroView: View {
                 if let score {
                     Text(String(format: "%.1f", score))
                         .font(Theme.FontStyle.display(80, weight: .medium))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color(hex: "#ffd166"), Color(hex: "#ffaa00"), Color(hex: "#ff8800")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .foregroundStyle(Theme.Palette.strain)
                         .monospacedDigit()
                 } else {
                     Text("—")
@@ -188,8 +183,6 @@ private struct StrainBand: View {
                     Circle()
                         .fill(Theme.Palette.fg0)
                         .frame(width: 14, height: 14)
-                        .shadow(color: Color.black.opacity(0.5), radius: 4, y: 2)
-                        .shadow(color: Theme.Palette.warning.opacity(0.7), radius: 6)
                         .offset(x: max(0, min(geo.size.width - 14, geo.size.width * CGFloat(score / 21) - 7)),
                                 y: -4)
                 }

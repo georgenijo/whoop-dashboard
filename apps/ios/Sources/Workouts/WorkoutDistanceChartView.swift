@@ -40,13 +40,7 @@ struct WorkoutDistanceChartView: View {
                         y: .value("km", row.distanceKm)
                     )
                     .cornerRadius(2)
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [Theme.Palette.info, Theme.Palette.info.opacity(0.45)],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
+                    .foregroundStyle(Theme.Palette.info)
                 }
                 .frame(height: 180)
                 .chartXAxis {
