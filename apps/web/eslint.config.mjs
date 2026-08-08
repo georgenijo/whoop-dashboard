@@ -29,7 +29,7 @@ const eslintConfig = defineConfig([
           selector:
             "MemberExpression[property.name='origin'][object.type='MemberExpression'][object.property.name='nextUrl']",
           message:
-            "Don't use `req.nextUrl.origin` in API route handlers — behind nginx + CF Access it leaks the upstream listener. Use `publicOrigin(req)` from @/lib/auth/origin instead. If this is a third-party callback URI (not a redirect target), add an eslint-disable comment with a reason.",
+            "Don't use `req.nextUrl.origin` in API route handlers — behind Cloudflare Tunnel it can expose the internal listener origin. Use `publicOrigin(req)` from @/lib/auth/origin instead. If this is a third-party callback URI (not a redirect target), add an eslint-disable comment with a reason.",
         },
       ],
     },

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""coach — CLI for inspecting Whoop Dashboard coach threads on the prod VM.
+"""coach — CLI for inspecting Whoop Dashboard coach threads on production.
 
-Opens a persistent SSH ControlMaster to the prod VM (`coach login`) and runs
-scoped queries against the chat_messages / chat_threads / chat_logs tables.
+Runs one-shot commands on the Optiplex Fleet node and scoped queries against
+the chat_messages / chat_threads / chat_logs tables.
 Default target is prod; `--local` reads `shared/whoop_data.db` directly.
 
 See README.md "Coach CLI" section or `coach --help`.
@@ -21,13 +21,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-VM_USER = "ubuntu"
-VM_HOST = "129.80.134.194"
-VM_TARGET = f"{VM_USER}@{VM_HOST}"
-SSH_KEY = str(Path.home() / ".ssh" / "id_ed25519")
-CM_SOCKET = str(Path.home() / ".ssh" / "cm-coach-master")
-CONTROL_PERSIST = "4h"
-VM_DB_PATH = "/home/george/Documents/whoop-dashboard/shared/whoop_data.db"
+FLEET_NODE = os.environ.get("COACH_FLEET_NODE", "opti")
+PROD_DB_PATH = "/home/george/services/whoop-dashboard/shared/whoop_data.db"
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LOCAL_DB_PATH = REPO_ROOT / "shared" / "whoop_data.db"
@@ -51,23 +46,17 @@ MAGENTA = lambda s: c("35", s)
 CYAN = lambda s: c("36", s)
 
 
-# ---------- SSH ControlMaster ----------
+# ---------- Fleet transport ----------
 
-def ssh_base() -> list[str]:
-    return [
-        "ssh",
-        "-i", SSH_KEY,
-        "-o", f"ControlPath={CM_SOCKET}",
-        "-o", "ControlMaster=auto",
-        "-o", f"ControlPersist={CONTROL_PERSIST}",
-        "-o", "StrictHostKeyChecking=no",
-        VM_TARGET,
-    ]
+def fleet_base(command: str) -> list[str]:
+    return ["fleet", "exec", FLEET_NODE, command]
 
 
 def master_alive() -> bool:
+    if shutil.which("fleet") is None:
+        return False
     r = subprocess.run(
-        ["ssh", "-O", "check", "-o", f"ControlPath={CM_SOCKET}", VM_TARGET],
+        ["fleet", "doctor", FLEET_NODE],
         capture_output=True, text=True,
     )
     return r.returncode == 0
@@ -75,32 +64,14 @@ def master_alive() -> bool:
 
 def cmd_login(_args: argparse.Namespace) -> int:
     if master_alive():
-        print(GREEN(f"✓ SSH master already up ({CM_SOCKET})"))
+        print(GREEN(f"✓ Fleet node {FLEET_NODE} reachable; no persistent login required"))
         return 0
-    Path(CM_SOCKET).parent.mkdir(parents=True, exist_ok=True)
-    r = subprocess.run(
-        ssh_base() + ["-N", "-f"],
-        capture_output=True, text=True,
-    )
-    if r.returncode != 0:
-        print(RED(f"✗ ssh login failed: {r.stderr.strip()}"), file=sys.stderr)
-        return r.returncode
-    print(GREEN(f"✓ SSH master up — persists {CONTROL_PERSIST}"))
-    return 0
+    print(RED(f"✗ Fleet node {FLEET_NODE} is not reachable; run `fleet doctor {FLEET_NODE}`"), file=sys.stderr)
+    return 1
 
 
 def cmd_logout(_args: argparse.Namespace) -> int:
-    if not master_alive():
-        print(DIM("(no active master)"))
-        return 0
-    r = subprocess.run(
-        ["ssh", "-O", "exit", "-o", f"ControlPath={CM_SOCKET}", VM_TARGET],
-        capture_output=True, text=True,
-    )
-    if r.returncode != 0:
-        print(RED(f"✗ logout failed: {r.stderr.strip()}"), file=sys.stderr)
-        return r.returncode
-    print(GREEN("✓ SSH master closed"))
+    print(DIM("(Fleet uses one-shot connections; nothing to close)"))
     return 0
 
 
@@ -121,20 +92,20 @@ def query_local(sql: str, params: tuple = ()) -> list[dict[str, Any]]:
 
 def query_remote(sql: str, params: tuple = ()) -> list[dict[str, Any]]:
     if not master_alive():
-        print(YELLOW("! SSH master not up — run `coach login` first"), file=sys.stderr)
+        print(YELLOW(f"! Fleet node unavailable — run `fleet doctor {FLEET_NODE}`"), file=sys.stderr)
         sys.exit(2)
     py = (
         "import sqlite3, json, sys\n"
-        f"conn = sqlite3.connect({VM_DB_PATH!r})\n"
+        f"conn = sqlite3.connect({PROD_DB_PATH!r})\n"
         "conn.row_factory = sqlite3.Row\n"
         f"sql = {sql!r}\n"
         f"params = {list(params)!r}\n"
         "rows = [dict(r) for r in conn.execute(sql, params).fetchall()]\n"
         "sys.stdout.write(json.dumps(rows, default=str))\n"
     )
-    remote_cmd = f"sudo -u george python3 -c {shlex.quote(py)}"
+    remote_cmd = f"python3 -c {shlex.quote(py)}"
     r = subprocess.run(
-        ssh_base() + [remote_cmd],
+        fleet_base(remote_cmd),
         capture_output=True, text=True,
     )
     if r.returncode != 0:
@@ -154,12 +125,12 @@ def q(args: argparse.Namespace, sql: str, params: tuple = ()) -> list[dict[str, 
 
 
 def run_remote_shell(cmd: str) -> tuple[int, str, str]:
-    """Run an arbitrary shell command on the VM via ControlMaster socket."""
+    """Run an arbitrary shell command on production through Fleet."""
     if not master_alive():
-        print(YELLOW("! SSH master not up — run `coach login` first"), file=sys.stderr)
+        print(YELLOW(f"! Fleet node unavailable — run `fleet doctor {FLEET_NODE}`"), file=sys.stderr)
         sys.exit(2)
     r = subprocess.run(
-        ssh_base() + [cmd],
+        fleet_base(cmd),
         capture_output=True, text=True,
     )
     return r.returncode, r.stdout, r.stderr
@@ -455,7 +426,7 @@ def cmd_journal(args: argparse.Namespace) -> int:
     until_clause = f" --until {shlex.quote(args.until)}" if args.until else ""
     grep_clause = f" | grep -iE {shlex.quote(args.grep)}" if args.grep else ""
     cmd = (
-        f"sudo journalctl -u whoop-web "
+        f"journalctl --user -u whoop-web "
         f"--since {shlex.quote(args.since)}{until_clause} "
         f"--no-pager{grep_clause}"
     )
@@ -595,7 +566,7 @@ def cmd_why(args: argparse.Namespace) -> int:
             until = end_dt.strftime("%Y-%m-%d %H:%M:%S")
             print(BOLD(f"journalctl whoop-web  {since} → {until}  (UTC)"))
             cmd = (
-                f"sudo journalctl -u whoop-web --since {shlex.quote(since)} "
+                f"journalctl --user -u whoop-web --since {shlex.quote(since)} "
                 f"--until {shlex.quote(until)} --no-pager 2>&1 | "
                 f"grep -iE 'chat|thread|sonnet|anthropic|cache|stream|error' | head -40"
             )
@@ -660,15 +631,15 @@ def cmd_syncs(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="coach",
-        description="Inspect Whoop Dashboard coach threads on the prod VM (or --local).",
+        description="Inspect Whoop Dashboard coach threads on production opti (or --local).",
     )
     p.add_argument("--local", action="store_true",
-                   help="Query local shared/whoop_data.db instead of prod VM")
+                   help="Query local shared/whoop_data.db instead of production opti")
 
     sub = p.add_subparsers(dest="command", required=True)
 
-    sub.add_parser("login", help="Open persistent SSH ControlMaster to prod VM (4h)").set_defaults(func=cmd_login)
-    sub.add_parser("logout", help="Close the SSH ControlMaster").set_defaults(func=cmd_logout)
+    sub.add_parser("login", help="Compatibility check for Fleet node reachability").set_defaults(func=cmd_login)
+    sub.add_parser("logout", help="Compatibility no-op; Fleet connections are one-shot").set_defaults(func=cmd_logout)
 
     t = sub.add_parser("thread", help="Print full transcript for a thread")
     t.add_argument("id", type=int, help="thread_id")
@@ -712,7 +683,7 @@ def build_parser() -> argparse.ArgumentParser:
     cd.add_argument("--json", action="store_true")
     cd.set_defaults(func=cmd_chat_detail)
 
-    jr = sub.add_parser("journal", help="journalctl whoop-web on the VM (prod only)")
+    jr = sub.add_parser("journal", help="journalctl whoop-web on production opti")
     jr.add_argument("since", help="--since TS (e.g. '2026-05-21 03:35:00' or '5 min ago')")
     jr.add_argument("--until", help="--until TS")
     jr.add_argument("--grep", help="extended-regex filter (case-insensitive)")

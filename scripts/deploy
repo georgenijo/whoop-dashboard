@@ -1,302 +1,299 @@
 #!/usr/bin/env bash
-# Build a production release on a fleet runner, deploy it to the prod VM, and
-# verify the exact commit is serving traffic.
+# Build and deploy Whoop Dashboard entirely on the Optiplex fleet node.
 #
-# The Oracle VM is deliberately artifact-only. Its 1 GB of RAM is enough to
-# run the app but not to install dependencies and compile Next.js reliably.
-# Builds run in a pinned Node 20 container on the Optiplex fleet node, then the
-# completed runtime tree is checksummed, staged, and activated on the VM.
+# Production layout on opti:
+#   ~/services/whoop-dashboard/
+#   ├── current -> releases/<full-sha>
+#   ├── releases/<full-sha>/
+#   ├── shared/whoop_data.db
+#   ├── backups/
+#   ├── runtime-home/
+#   ├── .env.local
+#   └── cloudflared.token
 #
 # Usage:
-#   scripts/deploy              # deploy origin/main
-#   scripts/deploy --ref <sha>  # deploy a specific ref
-#   scripts/deploy --check      # report drift only, change nothing
+#   scripts/deploy --ref <full-sha>  # deploy a CI-validated commit
+#   scripts/deploy --check      # report current/live/target state only
 set -euo pipefail
 
-VM_USER_APP=george
-VM_USER_SUDO=ubuntu
-VM_HOST=whoop-vm
-REPO=/home/george/Documents/whoop-dashboard
-APP="$REPO/apps/web"
-SERVICE=whoop-web
-PORT=8501
-
-BUILD_NODE=${DEPLOY_BUILD_NODE:-opti}
+FLEET_NODE=${DEPLOY_FLEET_NODE:-opti}
 BUILD_REPO=${DEPLOY_BUILD_REPO:-/home/george/Documents/code/whoop-dashboard}
-BUILD_IMAGE=${DEPLOY_BUILD_IMAGE:-docker.io/library/node:20-bullseye}
-FLEET_FETCH_MAX_BYTES=${DEPLOY_FETCH_MAX_BYTES:-1073741824}
+SERVICE_ROOT=${DEPLOY_SERVICE_ROOT:-/home/george/services/whoop-dashboard}
+NODE_VERSION=${DEPLOY_NODE_VERSION:-20.20.2}
+PORT=${DEPLOY_PORT:-8501}
 
-REF=origin/main
+REF=""
 CHECK_ONLY=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --ref)   REF="$2"; shift 2 ;;
+    --ref)
+      [ $# -ge 2 ] && [ -n "$2" ] || {
+        echo "--ref requires a full 40-character commit SHA" >&2
+        exit 2
+      }
+      REF="$2"
+      shift 2
+      ;;
     --check) CHECK_ONLY=1; shift ;;
-    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
 
-# Tailscale's client/daemon version-skew warning is benign and fires on every
-# call; drop only that line so real stderr still surfaces.
-quiet_ssh() {
-  tailscale ssh "$@" < /dev/null 2> >(grep -v '^Warning: client version' >&2)
-}
+say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
+die() { printf '\n\033[31mFAILED: %s\033[0m\n' "$*" >&2; exit 1; }
 
-# Script and artifact uploads need stdin, unlike ordinary one-shot commands.
-quiet_ssh_stdin() {
-  tailscale ssh "$@" 2> >(grep -v '^Warning: client version' >&2)
-}
-
-app()   { quiet_ssh "$VM_USER_APP@$VM_HOST"  "$@"; }
-sudo_() { quiet_ssh "$VM_USER_SUDO@$VM_HOST" "$@"; }
-app_script() {
-  quiet_ssh_stdin "$VM_USER_APP@$VM_HOST" "bash -s -- $*"
-}
-say()  { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
-die()  { printf '\n\033[31mFAILED: %s\033[0m\n' "$*" >&2; exit 1; }
-
-REMOTE_BUILD_ARTIFACT=""
-LOCAL_ARTIFACT=""
-VM_ARTIFACT=""
-SERVICE_STOPPED=0
-cleanup() {
-  rc=$?
-  trap - EXIT
-
-  if [ "$SERVICE_STOPPED" = "1" ]; then
-    sudo_ "sudo systemctl start $SERVICE" >/dev/null 2>&1 || true
-  fi
-  if [ -n "$VM_ARTIFACT" ]; then
-    app "rm -f -- '$VM_ARTIFACT'" >/dev/null 2>&1 || true
-  fi
-  if [ -n "$REMOTE_BUILD_ARTIFACT" ]; then
-    fleet exec "$BUILD_NODE" "rm -f -- '$REMOTE_BUILD_ARTIFACT'" >/dev/null 2>&1 || true
-  fi
-  if [ -n "$LOCAL_ARTIFACT" ]; then
-    rm -f -- "$LOCAL_ARTIFACT"
-  fi
-
-  exit "$rc"
-}
-trap cleanup EXIT
-
-# --- 0. Resolve the target and report current production state ----------------
-case "$REF" in
-  origin/*) git fetch origin -q || die "local git fetch failed — cannot trust $REF" ;;
-esac
-TARGET_FULL_SHA=$(git rev-parse "$REF^{commit}")
+command -v fleet >/dev/null 2>&1 || die "fleet CLI is required"
+if [ "$CHECK_ONLY" = "1" ] && [ -z "$REF" ]; then REF=origin/main; fi
+if [ "$CHECK_ONLY" != "1" ]; then
+  [ -n "$REF" ] || die "deployment requires --ref <CI-validated-full-sha>"
+  [[ "$REF" =~ ^[0-9a-fA-F]{40}$ ]] \
+    || die "deployment ref must be a full 40-character commit SHA"
+fi
+git fetch origin -q || die "local git fetch failed — cannot trust $REF"
+TARGET_FULL_SHA=$(git rev-parse "$REF^{commit}") \
+  || die "could not resolve $REF to a commit"
 TARGET_SHA=$(git rev-parse --short "$TARGET_FULL_SHA")
 
-say "Current state"
-LIVE_SHA=$(app "curl -sS --max-time 10 http://localhost:$PORT/api/health" \
-  | sed -n 's/.*\"sha\":\"\([^\"]*\)\".*/\1/p' || true)
-CHECKOUT_FULL_SHA=$(app "git -C $REPO rev-parse HEAD")
-CHECKOUT_SHA=$(app "git -C $REPO rev-parse --short HEAD")
-echo "  checkout on VM : $CHECKOUT_SHA"
-echo "  serving traffic: ${LIVE_SHA:-<no /api/health>}"
-echo "  target ($REF): $TARGET_SHA"
+say "Production state on $FLEET_NODE"
+STATE=$(fleet exec "$FLEET_NODE" "bash -s -- '$SERVICE_ROOT' '$PORT'" <<'REMOTE_STATE'
+set -euo pipefail
+ROOT=$1
+PORT=$2
 
-if [ -n "$LIVE_SHA" ] && [ "$LIVE_SHA" != "$CHECKOUT_SHA" ]; then
-  echo "  NOTE: checkout != running build. The service is stale; activation is pending."
+current="<none>"
+if [ -L "$ROOT/current" ]; then
+  current=$(basename "$(readlink -f "$ROOT/current")")
 fi
-if [ "$CHECKOUT_SHA" = "$TARGET_SHA" ] && [ "${LIVE_SHA:-}" = "$TARGET_SHA" ]; then
+live=$(curl -sS --max-time 5 "http://127.0.0.1:$PORT/api/health" 2>/dev/null \
+  | sed -n 's/.*"sha":"\([^"]*\)".*/\1/p' || true)
+web=$(systemctl --user is-active whoop-web.service 2>/dev/null || true)
+tunnel=$(systemctl --user is-active whoop-cloudflared.service 2>/dev/null || true)
+
+printf 'current=%s\n' "$current"
+printf 'live=%s\n' "${live:-<none>}"
+printf 'web=%s\n' "${web:-inactive}"
+printf 'tunnel=%s\n' "${tunnel:-inactive}"
+REMOTE_STATE
+) || die "could not inspect $FLEET_NODE"
+printf '%s\n' "$STATE" | sed 's/^/  /'
+echo "  target=$TARGET_SHA"
+
+CURRENT_FULL_SHA=$(printf '%s\n' "$STATE" | sed -n 's/^current=//p')
+LIVE_SHA=$(printf '%s\n' "$STATE" | sed -n 's/^live=//p')
+if [ "$CURRENT_FULL_SHA" = "$TARGET_FULL_SHA" ] && [ "$LIVE_SHA" = "$TARGET_SHA" ]; then
   echo "  already deployed and serving $TARGET_SHA — nothing to do."
   exit 0
 fi
 [ "$CHECK_ONLY" = "1" ] && { echo "  (--check: stopping here)"; exit 0; }
 
-command -v fleet >/dev/null 2>&1 || die "fleet CLI is required to build on $BUILD_NODE"
-command -v sha256sum >/dev/null 2>&1 || die "sha256sum is required"
-
-# --- 1. Build an isolated runtime artifact on the fleet node ------------------
-say "Building $TARGET_SHA on fleet node $BUILD_NODE"
-REMOTE_BUILD_ARTIFACT=$(
-  fleet exec --timeout 1800 "$BUILD_NODE" \
-    "bash -s -- '$TARGET_FULL_SHA' '$BUILD_REPO' '$BUILD_IMAGE'" <<'REMOTE_BUILD'
+say "Building and activating $TARGET_SHA on $FLEET_NODE"
+fleet exec --timeout 1800 "$FLEET_NODE" \
+  "bash -s -- '$TARGET_FULL_SHA' '$BUILD_REPO' '$SERVICE_ROOT' '$NODE_VERSION' '$PORT'" <<'REMOTE_DEPLOY'
 set -euo pipefail
 
 TARGET_FULL_SHA=$1
 BUILD_REPO=$2
-BUILD_IMAGE=$3
-WORKTREE=$(mktemp -d "/tmp/whoop-build-${TARGET_FULL_SHA:0:12}-XXXXXX")
-ARTIFACT=$(mktemp "/tmp/whoop-release-${TARGET_FULL_SHA:0:12}-XXXXXX.tar.gz")
+ROOT=$3
+NODE_VERSION=$4
+PORT=$5
+TS=$(date +%Y%m%d-%H%M%S)
+WORKTREE=""
+STAGE=""
+PREVIOUS=""
+ACTIVATED=0
+SMOKE_PID=""
 
-cleanup_build() {
+cleanup() {
   rc=$?
   trap - EXIT
-  git -C "$BUILD_REPO" worktree remove --force "$WORKTREE" >/dev/null 2>&1 || true
-  rm -rf -- "$WORKTREE"
-  if [ "$rc" -ne 0 ]; then rm -f -- "$ARTIFACT"; fi
+  if [ -n "$SMOKE_PID" ]; then
+    kill "$SMOKE_PID" >/dev/null 2>&1 || true
+    wait "$SMOKE_PID" 2>/dev/null || true
+  fi
+  if [ -n "$WORKTREE" ]; then
+    git -C "$BUILD_REPO" worktree remove --force "$WORKTREE" >/dev/null 2>&1 || true
+    rm -rf -- "$WORKTREE"
+  fi
+  if [ "$rc" -ne 0 ] && [ -n "$STAGE" ] && [ -d "$STAGE" ]; then
+    mv "$STAGE" "$ROOT/releases/failed-$TARGET_SHA-$TS" >/dev/null 2>&1 || true
+  fi
+  if [ "$rc" -ne 0 ] && [ "$ACTIVATED" = "1" ] && [ -n "$PREVIOUS" ] && [ -d "$PREVIOUS" ]; then
+    rollback_link="$ROOT/.rollback-$TS"
+    ln -s "$PREVIOUS" "$rollback_link" >/dev/null 2>&1 || true
+    mv -Tf "$rollback_link" "$ROOT/current" >/dev/null 2>&1 || true
+    systemctl --user restart whoop-web.service >/dev/null 2>&1 || true
+    systemctl --user restart whoop-cloudflared.service >/dev/null 2>&1 || true
+  fi
   exit "$rc"
 }
-trap cleanup_build EXIT
+trap cleanup EXIT
 
-git -C "$BUILD_REPO" fetch origin "$TARGET_FULL_SHA" >&2
-git -C "$BUILD_REPO" worktree add --detach "$WORKTREE" "$TARGET_FULL_SHA" >&2
-BUILD_SHA=$(git -C "$WORKTREE" rev-parse --short HEAD)
+for command in git python3 curl systemctl install ss flock tar; do
+  command -v "$command" >/dev/null 2>&1 || {
+    echo "missing required command on opti: $command" >&2
+    exit 1
+  }
+done
 
-podman run --rm \
-  --volume "$WORKTREE/apps/web:/workspace" \
-  --workdir /workspace \
-  --env "COACH_BUILD_SHA=$BUILD_SHA" \
-  "$BUILD_IMAGE" \
-  sh -lc '
-    set -eu
-    npm ci
-    npm run build
-    npm prune --omit=dev
+NODE_BIN="$HOME/.nvm/versions/node/v$NODE_VERSION/bin/node"
+NPM_BIN="$HOME/.nvm/versions/node/v$NODE_VERSION/bin/npm"
+[ -x "$NODE_BIN" ] || {
+  echo "Node $NODE_VERSION is missing. Run: nvm install $NODE_VERSION" >&2
+  exit 1
+}
+[ -x "$NPM_BIN" ] || { echo "npm for Node $NODE_VERSION is missing" >&2; exit 1; }
+[ -x /usr/bin/cloudflared ] || {
+  echo "cloudflared is missing; follow docs/operations/environment-and-deploy.md" >&2
+  exit 1
+}
+[ -x "$HOME/.local/bin/cursor-agent" ] || {
+  echo "cursor-agent is missing; install it before production deployment" >&2
+  exit 1
+}
+[ -s "$ROOT/.env.local" ] || { echo "$ROOT/.env.local is missing or empty" >&2; exit 1; }
+[ -s "$ROOT/cloudflared.token" ] || { echo "$ROOT/cloudflared.token is missing or empty" >&2; exit 1; }
+[ -s "$ROOT/shared/whoop_data.db" ] || { echo "$ROOT/shared/whoop_data.db is missing or empty" >&2; exit 1; }
 
-    node -e "const Database=require(\"better-sqlite3\"); new Database(\":memory:\").close()"
-    npm start -- --hostname 127.0.0.1 --port 8787 >/tmp/runtime-smoke.log 2>&1 &
-    server_pid=$!
-    trap '\''kill "$server_pid" >/dev/null 2>&1 || true'\'' EXIT
+exec 9>"$ROOT/.deploy.lock"
+flock -n 9 || { echo "another opti deployment is already running" >&2; exit 1; }
 
-    ready=0
-    attempt=0
-    while [ "$attempt" -lt 30 ]; do
-      if node -e "fetch(\"http://127.0.0.1:8787/api/health\").then(r=>r.json()).then(b=>{if(b.sha!==process.env.COACH_BUILD_SHA)process.exit(1)})" >/dev/null 2>&1; then
-        ready=1
-        break
-      fi
-      attempt=$((attempt + 1))
-      sleep 1
-    done
-    if [ "$ready" -ne 1 ]; then
-      cat /tmp/runtime-smoke.log >&2
-      exit 1
-    fi
+git -C "$BUILD_REPO" fetch origin "$TARGET_FULL_SHA"
+TARGET_SHA=$(git -C "$BUILD_REPO" rev-parse --short "$TARGET_FULL_SHA")
+WORKTREE=$(mktemp -d "/tmp/whoop-build-${TARGET_SHA}-XXXXXX")
+STAGE="$ROOT/releases/.staging-$TARGET_FULL_SHA-$TS"
+RELEASE="$ROOT/releases/$TARGET_FULL_SHA"
 
-    kill "$server_pid"
-    wait "$server_pid" || true
-    trap - EXIT
-  ' >&2
+mkdir -p "$ROOT/releases" "$ROOT/backups" "$ROOT/runtime-home" "$HOME/.config/systemd/user"
+chmod 700 "$ROOT" "$ROOT/backups" "$ROOT/runtime-home"
+chmod 600 "$ROOT/.env.local" "$ROOT/cloudflared.token" "$ROOT/shared/whoop_data.db"
 
-printf '%s\n' "$BUILD_SHA" > "$WORKTREE/apps/web/.deploy-sha"
-tar -C "$WORKTREE/apps/web" -czf "$ARTIFACT" \
-  --exclude='.next/cache' \
-  .deploy-sha .next dist node_modules
+git -C "$BUILD_REPO" worktree add --detach "$WORKTREE" "$TARGET_FULL_SHA"
 
-echo "  artifact: $(du -h "$ARTIFACT" | cut -f1)" >&2
-echo "  checksum: $(sha256sum "$ARTIFACT" | cut -d ' ' -f1)" >&2
-printf '%s\n' "$ARTIFACT"
-REMOTE_BUILD
-) || die "fleet build failed"
+export PATH="$HOME/.nvm/versions/node/v$NODE_VERSION/bin:$HOME/.local/bin:/usr/local/bin:/usr/bin"
+cd "$WORKTREE/apps/web"
+"$NPM_BIN" ci
+COACH_BUILD_SHA="$TARGET_SHA" "$NPM_BIN" run build
+"$NPM_BIN" prune --omit=dev
 
-[ -n "$REMOTE_BUILD_ARTIFACT" ] || die "fleet build returned no artifact path"
-LOCAL_ARTIFACT=$(fleet fetch --node "$BUILD_NODE" --timeout 300 \
-  --max-bytes "$FLEET_FETCH_MAX_BYTES" "$REMOTE_BUILD_ARTIFACT") \
-  || die "could not fetch fleet artifact"
-[ -f "$LOCAL_ARTIFACT" ] || die "fleet artifact was not downloaded"
-LOCAL_ARTIFACT_SHA=$(sha256sum "$LOCAL_ARTIFACT" | cut -d ' ' -f1)
-echo "  fetched: $(du -h "$LOCAL_ARTIFACT" | cut -f1)"
-echo "  sha256 : $LOCAL_ARTIFACT_SHA"
+# Prove the native SQLite ABI and the pruned Next runtime before activation.
+"$NODE_BIN" -e 'const Database=require("better-sqlite3"); new Database(":memory:").close()'
+SMOKE_PORT=18787
+if ss -tln | grep -q ":$SMOKE_PORT "; then
+  echo "runtime smoke port $SMOKE_PORT is already in use" >&2
+  exit 1
+fi
+COACH_BUILD_SHA="$TARGET_SHA" "$NPM_BIN" start -- --hostname 127.0.0.1 --port "$SMOKE_PORT" \
+  >/tmp/whoop-runtime-smoke.log 2>&1 &
+SMOKE_PID=$!
+smoke_ready=0
+for _ in $(seq 1 30); do
+  smoke_sha=$(curl -sS --max-time 2 "http://127.0.0.1:$SMOKE_PORT/api/health" 2>/dev/null \
+    | sed -n 's/.*"sha":"\([^"]*\)".*/\1/p' || true)
+  if [ "$smoke_sha" = "$TARGET_SHA" ]; then smoke_ready=1; break; fi
+  sleep 1
+done
+kill "$SMOKE_PID" >/dev/null 2>&1 || true
+wait "$SMOKE_PID" 2>/dev/null || true
+SMOKE_PID=""
+if [ "$smoke_ready" != "1" ]; then
+  tail -50 /tmp/whoop-runtime-smoke.log >&2 || true
+  echo "packaged runtime smoke failed" >&2
+  exit 1
+fi
 
-# --- 2. Snapshot the live database before any release activation -------------
-say "Snapshotting prod DB"
-TS=$(date +%Y%m%d-%H%M%S)
-BACKUP="/home/george/whoop_data.db.backup.$TS"
-# SQLite is in WAL mode, so use its online-backup API instead of copying the
-# main file. quick_check must return exactly "ok" before deployment proceeds.
-app "python3 -c 'import sqlite3,sys; s=sqlite3.connect(sys.argv[1],timeout=30); d=sqlite3.connect(sys.argv[2]); s.backup(d); r=d.execute(\"PRAGMA quick_check\").fetchone()[0]; d.close(); s.close(); sys.exit(0) if r==\"ok\" else sys.exit(\"quick_check FAILED: \"+str(r))' $REPO/shared/whoop_data.db $BACKUP && ls -la $BACKUP" \
-  || die "DB snapshot failed or did not verify — refusing to deploy"
+# Snapshot the canonical WAL database with SQLite's online-backup API.
+BACKUP="$ROOT/backups/whoop_data.db.$TS"
+python3 - "$ROOT/shared/whoop_data.db" "$BACKUP" <<'PY'
+import sqlite3
+import sys
 
-# --- 3. Put the exact source checkout and staged artifact on the VM -----------
-say "Staging $TARGET_SHA on $VM_HOST"
-app "cd $REPO && git fetch --all -q && git checkout -q main && git reset --hard '$TARGET_FULL_SHA' && git rev-parse --short HEAD" \
-  || die "could not update the production checkout"
-EXPECT_SHA=$(app "git -C $REPO rev-parse --short HEAD")
-[ "$EXPECT_SHA" = "$TARGET_SHA" ] \
-  || die "VM resolved $EXPECT_SHA but fleet built $TARGET_SHA"
+source = sqlite3.connect(sys.argv[1], timeout=30)
+destination = sqlite3.connect(sys.argv[2])
+source.backup(destination)
+result = destination.execute("PRAGMA quick_check").fetchone()[0]
+destination.close()
+source.close()
+if result != "ok":
+    raise SystemExit(f"backup quick_check failed: {result}")
+PY
 
-VM_ARTIFACT="/tmp/whoop-release-$EXPECT_SHA-$TS.tar.gz"
-quiet_ssh_stdin "$VM_USER_APP@$VM_HOST" "cat > '$VM_ARTIFACT'" < "$LOCAL_ARTIFACT" \
-  || die "artifact upload failed"
-VM_ARTIFACT_SHA=$(app "sha256sum '$VM_ARTIFACT' | cut -d ' ' -f1")
-[ "$VM_ARTIFACT_SHA" = "$LOCAL_ARTIFACT_SHA" ] \
-  || die "artifact checksum mismatch after upload"
-
-RELEASE=$(app_script "$APP" "$VM_ARTIFACT" "$EXPECT_SHA" "$TS" <<'REMOTE_STAGE'
-set -euo pipefail
-APP=$1
-ARTIFACT=$2
-EXPECT_SHA=$3
-TS=$4
-DEPLOY_ROOT="$APP/.deploy"
-STAGE="$DEPLOY_ROOT/staging-$EXPECT_SHA-$TS"
-RELEASE="$DEPLOY_ROOT/releases/$EXPECT_SHA"
-
-mkdir -p "$DEPLOY_ROOT/releases"
+# Materialize an immutable release: tracked source plus generated runtime.
 mkdir "$STAGE"
-tar -xzf "$ARTIFACT" -C "$STAGE"
+git -C "$WORKTREE" archive HEAD | tar -C "$STAGE" -xf -
+cp -a "$WORKTREE/apps/web/.next" "$STAGE/apps/web/.next"
+cp -a "$WORKTREE/apps/web/dist" "$STAGE/apps/web/dist"
+cp -a "$WORKTREE/apps/web/node_modules" "$STAGE/apps/web/node_modules"
+printf '%s\n' "$TARGET_SHA" > "$STAGE/.deploy-sha"
+ln -s "$ROOT/.env.local" "$STAGE/apps/web/.env.local"
 
-[ "$(cat "$STAGE/.deploy-sha")" = "$EXPECT_SHA" ]
-[ -f "$STAGE/.next/BUILD_ID" ]
-[ -x "$STAGE/node_modules/.bin/next" ]
-[ -f "$STAGE/dist/coach-mcp/server.mjs" ]
+[ -f "$STAGE/apps/web/.next/BUILD_ID" ]
+[ -x "$STAGE/apps/web/node_modules/.bin/next" ]
+[ -f "$STAGE/apps/web/dist/coach-mcp/server.mjs" ]
+[ "$(cat "$STAGE/.deploy-sha")" = "$TARGET_SHA" ]
 
-if [ -e "$RELEASE" ] || [ -L "$RELEASE" ]; then
-  mv "$RELEASE" "$DEPLOY_ROOT/releases/stale-$EXPECT_SHA-$TS"
+if [ -L "$ROOT/current" ]; then PREVIOUS=$(readlink -f "$ROOT/current" || true); fi
+if [ -e "$RELEASE" ]; then
+  REPLACED="$ROOT/releases/replaced-$TARGET_SHA-$TS"
+  mv "$RELEASE" "$REPLACED"
+  if [ "$PREVIOUS" = "$RELEASE" ]; then PREVIOUS="$REPLACED"; fi
 fi
 mv "$STAGE" "$RELEASE"
-rm -f -- "$ARTIFACT"
-printf '%s\n' "$RELEASE"
-REMOTE_STAGE
-) || die "artifact extraction or validation failed"
-VM_ARTIFACT=""
-[ -n "$RELEASE" ] || die "VM returned no staged release path"
 
-# --- 4. Stop briefly, switch all runtime paths, and start the service ----------
-say "Activating $EXPECT_SHA"
-sudo_ "sudo systemctl stop $SERVICE" || die "could not stop $SERVICE"
-SERVICE_STOPPED=1
+install -m 0644 "$RELEASE/systemd/whoop-web.service" \
+  "$HOME/.config/systemd/user/whoop-web.service"
+install -m 0644 "$RELEASE/systemd/whoop-cloudflared.service" \
+  "$HOME/.config/systemd/user/whoop-cloudflared.service"
+systemctl --user daemon-reload
 
-app_script "$APP" "$RELEASE" "$CHECKOUT_SHA" "$TS" <<'REMOTE_ACTIVATE'
-set -euo pipefail
-APP=$1
-RELEASE=$2
-OLD_SHA=$3
-TS=$4
-DEPLOY_ROOT="$APP/.deploy"
-LEGACY="$DEPLOY_ROOT/releases/legacy-$OLD_SHA-$TS"
+next_link="$ROOT/.current-$TS"
+ln -s "$RELEASE" "$next_link"
+mv -Tf "$next_link" "$ROOT/current"
+ACTIVATED=1
 
-for name in .next dist node_modules; do
-  [ -e "$RELEASE/$name" ]
-  link="$DEPLOY_ROOT/link-${name#.}-$TS"
-  ln -s "$RELEASE/$name" "$link"
+systemctl --user enable whoop-web.service whoop-cloudflared.service >/dev/null
+systemctl --user restart whoop-web.service
+sleep 5
+systemctl --user is-active --quiet whoop-web.service
 
-  current="$APP/$name"
-  if [ -e "$current" ] && [ ! -L "$current" ]; then
-    mkdir -p "$LEGACY"
-    mv "$current" "$LEGACY/$name"
-  fi
-  mv -Tf "$link" "$current"
-done
-REMOTE_ACTIVATE
+LIVE_SHA=$(curl -sS --max-time 15 "http://127.0.0.1:$PORT/api/health" \
+  | sed -n 's/.*"sha":"\([^"]*\)".*/\1/p')
+[ "$LIVE_SHA" = "$TARGET_SHA" ] || {
+  echo "local health reports $LIVE_SHA, expected $TARGET_SHA" >&2
+  exit 1
+}
+SIGNIN=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 \
+  "http://127.0.0.1:$PORT/signin")
+[ "$SIGNIN" = "200" ] || { echo "local /signin returned $SIGNIN" >&2; exit 1; }
 
-sudo_ "sudo systemctl start $SERVICE && sleep 8 && sudo systemctl is-active $SERVICE" \
-  || die "service did not come back — inspect journalctl -u $SERVICE -n 50"
-SERVICE_STOPPED=0
+systemctl --user restart whoop-cloudflared.service
+sleep 3
+systemctl --user is-active --quiet whoop-cloudflared.service
+ACTIVATED=0
 
-# --- 5. Verify the exact build and public entry point -------------------------
-say "Verifying"
-NEW_SHA=$(app "curl -sS --max-time 15 http://localhost:$PORT/api/health" \
-  | sed -n 's/.*\"sha\":\"\([^\"]*\)\".*/\1/p' || true)
-SIGNIN=$(app "curl -sS -o /dev/null -w '%{http_code}' --max-time 15 http://localhost:$PORT/signin" || echo 000)
+echo
+echo "Deployed $TARGET_SHA on opti"
+echo "  release : $RELEASE"
+echo "  backup  : $BACKUP"
+echo "  web     : active on 127.0.0.1:$PORT"
+echo "  tunnel  : active"
+if [ -n "$PREVIOUS" ]; then
+  echo "  rollback: scripts/deploy --ref $(basename "$PREVIOUS")"
+fi
+REMOTE_DEPLOY
 
-echo "  /api/health sha : ${NEW_SHA:-<none>}"
-echo "  /signin         : $SIGNIN"
-[ "$SIGNIN" = "200" ] || die "/signin returned $SIGNIN"
-[ "$NEW_SHA" = "$EXPECT_SHA" ] \
-  || die "running build is ${NEW_SHA:-<none>} but $EXPECT_SHA was deployed"
+say "Public verification"
+if ! WEB_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 \
+  https://coach.georgenijo.com/signin); then
+  WEB_STATUS=000
+fi
+if ! API_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 \
+  https://coach-api.georgenijo.com/api/health); then
+  API_STATUS=000
+fi
+echo "  coach.georgenijo.com/signin       : $WEB_STATUS"
+echo "  coach-api.georgenijo.com/api/health: $API_STATUS"
+[ "$WEB_STATUS" = "200" ] || die "public web verification failed"
+[ "$API_STATUS" = "200" ] || die "public API verification failed"
 
-say "Deployed $EXPECT_SHA"
-cat <<EOF
-
-Build node : $BUILD_NODE ($BUILD_IMAGE)
-Release    : $RELEASE
-DB backup  : $BACKUP
-
-Rollback (only if something is wrong):
-  scripts/deploy --ref $CHECKOUT_FULL_SHA
-EOF
+say "Deployed $TARGET_SHA"

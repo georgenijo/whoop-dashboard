@@ -29,10 +29,10 @@ Python tests live in `tests/` and run via `pytest` (covers the vault + integrati
 
 ### `scripts/coach` CLI (debug + inspection)
 
-Query the running web app's coach state without hand-rolled SSH+SQL. Defaults to the prod VM; pass `--local` to hit `shared/whoop_data.db` instead. Read-only.
+Query the running web app's coach state without hand-rolled remote SQL. Defaults to production on Fleet node `opti`; pass `--local` to hit `shared/whoop_data.db` instead. Read-only.
 
 ```bash
-scripts/coach login                       # opens persistent SSH ControlMaster (4h ControlPersist)
+scripts/coach login                       # compatibility reachability check; no persistent session
 scripts/coach threads --limit 10          # newest threads (filter with --source ios|web)
 scripts/coach thread 49                   # full transcript (--tools, --thinking, --json, --since YYYY-MM-DD)
 scripts/coach search "trigger_whoop_sync" # grep across chat_messages content + blocks
@@ -43,7 +43,7 @@ scripts/coach journal "5 min ago" --grep chat   # journalctl whoop-web window (p
 scripts/coach settings --user 2           # user_settings row (key redacted)
 scripts/coach why 82                      # forensic: chat_logs + journal + user_settings delta for a thread
 scripts/coach --local threads             # local dev DB instead of prod
-scripts/coach logout                      # close ControlMaster
+scripts/coach logout                      # compatibility no-op
 ```
 
 Use this whenever debugging coach behavior — tool-use traces, missing replies, thinking blocks, latency outliers, sync failures. Pairs with the `coach-debug` skill at `~/.claude/skills/coach-debug/`.
@@ -153,84 +153,35 @@ Admin routes use a separate gate keyed on `ADMIN_APPLE_SUB` env (fail-closed if 
 
 ## Deploy
 
-VM (Ubuntu) runs `whoop-web.service` (systemd) on port 8501.
+Production runs entirely on Optiplex Fleet node `opti`. User-level
+`whoop-web.service` listens on `127.0.0.1:8501`; user-level
+`whoop-cloudflared.service` publishes the web and API hostnames through an
+outbound Cloudflare Tunnel. The canonical database and secrets live under
+`/home/george/services/whoop-dashboard`, outside immutable releases.
 
-Pull requests and pushes to `main` run the web test/build workflow. Once the
-one-time Tailscale workload-identity setup is enabled, verified pushes to
-`main` deploy through the protected `production` GitHub environment. The
-workflow delegates to `scripts/deploy`; it does not duplicate deployment logic
-or copy application runtime secrets into GitHub. See
-`docs/operations/environment-and-deploy.md`.
-
-**Use `scripts/deploy`** — do not hand-run the steps below. The script snapshots
-the DB, pulls, runs the build *detached* (a dropped ssh session does not kill
-`next build`, and the orphan keeps the lock), restarts, then **verifies** that
-`/api/health` reports the commit it just deployed. It prints a rollback recipe
-on exit.
+Pull requests and pushes to `main` run GitHub Actions CI only. Deploys are
+explicit operator actions from a machine with Fleet access. **Use
+`scripts/deploy`**: it builds the exact revision on `opti` with Node 20.20.2,
+proves the native SQLite/runtime package, creates an online SQLite backup,
+atomically switches the release, restarts both user services, and verifies the
+local and public endpoints.
 
 ```bash
-scripts/deploy            # deploy origin/main
 scripts/deploy --check    # report drift only (what's live vs main), change nothing
-scripts/deploy --ref <sha>
+scripts/deploy --ref <CI-validated-full-sha>
 ```
 
-`scripts/deploy --check` answers "is prod current?" in one command. Prod once
-ran three commits behind main for a day with the fix for a live coach-timeout
-bug merged and undeployed, because nothing reported what was actually running.
+Use `fleet exec opti '<command>'` for diagnostics; never address a production
+IP directly. Logs are available with
+`fleet exec opti 'journalctl --user -u whoop-web -n 200'`. The legacy-named
+`vm-ops` skill contains the current Fleet procedures.
 
-SSH to the VM goes through **`tailscale ssh george|ubuntu@whoop-vm`** — plain
-`ssh` to the public IP hits a ForceCommand TUI and exits `Requires an active
-PTY`. See the `vm-ops` skill.
-
-<details>
-<summary>Manual flow (reference only — prefer the script)</summary>
-
-```bash
-# 1. Snapshot the DB BEFORE any schema-touching change (Phase D et al).
-#    NEVER cp/scp the live DB. It is WAL mode with the service still writing:
-#    committed data sits in the -wal sidecar, so a raw copy of the main file
-#    can restore as an EMPTY database, and a copy straddling a checkpoint can
-#    tear it. Both exit 0 — the failure is silent exactly when it matters.
-#    Use SQLite's online-backup API, which is safe against live writers:
-TS=$(date +%Y%m%d-%H%M%S)
-#    quick_check returns TEXT, not an exit status — assert it, or a corrupt
-#    snapshot passes as a good rollback artifact. $TS must expand LOCALLY.
-tailscale ssh george@whoop-vm "python3 -c '
-import sqlite3, sys
-s = sqlite3.connect(sys.argv[1], timeout=30); d = sqlite3.connect(sys.argv[2])
-s.backup(d); r = d.execute(\"PRAGMA quick_check\").fetchone()[0]; d.close(); s.close()
-sys.exit(0 if r == \"ok\" else \"quick_check FAILED: \" + str(r))
-' /home/george/Documents/whoop-dashboard/shared/whoop_data.db /home/george/whoop_data.db.backup.$TS"
-#    Rollback recipe (only if migration fails) — delete the sidecars FIRST, or a
-#    leftover -wal replays onto the restored older file and blends two states
-#    (SQLite validates WAL frames by checksum, never by which DB they belong to):
-#      tailscale ssh ubuntu@whoop-vm 'sudo systemctl stop whoop-web'
-#      tailscale ssh george@whoop-vm 'cd /home/george/Documents/whoop-dashboard/shared \
-#        && rm -f whoop_data.db-wal whoop_data.db-shm \
-#        && cp /home/george/whoop_data.db.backup.$TS whoop_data.db'
-#      ssh ubuntu@<vm-ip> 'sudo -u george git -C /home/george/Documents/whoop-dashboard checkout <prev-sha>'
-#      ssh ubuntu@<vm-ip> 'cd /home/george/Documents/whoop-dashboard/apps/web && sudo -u george npm ci && sudo -u george npm run build && sudo systemctl start whoop-web'
-
-# 2. Standard deploy
-ssh ubuntu@<vm-ip>
-sudo -u george bash -c 'cd /home/george/Documents/whoop-dashboard && git pull origin main'
-sudo -u george bash -c 'cd /home/george/Documents/whoop-dashboard/apps/web && npm ci && npm run build'
-sudo systemctl restart whoop-web
-
-# 3. Post-deploy verification (hit localhost to bypass CF Access)
-curl -sS http://localhost:8501/api/dashboard/today | jq .
-sudo -u george python3 -c "import sqlite3; \
-  conn = sqlite3.connect('/home/george/Documents/whoop-dashboard/shared/whoop_data.db'); \
-  for t in ['recovery','cycles','sleep','workouts','daily_summary']: \
-      n = conn.execute(f'SELECT COUNT(*) FROM {t} WHERE user_id IS NOT NULL').fetchone()[0]; \
-      print(t, n)"
-```
-
-</details>
-
-Public domain has an auth gate (302 to login). For VM-side smoke tests, hit `localhost:8501` directly to bypass. `/api/health` is auth-exempt and returns the running build's commit sha.
-
-The VM has no `sqlite3` binary — query via `sudo -u george python3 -c "import sqlite3; ..."`.
+For direct smoke tests, run curl on `opti` against `127.0.0.1:8501`.
+`/api/health` is auth-exempt and returns the running build SHA to on-box callers.
+Full initial provisioning, Oracle-to-opti data migration, rollback, tunnel,
+backup, and retirement procedures are in
+`docs/operations/environment-and-deploy.md`. Do not delete the Oracle instance
+until its production database and `.env.local` have been recovered and checked.
 
 Whoop sync runs server-side: cron-triggered via `/api/sync`, real-time via webhooks at `/api/whoop/webhook`. There is no Python sync script anymore — `python sync/daily_sync.py` was retired in Phase D.
 
@@ -261,7 +212,7 @@ Use this whenever typecheck + lint alone won't catch the bug:
 - Behavior under specific DB state (cooldown gates, empty data, stale tokens)
 - API route response shape after a code change
 
-Don't use it for VM debugging (use `vm-ops`) or anything needing a real Whoop API call (this skill doesn't copy `tokens.json`).
+Don't use it for production debugging (use the legacy-named `vm-ops` skill) or anything needing a real Whoop API call (this skill doesn't copy `tokens.json`).
 
 ## Issue taxonomy
 

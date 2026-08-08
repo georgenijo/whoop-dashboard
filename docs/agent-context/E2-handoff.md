@@ -101,7 +101,7 @@ sqlite3 "$DB" "ALTER TABLE user_settings ADD COLUMN coach_goals TEXT; \
   ALTER TABLE user_settings ADD COLUMN tz TEXT;"
 ```
 
-(Python via `sudo -u george python3 -c "..."` if `sqlite3` binary is unavailable — it isn't on the VM but is on macOS.)
+(Historical note: the retired VM lacked `sqlite3`, so its verification used Python.)
 
 ### Drive the Settings BYOK section
 

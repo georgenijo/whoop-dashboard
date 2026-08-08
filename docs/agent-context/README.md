@@ -7,10 +7,10 @@ Docs that describe how we develop this repo with AI agents.
 ## New machine setup
 
 1. **Clone** — `git clone git@github.com:georgenijo/whoop-dashboard.git`
-2. **Secrets** — `.env`, `tokens.json`, Apple `.p8`, VM SSH key. These are NOT in the repo. Transfer from a known machine via USB (see the handoff bundle pattern) or pull from the VM.
+2. **Secrets** — local `.env.local` and Apple `.p8` files are not in the repo. Provision them from the owner-approved secret source; never copy production runtime secrets into a worktree.
 3. **Shell helpers** — `echo 'source ~/Documents/code/whoop-dashboard/scripts/zsh-helpers.sh' >> ~/.zshrc && exec zsh`
 4. **CLI auth** — `gh auth login` and make sure `claude` (and `codex` if using `cwork`) are signed in.
-5. **DB** — `mkdir -p shared && ssh whoop-vm 'sudo -u george cat /home/george/Documents/whoop-dashboard/shared/whoop_data.db' > shared/whoop_data.db`
-6. **Run** — `cd apps/web && npm install && npm run dev`
+5. **DB** — `mkdir -p shared && touch shared/whoop_data.db`; use the `whoop-dev` helper when a sanitized production snapshot is explicitly needed.
+6. **Run** — `cd apps/web && npm ci && npm run dev`
 
 After that, `work <issue#>` works from anywhere inside the repo.

@@ -4,7 +4,7 @@ Status: scoping (2026-05-16). Owner: George. Burn-pipeline target.
 
 ## Goal (one sentence)
 
-A single `/logs` page on the VM that shows **every event the system or user has produced** — backend errors, sync runs, coach turns, route hits, webhook deliveries, web pageviews/clicks, web JS errors, iOS lifecycle events, iOS errors — unified into one filterable, searchable, expandable timeline with the same UX polish as Murmur's log viewer.
+A single `/logs` page in the production app that shows **every event the system or user has produced** — backend errors, sync runs, coach turns, route hits, webhook deliveries, web pageviews/clicks, web JS errors, iOS lifecycle events, iOS errors — unified into one filterable, searchable, expandable timeline with the same UX polish as Murmur's log viewer.
 
 ## Success criteria (definition of done)
 
@@ -24,7 +24,7 @@ The page is "done" when **all** of these are true:
 12. **Web client capture** — `window.onerror`, `unhandledrejection`, React ErrorBoundary, pageview tracker, and `data-track` clicks on 6 key elements (nav links, sync button, coach send, sign out, settings save, Whoop connect) all POST to `/api/log/client` → `client_logs` table.
 13. **iOS client capture** — `ClientLogger` Swift module pipes uncaught errors + APIClient errors + lifecycle events (sign in/out, foreground/background, push received, deep link opened) to `/api/log/client` with `source=ios`. No SwiftUI click-capture in v1.
 14. **All-green smoke** — `whoop-dev` snapshot → verify Murmur-style row rendering, expand behavior, live tail, filters, coach block inspector. `npm run build` clean. CI vitest green (`scoped.test.ts` still passes).
-15. **Deployed** — merged to `main`, pulled to VM, `whoop-web.service` restarted, `https://coach.georgenijo.com/logs` shows events end-to-end.
+15. **Deployed** — merged to `main`, activated on `opti` with `scripts/deploy`, and `https://coach.georgenijo.com/logs` shows events end-to-end.
 
 ## Lanes (burn-pipeline order)
 
@@ -104,7 +104,7 @@ Before claiming done, agent must:
 - Trigger a synthetic event from each source (sync run, coach turn, pageview, click, intentional JS error, intentional iOS error).
 - Confirm each appears in the timeline with correct chip color + expandable payload.
 - `npm run build` clean. Vitest green.
-- VM smoke after deploy: `curl localhost:8501/logs` returns 200 (or 302 if SIWA — fine).
+- Production smoke after deploy: `fleet exec opti 'curl -I http://127.0.0.1:8501/logs'` returns 200 when authenticated or a 3xx SIWA redirect when unauthenticated.
 
 ## References
 

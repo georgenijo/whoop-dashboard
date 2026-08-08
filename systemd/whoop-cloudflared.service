@@ -1,0 +1,14 @@
+[Unit]
+Description=Whoop Dashboard Cloudflare Tunnel
+After=network-online.target whoop-web.service
+Wants=network-online.target whoop-web.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/cloudflared tunnel --no-autoupdate run --token-file /home/george/services/whoop-dashboard/cloudflared.token
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target

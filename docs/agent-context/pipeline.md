@@ -79,27 +79,28 @@ Template: [`prompts/PROMPT_SWARM.md`](../../prompts/PROMPT_SWARM.md).
 | Code reviewer | `whoop-reviewer` agent + `/ultrareview` | post-PR; `whoop-reviewer` is read-only, usable any time |
 | Institutional memory | `~/.claude/projects/<slug>/memory/` + `docs/decisions/DECISIONS.md` | auto-loaded; `/decisions add` skill to append |
 
-## Verification gates (no CI — all local)
+## Verification gates
 
 - `cd apps/web && npm run build` — typecheck + bundle
 - `cd apps/web && npm test` — vitest; the load-bearing one is `scoped.test.ts` (blocks unscoped domain SQL)
 - `whoop-dev` skill — spin up dev server in a worktree against a prod-DB snapshot for UI/behavior checks
 - ESLint via `eslint-config-next`
 - Python: `pytest tests/` for helper modules
-- No `.github/workflows/` — all gates are local
+- GitHub Actions repeats install, test, build, and deploy-script syntax checks
 
 ## Deploy
 
-Zero-touch: push to `main`, then on the VM:
+Merge through a pull request, wait for CI, then deploy explicitly through Fleet:
 
 ```bash
-ssh whoop-vm
-sudo -u george bash -c 'cd /home/george/Documents/whoop-dashboard && git pull origin main'
-sudo -u george bash -c 'cd /home/george/Documents/whoop-dashboard/apps/web && npm ci && npm run build'
-sudo systemctl restart whoop-web
+scripts/deploy --check
+scripts/deploy --ref <CI-validated-full-sha>
 ```
 
-Schema-touching changes: snapshot the DB first. Full recipe in [`CLAUDE.md`](../../CLAUDE.md) "Deploy" section.
+The script builds on `opti`, creates an online SQLite backup, atomically switches
+the immutable release, restarts the user services, and verifies local and public
+health. Full provisioning, migration, rollback, and tunnel procedures are in
+[`docs/operations/environment-and-deploy.md`](../operations/environment-and-deploy.md).
 
 ## Prerequisites on a dev machine
 

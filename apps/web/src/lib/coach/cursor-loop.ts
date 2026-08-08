@@ -107,8 +107,8 @@ async function removeCursorProjectRegistration(workspace: string): Promise<void>
 }
 
 // Where the cursor-agent binary lives. The systemd service's PATH may not
-// include ~/.local/bin, so the VM sets COACH_CURSOR_AGENT_BIN to the absolute
-// path. Falls back to PATH lookup for local dev.
+// include ~/.local/bin, so production sets COACH_CURSOR_AGENT_BIN to the
+// absolute path. Falls back to PATH lookup for local dev.
 const CURSOR_AGENT_BIN =
   process.env.COACH_CURSOR_AGENT_BIN || "cursor-agent";
 

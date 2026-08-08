@@ -1,330 +1,93 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Whoop Dashboard — Current Architecture</title>
 <style>
-  :root {
-    --bg: #0a0a0f;
-    --surface: #14141d;
-    --surface-2: #1c1c28;
-    --border: #2a2a35;
-    --accent: #00d4aa;
-    --warn: #ff9e3d;
-    --danger: #ff5e5e;
-    --muted: #6a6a78;
-    --text: #e8e8ed;
-    --text-dim: #a8a8b3;
-    --link: #6ea8fe;
+  :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+  body { margin: 0; background: #0b0b10; color: #ececf2; }
+  main { max-width: 1080px; margin: 0 auto; padding: 48px 24px 72px; }
+  h1 { margin: 0 0 8px; font-size: 32px; }
+  h2 { margin-top: 40px; font-size: 18px; color: #bfc1cc; }
+  p, li { color: #a9abb7; line-height: 1.55; }
+  code { color: #8ee8d2; }
+  .meta { margin-top: 0; color: #707381; }
+  .flow { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; align-items: center; margin: 32px 0; }
+  .card { grid-column: span 2; min-height: 112px; padding: 18px; border: 1px solid #292b36; border-radius: 12px; background: #15161d; }
+  .card strong { display: block; margin-bottom: 8px; color: #f4f4f7; }
+  .accent { border-color: #36c9a7; }
+  .data { border-color: #6099f2; }
+  .arrow { text-align: center; color: #707381; font-size: 24px; }
+  .wide { grid-column: span 7; min-height: auto; }
+  .facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+  .facts section { padding: 18px; border: 1px solid #292b36; border-radius: 12px; background: #12131a; }
+  .facts h3 { margin: 0 0 8px; font-size: 15px; }
+  .facts p, .facts ul { margin: 0; }
+  @media (max-width: 760px) {
+    .flow { display: block; }
+    .card, .arrow { margin-bottom: 12px; }
+    .arrow { transform: rotate(90deg); }
+    .facts { grid-template-columns: 1fr; }
   }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    line-height: 1.5;
-    padding: 32px 48px 64px;
-  }
-  h1 { font-size: 26px; margin: 0 0 4px; font-weight: 600; }
-  .subtitle { color: var(--text-dim); margin: 0 0 24px; font-size: 14px; }
-  .meta { color: var(--muted); font-size: 12px; margin-bottom: 32px; }
-
-  .legend {
-    display: flex;
-    gap: 24px;
-    flex-wrap: wrap;
-    margin-bottom: 24px;
-    padding: 12px 16px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    font-size: 12px;
-  }
-  .legend-item { display: flex; align-items: center; gap: 6px; color: var(--text-dim); }
-  .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
-
-  .canvas {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 24px;
-    overflow-x: auto;
-  }
-  svg { display: block; margin: 0 auto; }
-
-  .notes {
-    margin-top: 32px;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 16px;
-  }
-  .note {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px;
-  }
-  .note h3 { margin: 0 0 8px; font-size: 14px; color: var(--accent); font-weight: 600; }
-  .note ul { margin: 0; padding-left: 18px; font-size: 13px; color: var(--text-dim); }
-  .note li { margin-bottom: 4px; }
-  .tag {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 500;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-  }
-  .tag.warn { color: var(--warn); border-color: rgba(255,158,61,.4); }
-  .tag.danger { color: var(--danger); border-color: rgba(255,94,94,.4); }
-  code { background: var(--surface-2); padding: 1px 6px; border-radius: 4px; font-size: 12px; color: var(--accent); font-family: ui-monospace, SFMono-Regular, monospace; }
 </style>
 </head>
 <body>
+<main>
+  <h1>Whoop Dashboard — Current Architecture</h1>
+  <p class="meta">Production topology as of 2026-08-07</p>
 
-<h1>Whoop Dashboard — Current Architecture</h1>
-<p class="subtitle">Personal-use single-tenant deployment as of 2026-05-08</p>
-<p class="meta">Single user (George), single VM, single SQLite file, single Whoop OAuth token, single Anthropic API key in env.</p>
-
-<div class="legend">
-  <div class="legend-item"><div class="legend-dot" style="background:#00d4aa"></div>Active surface</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#6ea8fe"></div>Storage / data</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#ff9e3d"></div>Legacy / single-point</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#ff5e5e"></div>External service</div>
-  <div class="legend-item"><div class="legend-dot" style="background:#6a6a78"></div>Auth gate</div>
-</div>
-
-<div class="canvas">
-<svg width="1200" height="780" viewBox="0 0 1200 780" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#6a6a78"/>
-    </marker>
-    <marker id="arr-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#00d4aa"/>
-    </marker>
-    <marker id="arr-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0,0 L10,5 L0,10 z" fill="#ff9e3d"/>
-    </marker>
-  </defs>
-
-  <!-- title bands -->
-  <text x="60" y="32" fill="#a8a8b3" font-size="11" font-family="ui-monospace, monospace">CLIENT</text>
-  <line x1="60" y1="40" x2="1140" y2="40" stroke="#2a2a35" stroke-dasharray="3 4"/>
-
-  <text x="60" y="180" fill="#a8a8b3" font-size="11" font-family="ui-monospace, monospace">AUTH GATE</text>
-  <line x1="60" y1="188" x2="1140" y2="188" stroke="#2a2a35" stroke-dasharray="3 4"/>
-
-  <text x="60" y="318" fill="#a8a8b3" font-size="11" font-family="ui-monospace, monospace">APP TIER · UBUNTU VM · systemd whoop-web.service</text>
-  <line x1="60" y1="326" x2="1140" y2="326" stroke="#2a2a35" stroke-dasharray="3 4"/>
-
-  <text x="60" y="568" fill="#a8a8b3" font-size="11" font-family="ui-monospace, monospace">DATA + EXTERNAL</text>
-  <line x1="60" y1="576" x2="1140" y2="576" stroke="#2a2a35" stroke-dasharray="3 4"/>
-
-  <!-- ==== CLIENTS ==== -->
-  <!-- iOS -->
-  <g>
-    <rect x="180" y="60" width="220" height="100" rx="8" fill="#1c1c28" stroke="#00d4aa" stroke-width="1.5"/>
-    <text x="290" y="88" text-anchor="middle" fill="#e8e8ed" font-size="14" font-weight="600">iOS App (Coach)</text>
-    <text x="290" y="108" text-anchor="middle" fill="#a8a8b3" font-size="11">SwiftUI · TestFlight Internal</text>
-    <text x="290" y="124" text-anchor="middle" fill="#6a6a78" font-size="10" font-family="ui-monospace, monospace">com.georgenijo.coach</text>
-    <text x="290" y="142" text-anchor="middle" fill="#6a6a78" font-size="10">v1.0 (1) · live</text>
-  </g>
-
-  <!-- Web -->
-  <g>
-    <rect x="800" y="60" width="220" height="100" rx="8" fill="#1c1c28" stroke="#00d4aa" stroke-width="1.5"/>
-    <text x="910" y="88" text-anchor="middle" fill="#e8e8ed" font-size="14" font-weight="600">Web Browser</text>
-    <text x="910" y="108" text-anchor="middle" fill="#a8a8b3" font-size="11">coach.georgenijo.com</text>
-    <text x="910" y="128" text-anchor="middle" fill="#6a6a78" font-size="10">Next.js 16.2.4 · App Router</text>
-  </g>
-
-  <!-- ==== AUTH ==== -->
-  <!-- Apple Sign In -->
-  <g>
-    <rect x="180" y="208" width="220" height="80" rx="8" fill="#1c1c28" stroke="#6a6a78"/>
-    <text x="290" y="234" text-anchor="middle" fill="#e8e8ed" font-size="13" font-weight="600">Apple Sign In</text>
-    <text x="290" y="254" text-anchor="middle" fill="#a8a8b3" font-size="11">JWT → /api/auth/apple</text>
-    <text x="290" y="272" text-anchor="middle" fill="#6a6a78" font-size="10">user_id = 2</text>
-  </g>
-
-  <!-- CF Access -->
-  <g>
-    <rect x="800" y="208" width="220" height="80" rx="8" fill="#1c1c28" stroke="#6a6a78"/>
-    <text x="910" y="234" text-anchor="middle" fill="#e8e8ed" font-size="13" font-weight="600">Cloudflare Access</text>
-    <text x="910" y="254" text-anchor="middle" fill="#a8a8b3" font-size="11">Email allowlist (1 user)</text>
-    <text x="910" y="272" text-anchor="middle" fill="#6a6a78" font-size="10">user_id = 1 (bootstrap)</text>
-  </g>
-
-  <!-- ==== APP TIER ==== -->
-  <!-- Next.js -->
-  <g>
-    <rect x="380" y="346" width="440" height="180" rx="10" fill="#1c1c28" stroke="#00d4aa" stroke-width="2"/>
-    <text x="600" y="370" text-anchor="middle" fill="#e8e8ed" font-size="15" font-weight="600">Next.js App</text>
-    <text x="600" y="386" text-anchor="middle" fill="#6a6a78" font-size="10" font-family="ui-monospace, monospace">apps/web · port 8501 · Turbopack</text>
-    <line x1="400" y1="400" x2="800" y2="400" stroke="#2a2a35"/>
-
-    <text x="408" y="422" fill="#a8a8b3" font-size="11" font-family="ui-monospace, monospace">routes</text>
-    <text x="408" y="442" fill="#e8e8ed" font-size="11">/ · /recovery · /sleep · /strain · /workouts</text>
-    <text x="408" y="458" fill="#e8e8ed" font-size="11">/coach · /logs · /settings</text>
-
-    <text x="408" y="482" fill="#a8a8b3" font-size="11" font-family="ui-monospace, monospace">api</text>
-    <text x="408" y="502" fill="#e8e8ed" font-size="11">/api/chat · /api/sync · /api/threads</text>
-    <text x="408" y="518" fill="#e8e8ed" font-size="11">/api/auth/apple · /api/dashboard/today</text>
-  </g>
-
-  <!-- Streamlit legacy -->
-  <g>
-    <rect x="60" y="346" width="270" height="120" rx="8" fill="#1c1c28" stroke="#ff9e3d"/>
-    <text x="195" y="372" text-anchor="middle" fill="#e8e8ed" font-size="13" font-weight="600">Streamlit (legacy)</text>
-    <text x="195" y="392" text-anchor="middle" fill="#a8a8b3" font-size="11">streamlit/app.py · port 8501</text>
-    <text x="195" y="412" text-anchor="middle" fill="#6a6a78" font-size="10">Plotly + pandas</text>
-    <text x="195" y="436" text-anchor="middle" fill="#ff9e3d" font-size="11">no longer primary surface</text>
-  </g>
-
-  <!-- daily_sync -->
-  <g>
-    <rect x="870" y="346" width="270" height="120" rx="8" fill="#1c1c28" stroke="#ff9e3d"/>
-    <text x="1005" y="372" text-anchor="middle" fill="#e8e8ed" font-size="13" font-weight="600">daily_sync.py</text>
-    <text x="1005" y="392" text-anchor="middle" fill="#a8a8b3" font-size="11">ThreadPoolExecutor(5)</text>
-    <text x="1005" y="412" text-anchor="middle" fill="#6a6a78" font-size="10">last 7 days · upsert</text>
-    <text x="1005" y="436" text-anchor="middle" fill="#ff9e3d" font-size="11">manual trigger only</text>
-  </g>
-
-  <!-- ==== DATA ==== -->
-  <!-- SQLite -->
-  <g>
-    <rect x="80" y="600" width="280" height="140" rx="8" fill="#1c1c28" stroke="#6ea8fe"/>
-    <text x="220" y="626" text-anchor="middle" fill="#e8e8ed" font-size="14" font-weight="600">SQLite (WAL)</text>
-    <text x="220" y="644" text-anchor="middle" fill="#6a6a78" font-size="10" font-family="ui-monospace, monospace">shared/whoop_data.db</text>
-    <line x1="100" y1="654" x2="340" y2="654" stroke="#2a2a35"/>
-    <text x="100" y="676" fill="#a8a8b3" font-size="10" font-family="ui-monospace, monospace">recovery · cycles · sleep · workouts</text>
-    <text x="100" y="694" fill="#a8a8b3" font-size="10" font-family="ui-monospace, monospace">daily_summary · users · sessions</text>
-    <text x="100" y="712" fill="#a8a8b3" font-size="10" font-family="ui-monospace, monospace">chat_threads · chat_messages</text>
-    <text x="100" y="730" fill="#a8a8b3" font-size="10" font-family="ui-monospace, monospace">chat_logs · sync_logs</text>
-  </g>
-
-  <!-- tokens.json -->
-  <g>
-    <rect x="400" y="600" width="240" height="100" rx="8" fill="#1c1c28" stroke="#ff9e3d"/>
-    <text x="520" y="626" text-anchor="middle" fill="#e8e8ed" font-size="13" font-weight="600">tokens.json</text>
-    <text x="520" y="646" text-anchor="middle" fill="#a8a8b3" font-size="11">repo root · gitignored</text>
-    <text x="520" y="666" text-anchor="middle" fill="#6a6a78" font-size="10">single Whoop OAuth token</text>
-    <text x="520" y="684" text-anchor="middle" fill="#ff9e3d" font-size="11">single-point-of-failure</text>
-  </g>
-
-  <!-- ENV -->
-  <g>
-    <rect x="680" y="600" width="200" height="100" rx="8" fill="#1c1c28" stroke="#ff9e3d"/>
-    <text x="780" y="626" text-anchor="middle" fill="#e8e8ed" font-size="13" font-weight="600">ENV</text>
-    <text x="780" y="648" text-anchor="middle" fill="#a8a8b3" font-size="11" font-family="ui-monospace, monospace">ANTHROPIC_API_KEY</text>
-    <text x="780" y="666" text-anchor="middle" fill="#a8a8b3" font-size="11" font-family="ui-monospace, monospace">WHOOP_CLIENT_ID/SECRET</text>
-    <text x="780" y="688" text-anchor="middle" fill="#ff9e3d" font-size="11">single key, billed to George</text>
-  </g>
-
-  <!-- Whoop API -->
-  <g>
-    <rect x="920" y="600" width="220" height="100" rx="8" fill="#1c1c28" stroke="#ff5e5e"/>
-    <text x="1030" y="626" text-anchor="middle" fill="#e8e8ed" font-size="13" font-weight="600">Whoop API</text>
-    <text x="1030" y="646" text-anchor="middle" fill="#a8a8b3" font-size="11">api.prod.whoop.com</text>
-    <text x="1030" y="666" text-anchor="middle" fill="#6a6a78" font-size="10">/developer · OAuth2</text>
-    <text x="1030" y="686" text-anchor="middle" fill="#ff5e5e" font-size="11">external rate limits</text>
-  </g>
-
-  <!-- Anthropic API (positioned to the right of ENV but below) -->
-  <g>
-    <rect x="400" y="720" width="240" height="50" rx="8" fill="#1c1c28" stroke="#ff5e5e"/>
-    <text x="520" y="742" text-anchor="middle" fill="#e8e8ed" font-size="13" font-weight="600">Anthropic API</text>
-    <text x="520" y="758" text-anchor="middle" fill="#a8a8b3" font-size="10">Sonnet 4.6 · Haiku 4.5</text>
-  </g>
-
-  <!-- ==== CONNECTIONS ==== -->
-  <!-- iOS → Apple Sign In -->
-  <line x1="290" y1="160" x2="290" y2="208" stroke="#00d4aa" stroke-width="1.5" marker-end="url(#arr-accent)"/>
-  <!-- Web → CF Access -->
-  <line x1="910" y1="160" x2="910" y2="208" stroke="#00d4aa" stroke-width="1.5" marker-end="url(#arr-accent)"/>
-
-  <!-- Apple Sign In → Next.js -->
-  <line x1="290" y1="288" x2="450" y2="346" stroke="#6a6a78" stroke-width="1" marker-end="url(#arr)"/>
-  <!-- CF Access → Next.js -->
-  <line x1="910" y1="288" x2="750" y2="346" stroke="#6a6a78" stroke-width="1" marker-end="url(#arr)"/>
-
-  <!-- Next.js → SQLite -->
-  <line x1="450" y1="526" x2="280" y2="600" stroke="#00d4aa" stroke-width="1.5" marker-end="url(#arr-accent)"/>
-  <!-- Next.js → Anthropic -->
-  <line x1="600" y1="526" x2="540" y2="720" stroke="#00d4aa" stroke-width="1.5" marker-end="url(#arr-accent)"/>
-  <!-- Next.js → ENV (read) -->
-  <line x1="700" y1="526" x2="760" y2="600" stroke="#6a6a78" stroke-width="1" stroke-dasharray="3 3" marker-end="url(#arr)"/>
-
-  <!-- daily_sync → tokens.json -->
-  <line x1="950" y1="466" x2="600" y2="600" stroke="#ff9e3d" stroke-width="1.5" marker-end="url(#arr-warn)"/>
-  <!-- daily_sync → Whoop API -->
-  <line x1="1050" y1="466" x2="1030" y2="600" stroke="#ff9e3d" stroke-width="1.5" marker-end="url(#arr-warn)"/>
-  <!-- daily_sync → SQLite -->
-  <line x1="900" y1="466" x2="320" y2="600" stroke="#ff9e3d" stroke-width="1.5" marker-end="url(#arr-warn)"/>
-
-  <!-- Streamlit → SQLite -->
-  <line x1="195" y1="466" x2="200" y2="600" stroke="#ff9e3d" stroke-width="1" stroke-dasharray="3 3" marker-end="url(#arr-warn)"/>
-
-</svg>
-</div>
-
-<div class="notes">
-  <div class="note">
-    <h3>Single-tenant assumptions</h3>
-    <ul>
-      <li><span class="tag warn">user_id=1</span> bootstrap fallback in <code>requireAuth()</code> when no auth header</li>
-      <li>iOS path uses Apple sub → <span class="tag">user_id=2</span> (cross-device split)</li>
-      <li>Most read queries omit <code>user_id</code> filter — single-user safe, multi-tenant unsafe</li>
-      <li>Public domain gated by Cloudflare Access email allowlist (1 entry)</li>
-    </ul>
+  <div class="flow">
+    <div class="card">
+      <strong>Web and iOS clients</strong>
+      Sign in with Apple cookie or bearer session
+    </div>
+    <div class="arrow">→</div>
+    <div class="card accent">
+      <strong>Cloudflare Tunnel</strong>
+      Outbound-only ingress for both public hostnames
+    </div>
+    <div class="arrow">→</div>
+    <div class="card accent">
+      <strong>Fleet node <code>opti</code></strong>
+      <code>whoop-web.service</code> on <code>127.0.0.1:8501</code>
+    </div>
+    <div class="card wide data">
+      <strong>Persistent production state</strong>
+      <code>/home/george/services/whoop-dashboard/shared/whoop_data.db</code>, runtime secrets, tunnel token, online backups, and immutable releases all live on <code>opti</code>.
+    </div>
   </div>
-  <div class="note">
-    <h3>Single-key surfaces</h3>
-    <ul>
-      <li><code>tokens.json</code> at repo root — one Whoop OAuth token for one Whoop account</li>
-      <li><code>ANTHROPIC_API_KEY</code> in <code>.env</code> — every Coach call billed to George</li>
-      <li><code>WHOOP_CLIENT_ID/SECRET</code> — one developer app, all sync calls share its rate budget</li>
-    </ul>
-  </div>
-  <div class="note">
-    <h3>Sync flow</h3>
-    <ul>
-      <li><code>daily_sync.py</code> manual: reads <code>tokens.json</code> → fetches last 7 days from Whoop → upserts to SQLite</li>
-      <li>Token refresh: thread-safe atomic write back to <code>tokens.json</code></li>
-      <li>5-min cooldown short-circuit on <code>/api/sync</code> (PR #231)</li>
-      <li>No cron / systemd timer — every sync triggered by hand from Settings or CLI</li>
-    </ul>
-  </div>
-  <div class="note">
-    <h3>Coach flow</h3>
-    <ul>
-      <li><code>/api/chat</code> agentic loop: Sonnet 4.6 + 5 tools (recovery/sleep/strain/workouts/journal)</li>
-      <li>Caps: 8 tool iterations, 16K output tokens</li>
-      <li>Persistence: <code>chat_threads</code> + <code>chat_messages</code> with <code>blocks</code> JSON column</li>
-      <li>Auto-titles via Haiku 4.5 in Next.js <code>after()</code> hook</li>
-    </ul>
-  </div>
-  <div class="note">
-    <h3>Deploy</h3>
-    <ul>
-      <li>Ubuntu VM · <code>whoop-web.service</code> systemd · port 8501</li>
-      <li>Manual: ssh → git pull → npm ci + build → systemctl restart</li>
-      <li>No CI · no automated tests · no Postgres / replicas</li>
-    </ul>
-  </div>
-  <div class="note">
-    <h3>What scales today</h3>
-    <ul>
-      <li>SQLite WAL handles current load with comfortable headroom</li>
-      <li>Next.js + better-sqlite3 sync access is fine for 1 user's read pattern</li>
-      <li>Anthropic adaptive thinking + 16K cap keeps Coach cost predictable</li>
-    </ul>
-  </div>
-</div>
 
+  <h2>Application and data flow</h2>
+  <div class="facts">
+    <section>
+      <h3>Next.js web + API</h3>
+      <p>Web pages and the iOS API share the same authenticated routes, tenant-scoped DB layer, integrations vault, logs, plans, and Coach threads.</p>
+    </section>
+    <section>
+      <h3>Health sources</h3>
+      <p>Whoop OAuth sync and signed webhooks write health data. The iOS app uploads HealthKit workouts and heart-rate streams.</p>
+    </section>
+    <section>
+      <h3>Coach providers</h3>
+      <p>Anthropic runs through the SDK. Cursor runs through <code>cursor-agent</code> and the bundled scoped MCP server on <code>opti</code>.</p>
+    </section>
+    <section>
+      <h3>SQLite</h3>
+      <p>One WAL database is canonical. Health-domain reads are user-scoped except the retained maintainer journal, whose tenant migration is deferred; live backups use SQLite’s online backup API.</p>
+    </section>
+    <section>
+      <h3>Deployment</h3>
+      <p><code>scripts/deploy</code> uses Fleet, builds on <code>opti</code> with Node 20.20.2, switches an immutable release symlink, restarts user services, and verifies the build SHA.</p>
+    </section>
+    <section>
+      <h3>CI and retired infrastructure</h3>
+      <p>GitHub Actions is CI only. The Oracle VM, nginx, Streamlit app, and Python sync services are retired and are not in the production request path.</p>
+    </section>
+  </div>
+
+  <h2>Operator boundary</h2>
+  <p>Use <code>scripts/deploy</code> and <code>fleet exec opti</code>; do not address a production IP directly. Provisioning, migration, backup, rollback, and Oracle-retirement procedures live in <a href="operations/environment-and-deploy.md">the environment and deployment guide</a>.</p>
+</main>
 </body>
 </html>

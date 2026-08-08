@@ -36,9 +36,9 @@ Follow the standard `PROMPT.md` workflow:
 
 ## 5. Ground rules
 
-- **Mac = dev, OptiPlex = deploy.** Anything that needs to run on the OptiPlex uses tailscale ssh via the full path: `/Applications/Tailscale.app/Contents/MacOS/Tailscale ssh george@optiplex '<cmd>'`. **The Bash tool does not inherit zsh aliases**, so the `tailscale` alias you see in an interactive shell won't work here.
-- **State-changing OptiPlex commands** (systemctl, podman run, file writes under `/home/george/Documents/whoop-dashboard`, pod destroys) require explicit user approval. Read-only recon is fine.
-- **Preserve the live Streamlit app** on OptiPlex until Phase 4. Don't restart its systemd unit, don't move files it reads without updating the unit.
+- **Dev checkout ≠ production service root.** Production runs on Fleet node `opti`; use `scripts/deploy` for releases and `fleet exec opti '<cmd>'` for diagnostics. Never address the host by IP or mutate `/home/george/services/whoop-dashboard/current` by hand.
+- **State-changing production commands** outside the canonical deploy workflow require explicit user approval. Read-only Fleet reconnaissance is fine.
+- **Retired services stay retired.** Do not reintroduce Streamlit, Python sync units, nginx, or Oracle deployment paths.
 - **Don't touch Oura-tagged issues** (#41–#49). Python-side Oura work runs in parallel; don't rewrite it.
 - **No escapes:** no `--dangerously-skip-permissions`, no `--no-verify`, no `git reset --hard` on work you didn't just create.
 - **One issue per branch**, PR to main. `main` stays deployable (streamlit + Next.js both build).

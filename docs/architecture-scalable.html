@@ -126,7 +126,7 @@
 
 <h1>Scalable Architecture — BYOK Multi-Tenant</h1>
 <p class="subtitle">Target state: anyone signs in, drops in their Whoop OAuth + Anthropic key, has a working dashboard.</p>
-<p class="meta">Estimated effort: ~2 weeks of focused evenings (solo). Scope: hosted up to ~100 users on existing VM, or self-host packaged via Docker compose.</p>
+<p class="meta">Historical scaling sketch. Scope: hosted up to ~100 users on the current single-node deployment, or self-host packaged via Docker compose.</p>
 
 <div class="legend">
   <div class="legend-item"><div class="legend-dot" style="background:#00d4aa"></div>Existing component</div>
@@ -398,7 +398,7 @@
       <li>Self-host: Docker compose · <code>VAULT_KEY</code> + <code>WHOOP_CLIENT_ID/SECRET</code> as required env</li>
       <li>README onboarding: register your own Whoop dev app · register Apple Service ID · run</li>
       <li>Single SQLite volume mount · backup script</li>
-      <li>Hosted: keep current VM · monitor Whoop client quota at ~100 active users</li>
+      <li>Hosted: keep the current <code>opti</code> node · monitor Whoop client quota at ~100 active users</li>
     </ul>
   </div>
 </div>
@@ -428,7 +428,7 @@
   </div>
   <div class="decision">
     <h4>5. SQLite or Postgres at multi-tenant?</h4>
-    <p><span class="opt">Stay SQLite:</span> works to ~100 light users on the existing VM with WAL. <span class="opt">Move to Postgres:</span> opens path to read replicas, RLS, real connection pooling — pay the cost when you hit ~50 users actively syncing concurrently. Defer until pain.</p>
+    <p><span class="opt">Stay SQLite:</span> works to ~100 light users on the existing single node with WAL. <span class="opt">Move to Postgres:</span> opens path to read replicas, RLS, real connection pooling — pay the cost when you hit ~50 users actively syncing concurrently. Defer until pain.</p>
   </div>
 </div>
 
