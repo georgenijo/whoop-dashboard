@@ -1,16 +1,11 @@
 #!/usr/bin/env bash
-# Deploy main to the prod VM, and *verify* it landed.
+# Build a production release on a fleet runner, deploy it to the prod VM, and
+# verify the exact commit is serving traffic.
 #
-# Why this exists: the deploy recipe used to live in prose in CLAUDE.md, and
-# every step of it had a trap that had to be rediscovered by hand:
-#
-#   - plain `ssh ubuntu@<ip>` no longer works (sshd ForceCommand runs a TUI
-#     and exits "Requires an active PTY"); tailscale ssh bypasses it
-#   - `next build` takes 5+ min and SURVIVES a dropped ssh session, so a
-#     naive `ssh ... npm run build` looks like it failed while the real build
-#     is still holding the lock
-#   - nothing reported which commit was actually serving traffic, so prod ran
-#     three commits behind main for a day with the fix for a live bug merged
+# The Oracle VM is deliberately artifact-only. Its 1 GB of RAM is enough to
+# run the app but not to install dependencies and compile Next.js reliably.
+# Builds run in a pinned Node 20 container on the Optiplex fleet node, then the
+# completed runtime tree is checksummed, staged, and activated on the VM.
 #
 # Usage:
 #   scripts/deploy              # deploy origin/main
@@ -20,12 +15,16 @@ set -euo pipefail
 
 VM_USER_APP=george
 VM_USER_SUDO=ubuntu
-VM_HOST=whoop-vm                  # tailnet name; see the vm-ops skill
+VM_HOST=whoop-vm
 REPO=/home/george/Documents/whoop-dashboard
 APP="$REPO/apps/web"
 SERVICE=whoop-web
 PORT=8501
-BUILD_POLL_SECONDS=900            # 15 min ceiling; a cold build is ~5-6 min
+
+BUILD_NODE=${DEPLOY_BUILD_NODE:-opti}
+BUILD_REPO=${DEPLOY_BUILD_REPO:-/home/george/Documents/code/whoop-dashboard}
+BUILD_IMAGE=${DEPLOY_BUILD_IMAGE:-docker.io/library/node:20-bullseye}
+FLEET_FETCH_MAX_BYTES=${DEPLOY_FETCH_MAX_BYTES:-1073741824}
 
 REF=origin/main
 CHECK_ONLY=0
@@ -33,168 +32,271 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --ref)   REF="$2"; shift 2 ;;
     --check) CHECK_ONLY=1; shift ;;
-    -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
 
-# The tailscale client/daemon version-skew warning is benign and fires on every
-# call; drop just that line so real stderr still surfaces.
+# Tailscale's client/daemon version-skew warning is benign and fires on every
+# call; drop only that line so real stderr still surfaces.
 quiet_ssh() {
   tailscale ssh "$@" < /dev/null 2> >(grep -v '^Warning: client version' >&2)
 }
+
+# Script and artifact uploads need stdin, unlike ordinary one-shot commands.
+quiet_ssh_stdin() {
+  tailscale ssh "$@" 2> >(grep -v '^Warning: client version' >&2)
+}
+
 app()   { quiet_ssh "$VM_USER_APP@$VM_HOST"  "$@"; }
 sudo_() { quiet_ssh "$VM_USER_SUDO@$VM_HOST" "$@"; }
+app_script() {
+  quiet_ssh_stdin "$VM_USER_APP@$VM_HOST" "bash -s -- $*"
+}
 say()  { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 die()  { printf '\n\033[31mFAILED: %s\033[0m\n' "$*" >&2; exit 1; }
 
-# --- 0. what is live right now -----------------------------------------------
-say "Current state"
-LIVE_SHA=$(app "curl -sS --max-time 10 http://localhost:$PORT/api/health" \
-  | sed -n 's/.*\"sha\":\"\([^\"]*\)\".*/\1/p' || true)
-CHECKOUT_SHA=$(app "git -C $REPO rev-parse --short HEAD")
-echo "  checkout on VM : $CHECKOUT_SHA"
-echo "  serving traffic: ${LIVE_SHA:-<no /api/health — pre-health build>}"
+REMOTE_BUILD_ARTIFACT=""
+LOCAL_ARTIFACT=""
+VM_ARTIFACT=""
+SERVICE_STOPPED=0
+cleanup() {
+  rc=$?
+  trap - EXIT
 
-if [ -n "$LIVE_SHA" ] && [ "$LIVE_SHA" != "$CHECKOUT_SHA" ]; then
-  echo "  NOTE: checkout != running build. The service is stale; a restart is pending."
-fi
+  if [ "$SERVICE_STOPPED" = "1" ]; then
+    sudo_ "sudo systemctl start $SERVICE" >/dev/null 2>&1 || true
+  fi
+  if [ -n "$VM_ARTIFACT" ]; then
+    app "rm -f -- '$VM_ARTIFACT'" >/dev/null 2>&1 || true
+  fi
+  if [ -n "$REMOTE_BUILD_ARTIFACT" ]; then
+    fleet exec "$BUILD_NODE" "rm -f -- '$REMOTE_BUILD_ARTIFACT'" >/dev/null 2>&1 || true
+  fi
+  if [ -n "$LOCAL_ARTIFACT" ]; then
+    rm -f -- "$LOCAL_ARTIFACT"
+  fi
 
-# Refresh the LOCAL remote-tracking ref before resolving it. `git rev-parse`
-# never contacts the remote, so without this a clone that hasn't fetched since
-# the last merge resolves origin/main to a stale commit — the script would then
-# deploy the OLD commit, verify it against itself, and print success, while
-# --check reports "nothing to do". That is exactly the drift this tool exists
-# to catch, so it must not be able to produce a false all-clear.
+  exit "$rc"
+}
+trap cleanup EXIT
+
+# --- 0. Resolve the target and report current production state ----------------
 case "$REF" in
   origin/*) git fetch origin -q || die "local git fetch failed — cannot trust $REF" ;;
 esac
-TARGET_SHA=$(git rev-parse --short "$REF")
+TARGET_FULL_SHA=$(git rev-parse "$REF^{commit}")
+TARGET_SHA=$(git rev-parse --short "$TARGET_FULL_SHA")
+
+say "Current state"
+LIVE_SHA=$(app "curl -sS --max-time 10 http://localhost:$PORT/api/health" \
+  | sed -n 's/.*\"sha\":\"\([^\"]*\)\".*/\1/p' || true)
+CHECKOUT_FULL_SHA=$(app "git -C $REPO rev-parse HEAD")
+CHECKOUT_SHA=$(app "git -C $REPO rev-parse --short HEAD")
+echo "  checkout on VM : $CHECKOUT_SHA"
+echo "  serving traffic: ${LIVE_SHA:-<no /api/health>}"
 echo "  target ($REF): $TARGET_SHA"
+
+if [ -n "$LIVE_SHA" ] && [ "$LIVE_SHA" != "$CHECKOUT_SHA" ]; then
+  echo "  NOTE: checkout != running build. The service is stale; activation is pending."
+fi
 if [ "$CHECKOUT_SHA" = "$TARGET_SHA" ] && [ "${LIVE_SHA:-}" = "$TARGET_SHA" ]; then
   echo "  already deployed and serving $TARGET_SHA — nothing to do."
   exit 0
 fi
 [ "$CHECK_ONLY" = "1" ] && { echo "  (--check: stopping here)"; exit 0; }
 
-# --- 1. snapshot the DB ------------------------------------------------------
-# Cheap insurance. Schema migrations are lazy ALTERs in openWrite(), so ANY
-# deploy can migrate the DB on the first write after restart.
+command -v fleet >/dev/null 2>&1 || die "fleet CLI is required to build on $BUILD_NODE"
+command -v sha256sum >/dev/null 2>&1 || die "sha256sum is required"
+
+# --- 1. Build an isolated runtime artifact on the fleet node ------------------
+say "Building $TARGET_SHA on fleet node $BUILD_NODE"
+REMOTE_BUILD_ARTIFACT=$(
+  fleet exec --timeout 1800 "$BUILD_NODE" \
+    "bash -s -- '$TARGET_FULL_SHA' '$BUILD_REPO' '$BUILD_IMAGE'" <<'REMOTE_BUILD'
+set -euo pipefail
+
+TARGET_FULL_SHA=$1
+BUILD_REPO=$2
+BUILD_IMAGE=$3
+WORKTREE=$(mktemp -d "/tmp/whoop-build-${TARGET_FULL_SHA:0:12}-XXXXXX")
+ARTIFACT=$(mktemp "/tmp/whoop-release-${TARGET_FULL_SHA:0:12}-XXXXXX.tar.gz")
+
+cleanup_build() {
+  rc=$?
+  trap - EXIT
+  git -C "$BUILD_REPO" worktree remove --force "$WORKTREE" >/dev/null 2>&1 || true
+  rm -rf -- "$WORKTREE"
+  if [ "$rc" -ne 0 ]; then rm -f -- "$ARTIFACT"; fi
+  exit "$rc"
+}
+trap cleanup_build EXIT
+
+git -C "$BUILD_REPO" fetch origin "$TARGET_FULL_SHA" >&2
+git -C "$BUILD_REPO" worktree add --detach "$WORKTREE" "$TARGET_FULL_SHA" >&2
+BUILD_SHA=$(git -C "$WORKTREE" rev-parse --short HEAD)
+
+podman run --rm \
+  --volume "$WORKTREE/apps/web:/workspace" \
+  --workdir /workspace \
+  --env "COACH_BUILD_SHA=$BUILD_SHA" \
+  "$BUILD_IMAGE" \
+  sh -lc '
+    set -eu
+    npm ci
+    npm run build
+    npm prune --omit=dev
+
+    node -e "const Database=require(\"better-sqlite3\"); new Database(\":memory:\").close()"
+    npm start -- --hostname 127.0.0.1 --port 8787 >/tmp/runtime-smoke.log 2>&1 &
+    server_pid=$!
+    trap '\''kill "$server_pid" >/dev/null 2>&1 || true'\'' EXIT
+
+    ready=0
+    attempt=0
+    while [ "$attempt" -lt 30 ]; do
+      if node -e "fetch(\"http://127.0.0.1:8787/api/health\").then(r=>r.json()).then(b=>{if(b.sha!==process.env.COACH_BUILD_SHA)process.exit(1)})" >/dev/null 2>&1; then
+        ready=1
+        break
+      fi
+      attempt=$((attempt + 1))
+      sleep 1
+    done
+    if [ "$ready" -ne 1 ]; then
+      cat /tmp/runtime-smoke.log >&2
+      exit 1
+    fi
+
+    kill "$server_pid"
+    wait "$server_pid" || true
+    trap - EXIT
+  ' >&2
+
+printf '%s\n' "$BUILD_SHA" > "$WORKTREE/apps/web/.deploy-sha"
+tar -C "$WORKTREE/apps/web" -czf "$ARTIFACT" \
+  --exclude='.next/cache' \
+  .deploy-sha .next dist node_modules
+
+echo "  artifact: $(du -h "$ARTIFACT" | cut -f1)" >&2
+echo "  checksum: $(sha256sum "$ARTIFACT" | cut -d ' ' -f1)" >&2
+printf '%s\n' "$ARTIFACT"
+REMOTE_BUILD
+) || die "fleet build failed"
+
+[ -n "$REMOTE_BUILD_ARTIFACT" ] || die "fleet build returned no artifact path"
+LOCAL_ARTIFACT=$(fleet fetch --node "$BUILD_NODE" --timeout 300 \
+  --max-bytes "$FLEET_FETCH_MAX_BYTES" "$REMOTE_BUILD_ARTIFACT") \
+  || die "could not fetch fleet artifact"
+[ -f "$LOCAL_ARTIFACT" ] || die "fleet artifact was not downloaded"
+LOCAL_ARTIFACT_SHA=$(sha256sum "$LOCAL_ARTIFACT" | cut -d ' ' -f1)
+echo "  fetched: $(du -h "$LOCAL_ARTIFACT" | cut -f1)"
+echo "  sha256 : $LOCAL_ARTIFACT_SHA"
+
+# --- 2. Snapshot the live database before any release activation -------------
 say "Snapshotting prod DB"
 TS=$(date +%Y%m%d-%H%M%S)
 BACKUP="/home/george/whoop_data.db.backup.$TS"
-# NOT `cp`. The DB is WAL mode (connection.ts: journal_mode = WAL) and the
-# service is still running and writing here — nothing is stopped until step 4.
-# Everything committed since the last checkpoint lives only in the -wal
-# sidecar, so copying the main file alone can yield a backup that restores as
-# an EMPTY database, and a cp straddling a checkpoint can tear the file. Both
-# exit 0, so the failure is silent precisely when you need the backup.
-# sqlite3.Connection.backup() is the online-backup API: it holds a read txn for
-# the whole copy, is safe against concurrent writers, and emits a
-# self-contained file with no sidecar. quick_check proves the artifact is
-# readable before we go anywhere near the deploy.
-# quick_check returns diagnostic TEXT, never a failing exit status — printing
-# it would let a corrupt snapshot pass as a valid rollback artifact. Raise
-# unless it is exactly "ok" so `|| die` actually fires.
+# SQLite is in WAL mode, so use its online-backup API instead of copying the
+# main file. quick_check must return exactly "ok" before deployment proceeds.
 app "python3 -c 'import sqlite3,sys; s=sqlite3.connect(sys.argv[1],timeout=30); d=sqlite3.connect(sys.argv[2]); s.backup(d); r=d.execute(\"PRAGMA quick_check\").fetchone()[0]; d.close(); s.close(); sys.exit(0) if r==\"ok\" else sys.exit(\"quick_check FAILED: \"+str(r))' $REPO/shared/whoop_data.db $BACKUP && ls -la $BACKUP" \
-  || die "DB snapshot failed or did not verify — refusing to deploy without a good rollback artifact"
+  || die "DB snapshot failed or did not verify — refusing to deploy"
 
-# --- 2. pull -----------------------------------------------------------------
-say "Pulling $REF"
-app "cd $REPO && git fetch --all -q && git checkout -q main && git reset --hard $TARGET_SHA && git rev-parse --short HEAD" \
-  || die "git pull failed"
-
-# Re-derive the expected sha ON THE VM. Git's abbreviation length is per-repo
-# (it grows with object count) and core.abbrev is per-machine, so a sha
-# abbreviated here can legitimately differ in length from the same commit
-# abbreviated there — which would fail verification on a perfectly good deploy.
-# Compare like with like: both sides now come from the VM's own git.
+# --- 3. Put the exact source checkout and staged artifact on the VM -----------
+say "Staging $TARGET_SHA on $VM_HOST"
+app "cd $REPO && git fetch --all -q && git checkout -q main && git reset --hard '$TARGET_FULL_SHA' && git rev-parse --short HEAD" \
+  || die "could not update the production checkout"
 EXPECT_SHA=$(app "git -C $REPO rev-parse --short HEAD")
-[ -n "$EXPECT_SHA" ] || die "could not read deployed sha from the VM"
+[ "$EXPECT_SHA" = "$TARGET_SHA" ] \
+  || die "VM resolved $EXPECT_SHA but fleet built $TARGET_SHA"
 
-# --- 3. build (detached — MUST survive this ssh session) ---------------------
-# `set -o pipefail` must be set INSIDE the remote command: the local pipefail on
-# line 19 governs local pipelines only, so without this the remote pipeline's
-# status is tail's (always 0) and a failed `npm ci` would sail straight through
-# into a build against gutted node_modules.
-say "Installing deps + building (detached; ~5-6 min)"
-app "cd $APP && set -o pipefail && npm ci --silent 2>&1 | tail -2" || die "npm ci failed"
+VM_ARTIFACT="/tmp/whoop-release-$EXPECT_SHA-$TS.tar.gz"
+quiet_ssh_stdin "$VM_USER_APP@$VM_HOST" "cat > '$VM_ARTIFACT'" < "$LOCAL_ARTIFACT" \
+  || die "artifact upload failed"
+VM_ARTIFACT_SHA=$(app "sha256sum '$VM_ARTIFACT' | cut -d ' ' -f1")
+[ "$VM_ARTIFACT_SHA" = "$LOCAL_ARTIFACT_SHA" ] \
+  || die "artifact checksum mismatch after upload"
 
-# Completion is signalled by an EXIT-CODE SENTINEL, not by .next/BUILD_ID.
-# Next writes BUILD_ID (build/index.js:1583) well BEFORE static generation runs
-# (~line 1665), so a build that dies during prerender still leaves a BUILD_ID
-# behind. Polling for that file would happily restart prod into a broken build —
-# the precise failure this script exists to prevent.
-#
-# --max-old-space-size: V8's default heap cap on the 956M VM is ~490M, which is
-# also the build's actual working set — run 30588295522 OOM'd at 487M while an
-# earlier build of a near-identical tree passed. Pin the cap above the margin;
-# the box's 1G swap absorbs what RAM can't.
-app "cd $APP && rm -f /tmp/deploy-build.log /tmp/deploy-build.exit && \
-     setsid nohup bash -c 'NODE_OPTIONS=--max-old-space-size=800 npm run build > /tmp/deploy-build.log 2>&1; echo \$? > /tmp/deploy-build.exit' \
-     < /dev/null > /dev/null 2>&1 & echo launched"
+RELEASE=$(app_script "$APP" "$VM_ARTIFACT" "$EXPECT_SHA" "$TS" <<'REMOTE_STAGE'
+set -euo pipefail
+APP=$1
+ARTIFACT=$2
+EXPECT_SHA=$3
+TS=$4
+DEPLOY_ROOT="$APP/.deploy"
+STAGE="$DEPLOY_ROOT/staging-$EXPECT_SHA-$TS"
+RELEASE="$DEPLOY_ROOT/releases/$EXPECT_SHA"
 
-waited=0
-BUILD_RC=""
-while [ "$waited" -lt "$BUILD_POLL_SECONDS" ]; do
-  sleep 20; waited=$((waited + 20))
-  BUILD_RC=$(app "cat /tmp/deploy-build.exit 2>/dev/null || true")
-  if [ -n "$BUILD_RC" ]; then
-    echo "  build finished after ${waited}s (exit $BUILD_RC)"; break
+mkdir -p "$DEPLOY_ROOT/releases"
+mkdir "$STAGE"
+tar -xzf "$ARTIFACT" -C "$STAGE"
+
+[ "$(cat "$STAGE/.deploy-sha")" = "$EXPECT_SHA" ]
+[ -f "$STAGE/.next/BUILD_ID" ]
+[ -x "$STAGE/node_modules/.bin/next" ]
+[ -f "$STAGE/dist/coach-mcp/server.mjs" ]
+
+if [ -e "$RELEASE" ] || [ -L "$RELEASE" ]; then
+  mv "$RELEASE" "$DEPLOY_ROOT/releases/stale-$EXPECT_SHA-$TS"
+fi
+mv "$STAGE" "$RELEASE"
+rm -f -- "$ARTIFACT"
+printf '%s\n' "$RELEASE"
+REMOTE_STAGE
+) || die "artifact extraction or validation failed"
+VM_ARTIFACT=""
+[ -n "$RELEASE" ] || die "VM returned no staged release path"
+
+# --- 4. Stop briefly, switch all runtime paths, and start the service ----------
+say "Activating $EXPECT_SHA"
+sudo_ "sudo systemctl stop $SERVICE" || die "could not stop $SERVICE"
+SERVICE_STOPPED=1
+
+app_script "$APP" "$RELEASE" "$CHECKOUT_SHA" "$TS" <<'REMOTE_ACTIVATE'
+set -euo pipefail
+APP=$1
+RELEASE=$2
+OLD_SHA=$3
+TS=$4
+DEPLOY_ROOT="$APP/.deploy"
+LEGACY="$DEPLOY_ROOT/releases/legacy-$OLD_SHA-$TS"
+
+for name in .next dist node_modules; do
+  [ -e "$RELEASE/$name" ]
+  link="$DEPLOY_ROOT/link-${name#.}-$TS"
+  ln -s "$RELEASE/$name" "$link"
+
+  current="$APP/$name"
+  if [ -e "$current" ] && [ ! -L "$current" ]; then
+    mkdir -p "$LEGACY"
+    mv "$current" "$LEGACY/$name"
   fi
-  if app "grep -q 'Another next build process' /tmp/deploy-build.log 2>/dev/null && echo locked || true" | grep -q locked; then
-    die "another next build holds the lock — an orphan from a dropped session is still running.
-     Inspect: tailscale ssh $VM_USER_APP@$VM_HOST 'pgrep -af \"next build\"'"
-  fi
-  printf '  ... %ss\n' "$waited"
+  mv -Tf "$link" "$current"
 done
+REMOTE_ACTIVATE
 
-[ -n "$BUILD_RC" ] \
-  || die "build did not finish in ${BUILD_POLL_SECONDS}s. Log: /tmp/deploy-build.log"
-[ "$BUILD_RC" = "0" ] || {
-  echo "--- last 20 lines of build log ---"
-  app "tail -20 /tmp/deploy-build.log || true"
-  die "build exited $BUILD_RC — NOT restarting the service. Full log: /tmp/deploy-build.log"
-}
+sudo_ "sudo systemctl start $SERVICE && sleep 8 && sudo systemctl is-active $SERVICE" \
+  || die "service did not come back — inspect journalctl -u $SERVICE -n 50"
+SERVICE_STOPPED=0
 
-# --- 4. restart --------------------------------------------------------------
-say "Restarting $SERVICE"
-sudo_ "sudo systemctl restart $SERVICE && sleep 8 && sudo systemctl is-active $SERVICE" \
-  || die "service did not come back — journalctl -u $SERVICE -n 50"
-
-# --- 5. verify the deploy actually landed ------------------------------------
+# --- 5. Verify the exact build and public entry point -------------------------
 say "Verifying"
 NEW_SHA=$(app "curl -sS --max-time 15 http://localhost:$PORT/api/health" \
   | sed -n 's/.*\"sha\":\"\([^\"]*\)\".*/\1/p' || true)
-# `|| echo 000` so a failed remote curl reports a bad status instead of tripping
-# set -e and aborting with no diagnostic at the last step of a deploy.
 SIGNIN=$(app "curl -sS -o /dev/null -w '%{http_code}' --max-time 15 http://localhost:$PORT/signin" || echo 000)
 
 echo "  /api/health sha : ${NEW_SHA:-<none>}"
 echo "  /signin         : $SIGNIN"
-
 [ "$SIGNIN" = "200" ] || die "/signin returned $SIGNIN"
-# An empty NEW_SHA is only acceptable when deploying a build that predates
-# /api/health. Once the endpoint exists, silence means the restart failed to
-# pick up the new build and MUST NOT pass as success.
-if [ -z "$NEW_SHA" ]; then
-  die "/api/health returned no sha — the service is not serving the new build.
-     If you are intentionally deploying a commit older than /api/health, re-run
-     with --check to confirm, then deploy manually."
-fi
-if [ "$NEW_SHA" != "$EXPECT_SHA" ]; then
-  die "running build is $NEW_SHA but $EXPECT_SHA was deployed — restart did not pick up the build"
-fi
+[ "$NEW_SHA" = "$EXPECT_SHA" ] \
+  || die "running build is ${NEW_SHA:-<none>} but $EXPECT_SHA was deployed"
 
 say "Deployed $EXPECT_SHA"
 cat <<EOF
 
+Build node : $BUILD_NODE ($BUILD_IMAGE)
+Release    : $RELEASE
+DB backup  : $BACKUP
+
 Rollback (only if something is wrong):
-  tailscale ssh $VM_USER_SUDO@$VM_HOST 'sudo systemctl stop $SERVICE'
-  # Delete the sidecars FIRST. SIGTERM to node does not guarantee a clean
-  # SQLite close, and SQLite validates WAL frames by salt/checksum only — it
-  # never checks the WAL belongs to this DB image — so a leftover -wal would
-  # replay onto the restored older file and blend two database states.
-  tailscale ssh $VM_USER_APP@$VM_HOST  'rm -f $REPO/shared/whoop_data.db-wal $REPO/shared/whoop_data.db-shm && cp $BACKUP $REPO/shared/whoop_data.db'
-  scripts/deploy --ref $CHECKOUT_SHA
+  scripts/deploy --ref $CHECKOUT_FULL_SHA
 EOF

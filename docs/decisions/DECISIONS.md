@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-07: Production builds move from the runtime VM to the Optiplex fleet node
+
+**Decision:** Run production dependency installation and Next.js compilation in an isolated worktree on Fleet node `opti`, inside the pinned `node:20-bullseye` Podman image. `whoop-vm` becomes artifact-only: it retains runtime secrets and the canonical SQLite database, verifies and stages the checksummed runtime archive, switches release paths during a brief service stop, restarts, and verifies the exact build SHA. GitHub Actions remains CI-only; an operator invokes the canonical `scripts/deploy` after verification.
+
+**Rationale:** Two consecutive on-VM installs/builds exhausted the Oracle instance's 1 GB memory and swap, making both SSH and production HTTP unavailable. The Optiplex has compatible x86_64 Linux, 8 GB RAM, and a Fleet-managed access path; pinning Node 20 on Debian Bullseye also keeps native modules compatible with the production Node ABI and older glibc while preventing application secrets from leaving the VM.
+
+**Status:** active
+
+**References:** `scripts/deploy`, `.github/workflows/ci.yml`, `docs/operations/environment-and-deploy.md`
+
+---
+
 ## 2026-08-07: Quiet Instrument constrains every web route through four layers
 
 **Decision:** Rebuild the web UI around a four-layer contract: closed tokens, twelve enum-only primitives, an intent router with per-route hierarchy, and machine-enforced lint rules. Interaction uses foreground/background contrast rather than an `--accent` token; hue is reserved for brand identity, metric identity, and semantic state. Every migrated route gets exactly one hero metric, at most six quiet metrics, at most two charts above the fold, and zero resting bordered containers except genuinely tappable or elevated surfaces.
@@ -96,7 +108,7 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 **Rationale:** CI should prove the exact commit before production changes, while deployment must preserve the hardened SQLite online-backup and health-verification behavior already encoded in `scripts/deploy`. Workload identity avoids a permanent runner or long-lived SSH/auth key, environment approval creates an explicit production boundary, and the enable flag lets the workflow merge safely before the one-time tailnet policy and federation credential are configured.
 
-**Status:** active
+**Status:** superseded by 2026-08-07 production fleet-build decision
 
 **References:** `.github/workflows/ci.yml`, `scripts/deploy`, `docs/operations/environment-and-deploy.md`
 
