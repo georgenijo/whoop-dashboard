@@ -49,7 +49,6 @@ struct ZonePill: View {
             Circle()
                 .fill(color)
                 .frame(width: 5, height: 5)
-                .shadow(color: color.opacity(0.8), radius: 3)
             Text((prefix.map { "\($0) · " } ?? "") + zone.label.uppercased())
                 .font(Theme.FontStyle.sans(10.5, weight: .semibold))
                 .tracking(0.6)

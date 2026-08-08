@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-07: Native Quiet Instrument shares tokens without changing feature contracts
+
+**Decision:** Move the SwiftUI app onto the same semantic Quiet Instrument palette, spacing, shape, and surface rules as web in a separate native PR. Translate legacy API-provided color hex values at the rendering boundary, keep every existing tab, route, model control, attachment flow, and data action intact, and use platform-native navigation and controls rather than reproducing web markup.
+
+**Rationale:** Web and iOS need one visual language, but the native client already owns platform-specific interaction and service behavior. A semantic compatibility layer makes the redesign visible across the existing app immediately without coupling presentation work to a payload migration or risking feature regressions.
+
+**Status:** active
+
+**References:** PR #481, `apps/ios/Sources/Shared/Theme.swift`, `apps/ios/Sources/Shared/ColorHex.swift`, `apps/ios/Sources/Shared/GlassCard.swift`
+
+---
+
 ## 2026-08-07: Production builds move from the runtime VM to the Optiplex fleet node
 
 **Decision:** Run production dependency installation and Next.js compilation in an isolated worktree on Fleet node `opti`, inside the pinned `node:20-bullseye` Podman image. `whoop-vm` becomes artifact-only: it retains runtime secrets and the canonical SQLite database, verifies and stages the checksummed runtime archive, switches release paths during a brief service stop, restarts, and verifies the exact build SHA. GitHub Actions remains CI-only; an operator invokes the canonical `scripts/deploy` after verification.

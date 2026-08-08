@@ -44,7 +44,6 @@ struct SleepStageDonutView: View {
                     .foregroundStyle(e.color)
                 }
                 .frame(width: 120, height: 120)
-                .shadow(color: Theme.Palette.sleepDeep.opacity(0.25), radius: 12)
 
                 VStack(spacing: 9) {
                     ForEach(entries) { e in
@@ -52,7 +51,6 @@ struct SleepStageDonutView: View {
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(e.color)
                                 .frame(width: 9, height: 9)
-                                .shadow(color: e.color.opacity(0.6), radius: 3)
                             Text(e.name)
                                 .font(Theme.FontStyle.sans(12.5, weight: .medium))
                                 .foregroundStyle(Theme.Palette.fg1)

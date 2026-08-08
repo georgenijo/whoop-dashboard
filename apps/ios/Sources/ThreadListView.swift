@@ -24,6 +24,7 @@ struct ThreadListView: View {
             }
             content
         }
+        .background(Theme.Palette.bg)
         .toolbar(.hidden, for: .navigationBar)
         .task { await load() }
         .refreshable { await load() }
@@ -78,7 +79,6 @@ struct ThreadListView: View {
                 Image(systemName: "sparkles")
                     .font(.system(size: 32, weight: .light))
                     .foregroundStyle(Theme.Palette.ai)
-                    .shadow(color: Theme.Palette.ai.opacity(0.6), radius: 12)
             }
             Text("No threads yet")
                 .font(Theme.FontStyle.sans(16, weight: .semibold))

@@ -52,7 +52,7 @@ struct TodayKpisView: View {
                 .foregroundStyle(Theme.Palette.fg2)
             Text(primary)
                 .font(Theme.FontStyle.display(22, weight: .medium))
-                .foregroundStyle(Theme.Palette.fg0)
+                .foregroundStyle(accent)
                 .monospacedDigit()
             if let sub {
                 Text(sub)
@@ -66,19 +66,11 @@ struct TodayKpisView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(
-            ZStack {
-                LinearGradient(colors: [Color.white.opacity(0.035), Color.white.opacity(0.008)],
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                RadialGradient(colors: [accent.opacity(0.14), .clear],
-                               center: UnitPoint(x: 1, y: 0),
-                               startRadius: 0, endRadius: 120)
-            }
-        )
+        .background(Theme.Palette.bgLift)
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1)
+            RoundedRectangle(cornerRadius: Theme.Radius.md)
+                .strokeBorder(Theme.Palette.rule, lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
     }
 }

@@ -44,13 +44,15 @@ struct SleepNeedBreakdownView: View {
                 HStack(spacing: 2) {
                     ForEach(segments) { seg in
                         Rectangle()
-                            .fill(LinearGradient(colors: [seg.color, seg.color.opacity(0.7)],
-                                                 startPoint: .top, endPoint: .bottom))
+                            .fill(seg.color)
                             .frame(width: max(0, geo.size.width * width(of: seg)))
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 7))
-                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.Radius.md)
+                        .strokeBorder(Theme.Palette.rule, lineWidth: 1)
+                )
             }
             .frame(height: 14)
 

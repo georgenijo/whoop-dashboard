@@ -87,6 +87,7 @@ struct SettingsView: View {
                 }
             }
             .scrollContentBackground(.hidden)
+            .background(Theme.Palette.bg)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
@@ -182,11 +183,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var rowBackground: some View {
-        LinearGradient(
-            colors: [Color.white.opacity(0.04), Color.white.opacity(0.01)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+        Theme.Palette.bgLift
     }
 
     private var versionString: String {

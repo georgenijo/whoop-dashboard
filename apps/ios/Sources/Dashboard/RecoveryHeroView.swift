@@ -12,7 +12,7 @@ struct RecoveryHeroView: View {
 
             HStack(alignment: .center, spacing: 18) {
                 RecoveryRing(score: hero.score)
-                    .frame(width: 120, height: 120)
+                    .frame(width: 112, height: 112)
 
                 VStack(alignment: .leading, spacing: 12) {
                     if let score = hero.score {
@@ -31,7 +31,7 @@ struct RecoveryHeroView: View {
             }
             .padding(.top, 12)
         }
-        .glassCard(tint: .recovery, padding: 18)
+        .glassCard(tint: .recovery, padding: Theme.Spacing.md)
     }
 }
 
@@ -41,17 +41,16 @@ private struct RecoveryRing: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.white.opacity(0.06), lineWidth: 9)
+                .stroke(Theme.Palette.rule, lineWidth: 7)
             if let score {
                 let color = RecoveryZone(score: score).color
                 Circle()
                     .trim(from: 0, to: max(0, min(1, score / 100)))
-                    .stroke(color, style: StrokeStyle(lineWidth: 9, lineCap: .round))
+                    .stroke(color, style: StrokeStyle(lineWidth: 7, lineCap: .butt))
                     .rotationEffect(.degrees(-90))
-                    .shadow(color: color.opacity(0.6), radius: 6)
                 VStack(spacing: 2) {
                     Text("\(Int(score.rounded()))")
-                        .font(Theme.FontStyle.mono(42, weight: .semibold))
+                        .font(Theme.FontStyle.mono(40, weight: .medium))
                         .foregroundStyle(Theme.Palette.fg0)
                         .monospacedDigit()
                     Text("PERCENT")

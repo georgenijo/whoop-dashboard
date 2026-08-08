@@ -12,14 +12,14 @@ struct PageHeader<Trailing: View>: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
-                .font(Theme.FontStyle.sans(28, weight: .bold))
-                .foregroundStyle(Theme.Palette.fg0)
+                .font(Theme.FontStyle.sans(24, weight: .semibold))
+                .foregroundStyle(Theme.Palette.fgHi)
             Spacer()
             trailing()
         }
         .padding(.horizontal, Theme.Spacing.md)
-        .padding(.top, 4)
-        .padding(.bottom, 10)
+        .padding(.top, Theme.Spacing.xs)
+        .padding(.bottom, Theme.Spacing.sm)
     }
 }
 

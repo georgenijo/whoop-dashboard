@@ -4,11 +4,14 @@ struct KPIStripView: View {
     let tiles: [KPITile]
     var onTap: (KPITile) -> Void = { _ in }
 
-    private var strip: [KPITile] { Array(tiles.prefix(4)) }
+    private let columns = [
+        GridItem(.flexible(), spacing: Theme.Spacing.xs),
+        GridItem(.flexible(), spacing: Theme.Spacing.xs),
+    ]
 
     var body: some View {
-        HStack(spacing: 1) {
-            ForEach(Array(strip.enumerated()), id: \.offset) { index, tile in
+        LazyVGrid(columns: columns, spacing: Theme.Spacing.xs) {
+            ForEach(tiles) { tile in
                 if tile.href != nil {
                     Button {
                         onTap(tile)
@@ -19,45 +22,51 @@ struct KPIStripView: View {
                 } else {
                     KPICell(tile: tile)
                 }
-                if index < strip.count - 1 {
-                    Rectangle()
-                        .fill(Theme.Palette.borderSubtle)
-                        .frame(width: 1)
-                }
             }
         }
-        .background(Theme.Palette.bg2)
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.Radius.lg)
-                .strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
     }
 }
 
 private struct KPICell: View {
     let tile: KPITile
 
-    private var accent: Color { Color(hex: tile.colorHex) }
+    private var accent: Color {
+        switch tile.key {
+        case .recovery: return Theme.Palette.recovery
+        case .hrv: return Theme.Palette.hrv
+        case .rhr: return Theme.Palette.rhr
+        case .sleep: return Theme.Palette.sleepDeep
+        case .strain: return Theme.Palette.strain
+        case .spo2: return Theme.Palette.spo2
+        }
+    }
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
             Text(tile.label.uppercased())
                 .font(Theme.FontStyle.sans(9.5, weight: .semibold))
                 .tracking(1.2)
                 .foregroundStyle(Theme.Palette.fg3)
                 .lineLimit(1)
-            Text(formattedValue)
-                .font(Theme.FontStyle.mono(19, weight: .semibold))
-                .foregroundStyle(Theme.Palette.fg0)
-                .monospacedDigit()
-            Text(tile.unit.isEmpty ? " " : tile.unit)
-                .font(Theme.FontStyle.mono(8.5))
-                .foregroundStyle(accent)
+            HStack(alignment: .lastTextBaseline, spacing: Theme.Spacing.xxs) {
+                Text(formattedValue)
+                    .font(Theme.FontStyle.mono(24, weight: .medium))
+                    .foregroundStyle(Theme.Palette.fgHi)
+                    .monospacedDigit()
+                Text(tile.unit)
+                    .font(Theme.FontStyle.mono(9))
+                    .foregroundStyle(accent)
+            }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .padding(.horizontal, 6)
+        .frame(minHeight: 64, alignment: .leading)
+        .padding(Theme.Spacing.sm)
+        .background(Theme.Palette.bgLift)
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.md)
+                .strokeBorder(Theme.Palette.rule, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
         .contentShape(Rectangle())
     }
 

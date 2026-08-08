@@ -32,12 +32,12 @@ struct RecoveryTrendCardView: View {
             chart
         }
         .padding(16)
-        .background(Color.white.opacity(0.025))
+        .background(Theme.Palette.bgLift)
         .overlay(
-            RoundedRectangle(cornerRadius: Theme.Radius.lg)
-                .strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1)
+            RoundedRectangle(cornerRadius: Theme.Radius.md)
+                .strokeBorder(Theme.Palette.rule, lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
     }
 
     @ViewBuilder
@@ -50,15 +50,10 @@ struct RecoveryTrendCardView: View {
         } else {
             Chart {
                 ForEach(values, id: \.date) { point in
-                    AreaMark(x: .value("Date", point.date), y: .value("Recovery", point.value))
-                        .interpolationMethod(.catmullRom)
-                        .foregroundStyle(.linearGradient(
-                            colors: [accent.opacity(0.28), accent.opacity(0.0)],
-                            startPoint: .top, endPoint: .bottom))
                     LineMark(x: .value("Date", point.date), y: .value("Recovery", point.value))
                         .interpolationMethod(.catmullRom)
                         .foregroundStyle(accent)
-                        .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                        .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .butt, lineJoin: .round))
                 }
             }
             .chartXAxis(.hidden)

@@ -22,10 +22,10 @@ struct PlansView: View {
                     Circle()
                         .fill(Theme.Palette.recovery)
                         .frame(width: 8, height: 8)
-                        .shadow(color: Theme.Palette.recovery.opacity(0.7), radius: 5)
                 }
                 content
             }
+            .background(Theme.Palette.bg)
             .toolbar(.hidden, for: .navigationBar)
             .refreshable { await load(showSpinner: false) }
         }
@@ -58,7 +58,7 @@ struct PlansView: View {
                     .padding(.horizontal)
                 Button("Retry") { Task { await load(showSpinner: true) } }
                     .buttonStyle(.borderedProminent)
-                    .tint(Theme.Palette.recovery)
+                    .tint(Theme.Palette.brand)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -258,12 +258,12 @@ private struct WeekReadinessStrip: View {
             .padding(.top, 12)
         }
         .padding(14)
-        .background(Color.white.opacity(0.025))
+        .background(Theme.Palette.bgLift)
         .overlay(
-            RoundedRectangle(cornerRadius: Theme.Radius.lg)
-                .strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1)
+            RoundedRectangle(cornerRadius: Theme.Radius.md)
+                .strokeBorder(Theme.Palette.rule, lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
     }
 
     private func weekdayLabel(_ date: String) -> String {
@@ -290,7 +290,6 @@ private struct WeekReadinessStrip: View {
                 Circle().strokeBorder(color.opacity(0.5), lineWidth: 1.5)
             )
             .frame(width: 22, height: 22)
-            .shadow(color: isToday ? color.opacity(0.5) : .clear, radius: isToday ? 6 : 0)
     }
 }
 
@@ -312,7 +311,6 @@ private struct SplitRow: View {
             Circle()
                 .fill(accent)
                 .frame(width: 8, height: 8)
-                .shadow(color: accent.opacity(0.6), radius: 4)
             VStack(alignment: .leading, spacing: 2) {
                 Text(plan.title)
                     .font(Theme.FontStyle.sans(13.5, weight: .semibold))
@@ -330,12 +328,12 @@ private struct SplitRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(Color.white.opacity(0.025))
+        .background(Theme.Palette.bgLift)
         .overlay(
-            RoundedRectangle(cornerRadius: Theme.Radius.lg)
-                .strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1)
+            RoundedRectangle(cornerRadius: Theme.Radius.md)
+                .strokeBorder(Theme.Palette.rule, lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.md))
         .contentShape(Rectangle())
     }
 }
@@ -349,8 +347,8 @@ private struct MetaTag: View {
             .foregroundStyle(Theme.Palette.fg2)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
-            .background(Color.white.opacity(0.05), in: Capsule())
-            .overlay(Capsule().strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1))
+            .background(Theme.Palette.ruleSoft, in: Capsule())
+            .overlay(Capsule().strokeBorder(Theme.Palette.rule, lineWidth: 1))
     }
 }
 

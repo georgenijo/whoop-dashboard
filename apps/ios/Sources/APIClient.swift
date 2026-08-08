@@ -102,7 +102,7 @@ final class APIClient {
     private let encoder: JSONEncoder
 
     init(
-        baseURL: URL = URL(string: "https://coach-api.georgenijo.com")!,
+        baseURL: URL = APIClient.defaultBaseURL,
         session: URLSession = .shared
     ) {
         self.baseURL = baseURL
@@ -133,6 +133,19 @@ final class APIClient {
         }
         self.decoder = decoder
         self.encoder = JSONEncoder()
+    }
+
+    private static var defaultBaseURL: URL {
+        #if DEBUG
+        if
+            let raw = ProcessInfo.processInfo.environment["COACH_API_URL"],
+            let override = URL(string: raw),
+            ["http", "https"].contains(override.scheme?.lowercased() ?? "")
+        {
+            return override
+        }
+        #endif
+        return URL(string: "https://coach-api.georgenijo.com")!
     }
 
     func get<T: Decodable>(_ path: String, query: [URLQueryItem]? = nil) async throws -> T {

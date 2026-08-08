@@ -18,6 +18,7 @@ struct RecoveryView: View {
                 PageHeader("Recovery") { rangeMenu }
                 content
             }
+            .background(Theme.Palette.bg)
             .toolbar(.hidden, for: .navigationBar)
             .refreshable { await load(showSpinner: false) }
         }

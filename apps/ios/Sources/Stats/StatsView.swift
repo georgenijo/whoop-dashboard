@@ -25,6 +25,7 @@ struct StatsView: View {
                 }
                 content
             }
+            .background(Theme.Palette.bg)
             .toolbar(.hidden, for: .navigationBar)
             .refreshable { await load(showSpinner: false) }
         }
@@ -57,7 +58,7 @@ struct StatsView: View {
                     .padding(.horizontal)
                 Button("Retry") { Task { await load(showSpinner: true) } }
                     .buttonStyle(.borderedProminent)
-                    .tint(Theme.Palette.recovery)
+                    .tint(Theme.Palette.brand)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -340,11 +341,10 @@ private struct BySportCard: View {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.white.opacity(0.05))
+                        .fill(Theme.Palette.ruleSoft)
                     Capsule()
                         .fill(color)
                         .frame(width: max(geo.size.width * fraction, 3))
-                        .shadow(color: color.opacity(0.5), radius: 4)
                 }
             }
             .frame(height: 10)
