@@ -14,7 +14,8 @@ migrating, rolling back, or deleting the retired Oracle instance.
 
 ## Boundaries
 
-- Use `fleet exec opti '<command>'`; never use a public IP or `whoop-vm`.
+- Use `fleet exec opti '<command>'` for normal operations; never use a public
+  IP. Access `whoop-vm` only for the documented one-time migration/recovery.
 - Use `scripts/deploy` for releases. Do not hand-run Git pulls/builds in the
   production service directory.
 - Services are user units. Always use `systemctl --user` and
@@ -60,8 +61,7 @@ fleet exec opti 'journalctl --user -u whoop-web -f'
 
 ```bash
 scripts/deploy --check
-scripts/deploy                 # origin/main
-scripts/deploy --ref <sha>     # exact revision
+scripts/deploy --ref <CI-validated-full-sha>
 
 fleet exec opti 'systemctl --user restart whoop-web'
 fleet exec opti 'systemctl --user restart whoop-cloudflared'

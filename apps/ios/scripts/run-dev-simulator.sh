@@ -42,9 +42,16 @@ if [[ -z "$SIMULATOR_ID" ]]; then
   exit 1
 fi
 
+if [[ ! "$DEV_USER_ID" =~ ^[1-9][0-9]*$ ]]; then
+  printf 'COACH_DEV_USER_ID must be a positive integer.\n' >&2
+  exit 1
+fi
+
+printf -v REMOTE_USER_ARG '%q' "$DEV_USER_ID"
+printf -v REMOTE_ENV_ARG '%q' "$PROD_ENV_FILE"
 printf 'Minting a Debug-only session for user %s on Fleet node %s...\n' "$DEV_USER_ID" "$FLEET_NODE"
 SESSION_TOKEN="$(
-  fleet exec "$FLEET_NODE" "python3 - '$DEV_USER_ID' '$PROD_ENV_FILE'" <<'PYTHON'
+  fleet exec "$FLEET_NODE" "python3 - $REMOTE_USER_ARG $REMOTE_ENV_ARG" <<'PYTHON'
 import base64
 import hashlib
 import hmac

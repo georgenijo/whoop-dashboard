@@ -18,7 +18,7 @@ whoop-dashboard/
 ├── infra/terraform/        Retired Oracle baseline; never apply for production
 ├── systemd/                Production user units for opti
 ├── streamlit/              LEGACY — do not modify
-├── tokens.json             Whoop OAuth tokens (will move into integrations table)
+├── tokens.json             LEGACY gitignored migration input; never a runtime source
 └── .github/                Issue templates, workflows
 ```
 
@@ -32,14 +32,15 @@ Both web and iOS clients call the same `/api/*` routes on Next.js. Bearer-token 
 | Web dev | `cd apps/web && npm run dev` | Hot reload on :3000 |
 | Test | `cd apps/web && npm test` | Vitest suite |
 | DB inspect | `sqlite3 shared/whoop_data.db ".schema"` | Read-only check |
-| Lint | (none configured) | — |
+| Lint | `cd apps/web && npm run lint` | Diagnostic; current main has known React-purity failures |
 
 ## Hard rules — never violate
 
 1. **Branch off main, open a PR.** Do not push directly to main.
 2. **No AI attribution.** Never add "Co-Authored-By: Claude" / "Co-Authored-By: GPT" / "Generated with Claude Code" / "🤖 Generated with…" / similar to commit messages, PR descriptions, branch names, issue bodies, or comments. The user enforces this strictly.
 3. **Preserve the `shared/whoop_data.db` repository contract.** Local/dev uses that path. Production sets `WHOOP_DB_PATH=/home/george/services/whoop-dashboard/shared/whoop_data.db`, outside immutable releases.
-4. **Do not move `tokens.json`** from repo root until an issue explicitly migrates it.
+4. **Do not add runtime reads from `tokens.json`.** It is a legacy, gitignored
+   one-time migration input; move or remove it only in an explicit cleanup issue.
 5. **Do not touch `streamlit/`.** Legacy app, deprecated.
 6. **Match existing style.** TypeScript strict, Next.js App Router conventions. Two-space indent. No emoji unless asked.
 7. **No new top-level dependencies** unless the issue explicitly approves. Adding a package is a design decision.

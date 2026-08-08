@@ -94,8 +94,7 @@ Merge through a pull request, wait for CI, then deploy explicitly through Fleet:
 
 ```bash
 scripts/deploy --check
-scripts/deploy             # origin/main
-# or: scripts/deploy --ref <full-or-short-sha>
+scripts/deploy --ref <CI-validated-full-sha>
 ```
 
 The script builds on `opti`, creates an online SQLite backup, atomically switches

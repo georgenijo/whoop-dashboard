@@ -110,9 +110,22 @@ fleet exec opti "loginctl show-user george -p Linger"
 # If it reports Linger=no:
 fleet exec opti "sudo loginctl enable-linger george"
 
-# Cursor's official Linux installer writes cursor-agent under ~/.local.
-fleet exec opti "curl https://cursor.com/install -fsS | bash"
-fleet exec opti "/home/george/.local/bin/cursor-agent --version"
+# Review and update both pinned values deliberately when upgrading Cursor.
+fleet exec opti "bash -s" <<'CURSOR_INSTALL'
+set -euo pipefail
+installer=/tmp/cursor-install.sh
+expected_sha=a51ebedf2a13bc073d994a6f2defbd1f4d976a6cf116ad678d071c6a363bf3e4
+expected_version=2026.07.23-e383d2b
+curl -fsSL --output "$installer" https://cursor.com/install
+printf '%s  %s\n' "$expected_sha" "$installer" | sha256sum -c -
+bash "$installer"
+rm -f -- "$installer"
+actual=$(/home/george/.local/bin/cursor-agent --version)
+[ "$actual" = "$expected_version" ] || {
+  echo "cursor-agent version $actual does not match $expected_version" >&2
+  exit 1
+}
+CURSOR_INSTALL
 ```
 
 Cursor installation reference: <https://docs.cursor.com/en/cli/installation>.
@@ -121,9 +134,18 @@ Install `cloudflared` from Cloudflare's current Linux package, then verify the
 binary path expected by the service:
 
 ```bash
-fleet exec opti "cd /tmp && curl --location --output cloudflared.deb \
-  'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb' \
-  && sudo dpkg -i cloudflared.deb && /usr/bin/cloudflared --version"
+fleet exec opti "bash -s" <<'CLOUDFLARED_INSTALL'
+set -euo pipefail
+version=2026.7.3
+expected_sha=049777d30f9bf93da6df8bbe31383460eb2aa51a832c6551824d56f9fcc55974
+package=/tmp/cloudflared-linux-amd64.deb
+curl -fsSL --output "$package" \
+  "https://github.com/cloudflare/cloudflared/releases/download/$version/cloudflared-linux-amd64.deb"
+printf '%s  %s\n' "$expected_sha" "$package" | sha256sum -c -
+sudo dpkg -i "$package"
+rm -f -- "$package"
+/usr/bin/cloudflared --version | grep -F "$version"
+CLOUDFLARED_INSTALL
 ```
 
 Cloudflare installation reference:
@@ -131,11 +153,17 @@ Cloudflare installation reference:
 
 ### 2. Recover the live SQLite database
 
-Bring `whoop-vm` online one final time. Create an online backup; never copy the
-live WAL database file directly.
+Bring `whoop-vm` online one final time. Fence writes before the final snapshot
+and keep the old web service stopped through cutover; never copy the live WAL
+database file directly.
 
 ```bash
-tailscale ssh george@whoop-vm "python3 -c '
+tailscale ssh ubuntu@whoop-vm \
+  'sudo systemctl stop whoop-web && ! sudo systemctl is-active --quiet whoop-web'
+
+tailscale ssh george@whoop-vm "umask 077
+rm -f -- /home/george/whoop_data.db.opti-migration
+python3 -c '
 import sqlite3
 s=sqlite3.connect(\"/home/george/Documents/whoop-dashboard/shared/whoop_data.db\", timeout=30)
 d=sqlite3.connect(\"/home/george/whoop_data.db.opti-migration\")
@@ -143,7 +171,8 @@ s.backup(d)
 r=d.execute(\"PRAGMA quick_check\").fetchone()[0]
 d.close(); s.close()
 raise SystemExit(0 if r == \"ok\" else \"quick_check failed: \" + str(r))
-'"
+'
+chmod 0600 /home/george/whoop_data.db.opti-migration"
 
 tailscale ssh george@whoop-vm \
   'cat /home/george/whoop_data.db.opti-migration' \
@@ -162,6 +191,10 @@ assert c.execute(\"PRAGMA quick_check\").fetchone()[0] == \"ok\"
 print(\"tables\", c.execute(\"SELECT count(*) FROM sqlite_master WHERE type=\\\"table\\\"\").fetchone()[0])
 c.close()
 '"
+
+# Remove the temporary Oracle copy only after the destination verifies.
+tailscale ssh george@whoop-vm \
+  'rm -f -- /home/george/whoop_data.db.opti-migration'
 ```
 
 ### 3. Recover production secrets
@@ -206,7 +239,7 @@ cloudflared `2025.4.0` or newer. See
 ### 5. Deploy and cut over
 
 ```bash
-scripts/deploy --ref origin/main
+scripts/deploy --ref <CI-validated-full-sha>
 ```
 
 Confirm all of the following before deleting the Oracle instance:
@@ -223,9 +256,17 @@ Also sign in on web, open an existing Coach thread, run one Whoop sync, and
 send one iOS request. Keep the final Oracle backup offline until at least one
 successful opti backup and restore drill has completed.
 
-If cutover fails, restore the recorded Oracle DNS records, bring the old
-service back online, and investigate `opti` without deleting either copy of the
-database. Do not write to both production databases at once.
+If cutover fails before `opti` accepts any production write, stop both opti
+services before restoring the recorded Oracle DNS records and old service:
+
+```bash
+fleet exec opti 'systemctl --user stop whoop-cloudflared whoop-web'
+```
+
+If `opti` may have accepted a write, do **not** start Oracle or restore its DNS.
+First create a verified online backup from `opti` and reconcile/restore that
+newer database onto the stopped Oracle service using the database-restoration
+procedure below. At every point exactly one web service may accept writes.
 
 ### 6. Retire Oracle
 
@@ -252,9 +293,8 @@ unchecked destroy could remove unrelated account resources.
 After CI passes on the desired commit:
 
 ```bash
-scripts/deploy                    # origin/main
-scripts/deploy --ref <full-sha>   # exact commit
 scripts/deploy --check            # read-only drift/service check
+scripts/deploy --ref <CI-validated-full-sha>
 ```
 
 The script:

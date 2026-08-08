@@ -308,9 +308,8 @@ deployments.
 Manual operator commands:
 
 ```bash
-scripts/deploy --check       # read-only checkout/build drift report
-scripts/deploy               # deploy origin/main
-scripts/deploy --ref <sha>   # deploy an exact revision
+scripts/deploy --check              # read-only main/live drift report
+scripts/deploy --ref <full-sha>     # deploy the CI-validated revision
 ```
 
 Do not reproduce the deploy sequence with ad hoc SSH or Git commands. Runtime

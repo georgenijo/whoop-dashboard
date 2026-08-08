@@ -167,9 +167,8 @@ atomically switches the release, restarts both user services, and verifies the
 local and public endpoints.
 
 ```bash
-scripts/deploy            # deploy origin/main
 scripts/deploy --check    # report drift only (what's live vs main), change nothing
-scripts/deploy --ref <sha>
+scripts/deploy --ref <CI-validated-full-sha>
 ```
 
 Use `fleet exec opti '<command>'` for diagnostics; never address a production

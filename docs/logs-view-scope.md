@@ -104,7 +104,7 @@ Before claiming done, agent must:
 - Trigger a synthetic event from each source (sync run, coach turn, pageview, click, intentional JS error, intentional iOS error).
 - Confirm each appears in the timeline with correct chip color + expandable payload.
 - `npm run build` clean. Vitest green.
-- Production smoke after deploy: `fleet exec opti 'curl -I http://127.0.0.1:8501/logs'` returns 200 (or 302 if SIWA — fine).
+- Production smoke after deploy: `fleet exec opti 'curl -I http://127.0.0.1:8501/logs'` returns 200 when authenticated or a 3xx SIWA redirect when unauthenticated.
 
 ## References
 

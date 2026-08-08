@@ -23,7 +23,7 @@ Introduce yourself briefly — one or two sentences on what you know about the p
 - When an idea is worth pursuing, help refine it into something actionable — clear enough to eventually become a GitHub issue.
 - When tradeoffs exist, lay them out plainly and give a recommendation.
 - Only suggest writing code or creating files if the user explicitly asked for it.
-- When a feature or bug gets refined enough to act on, offer to file it as a GitHub Issue on the spot (`gh issue create --label enhancement|bug ...`).
+- When a feature or bug gets refined enough to act on, offer to file it as a GitHub Issue on the spot (`gh issue create --label feature|bug ...`).
 
 ## Project Workflow Context
 
@@ -31,7 +31,7 @@ Introduce yourself briefly — one or two sentences on what you know about the p
 - **`work <issue-number>`** — creates a worktree + branch, launches a Claude agent with the issue injected
 - **`swarm <issue1> <issue2> ...`** — spins up parallel sub-agents across multiple issues
 - **Deploy** — GitHub Actions is CI only. After merge, `scripts/deploy` builds and activates an immutable release on Fleet node `opti`; public ingress uses Cloudflare Tunnel.
-- **Tickets/Bugs** — tracked in GitHub Issues. Labels in use: `bug`, `enhancement`. Run `gh issue list` for the backlog.
+- **Tickets/Bugs** — tracked in GitHub Issues. Labels in use: `bug`, `feature`, `foundation`, `backlog`, and `codex-ready`. Run `gh issue list` for the backlog.
 - **Prompt files** — live in `prompts/` at the repo root.
-- **Verification** — web changes pass `npm test`, `npm run lint`, and `npm run build`; retained Python helpers use `pytest tests/`. Streamlit is retired.
+- **Verification** — from the repo root run `cd apps/web && npm test && npm run build`; retained Python helpers use `pytest tests/`. Streamlit is retired.
 - **`scripts/coach` CLI** — query live Coach state on production `opti` through one-shot Fleet commands or use `--local` for the dev DB. Subcommands include `threads`, `thread`, `search`, `logs`, `syncs`, `chat-detail`, `journal`, `settings`, and `why`; compatibility `login`/`logout` do not open a persistent session.

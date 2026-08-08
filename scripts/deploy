@@ -12,8 +12,7 @@
 #   └── cloudflared.token
 #
 # Usage:
-#   scripts/deploy              # deploy origin/main
-#   scripts/deploy --ref <sha>  # deploy a specific commit
+#   scripts/deploy --ref <full-sha>  # deploy a CI-validated commit
 #   scripts/deploy --check      # report current/live/target state only
 set -euo pipefail
 
@@ -23,11 +22,18 @@ SERVICE_ROOT=${DEPLOY_SERVICE_ROOT:-/home/george/services/whoop-dashboard}
 NODE_VERSION=${DEPLOY_NODE_VERSION:-20.20.2}
 PORT=${DEPLOY_PORT:-8501}
 
-REF=origin/main
+REF=""
 CHECK_ONLY=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --ref)   REF="$2"; shift 2 ;;
+    --ref)
+      [ $# -ge 2 ] && [ -n "$2" ] || {
+        echo "--ref requires a full 40-character commit SHA" >&2
+        exit 2
+      }
+      REF="$2"
+      shift 2
+      ;;
     --check) CHECK_ONLY=1; shift ;;
     -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
@@ -38,10 +44,15 @@ say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 die() { printf '\n\033[31mFAILED: %s\033[0m\n' "$*" >&2; exit 1; }
 
 command -v fleet >/dev/null 2>&1 || die "fleet CLI is required"
-case "$REF" in
-  origin/*) git fetch origin -q || die "local git fetch failed — cannot trust $REF" ;;
-esac
-TARGET_FULL_SHA=$(git rev-parse "$REF^{commit}")
+if [ "$CHECK_ONLY" = "1" ] && [ -z "$REF" ]; then REF=origin/main; fi
+if [ "$CHECK_ONLY" != "1" ]; then
+  [ -n "$REF" ] || die "deployment requires --ref <CI-validated-full-sha>"
+  [[ "$REF" =~ ^[0-9a-fA-F]{40}$ ]] \
+    || die "deployment ref must be a full 40-character commit SHA"
+fi
+git fetch origin -q || die "local git fetch failed — cannot trust $REF"
+TARGET_FULL_SHA=$(git rev-parse "$REF^{commit}") \
+  || die "could not resolve $REF to a commit"
 TARGET_SHA=$(git rev-parse --short "$TARGET_FULL_SHA")
 
 say "Production state on $FLEET_NODE"

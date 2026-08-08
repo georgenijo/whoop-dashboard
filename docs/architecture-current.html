@@ -74,7 +74,7 @@
     </section>
     <section>
       <h3>SQLite</h3>
-      <p>One WAL database is canonical. All domain reads are user-scoped; live backups use SQLite’s online backup API.</p>
+      <p>One WAL database is canonical. Health-domain reads are user-scoped except the retained maintainer journal, whose tenant migration is deferred; live backups use SQLite’s online backup API.</p>
     </section>
     <section>
       <h3>Deployment</h3>

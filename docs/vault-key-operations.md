@@ -43,33 +43,66 @@ other length with `VaultMissingKeyError`.
 
 ---
 
-## Bootstrapping production on opti
+## Setting the production key on opti
 
-1. Generate a key on a trusted machine (`openssl rand -base64 32`).
-2. Append it to the protected production environment without placing the value
-   in shell history or command arguments:
+During Oracle migration, preserve the existing key from the recovered
+`.env.local`; generating a new key would make existing encrypted rows
+unreadable. For a genuinely new installation, generate the initial value on a
+trusted machine and start from an environment file containing exactly one
+`VAULT_KEY=` placeholder.
 
-   ```bash
-   read -r -s VAULT_KEY_VALUE
-   printf '\nVAULT_KEY=%s\n' "$VAULT_KEY_VALUE" \
-     | fleet exec opti \
-         "umask 077; tee -a /home/george/services/whoop-dashboard/.env.local >/dev/null"
-   unset VAULT_KEY_VALUE
-   ```
+Replace that one entry atomically without placing the value in shell history or
+command arguments. The remote updater rejects a missing/duplicate entry and an
+invalid key:
 
-3. Deploy or restart through the documented production workflow; Next.js loads
-   the persistent file from each release's `.env.local` symlink.
-4. If importing legacy `tokens.json`, run the one-time migration script in a
-   trusted maintenance environment with the same key:
+```bash
+read -r -s VAULT_KEY_VALUE
+printf '%s' "$VAULT_KEY_VALUE" | fleet exec opti "python3 -c '
+import base64, os, pathlib, sys, tempfile
+path = pathlib.Path(\"/home/george/services/whoop-dashboard/.env.local\")
+value = sys.stdin.read()
+if b\"\\n\" in value.encode() or len(base64.b64decode(value, validate=True)) != 32:
+    raise SystemExit(\"VAULT_KEY must be one base64-encoded 32-byte value\")
+lines = path.read_text().splitlines()
+matches = [i for i, line in enumerate(lines) if line.startswith(\"VAULT_KEY=\")]
+if len(matches) != 1:
+    raise SystemExit(f\"expected exactly one VAULT_KEY entry, found {len(matches)}\")
+lines[matches[0]] = \"VAULT_KEY=\" + value
+fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=\".env.local.\")
+try:
+    os.fchmod(fd, 0o600)
+    with os.fdopen(fd, \"w\") as output:
+        output.write(\"\\n\".join(lines) + \"\\n\")
+        output.flush()
+        os.fsync(output.fileno())
+    os.replace(temporary, path)
+finally:
+    if os.path.exists(temporary): os.unlink(temporary)
+'"
+unset VAULT_KEY_VALUE
+```
 
-   ```bash
-   python3 scripts/migrate-whoop-tokens.py
-   ```
+Deploy or restart through the documented production workflow; Next.js loads the
+persistent file from each release's `.env.local` symlink.
 
-5. Confirm the web/API process decrypts the integration and completes a Whoop
-   sync.
-6. Only then use any migration cleanup flag that removes the legacy token
-   source.
+If importing legacy `tokens.json`, first place that file in a protected,
+operator-selected path on `opti`. Then run the one-time migration against the
+production DB explicitly; do not rely on repository-local defaults:
+
+```bash
+fleet exec opti "bash -lc '
+  set -a
+  source /home/george/services/whoop-dashboard/.env.local
+  set +a
+  cd /home/george/Documents/code/whoop-dashboard
+  python3 scripts/migrate-whoop-tokens.py \
+    --db-path /home/george/services/whoop-dashboard/shared/whoop_data.db \
+    --tokens-path /protected/path/tokens.json
+'"
+```
+
+Confirm the web/API process decrypts the integration and completes a Whoop sync.
+Only then use any migration cleanup flag that removes the legacy token source.
 
 ---
 

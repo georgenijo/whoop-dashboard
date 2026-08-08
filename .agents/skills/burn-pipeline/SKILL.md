@@ -329,7 +329,7 @@ Prompt: `Squashed as <sha>. Deploy to opti? (y/n)`
 
 On `y`, use the canonical deploy script in the background:
 ```bash
-scripts/deploy --ref <sha>
+scripts/deploy --ref <full-sha>
 ```
 Don't poll. Wait for harness notification.
 
@@ -342,7 +342,7 @@ After deploy task completes (exit 0 + service active):
 3. Verify `/api/health` reports the deployed SHA.
 4. For visible fixes (strings, subtitles): grep response HTML.
 5. For CSS fixes: curl the linked `/_next/static/chunks/*.css`, grep for the rule.
-6. For iOS API: `curl http://localhost:8501/api/ios/<route>`, `jq` shape.
+6. For iOS API: `fleet exec opti 'curl http://127.0.0.1:8501/api/ios/<route> ...'`, then inspect the JSON shape.
 7. `fleet exec opti "journalctl --user -u whoop-web --since '2 min ago' --no-pager"` and inspect for new errors.
 
 **Prod smoke fail → STOP entire pipeline.** Do not start the next lane. Surface to user:

@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-07: Simulator debug sessions mint on opti through Fleet
+
+**Decision:** Debug simulator launches mint the existing 30-day user JWT on Fleet node `opti`, reading `JWT_SIGNING_KEY` only from the protected production environment and returning only the signed token to the launcher. The launcher validates that token against the production API and injects it only through Debug-only `COACH_DEBUG_TOKEN`; Release builds continue to require Sign in with Apple. Do not add a public dev-auth endpoint, embed credentials, or print the signing key/token.
+
+**Rationale:** Browser-mirrored simulators cannot reliably control Apple’s secure authorization sheet, but developer bypass must remain behind trusted operator access. Fleet replaces retired VM/Tailscale SSH while preserving the same server-side secret boundary and production authorization semantics.
+
+**Status:** active
+
+**References:** `apps/ios/scripts/run-dev-simulator.sh`, `apps/ios/Sources/CoachApp.swift`, `apps/ios/Sources/APIClient.swift`
+
+---
+
 ## 2026-08-07: Production runtime and canonical data move to opti
 
 **Decision:** Retire the Oracle `whoop-vm` and run the production web/API process, Cursor agent, canonical SQLite database, backups, secrets, and builds on Fleet node `opti`. Use user-level systemd with the pinned NVM Node 20.20.2 runtime, publish both hostnames through an outbound Cloudflare Tunnel, keep GitHub Actions CI-only, and make `scripts/deploy` the only release path. The Oracle instance must remain recoverable until its live database and environment have been migrated and verified on `opti`.
@@ -48,7 +60,7 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 **Rationale:** Browser-mirrored simulators cannot reliably render or control Apple's secure authorization sheets, but they still need valid production credentials to show the same data and threads as web. Reusing the existing JWT verifier behind authenticated Tailnet and sudo access provides the required developer convenience without creating an internet-facing backdoor or weakening production request authorization.
 
-**Status:** superseded by 2026-08-07 production runtime and canonical data move to opti
+**Status:** superseded by 2026-08-07 simulator debug sessions mint on opti through Fleet
 
 **References:** `apps/ios/scripts/run-dev-simulator.sh`, `apps/ios/Sources/CoachApp.swift`, `apps/ios/Sources/APIClient.swift`
 
