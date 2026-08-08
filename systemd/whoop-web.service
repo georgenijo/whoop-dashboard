@@ -1,18 +1,21 @@
 [Unit]
-Description=Whoop Dashboard (Next.js)
+Description=Whoop Dashboard (Next.js on opti)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=george
-WorkingDirectory=/home/george/Documents/whoop-dashboard/apps/web
-ExecStart=/usr/bin/node node_modules/.bin/next start -p 8501
+WorkingDirectory=/home/george/services/whoop-dashboard/current/apps/web
+ExecStart=/home/george/.nvm/versions/node/v20.20.2/bin/node node_modules/.bin/next start -H 127.0.0.1 -p 8501
 Restart=always
 RestartSec=5
-MemoryMax=512M
+TimeoutStopSec=30
+MemoryMax=2G
 Environment=NODE_ENV=production
-Environment=PATH=/usr/bin:/usr/local/bin
+Environment=HOME=/home/george/services/whoop-dashboard/runtime-home
+Environment=WHOOP_DB_PATH=/home/george/services/whoop-dashboard/shared/whoop_data.db
+Environment=COACH_CURSOR_AGENT_BIN=/home/george/.local/bin/cursor-agent
+Environment=PATH=/home/george/.local/bin:/home/george/.nvm/versions/node/v20.20.2/bin:/usr/local/bin:/usr/bin
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

@@ -60,7 +60,7 @@ same database and are scoped by `user_id` where applicable.
 | Content and images | marked 18 · DOMPurify · Sharp |
 | Data | SQLite WAL via better-sqlite3 12 |
 | Auth and encryption | Sign in with Apple · JOSE · TweetNaCl secretbox |
-| Operations | GitHub Actions · Tailscale · systemd · nginx · Oracle Cloud |
+| Operations | GitHub Actions CI · Fleet · user systemd · Cloudflare Tunnel · Optiplex |
 
 ## Repository layout
 
@@ -73,8 +73,8 @@ scripts/                 Deploy, Coach inspection, benchmarks, and migrations
 streamlit/whoop/         Retained Python helpers for scripts and tests only
 tests/                   Python helper tests
 docs/                    Architecture, decisions, contracts, and operations
-infra/terraform/         Owner-specific Oracle Cloud provisioning baseline
-systemd/                 Active web unit plus retained legacy service files
+infra/terraform/         Retired Oracle Cloud provisioning history
+systemd/                 Active opti web and Cloudflare Tunnel user units
 prompts/                 Repository task and build prompts
 ```
 
@@ -190,7 +190,7 @@ with Apple:
 apps/ios/scripts/run-dev-simulator.sh [simulator-udid]
 ```
 
-The launcher mints a normal 30-day session inside `whoop-vm` over Tailscale,
+The launcher mints a normal 30-day session on Fleet node `opti`,
 validates it against the production API, builds a signed Debug app, and injects
 the session only into that simulator process. It never prints the signing key or
 session token, and Release builds continue to require Sign in with Apple. Set
@@ -291,23 +291,19 @@ assets, and build-only `/api/health`.
 
 ## Production and deployment
 
-Production runs `whoop-web.service` on port 8501 behind nginx and the
-Cloudflare proxy. Cloudflare Access is not the application gate; Sign in with
-Apple and the app’s JWT validation protect the web surface. The iOS API uses
-the same Next.js routes with bearer authentication.
+Production lives entirely on the Optiplex Fleet node `opti`. A user-level
+`whoop-web.service` listens only on `127.0.0.1:8501`; a user-level
+`whoop-cloudflared.service` publishes both public hostnames through an
+outbound-only Cloudflare Tunnel. Sign in with Apple and the app JWT protect the
+application. No inbound port, nginx, or Oracle VM is part of the active path.
 
-The GitHub workflow runs `npm ci`, `npm test`, `npm run build`, and a deploy
-script syntax check for pull requests and `main`. When production deployment
-is enabled, a verified push to `main` connects through ephemeral Tailscale
-identity and calls:
-
-```bash
-scripts/deploy --ref "$GITHUB_SHA"
-```
-
-The deploy script creates and verifies an online SQLite backup, installs
-dependencies, builds the exact commit, restarts systemd, checks `/signin`, and
-confirms `/api/health` is serving the expected SHA. Deploys are serialized.
+GitHub Actions is CI only: it runs install, test, build, and deploy-script
+syntax checks. Deployment is an explicit operator action from a trusted
+machine with the Fleet CLI. `scripts/deploy` sends the exact revision to
+`opti`, builds there with Node 20.20.2, backs up the live SQLite database using
+the online backup API, switches an immutable release symlink, restarts the user
+services, and verifies local and public health. A host-side lock serializes
+deployments.
 
 Manual operator commands:
 
@@ -317,23 +313,28 @@ scripts/deploy               # deploy origin/main
 scripts/deploy --ref <sha>   # deploy an exact revision
 ```
 
-Do not reproduce the deploy sequence with ad hoc SSH commands. Runtime
-application secrets stay on the VM and are not copied into GitHub Actions.
+Do not reproduce the deploy sequence with ad hoc SSH or Git commands. Runtime
+secrets, the tunnel token, and the canonical database stay under
+`/home/george/services/whoop-dashboard` on `opti`; releases and CI never contain
+them. The one-time Oracle retirement and rollback procedure is documented in
+the operations guide below.
 
 ## Operations and debugging
 
 `scripts/coach` is a read-only inspector for local or production Coach state:
 
 ```bash
-scripts/coach login
 scripts/coach threads --limit 10
 scripts/coach thread 49 --tools
 scripts/coach logs 49
 scripts/coach syncs --status error
 scripts/coach why 82
 scripts/coach --local threads
-scripts/coach logout
 ```
+
+Production queries use one-shot `fleet exec opti` calls. The compatibility
+`login` and `logout` subcommands only check Fleet reachability and do not open a
+persistent session.
 
 The Cursor latency harness is documented in
 [`scripts/BENCH.md`](scripts/BENCH.md). Production configuration and recovery
@@ -347,9 +348,11 @@ procedures live in
   vault/integration wire format.
 - `tokens.json` is not read by the active application. It exists only as an
   input to the one-shot encrypted-token migration.
-- `systemd/whoop-web.service` is the active application unit. The older
-  Streamlit, Python sync, and tunnel units are retained as operational history
-  and should not be treated as the current architecture.
+- `systemd/whoop-web.service` and `systemd/whoop-cloudflared.service` are the
+  only active production units. Retired Streamlit, Python sync, nginx, and
+  Oracle service definitions remain available only in Git history.
+- `infra/terraform/` is the retired Oracle baseline. Do not apply it to create
+  or modify the current production environment.
 - The rebuild documents under `docs/rebuild/` describe historical migration
   work, not current implementation guidance.
 

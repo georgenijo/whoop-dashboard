@@ -7,7 +7,8 @@ IOS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 SIMULATOR_ID="${1:-}"
 DEV_USER_ID="${COACH_DEV_USER_ID:-2}"
-VM_HOST="${COACH_DEV_VM_HOST:-ubuntu@whoop-vm}"
+FLEET_NODE="${COACH_DEV_FLEET_NODE:-opti}"
+PROD_ENV_FILE="${COACH_DEV_ENV_FILE:-/home/george/services/whoop-dashboard/.env.local}"
 API_URL="${COACH_API_URL:-https://coach-api.georgenijo.com}"
 BUNDLE_ID="com.georgenijo.coach"
 DERIVED_DATA_PATH="${COACH_DERIVED_DATA_PATH:-/tmp/coach-dev-derived}"
@@ -20,7 +21,7 @@ require_command() {
 }
 
 require_command curl
-require_command tailscale
+require_command fleet
 require_command xcodebuild
 require_command xcodegen
 require_command xcrun
@@ -41,26 +42,15 @@ if [[ -z "$SIMULATOR_ID" ]]; then
   exit 1
 fi
 
-printf 'Minting a Debug-only session for user %s on %s...\n' "$DEV_USER_ID" "$VM_HOST"
+printf 'Minting a Debug-only session for user %s on Fleet node %s...\n' "$DEV_USER_ID" "$FLEET_NODE"
 SESSION_TOKEN="$(
-  tailscale ssh "$VM_HOST" "bash -s -- '$DEV_USER_ID'" <<'VM_SCRIPT'
-set -euo pipefail
-
-user_id="$1"
-environment="$({ sudo systemctl show whoop-web -p Environment --value; } 2>/dev/null)"
-signing_key="$(printf '%s\n' "$environment" | tr ' ' '\n' | sed -n 's/^JWT_SIGNING_KEY=//p' | head -1)"
-
-if [[ -z "$signing_key" ]]; then
-  printf 'JWT_SIGNING_KEY is missing from whoop-web.service\n' >&2
-  exit 1
-fi
-
-JWT_SIGNING_KEY="$signing_key" python3 - "$user_id" <<'PYTHON'
+  fleet exec "$FLEET_NODE" "python3 - '$DEV_USER_ID' '$PROD_ENV_FILE'" <<'PYTHON'
 import base64
 import hashlib
 import hmac
 import json
-import os
+import pathlib
+import re
 import sys
 import time
 
@@ -69,7 +59,22 @@ def base64url(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
 
+def read_env_value(path: pathlib.Path, key: str) -> str:
+    pattern = re.compile(rf"^(?:export\s+)?{re.escape(key)}=(.*)$")
+    for raw_line in path.read_text().splitlines():
+        match = pattern.match(raw_line.strip())
+        if not match:
+            continue
+        value = match.group(1).strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+            value = value[1:-1]
+        return value
+    raise SystemExit(f"{key} is missing from {path}")
+
+
 user_id = int(sys.argv[1])
+env_path = pathlib.Path(sys.argv[2])
+signing_key = read_env_value(env_path, "JWT_SIGNING_KEY")
 now = int(time.time())
 header = base64url(json.dumps({"alg": "HS256"}, separators=(",", ":")).encode())
 payload = base64url(
@@ -84,15 +89,14 @@ payload = base64url(
     ).encode()
 )
 unsigned = f"{header}.{payload}".encode("ascii")
-key = base64.b64decode(os.environ["JWT_SIGNING_KEY"], validate=True)
+key = base64.b64decode(signing_key, validate=True)
 signature = base64url(hmac.new(key, unsigned, hashlib.sha256).digest())
 sys.stdout.write(f"{unsigned.decode('ascii')}.{signature}")
 PYTHON
-VM_SCRIPT
 )"
 
 if [[ -z "$SESSION_TOKEN" ]]; then
-  printf 'The production VM returned an empty session token.\n' >&2
+  printf 'Fleet node %s returned an empty session token.\n' "$FLEET_NODE" >&2
   exit 1
 fi
 

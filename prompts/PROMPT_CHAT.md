@@ -30,8 +30,8 @@ Introduce yourself briefly — one or two sentences on what you know about the p
 - **Shell commands (from `~/.zshrc`):** `work`, `chat`, `bug`, `swarm` — each looks for the matching `prompts/PROMPT*.md` in the current repo root
 - **`work <issue-number>`** — creates a worktree + branch, launches a Claude agent with the issue injected
 - **`swarm <issue1> <issue2> ...`** — spins up parallel sub-agents across multiple issues
-- **Deploy** — there is no build/release pipeline. The Linux host at `/home/george/Documents/whoop-dashboard` runs the dashboard (via systemd) and the daily sync cron; changes reach it by pulling `main`.
+- **Deploy** — GitHub Actions is CI only. After merge, `scripts/deploy` builds and activates an immutable release on Fleet node `opti`; public ingress uses Cloudflare Tunnel.
 - **Tickets/Bugs** — tracked in GitHub Issues. Labels in use: `bug`, `enhancement`. Run `gh issue list` for the backlog.
 - **Prompt files** — live in `prompts/` at the repo root.
-- **No Python tests/linter** — Streamlit correctness is verified by running `streamlit run streamlit/app.py` and checking the dashboard in the browser; web changes should also pass `cd apps/web && npm run build`.
-- **`scripts/coach` CLI** — query the live web app's coach state (chat_messages, chat_threads, chat_logs, sync_logs, user_settings) on prod VM or `--local` DB without hand-rolled SSH+SQL. Subcommands: `login` / `logout` (persistent SSH ControlMaster, 4h), `threads`, `thread <id>` (`--tools`, `--thinking`, `--json`, `--since`), `search <pattern>`, `logs <thread>`, `syncs` (`--source`, `--status`), `chat-detail <log_id>`, `journal <window>`, `settings --user <id>`, `why <thread>` (forensic). Use this to investigate coach behavior, tool-use traces, sync failures, or thread-level latency without touching the app.
+- **Verification** — web changes pass `npm test`, `npm run lint`, and `npm run build`; retained Python helpers use `pytest tests/`. Streamlit is retired.
+- **`scripts/coach` CLI** — query live Coach state on production `opti` through one-shot Fleet commands or use `--local` for the dev DB. Subcommands include `threads`, `thread`, `search`, `logs`, `syncs`, `chat-detail`, `journal`, `settings`, and `why`; compatibility `login`/`logout` do not open a persistent session.

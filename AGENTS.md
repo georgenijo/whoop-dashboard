@@ -4,7 +4,7 @@ This file is the global brief for any AI coding agent (Codex, Claude Code, Curso
 
 ## What this is
 
-A personal data hub. Pulls Whoop wearable data today, will pull calendar / nutrition / Apple Health and unify under one analytics + AI-coach layer. Multi-tenant under the hood; hosted on an Oracle Cloud VM at `coach.georgenijo.com` (web, gated by Sign in with Apple) and `coach-api.georgenijo.com` (iOS API, bearer-only). SQLite is the canonical store. Server-side OAuth vault for all third-party tokens.
+A personal data hub. Pulls Whoop and Apple Health data into one analytics + AI-coach layer. Multi-tenant under the hood; hosted on the Optiplex Fleet node `opti` and published through Cloudflare Tunnel at `coach.georgenijo.com` (web, gated by Sign in with Apple) and `coach-api.georgenijo.com` (iOS API, bearer-only). SQLite is the canonical store. Server-side OAuth vault for all third-party tokens.
 
 ## Architecture target
 
@@ -13,17 +13,16 @@ whoop-dashboard/
 ├── apps/
 │   ├── web/                Next.js 16 App Router — UI + API server
 │   └── ios/                SwiftUI — coming
-├── sync/                   Python cron — polls third-party APIs, writes to SQLite
 ├── shared/
-│   └── whoop_data.db       Canonical SQLite DB (lives here, not at repo root)
-├── infra/                  Terraform + deploy scripts
-├── systemd/                Production unit files for the VM
+│   └── whoop_data.db       Canonical local/dev SQLite path
+├── infra/terraform/        Retired Oracle baseline; never apply for production
+├── systemd/                Production user units for opti
 ├── streamlit/              LEGACY — do not modify
 ├── tokens.json             Whoop OAuth tokens (will move into integrations table)
 └── .github/                Issue templates, workflows
 ```
 
-Both web and iOS clients call the same `/api/*` routes on Next.js. Bearer-token auth via Sign in with Apple. Sync polls on cron and can also be manually triggered via `POST /api/sync`.
+Both web and iOS clients call the same `/api/*` routes on Next.js. Bearer-token auth comes from Sign in with Apple. Whoop sync is triggered by the application/API; signed webhooks provide real-time updates.
 
 ## Build / test commands
 
@@ -31,7 +30,7 @@ Both web and iOS clients call the same `/api/*` routes on Next.js. Bearer-token 
 |---|---|---|
 | Web build | `cd apps/web && npm run build` | Must succeed before commit |
 | Web dev | `cd apps/web && npm run dev` | Hot reload on :3000 |
-| Sync | `python sync/daily_sync.py` | Pulls Whoop data into shared/whoop_data.db |
+| Test | `cd apps/web && npm test` | Vitest suite |
 | DB inspect | `sqlite3 shared/whoop_data.db ".schema"` | Read-only check |
 | Lint | (none configured) | — |
 
@@ -39,7 +38,7 @@ Both web and iOS clients call the same `/api/*` routes on Next.js. Bearer-token 
 
 1. **Branch off main, open a PR.** Do not push directly to main.
 2. **No AI attribution.** Never add "Co-Authored-By: Claude" / "Co-Authored-By: GPT" / "Generated with Claude Code" / "🤖 Generated with…" / similar to commit messages, PR descriptions, branch names, issue bodies, or comments. The user enforces this strictly.
-3. **Do not move `shared/whoop_data.db`** from its current location. It is the production DB and the path is hardcoded in deployed services.
+3. **Preserve the `shared/whoop_data.db` repository contract.** Local/dev uses that path. Production sets `WHOOP_DB_PATH=/home/george/services/whoop-dashboard/shared/whoop_data.db`, outside immutable releases.
 4. **Do not move `tokens.json`** from repo root until an issue explicitly migrates it.
 5. **Do not touch `streamlit/`.** Legacy app, deprecated.
 6. **Match existing style.** TypeScript strict, Next.js App Router conventions. Two-space indent. No emoji unless asked.
@@ -49,7 +48,8 @@ Both web and iOS clients call the same `/api/*` routes on Next.js. Bearer-token 
 
 ## Important environment notes
 
-- The web app reads `shared/whoop_data.db` via `process.cwd() + relative path`; from `apps/web`, the relative path is `../../shared/whoop_data.db`. The override env var `WHOOP_DB_PATH` is honored if set (production sets it).
+- The web app reads `shared/whoop_data.db` via `process.cwd() + relative path`; from `apps/web`, the relative path is `../../shared/whoop_data.db`. Production always sets `WHOOP_DB_PATH` to the persistent service-root database.
+- Production runs on Fleet node `opti` under user-level systemd. Use `scripts/deploy`; do not SSH to an IP or reintroduce the retired Oracle VM.
 - This is **Next.js 16** (custom version). APIs differ from public Next.js. Read `apps/web/AGENTS.md` and `apps/web/node_modules/next/dist/docs/` before relying on training-data Next.js knowledge.
 - AI calls use `claude-sonnet-4-6` with `thinking: { type: "adaptive" }`. Keep Coach model changes explicit and consistent across the tool-use loop.
 - The Anthropic SDK is preferred over the Claude CLI for production code paths. CLI fallback exists in `apps/web/src/app/api/chat/route.ts` — consider it deprecated.
@@ -72,7 +72,7 @@ Both web and iOS clients call the same `/api/*` routes on Next.js. Bearer-token 
 
 ## Reference
 
-- VM ops: `.claude/skills/vm-ops/SKILL.md`
+- Production ops (legacy skill name): `.claude/skills/vm-ops/SKILL.md`
 - Web-specific notes: `apps/web/AGENTS.md`
 - Project README: `README.md`
 - Workspace overview (multi-project): `../CLAUDE.md` (parent dir, not this repo)
@@ -81,7 +81,8 @@ Both web and iOS clients call the same `/api/*` routes on Next.js. Bearer-token 
 
 - **Whoop** — wearable fitness band; OAuth API at `api.prod.whoop.com/developer`.
 - **Coach** — in-app AI chat using Claude.
-- **VM** — the Oracle Cloud server hosting `coach.georgenijo.com` (web) and `coach-api.georgenijo.com` (iOS API).
+- **opti** — the Optiplex Fleet node hosting the production web/API process and canonical SQLite database.
+- **Cloudflare Tunnel** — outbound-only ingress from the public hostnames to `127.0.0.1:8501` on `opti`.
 - **Sync** — daily polling job that pulls Whoop data into SQLite.
 - **Integrations vault** — server-side table holding OAuth tokens for every third party.
 - **Hub** — the long-term framing of this project (Whoop is one source of many).

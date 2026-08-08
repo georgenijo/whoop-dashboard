@@ -6,13 +6,25 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-07: Production runtime and canonical data move to opti
+
+**Decision:** Retire the Oracle `whoop-vm` and run the production web/API process, Cursor agent, canonical SQLite database, backups, secrets, and builds on Fleet node `opti`. Use user-level systemd with the pinned NVM Node 20.20.2 runtime, publish both hostnames through an outbound Cloudflare Tunnel, keep GitHub Actions CI-only, and make `scripts/deploy` the only release path. The Oracle instance must remain recoverable until its live database and environment have been migrated and verified on `opti`.
+
+**Rationale:** The small Oracle instance repeatedly exhausted memory during dependency installation and builds, while splitting build, runtime, data, and rollback across two hosts increased ABI and operational failure modes. `opti` has sufficient capacity, stable Fleet access, and can keep the native build and runtime ABI identical; Cloudflare Tunnel provides public ingress without opening the home network.
+
+**Status:** active
+
+**References:** `scripts/deploy`, `systemd/whoop-web.service`, `systemd/whoop-cloudflared.service`, `docs/operations/environment-and-deploy.md`
+
+---
+
 ## 2026-08-07: Production builds move from the runtime VM to the Optiplex fleet node
 
 **Decision:** Run production dependency installation and Next.js compilation in an isolated worktree on Fleet node `opti`, inside the pinned `node:20-bullseye` Podman image. `whoop-vm` becomes artifact-only: it retains runtime secrets and the canonical SQLite database, verifies and stages the checksummed runtime archive, switches release paths during a brief service stop, restarts, and verifies the exact build SHA. GitHub Actions remains CI-only; an operator invokes the canonical `scripts/deploy` after verification.
 
 **Rationale:** Two consecutive on-VM installs/builds exhausted the Oracle instance's 1 GB memory and swap, making both SSH and production HTTP unavailable. The Optiplex has compatible x86_64 Linux, 8 GB RAM, and a Fleet-managed access path; pinning Node 20 on Debian Bullseye also keeps native modules compatible with the production Node ABI and older glibc while preventing application secrets from leaving the VM.
 
-**Status:** active
+**Status:** superseded by 2026-08-07 production runtime and canonical data move to opti
 
 **References:** `scripts/deploy`, `.github/workflows/ci.yml`, `docs/operations/environment-and-deploy.md`
 
@@ -36,7 +48,7 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 **Rationale:** Browser-mirrored simulators cannot reliably render or control Apple's secure authorization sheets, but they still need valid production credentials to show the same data and threads as web. Reusing the existing JWT verifier behind authenticated Tailnet and sudo access provides the required developer convenience without creating an internet-facing backdoor or weakening production request authorization.
 
-**Status:** active
+**Status:** superseded by 2026-08-07 production runtime and canonical data move to opti
 
 **References:** `apps/ios/scripts/run-dev-simulator.sh`, `apps/ios/Sources/CoachApp.swift`, `apps/ios/Sources/APIClient.swift`
 

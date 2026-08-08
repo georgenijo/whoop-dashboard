@@ -344,15 +344,12 @@ git checkout main && git pull origin main
 
 ### 2g. Gate 3 — confirm deploy
 
-Prompt: `Squashed as <sha>. Deploy to VM? (y/n)`
+Prompt: `Squashed as <sha>. Deploy to opti? (y/n)`
 
-On `y`, follow `vm-ops` pattern, background:
+On `y`, use the canonical deploy script in the background:
 
 ```bash
-ssh -i ~/.ssh/id_ed25519 ubuntu@129.80.134.194 \
-  "sudo -u george bash -c 'cd ~/Documents/whoop-dashboard && git pull origin main && cd apps/web && npm run build 2>&1 | tail -5' \
-   && sudo systemctl restart whoop-web \
-   && sleep 2 && sudo systemctl is-active whoop-web"
+scripts/deploy --ref <sha>
 ```
 
 Don't poll. Wait for harness notification.
@@ -361,17 +358,17 @@ Don't poll. Wait for harness notification.
 
 After deploy task completes (exit 0 + service active):
 
-1. Fetch prod `JWT_SIGNING_KEY` from `/etc/systemd/system/whoop-web.service.d/override.conf` (NOT `.env.local`).
-2. Mint a prod-key JWT.
-3. SSH + `curl http://localhost:8501/<route>` with cookie (bypasses Cloudflare Access).
+1. If an authenticated smoke is required, mint a short-lived JWT on `opti` without printing the signing key.
+2. Use `fleet exec opti 'curl http://127.0.0.1:8501/<route> ...'`.
+3. Verify `/api/health` reports the deployed SHA.
 4. For visible fixes (strings, subtitles): grep response HTML.
 5. For CSS fixes: curl the linked `/_next/static/chunks/*.css`, grep for the rule.
 6. For iOS API: `curl http://localhost:8501/api/ios/<route>`, `jq` shape.
-7. `sudo journalctl -u whoop-web --since '2 min ago' --no-pager | grep -iE 'error|exception'`. Expect zero.
+7. `fleet exec opti "journalctl --user -u whoop-web --since '2 min ago' --no-pager"` and inspect for new errors.
 
 **Prod smoke fail → STOP entire pipeline.** Do not start the next lane. Surface to user:
 - Failure detail (HTTP, missing string, journal error).
-- Rollback recipe (CLAUDE.md "Deploy" section: `scp` backup DB, `git checkout <prev-sha>`, rebuild, restart).
+- Rollback recipe: `scripts/deploy --ref <previous-full-sha>`. DB restore remains a separate manual recovery.
 - Wait for user direction.
 
 Prod smoke pass:
@@ -424,7 +421,7 @@ Each lane has three discrete cognitive states. Be explicit about which one you'r
 | `agent-browser eval` returns wrong measurement | the CSS rule didn't land — check specificity, check whether the bundle was regenerated (Next dev hot-reload is mostly reliable but exceptions happen — restart `whoop-dev`) |
 | Screenshot reveals regression outside the fix area | another lane interacted with this one; serialize the lanes more aggressively or split the lane |
 | CI red after push | new commit fixing, push, wait again. NEVER force-push |
-| VM deploy build fails | check Node + `apps/web/node_modules`; see `vm-ops` SKILL.md "Fresh VM provisioning" |
+| opti deploy build fails | inspect deploy output and `journalctl --user`; see the legacy-named `vm-ops` skill |
 | **Prod smoke fails** | **STOP pipeline.** Surface rollback recipe. No auto-rollback. No next lane. |
 
 ## What this skill does NOT do
@@ -465,7 +462,7 @@ Each lane has three discrete cognitive states. Be explicit about which one you'r
 | 2c | `whoop-reviewer` | Repo-aware pre-merge diff audit |
 | 2d | `whoop-dev` | Local dev server with prod DB snapshot |
 | 2d | `agent-browser` | **Primary UI test driver** — navigate, click, fill, snapshot, eval, screenshot. Every fix gets exercised in a headless Chromium, not just curled. |
-| 2g | `vm-ops` | SSH + systemd + nginx + Cloudflare Access |
+| 2g | `vm-ops` | Fleet + user systemd + SQLite + Cloudflare Tunnel |
 | 2c, 3 | `decisions` | Log any architectural choice made during the burn |
 
 ## Example session
@@ -488,4 +485,3 @@ Skill runs Stage 1: Plan triages and reports back —
   - #305, #328, #233 — foundation infra
 
 On approval at Gate 0, the skill burns each lane sequentially: ship + prod-smoke per lane, stopping the pipeline if any prod smoke fails and surfacing rollback guidance to the user.
-

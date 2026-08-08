@@ -1,14 +1,14 @@
 # VAULT_KEY operations
 
 `VAULT_KEY` is the symmetric key that protects every encrypted credential
-in the `integrations` table (Whoop OAuth tokens today, more later). Both
-the Node web app and the Python sync share it.
+in the `integrations` table (Whoop OAuth tokens and per-user Coach keys today,
+more later). The Next.js web/API process owns production vault access.
 
 The vault uses **NaCl secretbox** (XSalsa20-Poly1305) — same primitive on
 both sides:
 
 - `apps/web/src/lib/crypto/vault.ts` (Node, via `tweetnacl`)
-- `streamlit/whoop/vault.py` (Python, via `PyNaCl` / libsodium)
+- `streamlit/whoop/vault.py` (retained migration/test compatibility only)
 
 Wire format: `base64(nonce || ciphertext)` where the nonce is 24 random
 bytes and the ciphertext includes the 16-byte Poly1305 tag.
@@ -19,9 +19,9 @@ bytes and the ciphertext includes the 16-byte Poly1305 tag.
 
 | Process                  | How it reads the env var                           |
 | ------------------------ | -------------------------------------------------- |
-| Node (Next.js / Hono)    | VM `.env.local` (loaded by Next), or systemd unit  |
-| Python sync (cron / CLI) | venv `bin/activate` export, or systemd `EnvironmentFile=` |
-| Local dev                | `.env` at repo root (already gitignored)           |
+| Production Next.js | `/home/george/services/whoop-dashboard/.env.local` on `opti` |
+| Local Next.js | `apps/web/.env.local` (gitignored) |
+| Retained Python migrations/tests | Explicit local environment only |
 
 `VAULT_KEY` MUST NOT be committed. It is sensitive material. It belongs in:
 
@@ -43,28 +43,33 @@ other length with `VaultMissingKeyError`.
 
 ---
 
-## Bootstrapping a new VM
+## Bootstrapping production on opti
 
 1. Generate a key on a trusted machine (`openssl rand -base64 32`).
-2. SSH to the VM and write it to `/home/george/Documents/whoop-dashboard/.env.local`:
+2. Append it to the protected production environment without placing the value
+   in shell history or command arguments:
 
    ```bash
-   echo "VAULT_KEY=<paste>" | sudo -u george tee -a .env.local
-   chmod 600 .env.local
+   read -r -s VAULT_KEY_VALUE
+   printf '\nVAULT_KEY=%s\n' "$VAULT_KEY_VALUE" \
+     | fleet exec opti \
+         "umask 077; tee -a /home/george/services/whoop-dashboard/.env.local >/dev/null"
+   unset VAULT_KEY_VALUE
    ```
 
-3. Mirror the same value into the Python service unit's `EnvironmentFile=`
-   (or the venv `activate` script) so `daily_sync.py` can decrypt at refresh
-   time.
-4. Run the migration script once to populate the `integrations` row:
+3. Deploy or restart through the documented production workflow; Next.js loads
+   the persistent file from each release's `.env.local` symlink.
+4. If importing legacy `tokens.json`, run the one-time migration script in a
+   trusted maintenance environment with the same key:
 
    ```bash
    python3 scripts/migrate-whoop-tokens.py
    ```
 
-5. Confirm `daily_sync.py` works end-to-end (writes a fresh row after the
-   first refresh).
-6. Only then run with `--drop-legacy` to remove the old `tokens` table.
+5. Confirm the web/API process decrypts the integration and completes a Whoop
+   sync.
+6. Only then use any migration cleanup flag that removes the legacy token
+   source.
 
 ---
 
@@ -140,7 +145,7 @@ backups accordingly.
 
 | Symptom                                          | Likely cause                                        | Action                                                    |
 | ------------------------------------------------ | --------------------------------------------------- | --------------------------------------------------------- |
-| `VaultMissingKeyError: VAULT_KEY ... not set`    | env var unset in the runtime                        | check `.env.local`, systemd unit, venv activate           |
+| `VaultMissingKeyError: VAULT_KEY ... not set`    | env var unset in the runtime                        | check the persistent production or local `.env.local`    |
 | `VaultMissingKeyError: not valid base64`         | wrong format (e.g. raw bytes, hex)                  | regenerate with `openssl rand -base64 32`                 |
 | `VaultMissingKeyError: must decode to 32 bytes`  | truncated/corrupted env var                         | check for trailing whitespace / wrap                      |
 | `VaultDecryptError: Vault decryption failed`     | wrong key in env, or tampered ciphertext            | rotate env back, or re-OAuth                              |
