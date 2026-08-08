@@ -1,0 +1,10 @@
+.page { display: grid; gap: var(--s7); }
+.intro { max-width: 64ch; }
+.kicker { color: var(--fg-3); font-family: var(--font-num); font-size: var(--t-xs); letter-spacing: .14em; text-transform: uppercase; }
+.intro h1 { margin: var(--s3) 0 0; color: var(--fg); font-size: var(--t-xl); font-weight: 500; letter-spacing: -.02em; }
+.intro p { margin: var(--s3) 0 0; color: var(--fg-2); font-size: var(--t-sm); }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s7) var(--s6); align-items: start; }
+.metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.actions { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: center; }
+.stack { display: grid; gap: var(--s5); }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

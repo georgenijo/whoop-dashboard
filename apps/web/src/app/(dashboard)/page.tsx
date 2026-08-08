@@ -131,11 +131,10 @@ export default async function OverviewPage({
         sleepTrend={data.sleepTrend}
       />
 
-      <PRsCard stats={prStats} />
-
       <div className="grid-main">
         <div className="col">
           <RecoveryTrend rows={trend} />
+          <PRsCard stats={prStats} />
         </div>
         <div className="col">{/* Phase 2 */}</div>
       </div>

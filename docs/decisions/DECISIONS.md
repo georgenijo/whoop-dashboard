@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-07: Quiet Instrument constrains every web route through four layers
+
+**Decision:** Rebuild the web UI around a four-layer contract: closed tokens, twelve enum-only primitives, an intent router with per-route hierarchy, and machine-enforced lint rules. Interaction uses foreground/background contrast rather than an `--accent` token; hue is reserved for brand identity, metric identity, and semantic state. Every migrated route gets exactly one hero metric, at most six quiet metrics, at most two charts above the fold, and zero resting bordered containers except genuinely tappable or elevated surfaces.
+
+**Rationale:** The current surface drift comes from several simultaneously legal styling systems and undifferentiated information density, not from missing visual polish. A closed vocabulary plus numeric route budgets preserves all existing product behavior while making the quieter near-monochrome direction deterministic for future contributors and agents.
+
+**Status:** active
+
+**References:** `apps/web/src/styles/tokens.css`, `apps/web/src/components/primitives/`, Open Design `design-system-v2.html`, Open Design `design-system.html`, PR #481
+
+---
+
 ## 2026-08-07: Simulator auth bypass stays behind trusted VM access
 
 **Decision:** Debug simulator launches may bypass Sign in with Apple by minting a normal 30-day user session inside `whoop-vm` over Tailscale SSH and injecting it through `COACH_DEBUG_TOKEN`. The launcher validates the session before installation and suppresses secure system permission prompts for that Debug process; Release builds retain Apple authentication and the normal HealthKit and notification flow. Do not add a public development-auth endpoint or embed credentials in the app or repository.

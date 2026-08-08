@@ -25,7 +25,6 @@ export default function RecoveryTrend({ rows }: Props) {
         <div className="card-head">
           <div>
             <div className="card-title">
-              <span className="dot" style={{ background: "#00d4aa", color: "#00d4aa" }} />
               Recovery trend
             </div>
             <div className="card-sub" style={{ marginTop: 4 }}>30 days</div>
@@ -55,7 +54,6 @@ export default function RecoveryTrend({ rows }: Props) {
       <div className="card-head">
         <div>
           <div className="card-title">
-            <span className="dot" style={{ background: "#00d4aa", color: "#00d4aa" }} />
             Recovery trend
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
@@ -63,32 +61,25 @@ export default function RecoveryTrend({ rows }: Props) {
           </div>
         </div>
         <span className="card-sub">
-          Today&nbsp;<span style={{ color: "#00d4aa" }}>{latest.toFixed(0)}%</span>
+          Today&nbsp;<span className="recovery-value">{latest.toFixed(0)}%</span>
         </span>
       </div>
       <div className="chart-body">
         <svg viewBox="0 0 100 100" preserveAspectRatio="none">
           <defs>
             <linearGradient id="rec-area" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#00d4aa" stopOpacity="0.35" />
-              <stop offset="100%" stopColor="#00d4aa" stopOpacity="0" />
-            </linearGradient>
-            <linearGradient id="rec-line" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#00aa88" />
-              <stop offset="100%" stopColor="#00d4aa" />
+              <stop offset="0%" stopColor="var(--d-recovery)" stopOpacity="0.20" />
+              <stop offset="100%" stopColor="var(--d-recovery)" stopOpacity="0" />
             </linearGradient>
           </defs>
-          <line x1="0" y1="34" x2="100" y2="34" stroke="rgba(255,255,255,0.04)" strokeDasharray="0.3 0.6" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />
-          <line x1="0" y1="67" x2="100" y2="67" stroke="rgba(255,255,255,0.04)" strokeDasharray="0.3 0.6" strokeWidth="0.2" vectorEffect="non-scaling-stroke" />
           <path d={areaPath} fill="url(#rec-area)" />
-          <path d={linePath} fill="none" stroke="url(#rec-line)" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          <path d={linePath} fill="none" stroke="var(--d-recovery)" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
           <circle
             cx="100"
             cy={endY}
             r="1.2"
-            fill="#00d4aa"
+            fill="var(--d-recovery)"
             vectorEffect="non-scaling-stroke"
-            style={{ filter: "drop-shadow(0 0 3px #00d4aa)" }}
           />
         </svg>
       </div>

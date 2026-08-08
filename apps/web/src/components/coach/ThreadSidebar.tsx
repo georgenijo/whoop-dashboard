@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 
 type ThreadSummary = {
   id: number;
@@ -162,11 +163,14 @@ export default function ThreadSidebar({
   return (
     <>
       <aside className="coach-sidebar">
-        <div className="sb-brand coach-sidebar-brand">
-          <div className="mark">C</div>
-          <span className="wm">
-            threads<span className="plus">+</span>
-          </span>
+        <Link href="/" className="coach-back-link">
+          <ArrowLeft size={13} strokeWidth={1.8} aria-hidden />
+          Overview
+        </Link>
+
+        <div className="coach-sidebar-brand">
+          <span className="mark" aria-hidden />
+          <span className="wm">Coach</span>
         </div>
 
         <button
@@ -185,6 +189,14 @@ export default function ThreadSidebar({
           onSelectThread={onSelectThread}
           onDeleteThread={onDeleteThread}
         />
+
+        <div className="coach-sidebar-profile">
+          <span className="av">G</span>
+          <span>
+            <span className="name">George</span>
+            <span className="status">private workspace</span>
+          </span>
+        </div>
       </aside>
 
       {mobileOpen && (
