@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-07: Production builds move from the runtime VM to the Optiplex fleet node
+
+**Decision:** Run production dependency installation and Next.js compilation in an isolated worktree on Fleet node `opti`, inside the pinned `node:20-bullseye` Podman image. `whoop-vm` becomes artifact-only: it retains runtime secrets and the canonical SQLite database, verifies and stages the checksummed runtime archive, switches release paths during a brief service stop, restarts, and verifies the exact build SHA. GitHub Actions remains CI-only; an operator invokes the canonical `scripts/deploy` after verification.
+
+**Rationale:** Two consecutive on-VM installs/builds exhausted the Oracle instance's 1 GB memory and swap, making both SSH and production HTTP unavailable. The Optiplex has compatible x86_64 Linux, 8 GB RAM, and a Fleet-managed access path; pinning Node 20 on Debian Bullseye also keeps native modules compatible with the production Node ABI and older glibc while preventing application secrets from leaving the VM.
+
+**Status:** active
+
+**References:** `scripts/deploy`, `.github/workflows/ci.yml`, `docs/operations/environment-and-deploy.md`
+
+---
+
 ## 2026-08-07: Simulator auth bypass stays behind trusted VM access
 
 **Decision:** Debug simulator launches may bypass Sign in with Apple by minting a normal 30-day user session inside `whoop-vm` over Tailscale SSH and injecting it through `COACH_DEBUG_TOKEN`. The launcher validates the session before installation and suppresses secure system permission prompts for that Debug process; Release builds retain Apple authentication and the normal HealthKit and notification flow. Do not add a public development-auth endpoint or embed credentials in the app or repository.
@@ -84,7 +96,7 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 **Rationale:** CI should prove the exact commit before production changes, while deployment must preserve the hardened SQLite online-backup and health-verification behavior already encoded in `scripts/deploy`. Workload identity avoids a permanent runner or long-lived SSH/auth key, environment approval creates an explicit production boundary, and the enable flag lets the workflow merge safely before the one-time tailnet policy and federation credential are configured.
 
-**Status:** active
+**Status:** superseded by 2026-08-07 production fleet-build decision
 
 **References:** `.github/workflows/ci.yml`, `scripts/deploy`, `docs/operations/environment-and-deploy.md`
 

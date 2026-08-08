@@ -1,4 +1,4 @@
-name: Web CI and production deploy
+name: Web CI
 
 on:
   pull_request:
@@ -46,40 +46,3 @@ jobs:
 
       - name: Validate deployment script
         run: bash -n ../../scripts/deploy
-
-  deploy:
-    name: Deploy production
-    needs:
-      - verify
-    if: >-
-      (github.event_name == 'push' ||
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')) &&
-      vars.PRODUCTION_DEPLOY_ENABLED == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    concurrency:
-      group: production
-      cancel-in-progress: false
-    environment:
-      name: production
-      url: https://coach.georgenijo.com
-    permissions:
-      contents: read
-      id-token: write
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Connect to the production tailnet
-        uses: tailscale/github-action@v4
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          audience: ${{ secrets.TS_AUDIENCE }}
-          tags: tag:ci
-          ping: whoop-vm
-
-      - name: Deploy and verify exact commit
-        run: scripts/deploy --ref "$GITHUB_SHA"

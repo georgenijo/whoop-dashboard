@@ -16,8 +16,9 @@ request, or an Actions log.
 
 Next.js loads `apps/web/.env.local` from the app working directory. The
 production service starts in that directory. Runtime application secrets stay
-on the VM; the GitHub runner only receives a short-lived Tailscale identity and
-asks the VM to build from its existing configuration.
+on the VM. Builds run without production secrets in a pinned Node 20 container
+on the `opti` fleet node; the Oracle VM receives only the completed runtime
+artifact and keeps its existing `.env.local`.
 
 ## Operator-managed web variables
 
@@ -99,82 +100,29 @@ loads `.env`.
 `.github/workflows/ci.yml` runs `npm ci`, `npm test`, `npm run build`, and a
 syntax check of `scripts/deploy` for every pull request and push to `main`.
 
-After verification, a push to `main` deploys only when all of these are true:
-
-1. The `production` GitHub environment approves the job.
-2. Repository variable `PRODUCTION_DEPLOY_ENABLED` is exactly `true`.
-3. The environment secrets `TS_OAUTH_CLIENT_ID` and `TS_AUDIENCE` exist.
-4. The ephemeral `tag:ci` runner can reach and Tailscale SSH to
-   `tag:production`.
-
-The deploy job is serialized with `cancel-in-progress: false`. It invokes
-`scripts/deploy --ref "$GITHUB_SHA"`; the script remains the single deployment
-implementation and still owns the SQLite online backup, build, restart, health
-verification, and rollback receipt.
-
-### One-time Tailscale setup
-
-Use a Tailscale workload identity federation credential, not an expiring auth
-key:
-
-1. In the Tailscale admin console, create `tag:ci` and `tag:production`.
-2. Apply `tag:production` to `whoop-vm`.
-3. Preserve the existing human SSH rule and add narrowly scoped CI rules to
-   the existing policy:
-
-   ```json
-   {
-     "tagOwners": {
-       "tag:ci": [],
-       "tag:production": []
-     },
-     "grants": [
-       {
-         "src": ["tag:ci"],
-         "dst": ["tag:production"],
-         "ip": ["tcp:22"]
-       }
-     ],
-     "ssh": [
-       {
-         "action": "accept",
-         "src": ["tag:ci"],
-         "dst": ["tag:production"],
-         "users": ["george", "ubuntu"]
-       },
-       {
-         "action": "accept",
-         "src": ["george.nijo8@gmail.com"],
-         "dst": ["tag:production"],
-         "users": ["george", "ubuntu"]
-       }
-     ]
-   }
-   ```
-
-   Merge these entries into the current HuJSON policy; do not replace unrelated
-   grants, SSH rules, tests, or tag owners.
-4. Create a GitHub Actions federated identity restricted to this repository,
-   with the `auth_keys` scope and `tag:ci`.
-5. Copy its client ID and generated audience into the GitHub `production`
-   environment as `TS_OAUTH_CLIENT_ID` and `TS_AUDIENCE`.
-6. Run the workflow manually on `main`. After that succeeds, set the repository
-   variable `PRODUCTION_DEPLOY_ENABLED=true`.
-
-Official references:
-
-- <https://tailscale.com/docs/integrations/github/github-action>
-- <https://tailscale.com/docs/features/workload-identity-federation>
-- <https://tailscale.com/docs/features/tailscale-ssh>
-- <https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments>
-
-### Manual fallback
-
-If Actions or Tailscale identity federation is unavailable, run:
+Production deployment is operator-triggered after CI succeeds:
 
 ```bash
 scripts/deploy --ref <full-commit-sha>
 ```
+
+The command requires Fleet CLI access to `opti` and Tailscale SSH access to
+`whoop-vm`. It performs the following sequence:
+
+1. `fleet exec opti` creates an isolated Git worktree for the exact commit.
+2. Podman runs `npm ci`, the production build, and `npm prune --omit=dev` in
+   `node:20-bullseye`. The pinned runtime matches production Node 20 and keeps
+   native modules compatible with the VM's older Linux userspace.
+3. Fleet fetches a checksum-reported archive containing `.next`, the compiled
+   Coach MCP server, and production `node_modules`.
+4. The script creates and verifies an online SQLite backup on the VM, uploads
+   the archive, verifies its SHA-256, and validates the extracted release.
+5. `whoop-web` stops only for the runtime-path switch, then restarts. Local
+   `/api/health` and `/signin` checks must report the exact target SHA and 200.
+
+Production secrets never leave `whoop-vm`; the fleet build intentionally does
+not mount or copy `.env.local`. The deploy receipt prints the release path,
+database backup, build node/image, and exact rollback command.
 
 Use `scripts/deploy --check` for a read-only drift check. Do not duplicate the
 deployment sequence as ad hoc SSH commands.
