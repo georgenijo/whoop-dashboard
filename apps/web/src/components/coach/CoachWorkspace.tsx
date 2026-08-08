@@ -70,24 +70,6 @@ export default function CoachWorkspace({
 
   return (
     <div className="coach-page">
-      <div className="coach-topbar">
-        <div className="coach-title-block">
-          <div className="coach-kicker">Coach</div>
-          <h1>{threadTitle}</h1>
-          <div className="coach-subtitle">{threadMeta}</div>
-        </div>
-        <div className="coach-topbar-actions">
-          <button
-            type="button"
-            className="coach-mobile-threads"
-            onClick={() => setMobileOpen(true)}
-          >
-            <Menu size={16} strokeWidth={1.8} aria-hidden />
-            Threads
-          </button>
-        </div>
-      </div>
-
       <div className="coach-shell">
         <ThreadSidebar
           threads={threads}
@@ -100,6 +82,23 @@ export default function CoachWorkspace({
         />
 
         <section className="coach-chat">
+          <div className="coach-topbar">
+            <div className="coach-title-block">
+              <div className="coach-kicker">Conversation</div>
+              <h1>{threadTitle}</h1>
+              <div className="coach-subtitle">{threadMeta}</div>
+            </div>
+            <div className="coach-topbar-actions">
+              <button
+                type="button"
+                className="coach-mobile-threads"
+                onClick={() => setMobileOpen(true)}
+              >
+                <Menu size={16} strokeWidth={1.8} aria-hidden />
+                Threads
+              </button>
+            </div>
+          </div>
           {badApiKey ? <BadApiKeyBanner onDismiss={dismissBadApiKey} /> : null}
           <div className="coach-messages">
             {messages.length === 0 ? (

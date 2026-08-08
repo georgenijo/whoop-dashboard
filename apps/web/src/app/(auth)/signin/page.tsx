@@ -77,20 +77,27 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
         alignItems: "center",
         justifyContent: "center",
         gap: 24,
-        background: "#05050a",
-        color: "var(--fg-0, #f5f5f7)",
-        fontFamily: "var(--font-sans, -apple-system, BlinkMacSystemFont, sans-serif)",
+        background: "var(--bg)",
+        color: "var(--fg)",
+        fontFamily: "var(--font-text)",
         padding: 24,
       }}
     >
       <div
         style={{
-          fontSize: 28,
-          fontWeight: 600,
-          letterSpacing: -0.4,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          fontSize: 17,
+          fontWeight: 550,
+          letterSpacing: -0.2,
         }}
       >
-        whoop<span style={{ color: "#7b61ff" }}>+</span>
+        <span
+          aria-hidden
+          style={{ width: 6, height: 6, borderRadius: 999, background: "var(--brand)" }}
+        />
+        Coach
       </div>
       <div
         style={{
@@ -112,13 +119,13 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
           justifyContent: "center",
           gap: 10,
           padding: "12px 20px",
-          background: "#000",
-          color: "#fff",
-          borderRadius: 8,
+          background: "var(--fg-hi)",
+          color: "var(--bg)",
+          borderRadius: "var(--r-md)",
           fontSize: 14,
           fontWeight: 500,
           textDecoration: "none",
-          border: "1px solid rgba(255,255,255,0.18)",
+          border: "var(--stroke) solid var(--fg-hi)",
           minWidth: 220,
         }}
       >
@@ -143,11 +150,11 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
             maxWidth: 360,
             textAlign: "center",
             fontSize: 12,
-            color: "#ff8b8b",
-            background: "rgba(255,80,80,0.08)",
-            border: "1px solid rgba(255,80,80,0.25)",
+            color: "var(--bad)",
+            background: "transparent",
+            border: "var(--stroke) solid var(--bad)",
             padding: "10px 14px",
-            borderRadius: 8,
+            borderRadius: "var(--r-md)",
           }}
         >
           {errorText}

@@ -41,47 +41,38 @@ export default function PRsCard({ stats }: { stats: PRStats }) {
   ];
 
   const allEmpty = tiles.every((t) => t.value === null);
+  const recordCount = tiles.filter((t) => t.value !== null).length;
 
   return (
-    <section className="card" aria-label="Personal Records">
-      <div className="card-head">
-        <h3 className="card-title">Personal Records</h3>
-      </div>
-      {allEmpty ? (
-        <p style={{ color: "var(--fg-3)" }}>Not enough data yet</p>
-      ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-            gap: 12,
-          }}
-        >
-          {tiles.map((t) => (
-            <div key={t.label}>
-              <div className="card-sub">{t.label}</div>
-              <div
-                style={{ fontSize: 24, fontWeight: 600, marginTop: 4 }}
-              >
-                {t.value ?? "—"}
-                <span
-                  style={{
-                    fontSize: 13,
-                    color: "var(--fg-3)",
-                    marginLeft: 4,
-                    fontWeight: 400,
-                  }}
-                >
-                  {t.unit}
-                </span>
-              </div>
-              <div className="card-sub" style={{ marginTop: 4 }}>
-                {t.sub ?? "No data"}
-              </div>
+    <section className="overview-detail" aria-label="Detail">
+      <span className="overview-kicker">Detail</span>
+      <details className="overview-disclosure">
+        <summary>
+          <span>Personal records</span>
+          <span className="overview-disclosure-meta">
+            {allEmpty ? "Not enough data yet" : `${recordCount} tracked records`}
+          </span>
+          <span className="overview-disclosure-chevron" aria-hidden />
+        </summary>
+        <div className="overview-disclosure-body">
+          {allEmpty ? (
+            <p className="overview-empty-copy">Not enough data yet</p>
+          ) : (
+            <div className="overview-record-grid">
+              {tiles.map((t) => (
+                <div className="overview-record" key={t.label}>
+                  <div className="card-sub">{t.label}</div>
+                  <div className="overview-record-value">
+                    {t.value ?? "—"}
+                    <span>{t.unit}</span>
+                  </div>
+                  <div className="card-sub">{t.sub ?? "No data"}</div>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
-      )}
+      </details>
     </section>
   );
 }

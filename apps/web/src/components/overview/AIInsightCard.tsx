@@ -1,4 +1,5 @@
 import { marked } from "marked";
+import Link from "next/link";
 import type { InsightRow } from "@/lib/db";
 
 function formatInsightDate(date: string): string {
@@ -23,18 +24,23 @@ export default function AIInsightCard({
   return (
     <div className="ai-card" aria-label="AI insight">
       <div className="ai-head">
-        <div className="ai-dot" aria-hidden />
-        <span className="ai-tag">AI Insight</span>
+        <span className="ai-tag">Coach</span>
         {refreshing ? <span className="ai-refreshing">Refreshing...</span> : null}
         <span className="ai-when">
           {insight ? formatInsightDate(insight.date) : hasData ? "Not yet generated" : "No data"}
         </span>
       </div>
       {insight ? (
-        <div
-          className="ai-body"
-          dangerouslySetInnerHTML={{ __html: marked.parse(insight.insight) as string }}
-        />
+        <>
+          <div
+            className="ai-body"
+            dangerouslySetInnerHTML={{ __html: marked.parse(insight.insight) as string }}
+          />
+          <div className="ai-byline">
+            <span>Generated from your recent data</span>
+            <Link href="/coach">Ask a follow-up</Link>
+          </div>
+        </>
       ) : hasData ? (
         <>
           <p>{refreshing ? "Generating your latest insight..." : "No insight generated yet."}</p>
