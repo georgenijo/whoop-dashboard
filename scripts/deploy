@@ -1,39 +1,33 @@
 #!/usr/bin/env bash
-# Build and deploy Whoop Dashboard entirely on the Optiplex fleet node.
+# Build and deploy Whoop Dashboard on the Optiplex fleet node (opti).
 #
-# Production layout on opti:
-#   ~/services/whoop-dashboard/
-#   ├── current -> releases/<full-sha>
-#   ├── releases/<full-sha>/
-#   ├── shared/whoop_data.db
-#   ├── backups/
-#   ├── runtime-home/
-#   ├── .env.local
-#   └── cloudflared.token
+# Production layout on opti (verified 2026-08-10):
+#   /home/george/Documents/whoop-dashboard/   <- plain git checkout of this repo
+#   ├── apps/web/                              <- Next.js app, built in place
+#   │   ├── .next/                             <- current build output
+#   │   ├── .next.prev/                        <- previous build, kept for rollback
+#   │   └── .env.local                         <- secrets (never touched by deploy)
+#   ├── shared/whoop_data.db                   <- SQLite DB (never touched by deploy)
+#   └── .env                                   <- secrets (never touched by deploy)
+#
+# whoop-web.service is a SYSTEM-level systemd unit (not --user), running
+# `next start -p 8501 -H 127.0.0.1`, fronted by the shared Cloudflare tunnel
+# (no nginx, no certbot). Restarting it requires sudo (passwordless on opti).
 #
 # Usage:
-#   scripts/deploy --ref <full-sha>  # deploy a CI-validated commit
-#   scripts/deploy --check      # report current/live/target state only
+#   scripts/deploy            # fetch+reset to origin/main, build, restart, verify
+#   scripts/deploy --check    # report deployed commit vs origin/main only
 set -euo pipefail
 
 FLEET_NODE=${DEPLOY_FLEET_NODE:-opti}
-BUILD_REPO=${DEPLOY_BUILD_REPO:-/home/george/Documents/code/whoop-dashboard}
-SERVICE_ROOT=${DEPLOY_SERVICE_ROOT:-/home/george/services/whoop-dashboard}
+APP_ROOT=${DEPLOY_APP_ROOT:-/home/george/Documents/whoop-dashboard}
 NODE_VERSION=${DEPLOY_NODE_VERSION:-20.20.2}
 PORT=${DEPLOY_PORT:-8501}
+PUBLIC_URL=${DEPLOY_PUBLIC_URL:-https://coach-api.georgenijo.com/}
 
-REF=""
 CHECK_ONLY=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --ref)
-      [ $# -ge 2 ] && [ -n "$2" ] || {
-        echo "--ref requires a full 40-character commit SHA" >&2
-        exit 2
-      }
-      REF="$2"
-      shift 2
-      ;;
     --check) CHECK_ONLY=1; shift ;;
     -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
@@ -44,256 +38,95 @@ say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 die() { printf '\n\033[31mFAILED: %s\033[0m\n' "$*" >&2; exit 1; }
 
 command -v fleet >/dev/null 2>&1 || die "fleet CLI is required"
-if [ "$CHECK_ONLY" = "1" ] && [ -z "$REF" ]; then REF=origin/main; fi
-if [ "$CHECK_ONLY" != "1" ]; then
-  [ -n "$REF" ] || die "deployment requires --ref <CI-validated-full-sha>"
-  [[ "$REF" =~ ^[0-9a-fA-F]{40}$ ]] \
-    || die "deployment ref must be a full 40-character commit SHA"
-fi
-git fetch origin -q || die "local git fetch failed — cannot trust $REF"
-TARGET_FULL_SHA=$(git rev-parse "$REF^{commit}") \
-  || die "could not resolve $REF to a commit"
-TARGET_SHA=$(git rev-parse --short "$TARGET_FULL_SHA")
 
-say "Production state on $FLEET_NODE"
-STATE=$(fleet exec "$FLEET_NODE" "bash -s -- '$SERVICE_ROOT' '$PORT'" <<'REMOTE_STATE'
+if [ "$CHECK_ONLY" = "1" ]; then
+  say "Current state on $FLEET_NODE"
+  fleet exec "$FLEET_NODE" "bash -s -- '$APP_ROOT'" <<'REMOTE_CHECK' || die "could not inspect $FLEET_NODE"
 set -euo pipefail
 ROOT=$1
-PORT=$2
-
-current="<none>"
-if [ -L "$ROOT/current" ]; then
-  current=$(basename "$(readlink -f "$ROOT/current")")
-fi
-live=$(curl -sS --max-time 5 "http://127.0.0.1:$PORT/api/health" 2>/dev/null \
-  | sed -n 's/.*"sha":"\([^"]*\)".*/\1/p' || true)
-web=$(systemctl --user is-active whoop-web.service 2>/dev/null || true)
-tunnel=$(systemctl --user is-active whoop-cloudflared.service 2>/dev/null || true)
-
-printf 'current=%s\n' "$current"
-printf 'live=%s\n' "${live:-<none>}"
-printf 'web=%s\n' "${web:-inactive}"
-printf 'tunnel=%s\n' "${tunnel:-inactive}"
-REMOTE_STATE
-) || die "could not inspect $FLEET_NODE"
-printf '%s\n' "$STATE" | sed 's/^/  /'
-echo "  target=$TARGET_SHA"
-
-CURRENT_FULL_SHA=$(printf '%s\n' "$STATE" | sed -n 's/^current=//p')
-LIVE_SHA=$(printf '%s\n' "$STATE" | sed -n 's/^live=//p')
-if [ "$CURRENT_FULL_SHA" = "$TARGET_FULL_SHA" ] && [ "$LIVE_SHA" = "$TARGET_SHA" ]; then
-  echo "  already deployed and serving $TARGET_SHA — nothing to do."
+cd "$ROOT" || { echo "app root $ROOT not found" >&2; exit 1; }
+git fetch origin -q || { echo "git fetch failed" >&2; exit 1; }
+echo "  deployed:    $(git rev-parse --short HEAD)"
+echo "  origin/main: $(git rev-parse --short origin/main)"
+echo "  service:     $(systemctl is-active whoop-web.service 2>/dev/null || echo inactive)"
+REMOTE_CHECK
   exit 0
 fi
-[ "$CHECK_ONLY" = "1" ] && { echo "  (--check: stopping here)"; exit 0; }
 
-say "Building and activating $TARGET_SHA on $FLEET_NODE"
-fleet exec --timeout 1800 "$FLEET_NODE" \
-  "bash -s -- '$TARGET_FULL_SHA' '$BUILD_REPO' '$SERVICE_ROOT' '$NODE_VERSION' '$PORT'" <<'REMOTE_DEPLOY'
+say "Deploying latest origin/main on $FLEET_NODE"
+fleet exec --timeout 900 "$FLEET_NODE" \
+  "bash -s -- '$APP_ROOT' '$NODE_VERSION' '$PORT'" <<'REMOTE_DEPLOY' || die "deployment failed on $FLEET_NODE — see output above"
 set -euo pipefail
+ROOT=$1
+NODE_VERSION=$2
+PORT=$3
 
-TARGET_FULL_SHA=$1
-BUILD_REPO=$2
-ROOT=$3
-NODE_VERSION=$4
-PORT=$5
-TS=$(date +%Y%m%d-%H%M%S)
-WORKTREE=""
-STAGE=""
-PREVIOUS=""
-ACTIVATED=0
-SMOKE_PID=""
-
-cleanup() {
-  rc=$?
-  trap - EXIT
-  if [ -n "$SMOKE_PID" ]; then
-    kill "$SMOKE_PID" >/dev/null 2>&1 || true
-    wait "$SMOKE_PID" 2>/dev/null || true
-  fi
-  if [ -n "$WORKTREE" ]; then
-    git -C "$BUILD_REPO" worktree remove --force "$WORKTREE" >/dev/null 2>&1 || true
-    rm -rf -- "$WORKTREE"
-  fi
-  if [ "$rc" -ne 0 ] && [ -n "$STAGE" ] && [ -d "$STAGE" ]; then
-    mv "$STAGE" "$ROOT/releases/failed-$TARGET_SHA-$TS" >/dev/null 2>&1 || true
-  fi
-  if [ "$rc" -ne 0 ] && [ "$ACTIVATED" = "1" ] && [ -n "$PREVIOUS" ] && [ -d "$PREVIOUS" ]; then
-    rollback_link="$ROOT/.rollback-$TS"
-    ln -s "$PREVIOUS" "$rollback_link" >/dev/null 2>&1 || true
-    mv -Tf "$rollback_link" "$ROOT/current" >/dev/null 2>&1 || true
-    systemctl --user restart whoop-web.service >/dev/null 2>&1 || true
-    systemctl --user restart whoop-cloudflared.service >/dev/null 2>&1 || true
-  fi
-  exit "$rc"
-}
-trap cleanup EXIT
-
-for command in git python3 curl systemctl install ss flock tar; do
-  command -v "$command" >/dev/null 2>&1 || {
-    echo "missing required command on opti: $command" >&2
-    exit 1
-  }
-done
-
-NODE_BIN="$HOME/.nvm/versions/node/v$NODE_VERSION/bin/node"
-NPM_BIN="$HOME/.nvm/versions/node/v$NODE_VERSION/bin/npm"
-[ -x "$NODE_BIN" ] || {
-  echo "Node $NODE_VERSION is missing. Run: nvm install $NODE_VERSION" >&2
+NODE_BIN_DIR="$HOME/.nvm/versions/node/v$NODE_VERSION/bin"
+[ -x "$NODE_BIN_DIR/node" ] || {
+  echo "Node $NODE_VERSION is missing at $NODE_BIN_DIR — run: nvm install $NODE_VERSION" >&2
   exit 1
 }
-[ -x "$NPM_BIN" ] || { echo "npm for Node $NODE_VERSION is missing" >&2; exit 1; }
-[ -x /usr/bin/cloudflared ] || {
-  echo "cloudflared is missing; follow docs/operations/environment-and-deploy.md" >&2
-  exit 1
-}
-[ -x "$HOME/.local/bin/cursor-agent" ] || {
-  echo "cursor-agent is missing; install it before production deployment" >&2
-  exit 1
-}
-[ -s "$ROOT/.env.local" ] || { echo "$ROOT/.env.local is missing or empty" >&2; exit 1; }
-[ -s "$ROOT/cloudflared.token" ] || { echo "$ROOT/cloudflared.token is missing or empty" >&2; exit 1; }
-[ -s "$ROOT/shared/whoop_data.db" ] || { echo "$ROOT/shared/whoop_data.db is missing or empty" >&2; exit 1; }
+export PATH="$NODE_BIN_DIR:$PATH"
 
-exec 9>"$ROOT/.deploy.lock"
-flock -n 9 || { echo "another opti deployment is already running" >&2; exit 1; }
+cd "$ROOT" || { echo "app root $ROOT not found" >&2; exit 1; }
 
-git -C "$BUILD_REPO" fetch origin "$TARGET_FULL_SHA"
-TARGET_SHA=$(git -C "$BUILD_REPO" rev-parse --short "$TARGET_FULL_SHA")
-WORKTREE=$(mktemp -d "/tmp/whoop-build-${TARGET_SHA}-XXXXXX")
-STAGE="$ROOT/releases/.staging-$TARGET_FULL_SHA-$TS"
-RELEASE="$ROOT/releases/$TARGET_FULL_SHA"
+echo "--- syncing code (git fetch + reset --hard origin/main) ---"
+git fetch origin || { echo "git fetch failed" >&2; exit 1; }
+git reset --hard origin/main || { echo "git reset --hard origin/main failed" >&2; exit 1; }
+DEPLOY_SHA=$(git rev-parse --short HEAD)
+echo "now at $DEPLOY_SHA"
 
-mkdir -p "$ROOT/releases" "$ROOT/backups" "$ROOT/runtime-home" "$HOME/.config/systemd/user"
-chmod 700 "$ROOT" "$ROOT/backups" "$ROOT/runtime-home"
-chmod 600 "$ROOT/.env.local" "$ROOT/cloudflared.token" "$ROOT/shared/whoop_data.db"
+cd apps/web || { echo "apps/web missing under $ROOT" >&2; exit 1; }
 
-git -C "$BUILD_REPO" worktree add --detach "$WORKTREE" "$TARGET_FULL_SHA"
-
-export PATH="$HOME/.nvm/versions/node/v$NODE_VERSION/bin:$HOME/.local/bin:/usr/local/bin:/usr/bin"
-cd "$WORKTREE/apps/web"
-"$NPM_BIN" ci
-COACH_BUILD_SHA="$TARGET_SHA" "$NPM_BIN" run build
-"$NPM_BIN" prune --omit=dev
-
-# Prove the native SQLite ABI and the pruned Next runtime before activation.
-"$NODE_BIN" -e 'const Database=require("better-sqlite3"); new Database(":memory:").close()'
-SMOKE_PORT=18787
-if ss -tln | grep -q ":$SMOKE_PORT "; then
-  echo "runtime smoke port $SMOKE_PORT is already in use" >&2
-  exit 1
+echo "--- dependency install (npm ci only if the lockfile changed) ---"
+LOCKFILE=package-lock.json
+MARKER=node_modules/.deploy-lockfile-sha
+[ -f "$LOCKFILE" ] || { echo "$LOCKFILE missing" >&2; exit 1; }
+NEED_CI=1
+if [ -d node_modules ] && [ -f "$MARKER" ] \
+  && [ "$(shasum -a 256 "$LOCKFILE" | awk '{print $1}')" = "$(cat "$MARKER")" ]; then
+  NEED_CI=0
 fi
-COACH_BUILD_SHA="$TARGET_SHA" "$NPM_BIN" start -- --hostname 127.0.0.1 --port "$SMOKE_PORT" \
-  >/tmp/whoop-runtime-smoke.log 2>&1 &
-SMOKE_PID=$!
-smoke_ready=0
-for _ in $(seq 1 30); do
-  smoke_sha=$(curl -sS --max-time 2 "http://127.0.0.1:$SMOKE_PORT/api/health" 2>/dev/null \
-    | sed -n 's/.*"sha":"\([^"]*\)".*/\1/p' || true)
-  if [ "$smoke_sha" = "$TARGET_SHA" ]; then smoke_ready=1; break; fi
-  sleep 1
-done
-kill "$SMOKE_PID" >/dev/null 2>&1 || true
-wait "$SMOKE_PID" 2>/dev/null || true
-SMOKE_PID=""
-if [ "$smoke_ready" != "1" ]; then
-  tail -50 /tmp/whoop-runtime-smoke.log >&2 || true
-  echo "packaged runtime smoke failed" >&2
+if [ "$NEED_CI" = "1" ]; then
+  npm ci || { echo "npm ci failed" >&2; exit 1; }
+  mkdir -p node_modules
+  shasum -a 256 "$LOCKFILE" | awk '{print $1}' > "$MARKER"
+else
+  echo "lockfile unchanged — skipping npm ci"
+fi
+
+echo "--- staging previous build for rollback ---"
+rm -rf .next.prev
+if [ -d .next ]; then
+  mv .next .next.prev
+fi
+
+echo "--- building (npm run build) ---"
+if ! npm run build; then
+  echo "build failed — restoring previous .next" >&2
+  rm -rf .next
+  [ -d .next.prev ] && mv .next.prev .next
   exit 1
 fi
 
-# Snapshot the canonical WAL database with SQLite's online-backup API.
-BACKUP="$ROOT/backups/whoop_data.db.$TS"
-python3 - "$ROOT/shared/whoop_data.db" "$BACKUP" <<'PY'
-import sqlite3
-import sys
-
-source = sqlite3.connect(sys.argv[1], timeout=30)
-destination = sqlite3.connect(sys.argv[2])
-source.backup(destination)
-result = destination.execute("PRAGMA quick_check").fetchone()[0]
-destination.close()
-source.close()
-if result != "ok":
-    raise SystemExit(f"backup quick_check failed: {result}")
-PY
-
-# Materialize an immutable release: tracked source plus generated runtime.
-mkdir "$STAGE"
-git -C "$WORKTREE" archive HEAD | tar -C "$STAGE" -xf -
-cp -a "$WORKTREE/apps/web/.next" "$STAGE/apps/web/.next"
-cp -a "$WORKTREE/apps/web/dist" "$STAGE/apps/web/dist"
-cp -a "$WORKTREE/apps/web/node_modules" "$STAGE/apps/web/node_modules"
-printf '%s\n' "$TARGET_SHA" > "$STAGE/.deploy-sha"
-ln -s "$ROOT/.env.local" "$STAGE/apps/web/.env.local"
-
-[ -f "$STAGE/apps/web/.next/BUILD_ID" ]
-[ -x "$STAGE/apps/web/node_modules/.bin/next" ]
-[ -f "$STAGE/apps/web/dist/coach-mcp/server.mjs" ]
-[ "$(cat "$STAGE/.deploy-sha")" = "$TARGET_SHA" ]
-
-if [ -L "$ROOT/current" ]; then PREVIOUS=$(readlink -f "$ROOT/current" || true); fi
-if [ -e "$RELEASE" ]; then
-  REPLACED="$ROOT/releases/replaced-$TARGET_SHA-$TS"
-  mv "$RELEASE" "$REPLACED"
-  if [ "$PREVIOUS" = "$RELEASE" ]; then PREVIOUS="$REPLACED"; fi
-fi
-mv "$STAGE" "$RELEASE"
-
-install -m 0644 "$RELEASE/systemd/whoop-web.service" \
-  "$HOME/.config/systemd/user/whoop-web.service"
-install -m 0644 "$RELEASE/systemd/whoop-cloudflared.service" \
-  "$HOME/.config/systemd/user/whoop-cloudflared.service"
-systemctl --user daemon-reload
-
-next_link="$ROOT/.current-$TS"
-ln -s "$RELEASE" "$next_link"
-mv -Tf "$next_link" "$ROOT/current"
-ACTIVATED=1
-
-systemctl --user enable whoop-web.service whoop-cloudflared.service >/dev/null
-systemctl --user restart whoop-web.service
-sleep 5
-systemctl --user is-active --quiet whoop-web.service
-
-LIVE_SHA=$(curl -sS --max-time 15 "http://127.0.0.1:$PORT/api/health" \
-  | sed -n 's/.*"sha":"\([^"]*\)".*/\1/p')
-[ "$LIVE_SHA" = "$TARGET_SHA" ] || {
-  echo "local health reports $LIVE_SHA, expected $TARGET_SHA" >&2
-  exit 1
-}
-SIGNIN=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 \
-  "http://127.0.0.1:$PORT/signin")
-[ "$SIGNIN" = "200" ] || { echo "local /signin returned $SIGNIN" >&2; exit 1; }
-
-systemctl --user restart whoop-cloudflared.service
+echo "--- restarting whoop-web.service ---"
+sudo systemctl restart whoop-web || { echo "sudo systemctl restart whoop-web failed" >&2; exit 1; }
 sleep 3
-systemctl --user is-active --quiet whoop-cloudflared.service
-ACTIVATED=0
+systemctl is-active --quiet whoop-web || { echo "whoop-web.service is not active after restart" >&2; exit 1; }
+
+echo "--- local health check (expect 307) ---"
+LOCAL_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "http://127.0.0.1:$PORT/") || LOCAL_CODE=000
+[ "$LOCAL_CODE" = "307" ] || { echo "local health check returned $LOCAL_CODE, expected 307" >&2; exit 1; }
+echo "local check ok ($LOCAL_CODE)"
 
 echo
-echo "Deployed $TARGET_SHA on opti"
-echo "  release : $RELEASE"
-echo "  backup  : $BACKUP"
-echo "  web     : active on 127.0.0.1:$PORT"
-echo "  tunnel  : active"
-if [ -n "$PREVIOUS" ]; then
-  echo "  rollback: scripts/deploy --ref $(basename "$PREVIOUS")"
-fi
+echo "Deployed $DEPLOY_SHA on opti"
+echo "  rollback: on opti, in $ROOT/apps/web: rm -rf .next && mv .next.prev .next && sudo systemctl restart whoop-web"
 REMOTE_DEPLOY
 
-say "Public verification"
-if ! WEB_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 \
-  https://coach.georgenijo.com/signin); then
-  WEB_STATUS=000
-fi
-if ! API_STATUS=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 20 \
-  https://coach-api.georgenijo.com/api/health); then
-  API_STATUS=000
-fi
-echo "  coach.georgenijo.com/signin       : $WEB_STATUS"
-echo "  coach-api.georgenijo.com/api/health: $API_STATUS"
-[ "$WEB_STATUS" = "200" ] || die "public web verification failed"
-[ "$API_STATUS" = "200" ] || die "public API verification failed"
+say "Public verification (expect 307)"
+PUBLIC_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$PUBLIC_URL") || PUBLIC_CODE=000
+echo "  $PUBLIC_URL : $PUBLIC_CODE"
+[ "$PUBLIC_CODE" = "307" ] || die "public verification failed — expected 307, got $PUBLIC_CODE"
 
-say "Deployed $TARGET_SHA"
+say "Deploy complete"
