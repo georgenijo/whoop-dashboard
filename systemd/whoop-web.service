@@ -1,21 +1,25 @@
 [Unit]
-Description=Whoop Dashboard (Next.js on opti)
+Description=Whoop Dashboard (Next.js)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/george/services/whoop-dashboard/current/apps/web
-ExecStart=/home/george/.nvm/versions/node/v20.20.2/bin/node node_modules/.bin/next start -H 127.0.0.1 -p 8501
+User=george
+WorkingDirectory=/home/george/Documents/whoop-dashboard/apps/web
+ExecStart=/home/george/.nvm/versions/node/v20.20.2/bin/node node_modules/.bin/next start -p 8501 -H 127.0.0.1
 Restart=always
 RestartSec=5
-TimeoutStopSec=30
-MemoryMax=2G
+MemoryMax=512M
 Environment=NODE_ENV=production
-Environment=HOME=/home/george/services/whoop-dashboard/runtime-home
-Environment=WHOOP_DB_PATH=/home/george/services/whoop-dashboard/shared/whoop_data.db
-Environment=COACH_CURSOR_AGENT_BIN=/home/george/.local/bin/cursor-agent
-Environment=PATH=/home/george/.local/bin:/home/george/.nvm/versions/node/v20.20.2/bin:/usr/local/bin:/usr/bin
+Environment=PATH=/home/george/.nvm/versions/node/v20.20.2/bin:/usr/bin:/usr/local/bin
+NoNewPrivileges=yes
+PrivateTmp=true
+ProtectSystem=full
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
+
+# The JWT signing key is supplied by a root-owned, mode-600 drop-in at
+# /etc/systemd/system/whoop-web.service.d/override.conf on opti. That
+# drop-in is deliberately NOT checked into this repository.
