@@ -41,13 +41,13 @@ coach-api.georgenijo.com ─┘   bearer-only, no Access        │
 /home/george/Documents/whoop-dashboard/
 ├── .git                          in-place production checkout (also the deploy source)
 ├── apps/web                      Next.js app (WorkingDirectory for whoop-web.service)
-├── shared/whoop_data.db          canonical SQLite database
-└── .env                          canonical application secrets (mode 0600)
+│   └── .env.local                canonical application secrets (mode 0600)
+└── shared/whoop_data.db          canonical SQLite database
 ```
 
 Production deploys directly in this checkout — there is no separate
 `releases/`/`current` symlink tree and no isolated build worktree. The JWT
-signing key is not part of `.env`; it is injected via a root-owned, mode-600
+signing key is not part of `.env.local`; it is injected via a root-owned, mode-600
 systemd drop-in at `/etc/systemd/system/whoop-web.service.d/override.conf`,
 kept out of this repository.
 
@@ -56,7 +56,7 @@ kept out of this repository.
 | Location | Tracked | Purpose |
 |---|---:|---|
 | `.env.example` | yes | Operator-facing application template |
-| `/home/george/Documents/whoop-dashboard/.env` | no | Canonical production application configuration |
+| `/home/george/Documents/whoop-dashboard/apps/web/.env.local` | no | Canonical production application configuration loaded by Next.js |
 | `/etc/systemd/system/whoop-web.service.d/override.conf` | no | JWT signing key drop-in (root-owned, mode 600, not in repo) |
 | `/etc/cloudflared/config.yml` | no | Shared box-level tunnel config (not whoop-dashboard-specific, not in repo) |
 | `systemd/whoop-web.service` | yes | Reference copy of the deployed system unit |
@@ -107,7 +107,10 @@ Keep `COACH_CURSOR_AGENT_BIN=/home/george/.local/bin/cursor-agent` in
 `apps/web/.env.local`. `scripts/deploy` is the canonical release path. Before
 building or restarting, it runs the launcher under the same minimal PATH used
 by Coach; a missing binary or an auto-updated launcher that needs a new shell
-tool aborts the deploy while the existing service remains running.
+tool aborts the deploy while the existing service remains running. The canary
+checks the standardized launcher path (overridable with
+`DEPLOY_CURSOR_AGENT_BIN`); it does not load or validate application variables
+or provider credentials from `.env.local`.
 
 ```bash
 scripts/deploy --check

@@ -54,7 +54,21 @@ function resolveExecutable(command, pathValue) {
   return null;
 }
 
-if (!Array.isArray(tools) || tools.some((tool) => typeof tool !== "string")) {
+function validToolName(tool) {
+  return (
+    typeof tool === "string" &&
+    tool.length > 0 &&
+    tool !== "." &&
+    tool !== ".." &&
+    path.basename(tool) === tool
+  );
+}
+
+if (
+  !Array.isArray(tools) ||
+  !tools.every(validToolName) ||
+  new Set(tools).size !== tools.length
+) {
   fail("launcher tool manifest is invalid");
 } else {
   const agentBin = resolveExecutable(requestedAgent, process.env.PATH);

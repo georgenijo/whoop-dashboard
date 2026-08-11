@@ -43,6 +43,10 @@ done
 say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 die() { printf '\n\033[31mFAILED: %s\033[0m\n' "$*" >&2; exit 1; }
 
+if [[ ! "$CURSOR_AGENT_BIN" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
+  die "DEPLOY_CURSOR_AGENT_BIN must be a safe absolute path"
+fi
+
 command -v fleet >/dev/null 2>&1 || die "fleet CLI is required"
 
 if [ "$CHECK_ONLY" = "1" ]; then
