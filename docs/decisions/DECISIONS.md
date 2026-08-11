@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-11: Production deploys gate on the contained Cursor launcher
+
+**Decision:** Install Cursor Agent at the standardized runtime path `/home/george/.local/bin/cursor-agent` and make `scripts/deploy` run a launcher canary before build or restart. The canary executes `--version` with the same manifest-backed minimal PATH used by Coach, and `scripts/deploy --check` reports the same readiness signal.
+
+**Rationale:** The Oracle-to-Optiplex migration copied `COACH_CURSOR_AGENT_BIN` but not the executable, so every Cursor turn failed immediately with `ENOENT` while the web health check stayed green. Testing only the HTTP process cannot detect a missing optional subprocess or a self-update that adds an unavailable launcher dependency; a pre-restart canary catches both while leaving the currently running release untouched.
+
+**Status:** active
+
+**References:** #467, `scripts/check-cursor-agent.mjs`, `scripts/deploy`, `apps/web/src/lib/coach/cursor-launcher-tools.json`, `docs/operations/environment-and-deploy.md`
+
+---
+
 ## 2026-08-07: Simulator debug sessions mint on opti through Fleet
 
 **Decision:** Debug simulator launches mint the existing 30-day user JWT on Fleet node `opti`, reading `JWT_SIGNING_KEY` only from the protected production environment and returning only the signed token to the launcher. The launcher validates that token against the production API and injects it only through Debug-only `COACH_DEBUG_TOKEN`; Release builds continue to require Sign in with Apple. Do not add a public dev-auth endpoint, embed credentials, or print the signing key/token.

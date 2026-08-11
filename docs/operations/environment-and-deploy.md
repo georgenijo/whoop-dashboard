@@ -74,6 +74,7 @@ kept out of this repository.
 | `JWT_SIGNING_KEY` | Authenticated web or iOS sessions are used | Session JWTs |
 | `ANTHROPIC_API_KEY` | Shared Anthropic fallback is wanted | Coach |
 | `CURSOR_API_KEY` | Shared Cursor fallback is wanted | Coach |
+| `COACH_CURSOR_AGENT_BIN` | Cursor models are enabled | Absolute Cursor Agent launcher path |
 | `CURSOR_BACKEND_URL` | Cursor catalog override is needed | Coach settings |
 | `PUBLIC_ORIGIN` | Production redirects are generated | Web auth |
 | `ADMIN_APPLE_SUB` | Admin webhook replay is enabled | Admin authorization |
@@ -95,25 +96,30 @@ kept out of this repository.
 
 ## Normal deployment
 
-Production is currently updated by an operator-run checkout in place at the
-app directory, followed by a build and a service restart:
+Install Cursor Agent once as the runtime user before enabling Cursor models:
 
 ```bash
-fleet exec opti 'cd /home/george/Documents/whoop-dashboard && git fetch origin && git status --short'
-fleet exec opti 'cd /home/george/Documents/whoop-dashboard && git reset --hard <CI-validated-full-sha>'
-# build with the pinned Node runtime (nvm 20.20.2), then:
-fleet exec opti 'sudo systemctl restart whoop-web'
+fleet exec opti 'curl https://cursor.com/install -fsS | bash'
+fleet exec opti '/home/george/.local/bin/cursor-agent --version'
 ```
 
-`scripts/deploy`'s automated immutable-release pipeline (`releases/`/`current`
-symlink swap, user-level `systemctl --user` services, `.env.local`,
-`cloudflared.token`) predates the manual cutover to this layout and has not
-been reconciled with it — do not trust its description of the deploy
-mechanism until it is updated. Verify real state directly:
+Keep `COACH_CURSOR_AGENT_BIN=/home/george/.local/bin/cursor-agent` in
+`apps/web/.env.local`. `scripts/deploy` is the canonical release path. Before
+building or restarting, it runs the launcher under the same minimal PATH used
+by Coach; a missing binary or an auto-updated launcher that needs a new shell
+tool aborts the deploy while the existing service remains running.
+
+```bash
+scripts/deploy --check
+scripts/deploy
+```
+
+Verify real state directly when diagnosing production:
 
 ```bash
 fleet exec opti 'sudo systemctl status whoop-web --no-pager'
 fleet exec opti 'cd /home/george/Documents/whoop-dashboard && git log -1'
+fleet exec opti 'cd /home/george/Documents/whoop-dashboard && ~/.nvm/versions/node/v20.20.2/bin/node scripts/check-cursor-agent.mjs ~/.local/bin/cursor-agent'
 curl -fsS https://coach-api.georgenijo.com/api/health
 ```
 

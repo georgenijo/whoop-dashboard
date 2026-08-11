@@ -42,6 +42,7 @@ import {
   isCursorReasoningParameter,
   type CursorModelParameterSelection,
 } from "./cursor-model-params";
+import cursorLauncherTools from "./cursor-launcher-tools.json";
 
 // Hard reaper for the cursor-agent subprocess tree, NOT a quality-of-answer
 // policy. cursor-agent is spawned detached (own process group) and spawns the
@@ -147,14 +148,7 @@ export function cursorAgentChildPath(
 // `env` is defensive. The bundled Node it execs is addressed absolutely, so
 // nothing beyond these is needed. If a future launcher revision adds a tool,
 // the turn fails as `cursor-agent exited 127` in chat_logs — extend this list.
-const CURSOR_LAUNCHER_TOOLS = [
-  "bash",
-  "env",
-  "basename",
-  "dirname",
-  "realpath",
-  "readlink",
-];
+const CURSOR_LAUNCHER_TOOLS = cursorLauncherTools;
 const SHIM_BIN_DIRNAME = ".shim-bin";
 
 export function shimBinDirFor(ws: string): string {
