@@ -21,6 +21,11 @@ set -euo pipefail
 
 FLEET_NODE=${DEPLOY_FLEET_NODE:-opti}
 APP_ROOT=${DEPLOY_APP_ROOT:-/home/george/Documents/whoop-dashboard}
+# Fetch over HTTPS rather than the checkout's configured `origin`. opti's origin
+# remote is an SSH URL whose key is not authorized on GitHub, so `git fetch
+# origin` fails with "Permission denied (publickey)"; HTTPS resolves through the
+# `gh auth git-credential` helper that is already configured on opti.
+REPO_URL=${DEPLOY_REPO_URL:-https://github.com/georgenijo/whoop-dashboard.git}
 NODE_VERSION=${DEPLOY_NODE_VERSION:-20.20.2}
 PORT=${DEPLOY_PORT:-8501}
 PUBLIC_URL=${DEPLOY_PUBLIC_URL:-https://coach-api.georgenijo.com/}
@@ -41,11 +46,12 @@ command -v fleet >/dev/null 2>&1 || die "fleet CLI is required"
 
 if [ "$CHECK_ONLY" = "1" ]; then
   say "Current state on $FLEET_NODE"
-  fleet exec "$FLEET_NODE" "bash -s -- '$APP_ROOT'" <<'REMOTE_CHECK' || die "could not inspect $FLEET_NODE"
+  fleet exec "$FLEET_NODE" "bash -s -- '$APP_ROOT' '$REPO_URL'" <<'REMOTE_CHECK' || die "could not inspect $FLEET_NODE"
 set -euo pipefail
 ROOT=$1
+REPO_URL=$2
 cd "$ROOT" || { echo "app root $ROOT not found" >&2; exit 1; }
-git fetch origin -q || { echo "git fetch failed" >&2; exit 1; }
+git fetch -q "$REPO_URL" '+refs/heads/main:refs/remotes/origin/main' || { echo "git fetch failed" >&2; exit 1; }
 echo "  deployed:    $(git rev-parse --short HEAD)"
 echo "  origin/main: $(git rev-parse --short origin/main)"
 echo "  service:     $(systemctl is-active whoop-web.service 2>/dev/null || echo inactive)"
@@ -55,11 +61,12 @@ fi
 
 say "Deploying latest origin/main on $FLEET_NODE"
 fleet exec --timeout 900 "$FLEET_NODE" \
-  "bash -s -- '$APP_ROOT' '$NODE_VERSION' '$PORT'" <<'REMOTE_DEPLOY' || die "deployment failed on $FLEET_NODE — see output above"
+  "bash -s -- '$APP_ROOT' '$NODE_VERSION' '$PORT' '$REPO_URL'" <<'REMOTE_DEPLOY' || die "deployment failed on $FLEET_NODE — see output above"
 set -euo pipefail
 ROOT=$1
 NODE_VERSION=$2
 PORT=$3
+REPO_URL=$4
 
 NODE_BIN_DIR="$HOME/.nvm/versions/node/v$NODE_VERSION/bin"
 [ -x "$NODE_BIN_DIR/node" ] || {
@@ -71,7 +78,7 @@ export PATH="$NODE_BIN_DIR:$PATH"
 cd "$ROOT" || { echo "app root $ROOT not found" >&2; exit 1; }
 
 echo "--- syncing code (git fetch + reset --hard origin/main) ---"
-git fetch origin || { echo "git fetch failed" >&2; exit 1; }
+git fetch "$REPO_URL" '+refs/heads/main:refs/remotes/origin/main' || { echo "git fetch failed" >&2; exit 1; }
 git reset --hard origin/main || { echo "git reset --hard origin/main failed" >&2; exit 1; }
 DEPLOY_SHA=$(git rev-parse --short HEAD)
 echo "now at $DEPLOY_SHA"
