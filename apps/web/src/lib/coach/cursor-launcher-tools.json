@@ -1,0 +1,8 @@
+[
+  "bash",
+  "env",
+  "basename",
+  "dirname",
+  "realpath",
+  "readlink"
+]

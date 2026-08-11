@@ -45,4 +45,6 @@ jobs:
         run: npm run build
 
       - name: Validate deployment script
-        run: bash -n ../../scripts/deploy
+        run: |
+          bash -n ../../scripts/deploy
+          node --check ../../scripts/check-cursor-agent.mjs

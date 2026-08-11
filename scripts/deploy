@@ -29,6 +29,7 @@ REPO_URL=${DEPLOY_REPO_URL:-https://github.com/georgenijo/whoop-dashboard.git}
 NODE_VERSION=${DEPLOY_NODE_VERSION:-20.20.2}
 PORT=${DEPLOY_PORT:-8501}
 PUBLIC_URL=${DEPLOY_PUBLIC_URL:-https://coach-api.georgenijo.com/}
+CURSOR_AGENT_BIN=${DEPLOY_CURSOR_AGENT_BIN:-/home/george/.local/bin/cursor-agent}
 
 CHECK_ONLY=0
 while [ $# -gt 0 ]; do
@@ -42,31 +43,41 @@ done
 say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 die() { printf '\n\033[31mFAILED: %s\033[0m\n' "$*" >&2; exit 1; }
 
+if [[ ! "$CURSOR_AGENT_BIN" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
+  die "DEPLOY_CURSOR_AGENT_BIN must be a safe absolute path"
+fi
+
 command -v fleet >/dev/null 2>&1 || die "fleet CLI is required"
 
 if [ "$CHECK_ONLY" = "1" ]; then
   say "Current state on $FLEET_NODE"
-  fleet exec "$FLEET_NODE" "bash -s -- '$APP_ROOT' '$REPO_URL'" <<'REMOTE_CHECK' || die "could not inspect $FLEET_NODE"
+  fleet exec "$FLEET_NODE" "bash -s -- '$APP_ROOT' '$REPO_URL' '$NODE_VERSION' '$CURSOR_AGENT_BIN'" <<'REMOTE_CHECK' || die "could not inspect $FLEET_NODE"
 set -euo pipefail
 ROOT=$1
 REPO_URL=$2
+NODE_VERSION=$3
+CURSOR_AGENT_BIN=$4
 cd "$ROOT" || { echo "app root $ROOT not found" >&2; exit 1; }
 git fetch -q "$REPO_URL" '+refs/heads/main:refs/remotes/origin/main' || { echo "git fetch failed" >&2; exit 1; }
 echo "  deployed:    $(git rev-parse --short HEAD)"
 echo "  origin/main: $(git rev-parse --short origin/main)"
 echo "  service:     $(systemctl is-active whoop-web.service 2>/dev/null || echo inactive)"
+NODE_BIN="$HOME/.nvm/versions/node/v$NODE_VERSION/bin/node"
+[ -x "$NODE_BIN" ] || { echo "Node $NODE_VERSION missing at $NODE_BIN" >&2; exit 1; }
+"$NODE_BIN" scripts/check-cursor-agent.mjs "$CURSOR_AGENT_BIN"
 REMOTE_CHECK
   exit 0
 fi
 
 say "Deploying latest origin/main on $FLEET_NODE"
 fleet exec --timeout 900 "$FLEET_NODE" \
-  "bash -s -- '$APP_ROOT' '$NODE_VERSION' '$PORT' '$REPO_URL'" <<'REMOTE_DEPLOY' || die "deployment failed on $FLEET_NODE — see output above"
+  "bash -s -- '$APP_ROOT' '$NODE_VERSION' '$PORT' '$REPO_URL' '$CURSOR_AGENT_BIN'" <<'REMOTE_DEPLOY' || die "deployment failed on $FLEET_NODE — see output above"
 set -euo pipefail
 ROOT=$1
 NODE_VERSION=$2
 PORT=$3
 REPO_URL=$4
+CURSOR_AGENT_BIN=$5
 
 NODE_BIN_DIR="$HOME/.nvm/versions/node/v$NODE_VERSION/bin"
 [ -x "$NODE_BIN_DIR/node" ] || {
@@ -82,6 +93,12 @@ git fetch "$REPO_URL" '+refs/heads/main:refs/remotes/origin/main' || { echo "git
 git reset --hard origin/main || { echo "git reset --hard origin/main failed" >&2; exit 1; }
 DEPLOY_SHA=$(git rev-parse --short HEAD)
 echo "now at $DEPLOY_SHA"
+
+echo "--- Cursor Agent launcher canary ---"
+node scripts/check-cursor-agent.mjs "$CURSOR_AGENT_BIN" || {
+  echo "Cursor Agent preflight failed — leaving the running service untouched" >&2
+  exit 1
+}
 
 cd apps/web || { echo "apps/web missing under $ROOT" >&2; exit 1; }
 
