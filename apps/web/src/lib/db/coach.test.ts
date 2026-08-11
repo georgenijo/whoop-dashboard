@@ -19,16 +19,20 @@ new Database(dbFile).close();
 type CoachModule = typeof import("./coach");
 let coach: CoachModule;
 
+// Shared across all helpers/tests in this file instead of opening and closing
+// a fresh better-sqlite3 connection per call. Each open/close pair costs a
+// real filesystem round trip (schema read, WAL handshake); with the 30-row
+// cap test alone issuing 36 of them back-to-back, that churn is what made
+// this file occasionally blow past vitest's 5s default on loaded/virtualized
+// CI disks where fsync latency has a long tail (root-caused a flaky failure
+// on `main`, e.g. run 31441767192).
+let helperDb: Database.Database;
+
 function insertThread(userId: number): number {
-  const db = new Database(dbFile);
-  try {
-    const result = db
-      .prepare("INSERT INTO chat_threads (user_id, title) VALUES (?, ?)")
-      .run(userId, null);
-    return Number(result.lastInsertRowid);
-  } finally {
-    db.close();
-  }
+  const result = helperDb
+    .prepare("INSERT INTO chat_threads (user_id, title) VALUES (?, ?)")
+    .run(userId, null);
+  return Number(result.lastInsertRowid);
 }
 
 function insertMessage(
@@ -37,41 +41,32 @@ function insertMessage(
   content: string,
   blocks: unknown = null,
 ): number {
-  const db = new Database(dbFile);
-  try {
-    const result = db
-      .prepare(
-        "INSERT INTO chat_messages (thread_id, role, content, blocks, created_at) VALUES (?, ?, ?, ?, ?)",
-      )
-      .run(
-        threadId,
-        role,
-        content,
-        blocks === null ? null : JSON.stringify(blocks),
-        new Date().toISOString(),
-      );
-    return Number(result.lastInsertRowid);
-  } finally {
-    db.close();
-  }
+  const result = helperDb
+    .prepare(
+      "INSERT INTO chat_messages (thread_id, role, content, blocks, created_at) VALUES (?, ?, ?, ?, ?)",
+    )
+    .run(
+      threadId,
+      role,
+      content,
+      blocks === null ? null : JSON.stringify(blocks),
+      new Date().toISOString(),
+    );
+  return Number(result.lastInsertRowid);
 }
 
 function resetMessages(): void {
-  const db = new Database(dbFile);
-  try {
-    db.prepare("DELETE FROM chat_message_attachments").run();
-    db.prepare("DELETE FROM chat_attachments").run();
-    db.prepare("DELETE FROM chat_messages").run();
-    db.prepare("DELETE FROM chat_threads").run();
-  } finally {
-    db.close();
-  }
+  helperDb.prepare("DELETE FROM chat_message_attachments").run();
+  helperDb.prepare("DELETE FROM chat_attachments").run();
+  helperDb.prepare("DELETE FROM chat_messages").run();
+  helperDb.prepare("DELETE FROM chat_threads").run();
 }
 
 beforeAll(async () => {
   coach = await import("./coach");
   // First write goes through openWrite(), which builds the schema lazily.
   coach.createChatThread(1, null);
+  helperDb = new Database(dbFile);
   resetMessages();
 });
 
@@ -81,6 +76,7 @@ beforeEach(() => {
 });
 
 afterAll(() => {
+  helperDb.close();
   rmSync(tmpRoot, { recursive: true, force: true });
 });
 
@@ -128,9 +124,14 @@ describe("getChatThreadConversation", () => {
   it("caps the returned history at 30 rows and keeps the most recent", () => {
     const threadId = insertThread(1);
     // Insert 35 rows; oldest 5 should be dropped, leaving rows 6..35.
-    for (let i = 1; i <= 35; i++) {
-      insertMessage(threadId, i % 2 === 0 ? "assistant" : "user", `msg-${i}`);
-    }
+    // Batched in one transaction (one fsync) rather than 35 sequential
+    // commits — ordering is by autoincrement id, not created_at, so this
+    // is behaviorally identical to the old per-row-commit loop.
+    helperDb.transaction(() => {
+      for (let i = 1; i <= 35; i++) {
+        insertMessage(threadId, i % 2 === 0 ? "assistant" : "user", `msg-${i}`);
+      }
+    })();
 
     const conversation = coach.getChatThreadConversation(1, threadId);
 
