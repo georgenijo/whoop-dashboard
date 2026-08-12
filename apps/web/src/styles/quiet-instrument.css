@@ -23,8 +23,10 @@ textarea { font: inherit; }
 
 ::selection { background: var(--bg-lift); }
 
+/* Neutral, not brand. A red ring reads as an error state, and it fires on
+   every composer focus — which is the app's most common resting state. */
 :focus-visible {
-  outline: 2px solid var(--brand);
+  outline: 2px solid var(--fg-3);
   outline-offset: 3px;
 }
 
@@ -579,36 +581,25 @@ body:has(.coach-page) .bottom-nav { display: none; }
   font-size: var(--t-xs);
 }
 .coach-kicker { margin-bottom: var(--s1); letter-spacing: 0.1em; }
+/* The thread reads left-to-right at the pane's own width. A centred measure
+   left two dead gutters and made the transcript feel indented from nothing. */
 .coach-messages {
   gap: 0;
-  padding: calc(var(--s6) * var(--dm)) var(--s6) var(--s5);
+  padding: calc(var(--s5) * var(--dm)) var(--s6) var(--s5);
 }
 .coach-message-row {
   display: block;
-  width: min(100%, 70ch);
-  margin-right: auto;
-  margin-left: auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
 }
-.coach-message-row + .coach-message-row { margin-top: calc(var(--s6) * var(--dm)); }
-.coach-message-row.assistant + .coach-message-row.user { margin-top: calc(var(--s7) * var(--dm)); }
-.coach-speaker {
-  display: block;
-  margin-bottom: var(--s2);
-  padding-left: var(--s4);
-  color: var(--fg);
-  font-family: var(--font-num);
-  font-size: var(--t-xs);
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.coach-message-row.user .coach-speaker { color: var(--fg-3); }
+.coach-message-row + .coach-message-row { margin-top: calc(var(--s5) * var(--dm)); }
+.coach-message-row.assistant + .coach-message-row.user { margin-top: calc(var(--s6) * var(--dm)); }
 .coach-message {
   width: 100%;
   max-width: none;
-  padding: 0 0 0 var(--s4);
+  padding: 0;
   border: 0;
-  border-left: 2px solid transparent;
   border-radius: 0;
   background: transparent;
   color: var(--fg-2);
@@ -616,10 +607,16 @@ body:has(.coach-page) .bottom-nav { display: none; }
   font-size: var(--t-md);
   line-height: 1.65;
 }
+/* Speaker is carried by shape, not by a label: what you said is a right-hand
+   pill, what Coach said is the page itself. */
+.coach-message-row.user { display: flex; justify-content: flex-end; }
 .coach-message.user {
-  border-left-color: var(--fg-3);
-  border-radius: 0;
-  background: transparent;
+  width: fit-content;
+  max-width: min(100%, 62ch);
+  padding: var(--s2) var(--s3);
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--bg-lift);
   color: var(--fg);
   font-weight: 450;
 }
@@ -628,26 +625,115 @@ body:has(.coach-page) .bottom-nav { display: none; }
 .coach-message.assistant.has-work-log > .prose-coach {
   width: 100%;
   max-width: none;
-  padding: 0 0 0 var(--s4);
+  padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
   color: var(--fg-2);
 }
-.coach-message.assistant.has-work-log { padding-left: var(--s4); }
-.coach-message.assistant.has-work-log > .prose-coach { margin-top: var(--s3); padding-left: 0; }
+.coach-message.assistant.has-work-log > .prose-coach { margin-top: var(--s3); }
 .prose-coach strong { color: var(--fg); font-weight: 550; }
 .coach-markdown-fallback { white-space: pre-wrap; }
-.coach-work-disclosure > summary { color: var(--fg-3); border: 0; border-radius: var(--r-sm); }
+
+/* Work log: one line of text and a rule, not a card. The rule is the seam
+   between "what Coach did" and "what Coach said" in both states. */
+.coach-work-disclosure {
+  color: var(--fg-3);
+  font-size: var(--t-sm);
+  border-bottom: var(--stroke) solid var(--rule-soft);
+}
+.coach-work-disclosure > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: 0;
+  padding: 0 0 var(--s2);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg-3);
+  font-weight: 450;
+}
 .coach-work-disclosure > summary:hover,
-.coach-work-disclosure > summary:focus-visible { color: var(--fg); background: var(--bg-lift); border-color: transparent; }
-.coach-work-heartbeat,
-.coach-tool-state { background: var(--fg-3); box-shadow: none; }
-.coach-work-disclosure.running .coach-work-heartbeat,
-.coach-tool-call.running .coach-tool-state { background: var(--warn); box-shadow: none; }
-.coach-work-body { border-left-color: var(--rule); }
+.coach-work-disclosure > summary:focus-visible { color: var(--fg); background: transparent; }
+.coach-work-caret {
+  width: 6px;
+  height: 6px;
+  margin: 0;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  opacity: 0.6;
+  transform: rotate(-45deg);
+  transition: transform var(--dur) var(--ease);
+}
+.coach-work-disclosure[open] > summary .coach-work-caret { transform: rotate(45deg); }
+.coach-work-body {
+  margin: 0;
+  padding: 0 0 var(--s3);
+  border-left: 0;
+}
+.coach-work-note {
+  max-width: none;
+  margin: 0 0 var(--s3);
+  color: var(--fg-2);
+  font-size: var(--t-sm);
+  line-height: 1.6;
+}
+.coach-work-phase,
+.coach-work-empty { margin: 0 0 var(--s2); color: var(--fg-3); font-size: var(--t-xs); }
+
+/* Tool calls are rows in the same flow, not stacked cards. */
+.coach-tool-list { gap: 0; }
 .coach-tool-call,
-.coach-previous-tools { background: var(--bg-sunk); border-color: var(--rule-soft); border-radius: var(--r-md); }
+.coach-previous-tools {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+.coach-tool-call > summary,
+.coach-previous-tools > summary {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s1) 0;
+  color: var(--fg-3);
+  font-size: var(--t-sm);
+  font-weight: 450;
+}
+.coach-tool-call > summary::after,
+.coach-previous-tools > summary::after {
+  content: "";
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  opacity: 0.5;
+  transform: rotate(-45deg);
+  transition: transform var(--dur) var(--ease);
+}
+.coach-tool-call[open] > summary::after,
+.coach-previous-tools[open] > summary::after { transform: rotate(45deg); }
+/* No state dot on this row — pad it so its label sits on the same left edge
+   as the tool rows underneath. */
+.coach-previous-tools > summary { padding-left: calc(5px + var(--s2)); }
+.coach-tool-call > summary:hover,
+.coach-previous-tools > summary:hover { color: var(--fg); }
+.coach-tool-call > summary:hover .coach-tool-label { color: var(--fg); }
+.coach-tool-label { color: var(--fg-2); font-weight: 450; }
+.coach-tool-meta {
+  margin-left: var(--s2);
+  color: var(--fg-3);
+  font-family: var(--font-num);
+  font-size: var(--t-xs);
+  text-align: left;
+}
+.coach-tool-state { width: 5px; height: 5px; background: var(--fg-3); opacity: 0.45; box-shadow: none; }
+.coach-tool-call.running .coach-tool-state { background: var(--warn); opacity: 1; box-shadow: none; }
+.coach-tool-call.error .coach-tool-state { background: var(--bad); opacity: 1; }
+.coach-tool-detail { padding: var(--s2) 0 var(--s3) var(--s4); }
+.coach-previous-tools > .coach-tool-list { padding: 0 0 0 var(--s4); }
 .coach-empty { width: min(100%, 70ch); margin: 0 auto; }
 .coach-empty-mark { color: var(--fg-3); font-family: var(--font-num); font-size: var(--t-xs); font-weight: 500; }
 .coach-empty-title { color: var(--fg); font-size: var(--t-lg); font-weight: 550; }
@@ -665,7 +751,7 @@ body:has(.coach-page) .bottom-nav { display: none; }
   padding: var(--s3) var(--s6) var(--s4);
   border-top: var(--stroke) solid var(--rule-soft);
 }
-.coach-composer > * { max-width: 70ch; margin-right: auto; margin-left: auto; }
+.coach-composer > * { max-width: none; margin-right: 0; margin-left: 0; }
 .coach-input-shell {
   padding: var(--s2);
   background: transparent;
@@ -675,6 +761,9 @@ body:has(.coach-page) .bottom-nav { display: none; }
 }
 .coach-input-shell:focus-within { border-color: var(--fg-3); box-shadow: none; }
 .coach-input { color: var(--fg); font-family: var(--font-text); font-size: var(--t-md); }
+/* The shell's :focus-within border is the focus affordance — a second ring
+   inside it is just a box drawn around the placeholder. */
+.coach-input:focus-visible { outline: none; }
 .coach-attach { color: var(--fg-3); border-radius: var(--r-sm); }
 .coach-attach:hover:not(:disabled) { color: var(--fg); background: var(--bg-lift); }
 .coach-send {

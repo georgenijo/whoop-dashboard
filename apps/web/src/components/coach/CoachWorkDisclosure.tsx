@@ -87,7 +87,6 @@ export default function CoachWorkDisclosure({
       className={`coach-work-disclosure ${workLog.status}`}
     >
       <summary>
-        <span className="coach-work-heartbeat" aria-hidden="true" />
         <span>{disclosureLabel(workLog, elapsedMs)}</span>
         <span className="coach-work-caret" aria-hidden="true" />
       </summary>
