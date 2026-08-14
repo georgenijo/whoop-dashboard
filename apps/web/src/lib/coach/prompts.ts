@@ -79,6 +79,33 @@ Every turn opens with a short text sentence before any tool_use. This is the sin
 
 export const TITLE_SYSTEM_PROMPT = "You title chat threads. Reply with a 3-6 word title only.";
 
+// Issue #493 — bound the "Instructions" (custom system prompt) users can
+// save from Settings. 10,000 chars gives ~2x headroom over
+// DEFAULT_SYSTEM_PROMPT's own length (~8,584 chars as of this writing) — a
+// user replicating and lightly extending the built-in prompt still fits —
+// while keeping a single request's system-prompt overhead bounded (roughly
+// 2,500 tokens at 4 chars/token) and capping the size of the stored-content
+// an attacker could try to smuggle through this field.
+export const MAX_SYSTEM_PROMPT_LENGTH = 10_000;
+
+/**
+ * Resolve the effective custom system prompt for a user.
+ *
+ * Resolution order (issue #493): per-user override -> legacy app-global
+ * value (kept only so the single pre-migration owner's already-configured
+ * prompt keeps working) -> built-in default. Empty strings are treated the
+ * same as absent so clearing the Settings textarea falls through instead of
+ * pinning an empty override.
+ */
+export function resolveSystemPrompt(
+  userSystemPrompt: string | null | undefined,
+  globalSystemPrompt: string | null | undefined,
+): string {
+  if (userSystemPrompt) return userSystemPrompt;
+  if (globalSystemPrompt) return globalSystemPrompt;
+  return DEFAULT_SYSTEM_PROMPT;
+}
+
 const COACH_TIME_ZONE = "America/New_York";
 
 // Cursor receives tool names, descriptions, and JSON schemas from MCP, so

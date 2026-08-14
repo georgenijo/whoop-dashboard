@@ -1,5 +1,9 @@
-import { getSetting, setSetting, getUserSettings, upsertUserSettings } from "@/lib/db";
-import { DEFAULT_SYSTEM_PROMPT } from "@/lib/coach/prompts";
+import { getSetting, getUserSettings, upsertUserSettings } from "@/lib/db";
+import {
+  DEFAULT_SYSTEM_PROMPT,
+  MAX_SYSTEM_PROMPT_LENGTH,
+  resolveSystemPrompt,
+} from "@/lib/coach/prompts";
 import { requireAuth } from "@/lib/auth";
 import {
   CursorModelCatalogError,
@@ -17,7 +21,10 @@ import {
   parseModelPref,
 } from "@/lib/coach/provider";
 
-// `system_prompt` is a global app_setting (shared); model + effort are per-user.
+// `system_prompt` is per-user (issue #493 — it used to be a single
+// app-global app_setting that any authenticated user could overwrite for
+// everyone). Resolution falls back to the legacy global value, then the
+// built-in default — see resolveSystemPrompt.
 function settingsPayload(userId: number) {
   const settings = getUserSettings(userId);
   const selection = parseModelPref(settings?.model_pref);
@@ -25,7 +32,10 @@ function settingsPayload(userId: number) {
     settings?.cursor_key || process.env.CURSOR_API_KEY,
   );
   return {
-    system_prompt: getSetting("system_prompt") || DEFAULT_SYSTEM_PROMPT,
+    system_prompt: resolveSystemPrompt(
+      settings?.system_prompt,
+      getSetting("system_prompt"),
+    ),
     default_system_prompt: DEFAULT_SYSTEM_PROMPT,
     model_pref:
       selection.provider === "cursor" && cursorAvailable
@@ -115,7 +125,20 @@ export async function POST(req: Request) {
     };
 
     if (typeof body.system_prompt === "string") {
-      setSetting("system_prompt", body.system_prompt);
+      if (body.system_prompt.length > MAX_SYSTEM_PROMPT_LENGTH) {
+        return Response.json(
+          {
+            error: `system_prompt must be ${MAX_SYSTEM_PROMPT_LENGTH} characters or fewer`,
+          },
+          { status: 400 },
+        );
+      }
+      // Empty string clears the per-user override (falls back to the legacy
+      // global value, then the default) rather than pinning an empty prompt.
+      upsertUserSettings({
+        user_id: user.id,
+        system_prompt: body.system_prompt.length > 0 ? body.system_prompt : null,
+      });
     }
 
     if (typeof body.model_pref === "string") {

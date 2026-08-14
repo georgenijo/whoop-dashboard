@@ -276,6 +276,7 @@ export function openWrite(): DB | null {
         coach_goals TEXT,
         onboarded_at TEXT,
         tz TEXT,
+        system_prompt TEXT,
         updated_at TEXT NOT NULL
       );
       -- APNs device tokens for push notifications. Composite PK on
@@ -565,6 +566,13 @@ export function openWrite(): DB | null {
     }
     if (!userSettingsCols.some((c) => c.name === "cursor_model_params")) {
       db.exec("ALTER TABLE user_settings ADD COLUMN cursor_model_params TEXT");
+    }
+    // Issue #493 — system_prompt moves from a single app-global app_settings
+    // row (writable by ANY authenticated user, for every user) to a per-user
+    // column here. NULL means "no per-user override"; readers fall back to
+    // the legacy global app_settings value, then the built-in default.
+    if (!userSettingsCols.some((c) => c.name === "system_prompt")) {
+      db.exec("ALTER TABLE user_settings ADD COLUMN system_prompt TEXT");
     }
 
     // Phase D — data isolation. Add `user_id` to the five domain tables so

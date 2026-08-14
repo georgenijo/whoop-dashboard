@@ -34,6 +34,7 @@ export type UserSettings = {
   coach_goals: string[] | null;
   onboarded_at: string | null;
   tz: string | null;
+  system_prompt: string | null;
   updated_at: string;
 };
 
@@ -50,6 +51,9 @@ export type UserSettingsInput = {
   coach_goals?: string[] | null;
   onboarded_at?: string | null;
   tz?: string | null;
+  // `undefined` = leave existing column untouched. `null` = clear the column
+  // (falls back to the legacy global app_settings value, then the default).
+  system_prompt?: string | null;
 };
 
 export class UserSettingsUserMissingError extends Error {
@@ -82,6 +86,7 @@ function ensureUserSettingsTable(db: DB): void {
       coach_goals TEXT,
       onboarded_at TEXT,
       tz TEXT,
+      system_prompt TEXT,
       updated_at TEXT NOT NULL
     );
   `);
@@ -108,6 +113,7 @@ type UserSettingsRowRaw = {
   coach_goals: string | null;
   onboarded_at: string | null;
   tz: string | null;
+  system_prompt: string | null;
   updated_at: string;
 };
 
@@ -130,7 +136,7 @@ export function getUserSettings(user_id: number): UserSettings | null {
         SELECT user_id, anthropic_key, anthropic_key_version, cursor_key,
                cursor_key_version, model_pref, coach_effort, cursor_model_params,
                timezone, monthly_token_cap,
-               coach_goals, onboarded_at, tz, updated_at
+               coach_goals, onboarded_at, tz, system_prompt, updated_at
         FROM user_settings
         WHERE user_id = ?
         `
@@ -220,6 +226,7 @@ export function getUserSettings(user_id: number): UserSettings | null {
       coach_goals: parsedGoals,
       onboarded_at: row.onboarded_at,
       tz: row.tz,
+      system_prompt: row.system_prompt,
       updated_at: row.updated_at,
     };
   } finally {
@@ -255,7 +262,7 @@ export function upsertUserSettings(input: UserSettingsInput): void {
         SELECT anthropic_key, anthropic_key_version, cursor_key,
                cursor_key_version, model_pref, coach_effort, cursor_model_params,
                timezone, monthly_token_cap,
-               coach_goals, onboarded_at, tz
+               coach_goals, onboarded_at, tz, system_prompt
         FROM user_settings
         WHERE user_id = ?
         `
@@ -274,6 +281,7 @@ export function upsertUserSettings(input: UserSettingsInput): void {
           coach_goals: string | null;
           onboarded_at: string | null;
           tz: string | null;
+          system_prompt: string | null;
         }
       | undefined;
 
@@ -337,14 +345,19 @@ export function upsertUserSettings(input: UserSettingsInput): void {
         : input.onboarded_at;
     const nextTzCol =
       input.tz === undefined ? existing?.tz ?? null : input.tz;
+    const nextSystemPrompt =
+      input.system_prompt === undefined
+        ? existing?.system_prompt ?? null
+        : input.system_prompt;
 
     db.prepare(
       `
       INSERT INTO user_settings (
         user_id, anthropic_key, anthropic_key_version, cursor_key,
         cursor_key_version, model_pref, coach_effort, cursor_model_params,
-        timezone, monthly_token_cap, coach_goals, onboarded_at, tz, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        timezone, monthly_token_cap, coach_goals, onboarded_at, tz,
+        system_prompt, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET
         anthropic_key = excluded.anthropic_key,
         anthropic_key_version = excluded.anthropic_key_version,
@@ -358,6 +371,7 @@ export function upsertUserSettings(input: UserSettingsInput): void {
         coach_goals = excluded.coach_goals,
         onboarded_at = excluded.onboarded_at,
         tz = excluded.tz,
+        system_prompt = excluded.system_prompt,
         updated_at = excluded.updated_at
       `
     ).run(
@@ -374,6 +388,7 @@ export function upsertUserSettings(input: UserSettingsInput): void {
       nextCoachGoals,
       nextOnboardedAt,
       nextTzCol,
+      nextSystemPrompt,
       new Date().toISOString()
     );
   } finally {

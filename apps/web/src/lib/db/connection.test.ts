@@ -176,6 +176,70 @@ describe("Phase D — domain tables carry user_id", () => {
     }
   });
 
+  it("fresh DB: user_settings has a system_prompt column (issue #493)", () => {
+    const file = newDbFile();
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    try {
+      expect(columns(db!, "user_settings")).toContain("system_prompt");
+    } finally {
+      db?.close();
+    }
+  });
+
+  it("lazily adds system_prompt to a pre-#493 user_settings table without losing rows", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        apple_sub TEXT UNIQUE,
+        email TEXT,
+        name TEXT,
+        timezone TEXT
+      );
+      INSERT INTO users (id) VALUES (1);
+      CREATE TABLE user_settings (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id),
+        anthropic_key TEXT,
+        anthropic_key_version INTEGER,
+        model_pref TEXT,
+        timezone TEXT,
+        monthly_token_cap INTEGER,
+        updated_at TEXT NOT NULL
+      );
+      INSERT INTO user_settings (user_id, model_pref, updated_at)
+      VALUES (1, 'claude-sonnet-4-6', '2026-01-01T00:00:00Z');
+    `);
+    raw.close();
+    process.env.WHOOP_DB_PATH = file;
+
+    const db = conn.openWrite();
+    try {
+      expect(columns(db!, "user_settings")).toContain("system_prompt");
+      const row = db!
+        .prepare("SELECT model_pref, system_prompt FROM user_settings WHERE user_id = 1")
+        .get() as { model_pref: string; system_prompt: string | null };
+      expect(row.model_pref).toBe("claude-sonnet-4-6");
+      expect(row.system_prompt).toBeNull();
+    } finally {
+      db?.close();
+    }
+  });
+
+  it("re-opening the DB after the system_prompt ALTER is idempotent", () => {
+    const file = newDbFile();
+    process.env.WHOOP_DB_PATH = file;
+    conn.openWrite()?.close();
+    conn.openWrite()?.close();
+    const db = conn.openWrite();
+    try {
+      expect(columns(db!, "user_settings")).toContain("system_prompt");
+    } finally {
+      db?.close();
+    }
+  });
+
   it("workouts ALTER survives a pre-existing table when foreign_keys=ON", () => {
     // Prod scenario: a DB created by the pre-Phase-D schema already has
     // a `workouts` table with rows; opening it under FK=ON used to throw

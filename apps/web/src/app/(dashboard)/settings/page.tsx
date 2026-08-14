@@ -518,7 +518,12 @@ export default function SettingsPage() {
         body: JSON.stringify({ system_prompt: systemPrompt }),
       });
       if (!response.ok) {
-        throw new Error(`Couldn't save instructions (HTTP ${response.status}).`);
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(
+          data?.error || `Couldn't save instructions (HTTP ${response.status}).`,
+        );
       }
       const data = (await response.json()) as { system_prompt: string };
       setSavedSystemPrompt(data.system_prompt);

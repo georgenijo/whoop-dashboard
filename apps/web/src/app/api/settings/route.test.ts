@@ -36,6 +36,10 @@ vi.mock("@/lib/coach/cursor-models", async (importOriginal) => {
 
 import { GET, POST } from "./route";
 import { CursorModelCatalogError } from "@/lib/coach/cursor-models";
+import {
+  DEFAULT_SYSTEM_PROMPT,
+  MAX_SYSTEM_PROMPT_LENGTH,
+} from "@/lib/coach/prompts";
 
 function post(body: unknown): Request {
   return new Request("http://localhost/api/settings", {
@@ -287,5 +291,131 @@ describe("/api/settings model preferences", () => {
       error: "Cursor model catalog is unavailable",
     });
     expect(db.upsertUserSettings).not.toHaveBeenCalled();
+  });
+});
+
+describe("/api/settings system_prompt (issue #493 — per-user, not app-global)", () => {
+  it("writes system_prompt scoped to the authenticated user, not the global setting", async () => {
+    db.getUserSettings.mockReturnValue({
+      cursor_key: null,
+      model_pref: "anthropic:claude-sonnet-4-6",
+      system_prompt: "custom instructions",
+    });
+
+    const response = await POST(post({ system_prompt: "custom instructions" }));
+
+    expect(response.status).toBe(200);
+    expect(db.upsertUserSettings).toHaveBeenCalledWith({
+      user_id: 7,
+      system_prompt: "custom instructions",
+    });
+    expect(db.setSetting).not.toHaveBeenCalled();
+  });
+
+  it("clearing the textarea (empty string) stores null, not an empty override", async () => {
+    db.getUserSettings.mockReturnValue({
+      cursor_key: null,
+      model_pref: "anthropic:claude-sonnet-4-6",
+      system_prompt: null,
+    });
+
+    const response = await POST(post({ system_prompt: "" }));
+
+    expect(response.status).toBe(200);
+    expect(db.upsertUserSettings).toHaveBeenCalledWith({
+      user_id: 7,
+      system_prompt: null,
+    });
+  });
+
+  it("rejects an overlong system_prompt with 400 and does not persist it", async () => {
+    const overlong = "x".repeat(MAX_SYSTEM_PROMPT_LENGTH + 1);
+
+    const response = await POST(post({ system_prompt: overlong }));
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: `system_prompt must be ${MAX_SYSTEM_PROMPT_LENGTH} characters or fewer`,
+    });
+    expect(db.upsertUserSettings).not.toHaveBeenCalled();
+    expect(db.setSetting).not.toHaveBeenCalled();
+  });
+
+  it("accepts a system_prompt exactly at the length cap", async () => {
+    const atCap = "x".repeat(MAX_SYSTEM_PROMPT_LENGTH);
+    db.getUserSettings.mockReturnValue({
+      cursor_key: null,
+      model_pref: "anthropic:claude-sonnet-4-6",
+      system_prompt: atCap,
+    });
+
+    const response = await POST(post({ system_prompt: atCap }));
+
+    expect(response.status).toBe(200);
+    expect(db.upsertUserSettings).toHaveBeenCalledWith({
+      user_id: 7,
+      system_prompt: atCap,
+    });
+  });
+
+  it("GET resolves the caller's per-user system_prompt over the legacy global value", async () => {
+    db.getUserSettings.mockReturnValue({
+      cursor_key: null,
+      model_pref: "anthropic:claude-sonnet-4-6",
+      system_prompt: "per-user override",
+    });
+    db.getSetting.mockReturnValue("legacy global value");
+
+    const response = await GET(new Request("http://localhost/api/settings"));
+    expect(await response.json()).toMatchObject({
+      system_prompt: "per-user override",
+    });
+  });
+
+  it("GET falls back to the legacy global value when no per-user override exists", async () => {
+    db.getUserSettings.mockReturnValue({
+      cursor_key: null,
+      model_pref: "anthropic:claude-sonnet-4-6",
+      system_prompt: null,
+    });
+    db.getSetting.mockReturnValue("legacy global value");
+
+    const response = await GET(new Request("http://localhost/api/settings"));
+    expect(await response.json()).toMatchObject({
+      system_prompt: "legacy global value",
+    });
+  });
+
+  it("GET falls back to the built-in default when neither per-user nor global values exist", async () => {
+    db.getUserSettings.mockReturnValue({
+      cursor_key: null,
+      model_pref: "anthropic:claude-sonnet-4-6",
+      system_prompt: null,
+    });
+    db.getSetting.mockReturnValue(null);
+
+    const response = await GET(new Request("http://localhost/api/settings"));
+    expect(await response.json()).toMatchObject({
+      system_prompt: DEFAULT_SYSTEM_PROMPT,
+    });
+  });
+
+  it("a different authenticated user's write does not leak into another user's resolved prompt", async () => {
+    // Simulate two independent requests as different users by asserting the
+    // write call is scoped with the authenticated user's id (7, per the
+    // requireAuth mock) rather than any global key — the per-user isolation
+    // itself is covered end-to-end in user_settings.test.ts.
+    db.getUserSettings.mockReturnValue({
+      cursor_key: null,
+      model_pref: "anthropic:claude-sonnet-4-6",
+    });
+
+    await POST(post({ system_prompt: "attacker-controlled instructions" }));
+
+    expect(db.upsertUserSettings).toHaveBeenCalledWith({
+      user_id: 7,
+      system_prompt: "attacker-controlled instructions",
+    });
+    expect(db.setSetting).not.toHaveBeenCalled();
   });
 });
