@@ -26,7 +26,7 @@ export type Session = {
 // whenever both accounts hold a matching row. Every entry below is an
 // append-only table keyed by its own surrogate id, which is why the plain
 // UPDATE is safe. See mergeUserInto for the tables still missing from here.
-const USER_FK_TABLES = [
+export const USER_FK_TABLES = [
   "chat_threads",
   "body_measurements",
   "sessions",
@@ -37,19 +37,52 @@ const USER_FK_TABLES = [
   // whose merged-away account had ever chatted or synced.
   "chat_logs",
   "sync_logs",
+  // Issue #499 — route_logs gained the same FK for the same tenant-scoping
+  // reason. Append-only, keyed by its own surrogate id, so the bare repoint
+  // is safe.
+  "route_logs",
 ] as const;
 
 /**
  * Tables that only exist on some DBs, so they can't live in the static list.
  * `journal` is externally populated and absent from production entirely.
  */
-function optionalUserFkTables(db: DB): string[] {
+export function optionalUserFkTables(db: DB): string[] {
   const tables: string[] = [];
   if (hasTable(db, "journal") && hasColumn(db, "journal", "user_id")) {
     tables.push("journal");
   }
   return tables;
 }
+
+/**
+ * Tables that reference `users(id)` but are DELIBERATELY absent from
+ * USER_FK_TABLES because `user_id` participates in a PRIMARY KEY or UNIQUE
+ * constraint there — a bare `UPDATE ... SET user_id` would trade today's FK
+ * failure for a UNIQUE constraint failure whenever both merging accounts
+ * hold a matching row (e.g. the same `date` in `recovery`, or the same
+ * `(user_id, provider)` in `integrations`). Merging those needs a per-table
+ * conflict policy (which row wins, what happens to the loser) — a design
+ * decision, not a mechanical fix. See the KNOWN GAP note on mergeUserInto.
+ *
+ * Exists so connection.test.ts's FK-table reflection test can tell "known,
+ * deliberately unmerged" apart from "somebody forgot to list it" — the
+ * latter is exactly what let #496 slip through review three times before
+ * being caught.
+ */
+export const KNOWN_UNMERGED_USER_FK_TABLES = [
+  "integrations",
+  "user_settings",
+  "device_tokens",
+  "chat_attachments",
+  "client_logs",
+  "perf_metrics",
+  "recovery",
+  "cycles",
+  "sleep",
+  "workouts",
+  "daily_summary",
+] as const;
 
 export function getUserById(id: number): User | null {
   return safeWriteQuery((db) => {

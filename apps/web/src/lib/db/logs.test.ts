@@ -174,3 +174,43 @@ describe("sync_logs — tenant scoping", () => {
     expect(logs.getLastSuccessfulSyncAt(1)).toBeNull();
   });
 });
+
+function routeLog(userId: number | null, startedAt: string, route: string) {
+  return {
+    user_id: userId,
+    started_at: startedAt,
+    route,
+    duration_ms: 50,
+    status: 200,
+    details: null,
+    response_bytes: null,
+    render_ms: 10,
+  };
+}
+
+describe("route_logs — tenant scoping (issue #499)", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("getRouteLogs returns only the caller's rows", async () => {
+    const logs = await bootstrap();
+    logs.addRouteLog(routeLog(1, "2026-05-01T00:00:00Z", "/recovery"));
+    logs.addRouteLog(routeLog(2, "2026-05-02T00:00:00Z", "/sleep"));
+
+    const u1 = logs.getRouteLogs(1);
+    expect(u1.map((r) => r.route)).toEqual(["/recovery"]);
+    expect(u1[0].user_id).toBe(1);
+
+    const u2 = logs.getRouteLogs(2);
+    expect(u2.map((r) => r.route)).toEqual(["/sleep"]);
+  });
+
+  it("unattributed (NULL user_id) rows are invisible to every tenant", async () => {
+    const logs = await bootstrap();
+    logs.addRouteLog(routeLog(null, "2026-05-03T00:00:00Z", "/signin"));
+
+    expect(logs.getRouteLogs(1)).toHaveLength(0);
+    expect(logs.getRouteLogs(2)).toHaveLength(0);
+  });
+});

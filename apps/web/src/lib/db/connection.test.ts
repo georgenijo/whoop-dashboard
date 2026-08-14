@@ -12,10 +12,13 @@ vi.mock("server-only", () => ({}));
 const tmpRoot = mkdtempSync(path.join(tmpdir(), "connection-db-"));
 
 type ConnectionModule = typeof import("./connection");
+type AuthModule = typeof import("./auth");
 let conn: ConnectionModule;
+let authMod: AuthModule;
 
 beforeAll(async () => {
   conn = await import("./connection");
+  authMod = await import("./auth");
 });
 
 afterAll(() => {
@@ -570,6 +573,99 @@ describe("Phase D — domain tables carry user_id", () => {
   });
 
   // -------------------------------------------------------------------------
+  // Issue #499 — user_id on route_logs.
+  // -------------------------------------------------------------------------
+
+  it("issue #499: fresh DB has user_id + index on route_logs", () => {
+    const file = newDbFile();
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    try {
+      expect(columns(db!, "route_logs")).toContain("user_id");
+      expect(hasIndex(db!, "idx_route_logs_user")).toBe(true);
+    } finally {
+      db?.close();
+    }
+  });
+
+  it("issue #499: lazy ALTER adds user_id to a legacy route_logs table without losing rows", () => {
+    const file = newDbFile();
+    // Mimic a prod DB that pre-dates issue #499: route_logs has the #296
+    // perf columns but no user_id, and already has rows.
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE route_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at TEXT NOT NULL,
+        route TEXT NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        status INTEGER NOT NULL,
+        details TEXT,
+        response_bytes INTEGER,
+        render_ms INTEGER
+      );
+      INSERT INTO route_logs (started_at, route, duration_ms, status, details)
+      VALUES ('2026-05-13T12:00:00Z', '/recovery', 120, 200, '{"method":"GET"}');
+    `);
+    raw.close();
+
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    try {
+      expect(columns(db!, "route_logs")).toContain("user_id");
+      const row = db!
+        .prepare("SELECT route, status, user_id FROM route_logs WHERE id = 1")
+        .get() as { route: string; status: number; user_id: number | null };
+      expect(row.route).toBe("/recovery");
+      expect(row.status).toBe(200);
+      // Single-user DB (the fixture only ever inserts the bootstrap user
+      // id=1) — the legacy row is claimed for that account, same policy as
+      // chat_logs/sync_logs below.
+      expect(row.user_id).toBe(1);
+    } finally {
+      db?.close();
+    }
+  });
+
+  it("issue #499: multi-user DB leaves legacy route_logs rows NULL (fails closed)", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        apple_sub TEXT UNIQUE,
+        email TEXT,
+        name TEXT,
+        timezone TEXT
+      );
+      INSERT INTO users (id) VALUES (1);
+      INSERT INTO users (id) VALUES (2);
+      CREATE TABLE route_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at TEXT NOT NULL,
+        route TEXT NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        status INTEGER NOT NULL,
+        details TEXT
+      );
+      INSERT INTO route_logs (started_at, route, duration_ms, status)
+      VALUES ('2026-05-13T12:00:00Z', '/recovery', 120, 200);
+    `);
+    raw.close();
+
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    try {
+      const row = db!
+        .prepare("SELECT user_id FROM route_logs WHERE id = 1")
+        .get() as { user_id: number | null };
+      expect(row.user_id).toBeNull();
+    } finally {
+      db?.close();
+    }
+  });
+
+  // -------------------------------------------------------------------------
   // Issue #494 — user_id on chat_logs / sync_logs / journal.
   // -------------------------------------------------------------------------
 
@@ -889,6 +985,76 @@ describe("Phase D — domain tables carry user_id", () => {
       expect(row).toBeDefined();
       expect(row!.user_id).toBe(1);
       expect(row!.recovery_score).toBe(75);
+    } finally {
+      db?.close();
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Issue #502 — USER_FK_TABLES has needed three manual edits (#494 adding
+  // chat_logs/sync_logs, #499 adding route_logs) and each one was only caught
+  // in review. The connection runs with foreign_keys = ON, so ANY table that
+  // gains a `REFERENCES users(id)` FK and is missing from mergeUserInto's
+  // repoint list makes the trailing `DELETE FROM users` throw — and
+  // mergeUserInto sits on the Sign in with Apple path, so the symptom is a
+  // 500 on sign-in for anyone whose merged-away account touched that table.
+  //
+  // This test reflects the *actual* schema (PRAGMA foreign_key_list) rather
+  // than trusting any hand-maintained list, so a newly-added FK to users(id)
+  // fails loudly here instead of silently at the next split-brain merge.
+  // -------------------------------------------------------------------------
+  it("issue #502: every table with an FK to users(id) is accounted for in USER_FK_TABLES", () => {
+    const file = newDbFile();
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    expect(db).not.toBeNull();
+    try {
+      const tables = (
+        db!
+          .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+          .all() as { name: string }[]
+      ).map((r) => r.name);
+
+      const actualFkReferrers = new Set<string>();
+      for (const table of tables) {
+        const fks = db!.prepare(`PRAGMA foreign_key_list(${table})`).all() as {
+          table: string;
+        }[];
+        if (fks.some((fk) => fk.table === "users")) {
+          actualFkReferrers.add(table);
+        }
+      }
+
+      const accountedFor = new Set<string>([
+        ...authMod.USER_FK_TABLES,
+        ...authMod.optionalUserFkTables(db!),
+        ...authMod.KNOWN_UNMERGED_USER_FK_TABLES,
+      ]);
+
+      // The failure case that matters: a table now references users(id) but
+      // nobody added it to either list. Name it explicitly — that's the
+      // whole point of this test.
+      const missing = [...actualFkReferrers].filter((t) => !accountedFor.has(t));
+      expect(
+        missing,
+        missing.length
+          ? `table(s) reference users(id) but are missing from USER_FK_TABLES ` +
+              `(or KNOWN_UNMERGED_USER_FK_TABLES, if the omission is deliberate — ` +
+              `see its doc comment) in apps/web/src/lib/db/auth.ts: ${missing.join(", ")}`
+          : "",
+      ).toEqual([]);
+
+      // The inverse drift: an entry that no longer references users(id) at
+      // all (dropped column, renamed table) should be pruned rather than
+      // left to silently repoint a UPDATE against a column that isn't there.
+      const stale = [...accountedFor].filter(
+        (t) => tables.includes(t) && !actualFkReferrers.has(t),
+      );
+      expect(
+        stale,
+        `entries in USER_FK_TABLES / KNOWN_UNMERGED_USER_FK_TABLES that no ` +
+          `longer reference users(id): ${stale.join(", ")}`,
+      ).toEqual([]);
     } finally {
       db?.close();
     }

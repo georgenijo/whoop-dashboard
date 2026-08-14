@@ -30,9 +30,7 @@ export default async function LogsPage() {
 
   const logs = getChatLogs(user.id, 500);
   const syncLogs = getSyncLogs(user.id, 200);
-  // route_logs stays global: it has no user_id column and is out of scope for
-  // issue #494. Tracked separately — see #499.
-  const routeLogs = getRouteLogs(200);
+  const routeLogs = getRouteLogs(user.id, 200);
 
   // Resolve thread metadata for grouping. Pull thread_id from the column when
   // present, fall back to the legacy details JSON for older rows.
