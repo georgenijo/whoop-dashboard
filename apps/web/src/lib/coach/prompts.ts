@@ -91,18 +91,19 @@ export const MAX_SYSTEM_PROMPT_LENGTH = 10_000;
 /**
  * Resolve the effective custom system prompt for a user.
  *
- * Resolution order (issue #493): per-user override -> legacy app-global
- * value (kept only so the single pre-migration owner's already-configured
- * prompt keeps working) -> built-in default. Empty strings are treated the
- * same as absent so clearing the Settings textarea falls through instead of
- * pinning an empty override.
+ * Resolution order (issue #493): per-user override -> built-in default. The
+ * legacy app-global app_settings fallback was removed once the one-time
+ * migration in connection.ts (openWrite) copies any pre-existing global
+ * value into user_settings and deletes the global row — keeping a global
+ * fallback here would have kept a frozen, cross-tenant-shared value alive
+ * indefinitely and blocked clearing back to the default. Kept as the single
+ * choke point (not inlined at call sites) because this is where coach-loop
+ * wiring will eventually hook in.
  */
 export function resolveSystemPrompt(
   userSystemPrompt: string | null | undefined,
-  globalSystemPrompt: string | null | undefined,
 ): string {
   if (userSystemPrompt) return userSystemPrompt;
-  if (globalSystemPrompt) return globalSystemPrompt;
   return DEFAULT_SYSTEM_PROMPT;
 }
 

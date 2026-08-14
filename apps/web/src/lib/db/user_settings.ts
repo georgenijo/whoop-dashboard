@@ -20,6 +20,7 @@ import {
   parseCursorModelParamsByModel,
   type CursorModelParamsByModel,
 } from "@/lib/coach/cursor-model-params";
+import { MAX_SYSTEM_PROMPT_LENGTH } from "@/lib/coach/prompts";
 import { hasTable, openWrite, type DB } from "./connection";
 
 export type UserSettings = {
@@ -52,7 +53,7 @@ export type UserSettingsInput = {
   onboarded_at?: string | null;
   tz?: string | null;
   // `undefined` = leave existing column untouched. `null` = clear the column
-  // (falls back to the legacy global app_settings value, then the default).
+  // (falls back to the built-in default — see resolveSystemPrompt).
   system_prompt?: string | null;
 };
 
@@ -62,6 +63,20 @@ export class UserSettingsUserMissingError extends Error {
       `user_id=${userId} not found in users table; bootstrap user first`
     );
     this.name = "UserSettingsUserMissingError";
+  }
+}
+
+// Defense in depth (issue #493 follow-up): the settings route already
+// rejects an overlong system_prompt with a 400 before calling here, so this
+// never fires today — but upsertUserSettings is the actual write chokepoint,
+// and a future caller (a script, another route) could otherwise store an
+// unbounded prompt straight past the route-level check.
+export class SystemPromptTooLongError extends Error {
+  constructor(length: number) {
+    super(
+      `system_prompt is ${length} characters, exceeding the ${MAX_SYSTEM_PROMPT_LENGTH}-character cap`
+    );
+    this.name = "SystemPromptTooLongError";
   }
 }
 
@@ -254,6 +269,12 @@ export function upsertUserSettings(input: UserSettingsInput): void {
     ensureUserSettingsTable(db);
     if (!userExists(db, input.user_id)) {
       throw new UserSettingsUserMissingError(input.user_id);
+    }
+    if (
+      typeof input.system_prompt === "string" &&
+      input.system_prompt.length > MAX_SYSTEM_PROMPT_LENGTH
+    ) {
+      throw new SystemPromptTooLongError(input.system_prompt.length);
     }
 
     const existing = db

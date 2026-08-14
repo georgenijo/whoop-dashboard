@@ -358,13 +358,12 @@ describe("/api/settings system_prompt (issue #493 — per-user, not app-global)"
     });
   });
 
-  it("GET resolves the caller's per-user system_prompt over the legacy global value", async () => {
+  it("GET resolves the caller's per-user system_prompt", async () => {
     db.getUserSettings.mockReturnValue({
       cursor_key: null,
       model_pref: "anthropic:claude-sonnet-4-6",
       system_prompt: "per-user override",
     });
-    db.getSetting.mockReturnValue("legacy global value");
 
     const response = await GET(new Request("http://localhost/api/settings"));
     expect(await response.json()).toMatchObject({
@@ -372,31 +371,68 @@ describe("/api/settings system_prompt (issue #493 — per-user, not app-global)"
     });
   });
 
-  it("GET falls back to the legacy global value when no per-user override exists", async () => {
+  it("GET falls back to the built-in default when no per-user override exists", async () => {
     db.getUserSettings.mockReturnValue({
       cursor_key: null,
       model_pref: "anthropic:claude-sonnet-4-6",
       system_prompt: null,
     });
-    db.getSetting.mockReturnValue("legacy global value");
-
-    const response = await GET(new Request("http://localhost/api/settings"));
-    expect(await response.json()).toMatchObject({
-      system_prompt: "legacy global value",
-    });
-  });
-
-  it("GET falls back to the built-in default when neither per-user nor global values exist", async () => {
-    db.getUserSettings.mockReturnValue({
-      cursor_key: null,
-      model_pref: "anthropic:claude-sonnet-4-6",
-      system_prompt: null,
-    });
-    db.getSetting.mockReturnValue(null);
 
     const response = await GET(new Request("http://localhost/api/settings"));
     expect(await response.json()).toMatchObject({
       system_prompt: DEFAULT_SYSTEM_PROMPT,
+    });
+  });
+
+  // Issue #493 follow-up (fable review, MEDIUM) — the legacy app-global
+  // app_settings row was a frozen, cross-tenant-shared fallback: any
+  // instance where someone had written it before this fix kept leaking that
+  // value to every future user indefinitely, and it blocked clearing back
+  // to the default. connection.ts (openWrite) now migrates it into
+  // user_settings once and deletes it, so the route must never read it.
+  it("GET never falls back to the legacy global app_settings key", async () => {
+    db.getUserSettings.mockReturnValue({
+      cursor_key: null,
+      model_pref: "anthropic:claude-sonnet-4-6",
+      system_prompt: null,
+    });
+
+    const response = await GET(new Request("http://localhost/api/settings"));
+    expect(await response.json()).toMatchObject({
+      system_prompt: DEFAULT_SYSTEM_PROMPT,
+    });
+    expect(db.getSetting).not.toHaveBeenCalled();
+  });
+
+  it("trims whitespace before the empty-string check, so a whitespace-only value clears to null", async () => {
+    db.getUserSettings.mockReturnValue({
+      cursor_key: null,
+      model_pref: "anthropic:claude-sonnet-4-6",
+      system_prompt: null,
+    });
+
+    const response = await POST(post({ system_prompt: "   \n\t  " }));
+
+    expect(response.status).toBe(200);
+    expect(db.upsertUserSettings).toHaveBeenCalledWith({
+      user_id: 7,
+      system_prompt: null,
+    });
+  });
+
+  it("trims leading/trailing whitespace before persisting a non-empty system_prompt", async () => {
+    db.getUserSettings.mockReturnValue({
+      cursor_key: null,
+      model_pref: "anthropic:claude-sonnet-4-6",
+      system_prompt: "be terse",
+    });
+
+    const response = await POST(post({ system_prompt: "  be terse  \n" }));
+
+    expect(response.status).toBe(200);
+    expect(db.upsertUserSettings).toHaveBeenCalledWith({
+      user_id: 7,
+      system_prompt: "be terse",
     });
   });
 

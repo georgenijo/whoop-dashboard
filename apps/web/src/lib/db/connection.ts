@@ -2,6 +2,7 @@ import "server-only";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import Database, { type Database as DB } from "better-sqlite3";
+import { MAX_SYSTEM_PROMPT_LENGTH } from "@/lib/coach/prompts";
 
 export type { DB };
 
@@ -573,6 +574,52 @@ export function openWrite(): DB | null {
     // the legacy global app_settings value, then the built-in default.
     if (!userSettingsCols.some((c) => c.name === "system_prompt")) {
       db.exec("ALTER TABLE user_settings ADD COLUMN system_prompt TEXT");
+    }
+    // Issue #493 follow-up (fable review) — one-time migration off the
+    // legacy app-global system_prompt row. Runs on every openWrite() call,
+    // so the steady-state (post-migration) path must be cheap: app_settings
+    // is keyed on `key TEXT PRIMARY KEY`, so this is a single indexed point
+    // lookup, not a table scan — once the row is deleted below, every
+    // subsequent call short-circuits here.
+    if (hasTable(db, "app_settings") && hasTable(db, "user_settings")) {
+      const legacyPrompt = db
+        .prepare("SELECT value FROM app_settings WHERE key = 'system_prompt'")
+        .get() as { value: string | null } | undefined;
+      if (legacyPrompt?.value) {
+        // Cap defensively at migration time too — the legacy row predates
+        // MAX_SYSTEM_PROMPT_LENGTH and was never validated on write.
+        const value = legacyPrompt.value.slice(0, MAX_SYSTEM_PROMPT_LENGTH);
+        // Transactional: copy-to-every-user then delete must be atomic. A
+        // crash between the two must not be able to delete the global row
+        // without every user having already received it — that would
+        // silently and irrecoverably erase the owner's configured prompt.
+        // Only users who currently have NULL system_prompt are touched
+        // (the WHERE on the UPSERT's DO UPDATE), so anyone who already set
+        // their own per-user value keeps it.
+        //
+        // `dbHandle` is a `const` alias of `db` (itself a `let`, reassigned
+        // once at handle-open time): TypeScript only preserves non-null
+        // narrowing into a closure for a `const` binding, so `db.transaction`
+        // below is captured through this alias rather than `db` directly.
+        const dbHandle = db;
+        const migrateLegacySystemPrompt = dbHandle.transaction((promptValue: string) => {
+          const users = dbHandle.prepare("SELECT id FROM users").all() as { id: number }[];
+          const now = new Date().toISOString();
+          const upsert = dbHandle.prepare(`
+            INSERT INTO user_settings (user_id, system_prompt, updated_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+              system_prompt = excluded.system_prompt,
+              updated_at = excluded.updated_at
+            WHERE user_settings.system_prompt IS NULL
+          `);
+          for (const user of users) {
+            upsert.run(user.id, promptValue, now);
+          }
+          dbHandle.prepare("DELETE FROM app_settings WHERE key = 'system_prompt'").run();
+        });
+        migrateLegacySystemPrompt(value);
+      }
     }
 
     // Phase D — data isolation. Add `user_id` to the five domain tables so

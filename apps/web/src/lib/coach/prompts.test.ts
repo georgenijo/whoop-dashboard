@@ -7,7 +7,35 @@ import {
   buildSystemPrompt,
   CURSOR_SYSTEM_PROMPT,
   DEFAULT_SYSTEM_PROMPT,
+  resolveSystemPrompt,
 } from "./prompts";
+
+describe("resolveSystemPrompt", () => {
+  // Issue #493 follow-up (fable review, MEDIUM) — resolveSystemPrompt used
+  // to take a second "legacy global app_settings value" fallback argument.
+  // That fallback was a frozen, cross-tenant-shared value once anyone wrote
+  // it pre-fix, and it blocked clearing back to the default. It was removed
+  // once connection.ts's one-time migration folds any legacy value into
+  // user_settings and deletes the app_settings row, so this is now a plain
+  // two-level per-user -> default resolution, single-argument.
+  it("returns the per-user override when present", () => {
+    expect(resolveSystemPrompt("custom instructions")).toBe(
+      "custom instructions",
+    );
+  });
+
+  it("falls back to DEFAULT_SYSTEM_PROMPT for null", () => {
+    expect(resolveSystemPrompt(null)).toBe(DEFAULT_SYSTEM_PROMPT);
+  });
+
+  it("falls back to DEFAULT_SYSTEM_PROMPT for undefined", () => {
+    expect(resolveSystemPrompt(undefined)).toBe(DEFAULT_SYSTEM_PROMPT);
+  });
+
+  it("falls back to DEFAULT_SYSTEM_PROMPT for an empty string", () => {
+    expect(resolveSystemPrompt("")).toBe(DEFAULT_SYSTEM_PROMPT);
+  });
+});
 
 describe("buildSystemPrompt", () => {
   it("uses the Coach timezone for today's date", () => {
