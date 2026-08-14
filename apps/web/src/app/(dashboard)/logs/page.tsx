@@ -1,4 +1,7 @@
+import { headers } from "next/headers";
+import { notFound } from "next/navigation";
 import { getChatLogs, getChatThreadInfo, getRouteLogs, getSyncLogs } from "@/lib/db";
+import { requireAuthOrSignin } from "@/lib/auth";
 import ChatLogsByThread from "./ChatLogsByThread";
 import CollapsibleCard from "./CollapsibleCard";
 import RouteLogsTable from "./RouteLogsTable";
@@ -16,7 +19,22 @@ function deriveThreadIdFromDetails(details?: string | null): number | null {
 
 export const dynamic = "force-dynamic";
 
-export default function LogsPage() {
+export default async function LogsPage() {
+  const headerList = await headers();
+  const { user } = await requireAuthOrSignin(
+    new Request("http://localhost", { headers: headerList }),
+  );
+
+  // chat_logs is cross-user (details holds full prompts + raw health rows for
+  // every tenant, not just the signed-in one) — same admin gate as the
+  // /api/logs JSON route (#491). Per-user scoping of the underlying queries
+  // is separate work (#494); this just keeps the page's exposure consistent
+  // with the API's until that lands.
+  const adminSub = process.env.ADMIN_APPLE_SUB;
+  if (!adminSub || user.apple_sub !== adminSub) {
+    notFound();
+  }
+
   const logs = getChatLogs(500);
   const syncLogs = getSyncLogs(200);
   const routeLogs = getRouteLogs(200);
