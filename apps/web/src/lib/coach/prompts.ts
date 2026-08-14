@@ -89,22 +89,43 @@ export const TITLE_SYSTEM_PROMPT = "You title chat threads. Reply with a 3-6 wor
 export const MAX_SYSTEM_PROMPT_LENGTH = 10_000;
 
 /**
- * Resolve the effective custom system prompt for a user.
+ * Normalize a stored per-user "Instructions" value into either real custom
+ * instructions or `null` for "the user has none".
  *
- * Resolution order (issue #493): per-user override -> built-in default. The
- * legacy app-global app_settings fallback was removed once the one-time
- * migration in connection.ts (openWrite) copies any pre-existing global
- * value into user_settings and deletes the global row — keeping a global
- * fallback here would have kept a frozen, cross-tenant-shared value alive
- * indefinitely and blocked clearing back to the default. Kept as the single
- * choke point (not inlined at call sites) because this is where coach-loop
- * wiring will eventually hook in.
+ * Issue #498 replaced the previous `resolveSystemPrompt`, which returned the
+ * user's text *instead of* DEFAULT_SYSTEM_PROMPT. Full replacement meant the
+ * first user to type anything into a box labelled "Instructions" silently
+ * dropped the tool-usage rules, the date-interpretation rules, and the safety
+ * rules ("query their data before quoting any health number; never invent a
+ * value") — a coach that invents health numbers, one textarea away. Custom
+ * instructions are therefore ADDITIVE: an extra block after the default, in
+ * the same shape the coach_goals block already uses.
+ *
+ * The 10,000-char cap is enforced on write and is not a sanitizer, so treat
+ * the stored value as arbitrary text. `null`, `undefined`, `""` and a
+ * whitespace-only string all collapse to `null` here, which is what keeps the
+ * no-custom-instructions prompt byte-identical to the pre-#498 prompt — and
+ * therefore keeps the cached DEFAULT_SYSTEM_PROMPT block hitting cache.
  */
-export function resolveSystemPrompt(
+export function normalizeCustomInstructions(
   userSystemPrompt: string | null | undefined,
-): string {
-  if (userSystemPrompt) return userSystemPrompt;
-  return DEFAULT_SYSTEM_PROMPT;
+): string | null {
+  if (typeof userSystemPrompt !== "string") return null;
+  const trimmed = userSystemPrompt.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+// Framing for the user's own instructions. The header marks where operator
+// rules stop and user text begins, and states the precedence the additive
+// model implies: custom instructions steer tone and emphasis, they do not
+// repeal the data-integrity rules in DEFAULT_SYSTEM_PROMPT above.
+function customInstructionsText(instructions: string): string {
+  return `## The user's own instructions
+The user wrote the following in Settings. Follow it for tone, emphasis, and
+preferences. It adds to the rules above rather than replacing them — where it
+conflicts with the data-integrity or safety rules above, those rules win.
+
+${instructions}`;
 }
 
 const COACH_TIME_ZONE = "America/New_York";
@@ -149,11 +170,18 @@ function goalSentenceLabel(id: string): string | undefined {
  * is appended — caching per-user text would balloon cache writes for a single
  * read each, so it's intentionally left ephemeral.
  *
- * `goals = null` (the default) preserves the pre-Phase-E.1 two-block shape.
+ * Issue #498 appends the user's custom instructions as a further UNCACHED
+ * block, last, for the same reason: per-user text in the cached block would
+ * cost one cache write per user for a single read, and would break the
+ * byte-identical-across-users property that makes block 2 cacheable at all.
+ *
+ * `goals = null` and `customInstructions = null` (the defaults) preserve the
+ * pre-Phase-E.1 two-block shape.
  */
 export function buildSystemPrompt(
   now: Date = new Date(),
   goals: readonly string[] | null = null,
+  customInstructions: string | null = null,
 ): TextBlockParam[] {
   // en-CA locale formats as YYYY-MM-DD.
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: COACH_TIME_ZONE }).format(now);
@@ -179,12 +207,25 @@ export function buildSystemPrompt(
       });
     }
   }
+  const instructions = normalizeCustomInstructions(customInstructions);
+  if (instructions) {
+    blocks.push({ type: "text", text: customInstructionsText(instructions) });
+  }
   return blocks;
 }
 
+/**
+ * Cursor's prompt is a single string (no block array, so no cache_control to
+ * preserve), but issue #498 applies the same additive rule: the user's
+ * instructions are appended after CURSOR_SYSTEM_PROMPT and the goals
+ * sentence, never substituted for them. Honouring a user's instructions on
+ * Anthropic while silently ignoring them on Cursor would be worse than either
+ * consistent choice.
+ */
 export function buildCursorSystemPrompt(
   now: Date = new Date(),
   goals: readonly string[] | null = null,
+  customInstructions: string | null = null,
 ): string {
   const today = new Intl.DateTimeFormat("en-CA", {
     timeZone: COACH_TIME_ZONE,
@@ -196,5 +237,9 @@ export function buildCursorSystemPrompt(
     labels.length > 0
       ? `\nThe user's stated goals are ${labels.join(", ")}. Use them when relevant without forcing them into every answer.`
       : "";
-  return `Today's date is ${today}.\n${CURSOR_SYSTEM_PROMPT}${goalText}`;
+  const instructions = normalizeCustomInstructions(customInstructions);
+  const instructionsText = instructions
+    ? `\n\n${customInstructionsText(instructions)}`
+    : "";
+  return `Today's date is ${today}.\n${CURSOR_SYSTEM_PROMPT}${goalText}${instructionsText}`;
 }

@@ -373,9 +373,14 @@ function buildPrompt(
   activeIds: ReadonlySet<string>,
   preloadedContext: PreloadedContext | null,
 ): string {
+  // Issue #498 — the user's Settings "Instructions" apply on the Cursor path
+  // too, appended additively (see buildCursorSystemPrompt). One settings read
+  // now serves both goals and instructions.
+  const userSettings = getUserSettings(userId);
   const system = buildCursorSystemPrompt(
     new Date(),
-    getUserSettings(userId)?.coach_goals ?? null,
+    userSettings?.coach_goals ?? null,
+    userSettings?.system_prompt ?? null,
   );
   const transcript = truncateTranscript(
     flattenCursorConversation(conversation, activeIds),

@@ -1,8 +1,7 @@
 import { getUserSettings, upsertUserSettings } from "@/lib/db";
 import {
-  DEFAULT_SYSTEM_PROMPT,
   MAX_SYSTEM_PROMPT_LENGTH,
-  resolveSystemPrompt,
+  normalizeCustomInstructions,
 } from "@/lib/coach/prompts";
 import { requireAuth } from "@/lib/auth";
 import {
@@ -23,9 +22,18 @@ import {
 
 // `system_prompt` is per-user (issue #493 — it used to be a single
 // app-global app_setting that any authenticated user could overwrite for
-// everyone). Resolution falls back straight to the built-in default — see
-// resolveSystemPrompt. The legacy global app_settings row, if any existed,
-// was migrated into user_settings and deleted by connection.ts (openWrite).
+// everyone). The legacy global app_settings row, if any existed, was
+// migrated into user_settings and deleted by connection.ts (openWrite).
+//
+// Issue #498 — this returns the user's RAW stored instructions ("" when they
+// have none), not a value resolved against DEFAULT_SYSTEM_PROMPT. Custom
+// instructions are now additive to the built-in prompt rather than a
+// replacement for it, so pre-filling the Settings textarea with the built-in
+// default would be actively wrong: the user would edit a copy of the default
+// and save it, and the coach would then receive the entire default prompt
+// twice — once cached, once as ~8.5KB of uncached per-user text on every
+// turn. `default_system_prompt` was dropped from this payload for the same
+// reason; nothing should invite the user to edit the operator prompt.
 function settingsPayload(userId: number) {
   const settings = getUserSettings(userId);
   const selection = parseModelPref(settings?.model_pref);
@@ -33,8 +41,7 @@ function settingsPayload(userId: number) {
     settings?.cursor_key || process.env.CURSOR_API_KEY,
   );
   return {
-    system_prompt: resolveSystemPrompt(settings?.system_prompt),
-    default_system_prompt: DEFAULT_SYSTEM_PROMPT,
+    system_prompt: normalizeCustomInstructions(settings?.system_prompt) ?? "",
     model_pref:
       selection.provider === "cursor" && cursorAvailable
         ? modelPrefForSelection(selection)

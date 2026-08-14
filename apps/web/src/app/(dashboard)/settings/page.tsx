@@ -142,7 +142,6 @@ function SettingRow({
 export default function SettingsPage() {
   const [localValues, setLocalValues] = useState<Record<string, boolean>>({});
   const [systemPrompt, setSystemPrompt] = useState("");
-  const [defaultSystemPrompt, setDefaultSystemPrompt] = useState("");
   const [savedSystemPrompt, setSavedSystemPrompt] = useState("");
   const [saving, setSaving] = useState(false);
   const [promptError, setPromptError] = useState<string | null>(null);
@@ -231,7 +230,6 @@ export default function SettingsPage() {
         response.ok
           ? (response.json() as Promise<{
               system_prompt: string;
-              default_system_prompt: string;
               model_pref?: string;
               cursor_available?: boolean;
             }>)
@@ -242,7 +240,6 @@ export default function SettingsPage() {
           if (!data) return;
           setSystemPrompt(data.system_prompt);
           setSavedSystemPrompt(data.system_prompt);
-          setDefaultSystemPrompt(data.default_system_prompt);
           if (data.model_pref) setModelPref(data.model_pref);
           setCursorAvailable(Boolean(data.cursor_available));
         },
@@ -888,7 +885,9 @@ export default function SettingsPage() {
                   <h3>Instructions</h3>
                   <p>
                     Give Coach persistent context about how you want it to
-                    think and respond.
+                    think and respond. This is added to Coach&rsquo;s built-in
+                    instructions, not a replacement for them. Leave it empty
+                    to use Coach as-is.
                   </p>
                 </div>
                 <span className={styles.saveState} aria-live="polite">
@@ -906,6 +905,7 @@ export default function SettingsPage() {
                 value={systemPrompt}
                 onChange={(event) => setSystemPrompt(event.target.value)}
                 aria-label="Coach instructions"
+                placeholder="e.g. Keep answers to three sentences. Always mention my HRV trend."
                 spellCheck={false}
               />
               <div className={styles.promptActions}>
@@ -914,10 +914,10 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     className={styles.secondaryButton}
-                    onClick={() => setSystemPrompt(defaultSystemPrompt)}
-                    disabled={systemPrompt === defaultSystemPrompt}
+                    onClick={() => setSystemPrompt("")}
+                    disabled={systemPrompt === ""}
                   >
-                    Reset
+                    Clear
                   </button>
                   <button
                     type="button"

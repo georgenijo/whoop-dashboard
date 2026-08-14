@@ -7,17 +7,21 @@ import { PassThrough } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const spawnMock = vi.hoisted(() => vi.fn());
+const getUserSettingsMock = vi.hoisted(() =>
+  vi.fn(() => ({ coach_goals: null }) as Record<string, unknown> | null),
+);
+const buildCursorSystemPromptMock = vi.hoisted(() => vi.fn(() => "System prompt"));
 
 vi.mock("server-only", () => ({}));
 vi.mock("node:child_process", () => ({ spawn: spawnMock }));
 vi.mock("@/lib/db", () => ({
-  getUserSettings: vi.fn(() => ({ coach_goals: null })),
+  getUserSettings: getUserSettingsMock,
 }));
 vi.mock("@/lib/db/connection", () => ({
   dbPath: vi.fn(() => "/tmp/test-whoop.db"),
 }));
 vi.mock("./prompts", () => ({
-  buildCursorSystemPrompt: vi.fn(() => "System prompt"),
+  buildCursorSystemPrompt: buildCursorSystemPromptMock,
 }));
 vi.mock("./tools", () => ({
   captureToolResponse: vi.fn((value: unknown) => value),
@@ -111,6 +115,13 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   spawnMock.mockReset();
+  // Restore the module-factory defaults: vi.restoreAllMocks() strips the
+  // implementations these were created with, and other suites in this file
+  // rely on them.
+  getUserSettingsMock.mockReset();
+  getUserSettingsMock.mockReturnValue({ coach_goals: null });
+  buildCursorSystemPromptMock.mockReset();
+  buildCursorSystemPromptMock.mockReturnValue("System prompt");
 });
 
 describe("CursorVisibleTextAccumulator", () => {
@@ -258,6 +269,55 @@ describe("selectRecentPrefetchTool", () => {
     ["Analyze my recovery trend this month", null],
   ])("routes %s to %s", (prompt, expected) => {
     expect(selectRecentPrefetchTool(prompt)).toBe(expected);
+  });
+});
+
+// Issue #498 — the Cursor path must honour the user's stored Instructions
+// too. buildCursorSystemPrompt is mocked in this file, so assert the wiring
+// here (that the stored value is handed to the builder) and the additive
+// composition in prompts.test.ts.
+describe("runCursorTurn custom instructions (issue #498)", () => {
+  it("passes the user's stored system_prompt to buildCursorSystemPrompt", async () => {
+    buildCursorSystemPromptMock.mockReturnValue("System prompt");
+    getUserSettingsMock.mockReturnValue({
+      coach_goals: ["sleep_better"],
+      system_prompt: "Always mention my HRV trend.",
+    });
+    const child = fakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const turn = runCursorTurn(baseArgs({ iterations: 0 }));
+    await waitForSpawn();
+
+    expect(buildCursorSystemPromptMock).toHaveBeenCalledWith(
+      expect.any(Date),
+      ["sleep_better"],
+      "Always mention my HRV trend.",
+    );
+
+    child.stdout.end();
+    child.emit("close", 0);
+    await turn.catch(() => undefined);
+  });
+
+  it("passes null when the user has no stored instructions", async () => {
+    buildCursorSystemPromptMock.mockReturnValue("System prompt");
+    getUserSettingsMock.mockReturnValue({ coach_goals: null });
+    const child = fakeChild();
+    spawnMock.mockReturnValue(child);
+
+    const turn = runCursorTurn(baseArgs({ iterations: 0 }));
+    await waitForSpawn();
+
+    expect(buildCursorSystemPromptMock).toHaveBeenCalledWith(
+      expect.any(Date),
+      null,
+      null,
+    );
+
+    child.stdout.end();
+    child.emit("close", 0);
+    await turn.catch(() => undefined);
   });
 });
 

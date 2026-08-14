@@ -371,7 +371,12 @@ describe("/api/settings system_prompt (issue #493 — per-user, not app-global)"
     });
   });
 
-  it("GET falls back to the built-in default when no per-user override exists", async () => {
+  // Issue #498 — GET returns the RAW stored value, not one resolved against
+  // DEFAULT_SYSTEM_PROMPT. Custom instructions are additive now, so
+  // pre-filling the Settings textarea with the built-in prompt would invite
+  // the user to save a near-copy of it, which the coach would then receive
+  // twice (once cached, once as ~8.5KB of uncached per-user text per turn).
+  it("GET returns an empty string when no per-user instructions exist", async () => {
     db.getUserSettings.mockReturnValue({
       cursor_key: null,
       model_pref: "anthropic:claude-sonnet-4-6",
@@ -379,9 +384,20 @@ describe("/api/settings system_prompt (issue #493 — per-user, not app-global)"
     });
 
     const response = await GET(new Request("http://localhost/api/settings"));
-    expect(await response.json()).toMatchObject({
-      system_prompt: DEFAULT_SYSTEM_PROMPT,
+    const body = await response.json();
+    expect(body.system_prompt).toBe("");
+    expect(body.system_prompt).not.toBe(DEFAULT_SYSTEM_PROMPT);
+  });
+
+  it("GET no longer ships the built-in prompt to the client", async () => {
+    db.getUserSettings.mockReturnValue({
+      cursor_key: null,
+      model_pref: "anthropic:claude-sonnet-4-6",
+      system_prompt: null,
     });
+
+    const response = await GET(new Request("http://localhost/api/settings"));
+    expect(await response.json()).not.toHaveProperty("default_system_prompt");
   });
 
   // Issue #493 follow-up (fable review, MEDIUM) — the legacy app-global
@@ -398,9 +414,7 @@ describe("/api/settings system_prompt (issue #493 — per-user, not app-global)"
     });
 
     const response = await GET(new Request("http://localhost/api/settings"));
-    expect(await response.json()).toMatchObject({
-      system_prompt: DEFAULT_SYSTEM_PROMPT,
-    });
+    expect(await response.json()).toMatchObject({ system_prompt: "" });
     expect(db.getSetting).not.toHaveBeenCalled();
   });
 
