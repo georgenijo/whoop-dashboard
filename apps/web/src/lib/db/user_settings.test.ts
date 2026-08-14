@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import crypto from "node:crypto";
+import { MAX_SYSTEM_PROMPT_LENGTH } from "@/lib/coach/prompts";
 
 vi.mock("server-only", () => ({}));
 
@@ -423,6 +424,97 @@ describe("user_settings + vault", () => {
     expect(() => settings.setTzIfUnset(9999, "America/New_York")).toThrow(
       settings.UserSettingsUserMissingError
     );
+  });
+
+  // -------------------------------------------------------------------------
+  // Issue #493 — system_prompt is per-user, not a global app_setting
+  // -------------------------------------------------------------------------
+
+  it("system_prompt is null on a bare row", async () => {
+    const { settings } = await loadModules();
+    settings.upsertUserSettings({ user_id: 1, model_pref: "claude-sonnet-4-6" });
+    expect(settings.getUserSettings(1)?.system_prompt).toBeNull();
+  });
+
+  it("round-trips a per-user system_prompt", async () => {
+    const { settings } = await loadModules();
+    settings.upsertUserSettings({
+      user_id: 1,
+      system_prompt: "Be extra terse and always cite HRV trend.",
+    });
+    expect(settings.getUserSettings(1)?.system_prompt).toBe(
+      "Be extra terse and always cite HRV trend.",
+    );
+  });
+
+  it("explicit null clears system_prompt without touching other columns", async () => {
+    const { settings } = await loadModules();
+    settings.upsertUserSettings({
+      user_id: 1,
+      model_pref: "claude-sonnet-4-6",
+      system_prompt: "custom instructions",
+    });
+    settings.upsertUserSettings({ user_id: 1, system_prompt: null });
+    const got = settings.getUserSettings(1);
+    expect(got?.system_prompt).toBeNull();
+    expect(got?.model_pref).toBe("claude-sonnet-4-6");
+  });
+
+  it("undefined system_prompt leaves the existing value untouched", async () => {
+    const { settings } = await loadModules();
+    settings.upsertUserSettings({
+      user_id: 1,
+      system_prompt: "keep me",
+    });
+    settings.upsertUserSettings({ user_id: 1, model_pref: "claude-sonnet-4-6" });
+    expect(settings.getUserSettings(1)?.system_prompt).toBe("keep me");
+  });
+
+  it("isolates system_prompt across users — user A's write does not affect user B", async () => {
+    const { settings, conn } = await loadModules();
+    const db = conn.openWrite();
+    db!.prepare("INSERT INTO users (id, email) VALUES (?, ?)").run(
+      2,
+      "second@example.com",
+    );
+    db!.close();
+
+    settings.upsertUserSettings({
+      user_id: 1,
+      system_prompt: "user one's private instructions",
+    });
+    settings.upsertUserSettings({
+      user_id: 2,
+      system_prompt: "user two's private instructions",
+    });
+
+    expect(settings.getUserSettings(1)?.system_prompt).toBe(
+      "user one's private instructions",
+    );
+    expect(settings.getUserSettings(2)?.system_prompt).toBe(
+      "user two's private instructions",
+    );
+  });
+
+  // Defense in depth (fable review, MEDIUM follow-up) — the settings route
+  // is the only writer today and already rejects an overlong system_prompt
+  // with a 400 before ever calling upsertUserSettings, so this never fires
+  // through the live route. It exists so a future caller bypassing the
+  // route can't silently store an unbounded prompt straight into the DB.
+  it("rejects a system_prompt over MAX_SYSTEM_PROMPT_LENGTH and persists nothing", async () => {
+    const { settings } = await loadModules();
+    const overlong = "x".repeat(MAX_SYSTEM_PROMPT_LENGTH + 1);
+    expect(() =>
+      settings.upsertUserSettings({ user_id: 1, system_prompt: overlong }),
+    ).toThrow(settings.SystemPromptTooLongError);
+    expect(settings.getUserSettings(1)).toBeNull();
+  });
+
+  it("accepts a system_prompt exactly at MAX_SYSTEM_PROMPT_LENGTH", async () => {
+    const { settings } = await loadModules();
+    const atCap = "x".repeat(MAX_SYSTEM_PROMPT_LENGTH);
+    settings.upsertUserSettings({ user_id: 1, system_prompt: atCap });
+    expect(settings.getUserSettings(1)?.system_prompt).toBe(atCap);
   });
 
   it("assertVaultKeyConfigured rejects wrong-length keys", async () => {

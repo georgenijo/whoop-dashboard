@@ -20,6 +20,7 @@ import {
   parseCursorModelParamsByModel,
   type CursorModelParamsByModel,
 } from "@/lib/coach/cursor-model-params";
+import { MAX_SYSTEM_PROMPT_LENGTH } from "@/lib/coach/prompts";
 import { hasTable, openWrite, type DB } from "./connection";
 
 export type UserSettings = {
@@ -34,6 +35,7 @@ export type UserSettings = {
   coach_goals: string[] | null;
   onboarded_at: string | null;
   tz: string | null;
+  system_prompt: string | null;
   updated_at: string;
 };
 
@@ -50,6 +52,9 @@ export type UserSettingsInput = {
   coach_goals?: string[] | null;
   onboarded_at?: string | null;
   tz?: string | null;
+  // `undefined` = leave existing column untouched. `null` = clear the column
+  // (falls back to the built-in default — see resolveSystemPrompt).
+  system_prompt?: string | null;
 };
 
 export class UserSettingsUserMissingError extends Error {
@@ -58,6 +63,20 @@ export class UserSettingsUserMissingError extends Error {
       `user_id=${userId} not found in users table; bootstrap user first`
     );
     this.name = "UserSettingsUserMissingError";
+  }
+}
+
+// Defense in depth (issue #493 follow-up): the settings route already
+// rejects an overlong system_prompt with a 400 before calling here, so this
+// never fires today — but upsertUserSettings is the actual write chokepoint,
+// and a future caller (a script, another route) could otherwise store an
+// unbounded prompt straight past the route-level check.
+export class SystemPromptTooLongError extends Error {
+  constructor(length: number) {
+    super(
+      `system_prompt is ${length} characters, exceeding the ${MAX_SYSTEM_PROMPT_LENGTH}-character cap`
+    );
+    this.name = "SystemPromptTooLongError";
   }
 }
 
@@ -82,6 +101,7 @@ function ensureUserSettingsTable(db: DB): void {
       coach_goals TEXT,
       onboarded_at TEXT,
       tz TEXT,
+      system_prompt TEXT,
       updated_at TEXT NOT NULL
     );
   `);
@@ -108,6 +128,7 @@ type UserSettingsRowRaw = {
   coach_goals: string | null;
   onboarded_at: string | null;
   tz: string | null;
+  system_prompt: string | null;
   updated_at: string;
 };
 
@@ -130,7 +151,7 @@ export function getUserSettings(user_id: number): UserSettings | null {
         SELECT user_id, anthropic_key, anthropic_key_version, cursor_key,
                cursor_key_version, model_pref, coach_effort, cursor_model_params,
                timezone, monthly_token_cap,
-               coach_goals, onboarded_at, tz, updated_at
+               coach_goals, onboarded_at, tz, system_prompt, updated_at
         FROM user_settings
         WHERE user_id = ?
         `
@@ -220,6 +241,7 @@ export function getUserSettings(user_id: number): UserSettings | null {
       coach_goals: parsedGoals,
       onboarded_at: row.onboarded_at,
       tz: row.tz,
+      system_prompt: row.system_prompt,
       updated_at: row.updated_at,
     };
   } finally {
@@ -248,6 +270,12 @@ export function upsertUserSettings(input: UserSettingsInput): void {
     if (!userExists(db, input.user_id)) {
       throw new UserSettingsUserMissingError(input.user_id);
     }
+    if (
+      typeof input.system_prompt === "string" &&
+      input.system_prompt.length > MAX_SYSTEM_PROMPT_LENGTH
+    ) {
+      throw new SystemPromptTooLongError(input.system_prompt.length);
+    }
 
     const existing = db
       .prepare(
@@ -255,7 +283,7 @@ export function upsertUserSettings(input: UserSettingsInput): void {
         SELECT anthropic_key, anthropic_key_version, cursor_key,
                cursor_key_version, model_pref, coach_effort, cursor_model_params,
                timezone, monthly_token_cap,
-               coach_goals, onboarded_at, tz
+               coach_goals, onboarded_at, tz, system_prompt
         FROM user_settings
         WHERE user_id = ?
         `
@@ -274,6 +302,7 @@ export function upsertUserSettings(input: UserSettingsInput): void {
           coach_goals: string | null;
           onboarded_at: string | null;
           tz: string | null;
+          system_prompt: string | null;
         }
       | undefined;
 
@@ -337,14 +366,19 @@ export function upsertUserSettings(input: UserSettingsInput): void {
         : input.onboarded_at;
     const nextTzCol =
       input.tz === undefined ? existing?.tz ?? null : input.tz;
+    const nextSystemPrompt =
+      input.system_prompt === undefined
+        ? existing?.system_prompt ?? null
+        : input.system_prompt;
 
     db.prepare(
       `
       INSERT INTO user_settings (
         user_id, anthropic_key, anthropic_key_version, cursor_key,
         cursor_key_version, model_pref, coach_effort, cursor_model_params,
-        timezone, monthly_token_cap, coach_goals, onboarded_at, tz, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        timezone, monthly_token_cap, coach_goals, onboarded_at, tz,
+        system_prompt, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(user_id) DO UPDATE SET
         anthropic_key = excluded.anthropic_key,
         anthropic_key_version = excluded.anthropic_key_version,
@@ -358,6 +392,7 @@ export function upsertUserSettings(input: UserSettingsInput): void {
         coach_goals = excluded.coach_goals,
         onboarded_at = excluded.onboarded_at,
         tz = excluded.tz,
+        system_prompt = excluded.system_prompt,
         updated_at = excluded.updated_at
       `
     ).run(
@@ -374,6 +409,7 @@ export function upsertUserSettings(input: UserSettingsInput): void {
       nextCoachGoals,
       nextOnboardedAt,
       nextTzCol,
+      nextSystemPrompt,
       new Date().toISOString()
     );
   } finally {

@@ -176,6 +176,281 @@ describe("Phase D — domain tables carry user_id", () => {
     }
   });
 
+  it("fresh DB: user_settings has a system_prompt column (issue #493)", () => {
+    const file = newDbFile();
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    try {
+      expect(columns(db!, "user_settings")).toContain("system_prompt");
+    } finally {
+      db?.close();
+    }
+  });
+
+  it("lazily adds system_prompt to a pre-#493 user_settings table without losing rows", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        apple_sub TEXT UNIQUE,
+        email TEXT,
+        name TEXT,
+        timezone TEXT
+      );
+      INSERT INTO users (id) VALUES (1);
+      CREATE TABLE user_settings (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id),
+        anthropic_key TEXT,
+        anthropic_key_version INTEGER,
+        model_pref TEXT,
+        timezone TEXT,
+        monthly_token_cap INTEGER,
+        updated_at TEXT NOT NULL
+      );
+      INSERT INTO user_settings (user_id, model_pref, updated_at)
+      VALUES (1, 'claude-sonnet-4-6', '2026-01-01T00:00:00Z');
+    `);
+    raw.close();
+    process.env.WHOOP_DB_PATH = file;
+
+    const db = conn.openWrite();
+    try {
+      expect(columns(db!, "user_settings")).toContain("system_prompt");
+      const row = db!
+        .prepare("SELECT model_pref, system_prompt FROM user_settings WHERE user_id = 1")
+        .get() as { model_pref: string; system_prompt: string | null };
+      expect(row.model_pref).toBe("claude-sonnet-4-6");
+      expect(row.system_prompt).toBeNull();
+    } finally {
+      db?.close();
+    }
+  });
+
+  it("re-opening the DB after the system_prompt ALTER is idempotent", () => {
+    const file = newDbFile();
+    process.env.WHOOP_DB_PATH = file;
+    conn.openWrite()?.close();
+    conn.openWrite()?.close();
+    const db = conn.openWrite();
+    try {
+      expect(columns(db!, "user_settings")).toContain("system_prompt");
+    } finally {
+      db?.close();
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Issue #493 follow-up (fable review, MEDIUM) — one-time migration off the
+  // legacy app-global system_prompt row into per-user user_settings.
+  // -------------------------------------------------------------------------
+
+  function seedLegacyGlobalPrompt(
+    file: string,
+    opts: {
+      users: { id: number; system_prompt?: string | null; hasRow?: boolean }[];
+      legacyValue: string | null;
+    },
+  ) {
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        apple_sub TEXT UNIQUE,
+        email TEXT,
+        name TEXT,
+        timezone TEXT
+      );
+      CREATE TABLE app_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+      );
+      CREATE TABLE user_settings (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id),
+        anthropic_key TEXT,
+        anthropic_key_version INTEGER,
+        model_pref TEXT,
+        system_prompt TEXT,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    for (const u of opts.users) {
+      raw.prepare("INSERT INTO users (id) VALUES (?)").run(u.id);
+      if (u.hasRow !== false) {
+        raw
+          .prepare(
+            "INSERT INTO user_settings (user_id, system_prompt, updated_at) VALUES (?, ?, ?)",
+          )
+          .run(u.id, u.system_prompt ?? null, "2026-01-01T00:00:00Z");
+      }
+    }
+    if (opts.legacyValue !== null) {
+      raw
+        .prepare("INSERT INTO app_settings (key, value) VALUES ('system_prompt', ?)")
+        .run(opts.legacyValue);
+    }
+    raw.close();
+  }
+
+  it("migrates the legacy global value to the sole user and deletes the app_settings row", () => {
+    const file = newDbFile();
+    seedLegacyGlobalPrompt(file, {
+      users: [{ id: 1 }],
+      legacyValue: "be terse and cite HRV",
+    });
+    process.env.WHOOP_DB_PATH = file;
+
+    const db = conn.openWrite();
+    try {
+      const row = db!
+        .prepare("SELECT system_prompt FROM user_settings WHERE user_id = 1")
+        .get() as { system_prompt: string | null };
+      expect(row.system_prompt).toBe("be terse and cite HRV");
+
+      const legacy = db!
+        .prepare("SELECT value FROM app_settings WHERE key = 'system_prompt'")
+        .get();
+      expect(legacy).toBeUndefined();
+    } finally {
+      db?.close();
+    }
+  });
+
+  it("migration is idempotent across repeated openWrite() calls", () => {
+    const file = newDbFile();
+    seedLegacyGlobalPrompt(file, {
+      users: [{ id: 1 }],
+      legacyValue: "be terse and cite HRV",
+    });
+    process.env.WHOOP_DB_PATH = file;
+
+    // First open migrates; the row is gone, so subsequent opens must be
+    // cheap no-ops that don't throw and don't disturb the migrated value.
+    conn.openWrite()?.close();
+    conn.openWrite()?.close();
+    const db = conn.openWrite();
+    try {
+      const row = db!
+        .prepare("SELECT system_prompt FROM user_settings WHERE user_id = 1")
+        .get() as { system_prompt: string | null };
+      expect(row.system_prompt).toBe("be terse and cite HRV");
+      const legacy = db!
+        .prepare("SELECT value FROM app_settings WHERE key = 'system_prompt'")
+        .get();
+      expect(legacy).toBeUndefined();
+    } finally {
+      db?.close();
+    }
+  });
+
+  it("a user with no per-user value inherits the migrated legacy value", () => {
+    const file = newDbFile();
+    seedLegacyGlobalPrompt(file, {
+      users: [
+        { id: 1, system_prompt: null },
+        { id: 2, system_prompt: null },
+      ],
+      legacyValue: "shared legacy instructions",
+    });
+    process.env.WHOOP_DB_PATH = file;
+
+    const db = conn.openWrite();
+    try {
+      for (const id of [1, 2]) {
+        const row = db!
+          .prepare("SELECT system_prompt FROM user_settings WHERE user_id = ?")
+          .get(id) as { system_prompt: string | null };
+        expect(row.system_prompt).toBe("shared legacy instructions");
+      }
+    } finally {
+      db?.close();
+    }
+  });
+
+  it("a user who already had a per-user value keeps theirs, not the legacy value", () => {
+    const file = newDbFile();
+    seedLegacyGlobalPrompt(file, {
+      users: [
+        { id: 1, system_prompt: "user one already set this" },
+        { id: 2, system_prompt: null },
+      ],
+      legacyValue: "shared legacy instructions",
+    });
+    process.env.WHOOP_DB_PATH = file;
+
+    const db = conn.openWrite();
+    try {
+      const userOne = db!
+        .prepare("SELECT system_prompt FROM user_settings WHERE user_id = 1")
+        .get() as { system_prompt: string | null };
+      expect(userOne.system_prompt).toBe("user one already set this");
+
+      const userTwo = db!
+        .prepare("SELECT system_prompt FROM user_settings WHERE user_id = 2")
+        .get() as { system_prompt: string | null };
+      expect(userTwo.system_prompt).toBe("shared legacy instructions");
+    } finally {
+      db?.close();
+    }
+  });
+
+  it("creates a user_settings row for a user that doesn't have one yet (insert path)", () => {
+    const file = newDbFile();
+    // hasRow: false — user 1 exists in `users` but has never touched
+    // user_settings, so there is no row for the migration to UPDATE.
+    seedLegacyGlobalPrompt(file, {
+      users: [{ id: 1, hasRow: false }],
+      legacyValue: "legacy instructions",
+    });
+    process.env.WHOOP_DB_PATH = file;
+
+    const db = conn.openWrite();
+    try {
+      const row = db!
+        .prepare("SELECT system_prompt FROM user_settings WHERE user_id = 1")
+        .get() as { system_prompt: string | null } | undefined;
+      expect(row).toBeDefined();
+      expect(row!.system_prompt).toBe("legacy instructions");
+    } finally {
+      db?.close();
+    }
+  });
+
+  it("leaves an empty-string legacy value untouched (no migration, row survives)", () => {
+    const file = newDbFile();
+    seedLegacyGlobalPrompt(file, {
+      users: [{ id: 1 }],
+      legacyValue: "",
+    });
+    process.env.WHOOP_DB_PATH = file;
+
+    const db = conn.openWrite();
+    try {
+      const row = db!
+        .prepare("SELECT system_prompt FROM user_settings WHERE user_id = 1")
+        .get() as { system_prompt: string | null };
+      expect(row.system_prompt).toBeNull();
+      // Harmless either way — nothing reads app_settings.system_prompt any
+      // more — but documenting the chosen behavior: an empty value is not
+      // treated as "present" so it is not copied or cleaned up.
+      const legacy = db!
+        .prepare("SELECT value FROM app_settings WHERE key = 'system_prompt'")
+        .get();
+      expect(legacy).toEqual({ value: "" });
+    } finally {
+      db?.close();
+    }
+  });
+
+  it("no-op when there is no legacy app_settings row at all", () => {
+    const file = newDbFile();
+    process.env.WHOOP_DB_PATH = file;
+    // Fresh DB, never had a legacy global row — must not throw.
+    const db = conn.openWrite();
+    expect(db).not.toBeNull();
+    db?.close();
+  });
+
   it("workouts ALTER survives a pre-existing table when foreign_keys=ON", () => {
     // Prod scenario: a DB created by the pre-Phase-D schema already has
     // a `workouts` table with rows; opening it under FK=ON used to throw
