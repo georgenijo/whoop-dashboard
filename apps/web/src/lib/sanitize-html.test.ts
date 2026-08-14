@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+
 import { marked } from "marked";
 import { sanitizeHtml } from "./sanitize-html";
 
@@ -8,8 +11,9 @@ import { sanitizeHtml } from "./sanitize-html";
 // only surfaced through `sanitizeHtml` actually running (module import +
 // JSDOM construction), so this test exercises exactly that path rather than
 // mocking it away — if the module-scope JSDOM/DOMPurify setup ever regresses
-// to something Node-20-incompatible, this test fails without needing a real
-// browser DOM, matching how AIInsightCard renders it server-side.
+// to something Node-20-incompatible, this test fails even though vitest's
+// configured `jsdom` environment already provides a browser DOM, matching
+// how AIInsightCard renders it server-side.
 describe("sanitizeHtml", () => {
   it("loads and sanitizes without a browser DOM present", () => {
     expect(sanitizeHtml("<p>hello</p>")).toBe("<p>hello</p>");

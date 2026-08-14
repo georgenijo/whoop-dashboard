@@ -1,3 +1,4 @@
+import "server-only";
 // Server-side HTML sanitization for LLM-generated content (e.g. AIInsightCard).
 //
 // We deliberately do NOT use `isomorphic-dompurify`: it bundles its own nested
