@@ -10,6 +10,7 @@ import ClientLogBootstrap from "@/components/ClientLogBootstrap";
 import WebVitalsReporter from "@/components/WebVitalsReporter";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { addRouteLog } from "@/lib/db";
+import { requireAuthOrSignin } from "@/lib/auth";
 import "../globals.css";
 import "../../styles/quiet-instrument.css";
 
@@ -46,6 +47,17 @@ export default async function RootLayout({
   // eslint-disable-next-line react-hooks/purity
   const layoutStartMs = Date.now();
   const requestHeaders = await headers();
+
+  // Every page in this route group requires a signed-in user. Pages also
+  // call requireAuthOrSignin() themselves (defense in depth, left as-is) —
+  // this layout-level check exists to close the gap for pages that don't
+  // (e.g. settings/page.tsx, a "use client" component that can't call a
+  // server-only auth helper directly) and covers any future page in the
+  // group by default rather than opt-in.
+  await requireAuthOrSignin(
+    new Request("http://localhost", { headers: requestHeaders }),
+  );
+
   const route = requestHeaders.get("x-whoop-route-log-route");
   const startedAt = requestHeaders.get("x-whoop-route-log-started-at");
   const startMs = Number(requestHeaders.get("x-whoop-route-log-start-ms"));

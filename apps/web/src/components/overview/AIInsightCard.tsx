@@ -1,6 +1,7 @@
 import { marked } from "marked";
 import Link from "next/link";
 import type { InsightRow } from "@/lib/db";
+import { sanitizeHtml } from "@/lib/sanitize-html";
 
 function formatInsightDate(date: string): string {
   const todayStr = new Date().toLocaleDateString("en-CA");
@@ -34,7 +35,9 @@ export default function AIInsightCard({
         <>
           <div
             className="ai-body"
-            dangerouslySetInnerHTML={{ __html: marked.parse(insight.insight) as string }}
+            dangerouslySetInnerHTML={{
+              __html: sanitizeHtml(marked.parse(insight.insight) as string),
+            }}
           />
           <div className="ai-byline">
             <span>Generated from your recent data</span>

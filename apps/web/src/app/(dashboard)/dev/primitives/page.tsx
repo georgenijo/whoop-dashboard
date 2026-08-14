@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import {
   Button,
   Chart,
@@ -11,6 +12,7 @@ import {
   Tappable,
   Zone,
 } from "@/components/primitives";
+import { requireAuthOrSignin } from "@/lib/auth";
 import { PrimitiveGalleryClient } from "./PrimitiveGalleryClient";
 import styles from "./gallery.module.css";
 
@@ -25,7 +27,10 @@ const workoutRows = [
   { workout: "Cycling", zone: <Tag>Z4</Tag>, strain: "16.8", duration: "95m" },
 ];
 
-export default function PrimitivesPage() {
+export default async function PrimitivesPage() {
+  const headerList = await headers();
+  await requireAuthOrSignin(new Request("http://localhost", { headers: headerList }));
+
   return (
     <div className={styles.page} data-od-id="primitive-gallery">
       <header className={styles.intro}>

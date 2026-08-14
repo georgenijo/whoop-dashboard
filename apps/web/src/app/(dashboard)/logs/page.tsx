@@ -1,4 +1,6 @@
+import { headers } from "next/headers";
 import { getChatLogs, getChatThreadInfo, getRouteLogs, getSyncLogs } from "@/lib/db";
+import { requireAuthOrSignin } from "@/lib/auth";
 import ChatLogsByThread from "./ChatLogsByThread";
 import CollapsibleCard from "./CollapsibleCard";
 import RouteLogsTable from "./RouteLogsTable";
@@ -16,7 +18,14 @@ function deriveThreadIdFromDetails(details?: string | null): number | null {
 
 export const dynamic = "force-dynamic";
 
-export default function LogsPage() {
+export default async function LogsPage() {
+  const headerList = await headers();
+  // Authentication only — no admin gate here. #494 (tenant-scoping) is what
+  // narrows getChatLogs/getSyncLogs to the signed-in user's own rows; the
+  // page intentionally does not duplicate that with an ADMIN_APPLE_SUB check
+  // (unlike /api/logs, which stays admin-only).
+  await requireAuthOrSignin(new Request("http://localhost", { headers: headerList }));
+
   const logs = getChatLogs(500);
   const syncLogs = getSyncLogs(200);
   const routeLogs = getRouteLogs(200);
