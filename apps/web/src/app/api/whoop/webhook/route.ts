@@ -8,14 +8,30 @@ import {
 } from "@/lib/db";
 import { WhoopNotFoundError } from "@/lib/whoop/client";
 import { verifyWhoopSignature } from "@/lib/whoop/signature";
-import { handleEvent, type WhoopWebhookEvent } from "@/lib/whoop/webhook-handler";
+import {
+  handleEvent,
+  resolveEventUserId,
+  type WhoopWebhookEvent,
+} from "@/lib/whoop/webhook-handler";
 import { forModule } from "@/lib/logger";
 
 const log = forModule("whoop.webhook");
 
 export const dynamic = "force-dynamic";
 
+/**
+ * `userId` is required, not optional (issue #494) — every call site has to
+ * make an explicit decision about who the sync_logs row belongs to.
+ *
+ * `null` is the honest answer for a delivery we cannot attribute: malformed
+ * JSON, a payload with no Whoop user_id, or a Whoop account with no local
+ * integrations mapping. Such a row is then invisible to every tenant's /logs
+ * AND to every tenant's sync-cooldown gate — which is an improvement on the
+ * old global behavior, where an unattributable webhook noop could suppress a
+ * real user's sync for the whole cooldown window.
+ */
 function logWebhook(args: {
+  userId: number | null;
   startedAt: string;
   durationMs: number;
   status: "ok" | "error";
@@ -23,6 +39,7 @@ function logWebhook(args: {
   error?: string | null;
 }) {
   addSyncLog({
+    user_id: args.userId,
     started_at: args.startedAt,
     duration_ms: args.durationMs,
     status: args.status,
@@ -54,7 +71,9 @@ export async function POST(req: Request) {
   try {
     evt = JSON.parse(raw) as WhoopWebhookEvent;
   } catch {
+    // Unparseable body — there is no event, so there is no tenant.
     logWebhook({
+      userId: null,
       startedAt,
       durationMs: Date.now() - t0,
       status: "error",
@@ -66,6 +85,7 @@ export async function POST(req: Request) {
 
   if (!evt.type || !evt.id) {
     logWebhook({
+      userId: resolveEventUserId(evt),
       startedAt,
       durationMs: Date.now() - t0,
       status: "error",
@@ -74,6 +94,11 @@ export async function POST(req: Request) {
     });
     return new Response("Bad Request", { status: 400 });
   }
+
+  // Resolved once, up front, so the sync_logs row is stamped with the right
+  // tenant on the success path AND on the throwing path (where `handleEvent`
+  // never returns an outcome we could read it from).
+  const eventUserId = resolveEventUserId(evt);
 
   const baseDetails = {
     event_type: evt.type,
@@ -101,6 +126,7 @@ export async function POST(req: Request) {
     if (dlqId !== null) markWebhookSucceeded(dlqId, finishedAt);
     if (outcome.kind === "noop") {
       logWebhook({
+        userId: eventUserId,
         startedAt,
         durationMs: Date.now() - t0,
         status: "ok",
@@ -108,6 +134,7 @@ export async function POST(req: Request) {
       });
     } else {
       logWebhook({
+        userId: eventUserId,
         startedAt,
         durationMs: Date.now() - t0,
         status: "ok",
@@ -131,6 +158,7 @@ export async function POST(req: Request) {
       }
     }
     logWebhook({
+      userId: eventUserId,
       startedAt,
       durationMs: Date.now() - t0,
       status: "error",

@@ -14,7 +14,9 @@ export async function POST(req: Request) {
 
   // No sync_logs row on skip — keeps history clean.
   // Best-effort gate, not a lock — ok for manual button cadence.
-  const lastOk = getLastSuccessfulSyncAt();
+  // Per-user (issue #494): another tenant's recent sync must not suppress
+  // this one, and its timestamp must not be disclosed here.
+  const lastOk = getLastSuccessfulSyncAt(user.id);
   if (lastOk && Date.now() - lastOk.getTime() < SYNC_COOLDOWN_MS) {
     return Response.json({
       ok: true,
@@ -48,6 +50,7 @@ export async function POST(req: Request) {
 
   if (result.success) {
     addSyncLog({
+      user_id: user.id,
       started_at: startedAt,
       duration_ms: durationMs,
       status: "ok",
@@ -81,6 +84,7 @@ export async function POST(req: Request) {
 
   const errorMsg = (result.error ?? "sync failed").slice(0, 800);
   addSyncLog({
+    user_id: user.id,
     started_at: startedAt,
     duration_ms: durationMs,
     status: "error",

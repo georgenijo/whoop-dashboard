@@ -188,6 +188,94 @@ describe("upsertUserByAppleSub branch coverage (issue #262)", () => {
   });
 });
 
+// Issue #494 regression. Adding `user_id INTEGER REFERENCES users(id)` to
+// chat_logs / sync_logs put those tables under FK enforcement, but they were
+// missing from USER_FK_TABLES. mergeUserInto repointed only the listed tables
+// and then ran DELETE FROM users, which failed the FK check on a
+// foreign_keys=ON connection — surfacing as a 500 from the SIWA callback, i.e.
+// a hard sign-in lockout for any account that had ever chatted or synced.
+describe("split-brain merge repoints the issue #494 log tables", () => {
+  function seedSplitBrain(): { keepId: number; goneId: number } {
+    const db = new Database(dbFile);
+    try {
+      db.prepare("DELETE FROM chat_logs").run();
+      db.prepare("DELETE FROM sync_logs").run();
+      // Surviving row: matched by apple_sub, holds the OLD email.
+      db.prepare(
+        "UPDATE users SET apple_sub = ?, email = ? WHERE id = 1",
+      ).run("sub-keep", "old@example.com");
+      // Doomed row: matched by the NEW email the user now signs in with.
+      const gone = db
+        .prepare("INSERT INTO users (apple_sub, email) VALUES (?, ?)")
+        .run("sub-gone", "new@example.com");
+      const goneId = Number(gone.lastInsertRowid);
+      db.prepare(
+        "INSERT INTO chat_logs (user_id, started_at, prompt_preview, duration_ms, status, response_length) VALUES (?, ?, ?, 1, 'ok', 1)",
+      ).run(goneId, "2026-06-01T00:00:00Z", "history worth keeping");
+      db.prepare(
+        "INSERT INTO sync_logs (user_id, started_at, duration_ms, status, source) VALUES (?, ?, 1, 'ok', 'manual')",
+      ).run(goneId, "2026-06-01T00:00:00Z");
+      return { keepId: 1, goneId };
+    } finally {
+      db.close();
+    }
+  }
+
+  it("merges without an FK failure and repoints log rows instead of orphaning them", () => {
+    const { keepId, goneId } = seedSplitBrain();
+
+    // Pre-#494-fix this threw `FOREIGN KEY constraint failed`.
+    const user = auth.upsertUserByAppleSub("sub-keep", "new@example.com");
+    expect(user.id).toBe(keepId);
+
+    const db = new Database(dbFile);
+    try {
+      expect(
+        db.prepare("SELECT id FROM users WHERE id = ?").get(goneId),
+      ).toBeUndefined();
+
+      // Repointed, not orphaned: the history follows the surviving account.
+      const chat = db
+        .prepare("SELECT user_id FROM chat_logs WHERE prompt_preview = ?")
+        .get("history worth keeping") as { user_id: number };
+      expect(chat.user_id).toBe(keepId);
+      const sync = db
+        .prepare("SELECT user_id FROM sync_logs WHERE source = 'manual'")
+        .get() as { user_id: number };
+      expect(sync.user_id).toBe(keepId);
+
+      // Nothing left pointing at the deleted account.
+      for (const table of ["chat_logs", "sync_logs"]) {
+        const dangling = db
+          .prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE user_id = ?`)
+          .get(goneId) as { n: number };
+        expect(dangling.n, `${table} dangling`).toBe(0);
+      }
+    } finally {
+      db.close();
+    }
+  });
+
+  it("the merged-in sync history becomes the survivor's cooldown signal", () => {
+    // Consequence check: repointing (rather than orphaning) means the moved
+    // sync_logs row is now visible to the surviving user's cooldown gate.
+    const { keepId } = seedSplitBrain();
+    auth.upsertUserByAppleSub("sub-keep", "new@example.com");
+
+    const db = new Database(dbFile);
+    try {
+      const row = db
+        .prepare(
+          "SELECT started_at FROM sync_logs WHERE status = 'ok' AND user_id = ? ORDER BY id DESC LIMIT 1",
+        )
+        .get(keepId) as { started_at: string } | undefined;
+      expect(row?.started_at).toBe("2026-06-01T00:00:00Z");
+    } finally {
+      db.close();
+    }
+  });
+});
+
 describe("DB helper trusts caller (no validation at this layer)", () => {
   // Validation is enforced at the route layer (see apple/route.test.ts). The DB
   // helper trusts whatever it's handed — exercised here only to confirm we

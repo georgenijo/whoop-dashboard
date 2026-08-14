@@ -157,8 +157,12 @@ export function openWrite(): DB | null {
         type TEXT,
         source TEXT,
         details TEXT,
-        thread_id INTEGER REFERENCES chat_threads(id)
+        thread_id INTEGER REFERENCES chat_threads(id),
+        user_id INTEGER REFERENCES users(id)
       );
+      -- idx_chat_logs_user is created AFTER the lazy ALTER below, not here:
+      -- on a pre-#494 DB the CREATE TABLE above is a no-op, so indexing
+      -- user_id at this point would reference a column that doesn't exist yet.
       CREATE INDEX IF NOT EXISTS idx_chat_logs_started ON chat_logs(started_at DESC);
       -- Issue #421 — Coach-authored, recovery-tuned workout plans. Tenant data
       -- (user_id scoped) but NOT a Phase-D domain table (no composite-PK
@@ -200,8 +204,10 @@ export function openWrite(): DB | null {
         error_message TEXT,
         source TEXT,
         details TEXT,
-        partial INTEGER NOT NULL DEFAULT 0
+        partial INTEGER NOT NULL DEFAULT 0,
+        user_id INTEGER REFERENCES users(id)
       );
+      -- idx_sync_logs_user: created after the lazy ALTER, same reason as above.
       CREATE INDEX IF NOT EXISTS idx_sync_logs_started ON sync_logs(started_at DESC);
       CREATE TABLE IF NOT EXISTS route_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -382,6 +388,40 @@ export function openWrite(): DB | null {
     }
     if (!syncCols.some((c) => c.name === "partial")) {
       db.exec("ALTER TABLE sync_logs ADD COLUMN partial INTEGER NOT NULL DEFAULT 0");
+    }
+    // Issue #494 — tenant-scope chat_logs / sync_logs / journal.
+    //
+    // Nullable INTEGER: existing rows pre-date the column and cannot be given
+    // a NOT NULL value at ALTER time. A REFERENCES clause is legal here only
+    // because the default is NULL (SQLite rejects ADD COLUMN with REFERENCES +
+    // non-NULL DEFAULT while foreign_keys=ON — see the workouts ALTER below).
+    //
+    // Reads filter on `user_id = ?`, so a NULL row is invisible to every
+    // tenant — the secure default.
+    if (!cols.some((c) => c.name === "user_id")) {
+      addUserIdColumnAndClaimLegacyRows(db, "chat_logs");
+    }
+    db.exec("CREATE INDEX IF NOT EXISTS idx_chat_logs_user ON chat_logs(user_id, id DESC)");
+    if (!syncCols.some((c) => c.name === "user_id")) {
+      addUserIdColumnAndClaimLegacyRows(db, "sync_logs");
+    }
+    db.exec("CREATE INDEX IF NOT EXISTS idx_sync_logs_user ON sync_logs(user_id, id DESC)");
+    // `journal` is NOT created by this app — it's an optional, externally
+    // populated table that does not exist in the current production DB. We
+    // deliberately do not CREATE it here: inventing a schema for a table we
+    // never write would guess at columns the real producer owns, and
+    // getJournalRange() already degrades to [] when the table is absent. So
+    // the ALTER is gated on the table existing; the moment it does, it gets
+    // scoped like everything else.
+    if (hasTable(db, "journal")) {
+      if (!hasColumn(db, "journal", "user_id")) {
+        addUserIdColumnAndClaimLegacyRows(db, "journal");
+      }
+      if (hasColumn(db, "journal", "date")) {
+        db.exec(
+          "CREATE INDEX IF NOT EXISTS idx_journal_user_date ON journal(user_id, date)"
+        );
+      }
     }
     const routeCols = db.prepare("PRAGMA table_info(route_logs)").all() as { name: string }[];
     if (!routeCols.some((c) => c.name === "details")) {
@@ -648,6 +688,55 @@ export function safeWriteQuery<T>(fn: (db: DB) => T): T | null {
   } finally {
     db.close();
   }
+}
+
+// ---------------------------------------------------------------------------
+// Issue #494 — log/journal user_id migration
+// ---------------------------------------------------------------------------
+
+/**
+ * Add the `user_id` column to `table` and, in the SAME transaction, claim the
+ * rows that pre-date it for the sole account — but ONLY when the DB has
+ * exactly one user.
+ *
+ * The claim MUST be bound to the ALTER like this rather than run on every
+ * `openWrite()` behind a "one user exists" check. NULL is not only a legacy
+ * marker after this migration — it is a deliberate value. The webhook route
+ * writes `user_id: null` for deliveries it cannot attribute (bad signature
+ * payload, or a Whoop account with no local mapping) precisely so those rows
+ * stay invisible to every tenant's /logs and, critically, to every tenant's
+ * sync-cooldown gate. A recurring claim would adopt them for the sole user,
+ * letting a Whoop-signed webhook for a STRANGER's account suppress the real
+ * user's sync — a residual echo of the bug this issue fixes.
+ *
+ * It also closes a worse transition: a multi-user DB that drops back to one
+ * account (reachable via the mergeUserInto DELETE) would otherwise let the
+ * survivor claim NULL rows that were deliberately left unreadable, which can
+ * include another tenant's chat_logs.prompt_preview.
+ *
+ * Running ALTER + UPDATE in one transaction also means the two can't be
+ * separated by a crash: either the column exists with legacy rows claimed, or
+ * neither happened and the next open retries. Being gated on the ALTER makes
+ * it inherently one-shot, which also drops the standing three-UPDATEs-per-
+ * openWrite() cost of the previous shape.
+ *
+ * On a multi-user DB nothing is claimed: there is no defensible owner, so the
+ * rows stay NULL and stay invisible (fail closed).
+ */
+function addUserIdColumnAndClaimLegacyRows(db: DB, table: string): void {
+  const userRows = db.prepare("SELECT id FROM users").all() as { id: number }[];
+  const soleUserId = userRows.length === 1 ? userRows[0].id : null;
+  const migrate = db.transaction(() => {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN user_id INTEGER REFERENCES users(id)`);
+    if (soleUserId !== null) {
+      // Every row visible here predates the column by construction, so this
+      // cannot touch a deliberately-NULL row written after the migration.
+      db.prepare(`UPDATE ${table} SET user_id = ? WHERE user_id IS NULL`).run(
+        soleUserId,
+      );
+    }
+  });
+  migrate();
 }
 
 // ---------------------------------------------------------------------------

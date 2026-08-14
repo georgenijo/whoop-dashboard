@@ -150,6 +150,7 @@ export async function runAndPersistCoachTurn(
     detailState.persistence_ms = Date.now() - persistenceStartedMs;
     handle?.markCommitted();
     addChatLog({
+      user_id: userId,
       started_at: startedAt,
       prompt_preview: promptPreview,
       duration_ms: durationMs,
@@ -166,6 +167,7 @@ export async function runAndPersistCoachTurn(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     addChatLog({
+      user_id: userId,
       started_at: startedAt,
       prompt_preview: promptPreview,
       duration_ms: Date.now() - startMs,

@@ -51,6 +51,11 @@ function openRouteLogWrite(): DB | null {
 
 export type ChatLog = {
   id: number;
+  /** Owning tenant. NULL only on legacy rows written before issue #494 that
+   *  the single-user backfill in `openWrite()` could not claim (i.e. the DB
+   *  already had more than one account). Those rows are unreadable by design
+   *  — every read filters on `user_id = ?`. */
+  user_id: number | null;
   started_at: string;
   prompt_preview: string;
   duration_ms: number;
@@ -64,13 +69,17 @@ export type ChatLog = {
   thread_id: number | null;
 };
 
-export function addChatLog(log: Omit<ChatLog, "id">): void {
+/** `user_id` is a required field of the payload (not an optional trailing
+ *  argument) so a caller that forgets to stamp the tenant fails typecheck
+ *  instead of silently writing an orphaned, unreadable row. */
+export function addChatLog(log: Omit<ChatLog, "id"> & { user_id: number }): void {
   const db = openWrite();
   if (!db) return;
   try {
     db.prepare(
-      "INSERT INTO chat_logs (started_at, prompt_preview, duration_ms, status, response_length, error_message, days_context, type, source, details, thread_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO chat_logs (user_id, started_at, prompt_preview, duration_ms, status, response_length, error_message, days_context, type, source, details, thread_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(
+      log.user_id,
       log.started_at,
       log.prompt_preview,
       log.duration_ms,
@@ -88,10 +97,16 @@ export function addChatLog(log: Omit<ChatLog, "id">): void {
   }
 }
 
-export function getChatLogs(limit = 200): ChatLog[] {
+/** Tenant-scoped. `userId` is the first, required argument — omitting it is a
+ *  type error rather than a silent cross-tenant read (issue #494). */
+export function getChatLogs(userId: number, limit = 200): ChatLog[] {
   return (
     safeQuery((db) => {
       if (!hasTable(db, "chat_logs")) return [] as ChatLog[];
+      // Fail closed: a DB whose schema migration hasn't run yet (read-only
+      // handle, no write since deploy) has no user_id column and therefore no
+      // way to tell tenants apart. Return nothing rather than everything.
+      if (!hasColumn(db, "chat_logs", "user_id")) return [] as ChatLog[];
       const sourceSelect = hasColumn(db, "chat_logs", "source")
         ? "source"
         : "NULL AS source";
@@ -100,9 +115,9 @@ export function getChatLogs(limit = 200): ChatLog[] {
         : "NULL AS thread_id";
       return db
         .prepare(
-          `SELECT id, started_at, prompt_preview, duration_ms, status, response_length, error_message, days_context, type, ${sourceSelect}, details, ${threadSelect} FROM chat_logs ORDER BY id DESC LIMIT ?`
+          `SELECT id, user_id, started_at, prompt_preview, duration_ms, status, response_length, error_message, days_context, type, ${sourceSelect}, details, ${threadSelect} FROM chat_logs WHERE user_id = ? ORDER BY id DESC LIMIT ?`
         )
-        .all(limit) as ChatLog[];
+        .all(userId, limit) as ChatLog[];
     }) ?? []
   );
 }
@@ -136,11 +151,13 @@ export function getChatThreadInfo(threadIds: number[]): Map<number, ChatThreadIn
   return result;
 }
 
-export function clearChatLogs(): void {
+/** Clears only the caller's rows. A user must not be able to wipe another
+ *  tenant's chat history (or the un-owned legacy rows). */
+export function clearChatLogs(userId: number): void {
   const db = openWrite();
   if (!db) return;
   try {
-    db.prepare("DELETE FROM chat_logs").run();
+    db.prepare("DELETE FROM chat_logs WHERE user_id = ?").run(userId);
   } finally {
     db.close();
   }
@@ -148,6 +165,12 @@ export function clearChatLogs(): void {
 
 export type SyncLog = {
   id: number;
+  /** Owning tenant. NULL is legitimate here (unlike chat_logs): a webhook
+   *  delivery that fails signature/JSON parsing, or arrives for a Whoop
+   *  account we have no local mapping for, has no tenant to attribute. Such
+   *  rows are invisible to every user's /logs and — deliberately — to every
+   *  user's sync-cooldown gate. */
+  user_id: number | null;
   started_at: string;
   duration_ms: number;
   status: "ok" | "error";
@@ -160,13 +183,16 @@ export type SyncLog = {
   partial: boolean;
 };
 
+/** `user_id` is a required field of the payload — pass an explicit `null` only
+ *  when the sync genuinely has no owner (unattributable webhook delivery). */
 export function addSyncLog(log: Omit<SyncLog, "id">): void {
   const db = openWrite();
   if (!db) return;
   try {
     db.prepare(
-      "INSERT INTO sync_logs (started_at, duration_ms, status, recovery_count, sleep_count, workouts_count, error_message, source, details, partial) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO sync_logs (user_id, started_at, duration_ms, status, recovery_count, sleep_count, workouts_count, error_message, source, details, partial) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(
+      log.user_id,
       log.started_at,
       log.duration_ms,
       log.status,
@@ -183,10 +209,13 @@ export function addSyncLog(log: Omit<SyncLog, "id">): void {
   }
 }
 
-export function getSyncLogs(limit = 200): SyncLog[] {
+/** Tenant-scoped. `userId` is the first, required argument (issue #494). */
+export function getSyncLogs(userId: number, limit = 200): SyncLog[] {
   return (
     safeQuery((db) => {
       if (!hasTable(db, "sync_logs")) return [] as SyncLog[];
+      // Fail closed — see getChatLogs.
+      if (!hasColumn(db, "sync_logs", "user_id")) return [] as SyncLog[];
       const detailsSelect = hasColumn(db, "sync_logs", "details")
         ? "details"
         : "NULL AS details";
@@ -195,22 +224,35 @@ export function getSyncLogs(limit = 200): SyncLog[] {
         : "0 AS partial";
       const rows = db
         .prepare(
-          `SELECT id, started_at, duration_ms, status, recovery_count, sleep_count, workouts_count, error_message, source, ${detailsSelect}, ${partialSelect} FROM sync_logs ORDER BY id DESC LIMIT ?`
+          `SELECT id, user_id, started_at, duration_ms, status, recovery_count, sleep_count, workouts_count, error_message, source, ${detailsSelect}, ${partialSelect} FROM sync_logs WHERE user_id = ? ORDER BY id DESC LIMIT ?`
         )
-        .all(limit) as Array<Omit<SyncLog, "partial"> & { partial: number }>;
+        .all(userId, limit) as Array<Omit<SyncLog, "partial"> & { partial: number }>;
       return rows.map((r) => ({ ...r, partial: r.partial === 1 }));
     }) ?? []
   );
 }
 
-export function getLastSuccessfulSyncAt(): Date | null {
+/**
+ * Timestamp of `userId`'s most recent successful sync, or null.
+ *
+ * Per-user by construction (issue #494). This drives the sync-cooldown gate in
+ * `/api/sync` and the coach's `trigger_whoop_sync` tool, so a global read did
+ * two wrong things at once: it disclosed another tenant's last-sync time, and
+ * it let one tenant's sync suppress everyone else's for the cooldown window.
+ *
+ * Missing `user_id` column ⇒ null, i.e. the gate opens and a sync is allowed.
+ * That's the safe direction to fail: an extra sync costs an API call, whereas
+ * falling back to a global row would resurrect the leak.
+ */
+export function getLastSuccessfulSyncAt(userId: number): Date | null {
   return safeQuery((db) => {
     if (!hasTable(db, "sync_logs")) return null;
+    if (!hasColumn(db, "sync_logs", "user_id")) return null;
     const row = db
       .prepare(
-        "SELECT started_at FROM sync_logs WHERE status = 'ok' ORDER BY id DESC LIMIT 1"
+        "SELECT started_at FROM sync_logs WHERE status = 'ok' AND user_id = ? ORDER BY id DESC LIMIT 1"
       )
-      .get() as { started_at: string } | undefined;
+      .get(userId) as { started_at: string } | undefined;
     return row ? new Date(row.started_at) : null;
   });
 }

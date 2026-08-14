@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { openWrite, safeWriteQuery, type DB } from "./connection";
+import { hasColumn, hasTable, openWrite, safeWriteQuery, type DB } from "./connection";
 
 export type User = {
   id: number;
@@ -19,7 +19,37 @@ export type Session = {
 
 // Tables with a `user_id` FK to users(id). Kept in sync with connection.ts.
 // Used by upsertUserByAppleSub (split-brain merge) and the migration script.
-const USER_FK_TABLES = ["chat_threads", "body_measurements", "sessions"] as const;
+//
+// Any table listed here is repointed with a bare `UPDATE ... SET user_id`, so
+// a table may only be added if `user_id` is NOT part of a PRIMARY KEY or
+// UNIQUE constraint — otherwise the repoint throws UNIQUE constraint failed
+// whenever both accounts hold a matching row. Every entry below is an
+// append-only table keyed by its own surrogate id, which is why the plain
+// UPDATE is safe. See mergeUserInto for the tables still missing from here.
+const USER_FK_TABLES = [
+  "chat_threads",
+  "body_measurements",
+  "sessions",
+  // Issue #494 — these gained `user_id INTEGER REFERENCES users(id)`. Without
+  // repointing them, the `DELETE FROM users` at the end of mergeUserInto
+  // fails the FK check under `foreign_keys = ON`, which propagates out of
+  // upsertUserByAppleSub and 500s the SIWA callback — locking out any user
+  // whose merged-away account had ever chatted or synced.
+  "chat_logs",
+  "sync_logs",
+] as const;
+
+/**
+ * Tables that only exist on some DBs, so they can't live in the static list.
+ * `journal` is externally populated and absent from production entirely.
+ */
+function optionalUserFkTables(db: DB): string[] {
+  const tables: string[] = [];
+  if (hasTable(db, "journal") && hasColumn(db, "journal", "user_id")) {
+    tables.push("journal");
+  }
+  return tables;
+}
 
 export function getUserById(id: number): User | null {
   return safeWriteQuery((db) => {
@@ -195,10 +225,23 @@ function applyTzUpdate(db: DB, user: User, tz: string | null | undefined): void 
 /**
  * Repoint every `user_id` FK from `fromId` onto `toId`, then delete `fromId`.
  * Caller must wrap in a transaction.
+ *
+ * KNOWN GAP (pre-dates issue #494, deliberately not widened here): several
+ * other tables reference users(id) and are still absent from this list —
+ * integrations, user_settings, device_tokens, chat_attachments, client_logs,
+ * perf_metrics, and the five Whoop domain tables. They can't simply be
+ * appended: `user_id` is part of the PRIMARY KEY in integrations
+ * (user_id, provider), user_settings (user_id), device_tokens (user_id,
+ * token), recovery / cycles / daily_summary (user_id, date) and sleep
+ * (user_id, sleep_id), so a bare repoint would trade today's FK failure for a
+ * UNIQUE constraint failure whenever both accounts hold a matching row.
+ * Merging those needs a per-table conflict policy (which row wins, and what
+ * happens to the loser) — a design decision, not a mechanical fix, and out of
+ * scope for a data-scoping change.
  */
 function mergeUserInto(db: DB, fromId: number, toId: number): void {
   const moves: Record<string, number> = {};
-  for (const table of USER_FK_TABLES) {
+  for (const table of [...USER_FK_TABLES, ...optionalUserFkTables(db)]) {
     const result = db
       .prepare(`UPDATE ${table} SET user_id = ? WHERE user_id = ?`)
       .run(toId, fromId);

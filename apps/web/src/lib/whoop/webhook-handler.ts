@@ -41,6 +41,21 @@ export type HandleEventOutcome =
         | "missing_whoop_user_id";
     };
 
+/**
+ * Map a webhook payload's Whoop `user_id` onto a local `users.id`, or null
+ * when the event carries no Whoop user or we hold no mapping for it.
+ *
+ * Exported (issue #494) so the route can stamp the tenant onto its
+ * `sync_logs` row on EVERY path — including the one where `handleEvent`
+ * throws and therefore returns no outcome to read the id off of. It's a
+ * single indexed lookup, so paying for it twice per delivery is cheaper than
+ * threading a resolved id through the throw.
+ */
+export function resolveEventUserId(evt: WhoopWebhookEvent): number | null {
+  if (evt.user_id == null) return null;
+  return lookupUserIdByProvider("whoop", String(evt.user_id));
+}
+
 /** Surfaces `WhoopNotFoundError` raw because callers handle it differently
  * (webhook route discards; replay marks discarded). */
 export async function handleEvent(evt: WhoopWebhookEvent): Promise<HandleEventOutcome> {
@@ -50,7 +65,7 @@ export async function handleEvent(evt: WhoopWebhookEvent): Promise<HandleEventOu
   if (evt.user_id == null) {
     return { kind: "noop", reason: "missing_whoop_user_id" };
   }
-  const userId = lookupUserIdByProvider("whoop", String(evt.user_id));
+  const userId = resolveEventUserId(evt);
   if (userId === null) {
     return { kind: "noop", reason: "unknown_whoop_user" };
   }
