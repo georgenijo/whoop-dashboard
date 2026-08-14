@@ -1,7 +1,6 @@
 "use client";
 
-import DOMPurify from "dompurify";
-import { marked } from "marked";
+import { renderMarkdownToSafeHtml } from "@/lib/render-markdown";
 import { useMemo, useSyncExternalStore } from "react";
 import CoachWorkDisclosure from "./CoachWorkDisclosure";
 import type {
@@ -18,6 +17,11 @@ type Props = {
   ) => void;
 };
 
+// Markdown is rendered only after hydration. `dompurify` has no usable
+// `sanitize` without a `window`, so the server pass renders the message as
+// escaped plain text through normal React instead (see `render-markdown.ts`).
+// `useSyncExternalStore` — rather than an effect — is what keeps the hydration
+// pass byte-identical to the server pass; the swap happens on the tick after.
 const subscribeToBrowser = (notify: () => void) => {
   const timeout = window.setTimeout(notify, 0);
   return () => window.clearTimeout(timeout);
@@ -35,7 +39,7 @@ export default function MessageBubble({ msg, onAttachmentClick }: Props) {
   const isAborted = !isUser && !msg.streaming && msg.status === "aborted";
   const html = useMemo(() => {
     if (isUser || !isBrowser) return null;
-    return DOMPurify.sanitize(marked.parse(msg.content) as string);
+    return renderMarkdownToSafeHtml(msg.content);
   }, [isBrowser, isUser, msg.content]);
 
   // Don't render empty aborted assistant bubbles (race between abort + tool flush).
@@ -93,11 +97,15 @@ export default function MessageBubble({ msg, onAttachmentClick }: Props) {
                 hasVisibleText={Boolean(msg.content)}
               />
             ) : null}
+            {/* `html` is non-null only when DOMPurify actually ran. Branching on
+                it rather than on `isBrowser` keeps the two in lockstep: a
+                sanitizer that failed closed degrades to text instead of
+                blanking the message. */}
             {msg.content ? (
-              isBrowser ? (
+              html !== null ? (
                 <div
                   className="prose-coach"
-                  dangerouslySetInnerHTML={{ __html: html ?? "" }}
+                  dangerouslySetInnerHTML={{ __html: html }}
                 />
               ) : (
                 <div className="prose-coach coach-markdown-fallback">
