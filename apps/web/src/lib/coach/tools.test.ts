@@ -27,6 +27,7 @@ vi.mock("@/lib/sync", () => ({
 
 import {
   addSyncLog,
+  getJournalRange,
   getLastSuccessfulSyncAt,
   getUserSettings,
   getWorkoutPlans,
@@ -38,6 +39,7 @@ import { runWhoopSync } from "@/lib/sync";
 import { chatLogToolSummaries, executeTool, newToolTurnState, type ToolDetail } from "./tools";
 
 const addSyncLogMock = vi.mocked(addSyncLog);
+const getJournalRangeMock = vi.mocked(getJournalRange);
 const getLastSuccessfulSyncAtMock = vi.mocked(getLastSuccessfulSyncAt);
 const getUserSettingsMock = vi.mocked(getUserSettings);
 const getWorkoutsRangeMock = vi.mocked(getWorkoutsRange);
@@ -125,6 +127,40 @@ describe("trigger_whoop_sync tool", () => {
     expect(addSyncLogMock).not.toHaveBeenCalled();
     // Cooldown skips don't count toward the per-turn cap.
     expect(turnState.syncAttempts).toBe(0);
+    // Issue #494 — the gate is read for THIS user, never globally.
+    expect(getLastSuccessfulSyncAtMock).toHaveBeenCalledWith(1);
+  });
+
+  // Issue #494 — the cooldown gate used to read the newest successful
+  // sync_logs row for the whole table, so one tenant syncing locked every
+  // other tenant out for the window (and disclosed their sync time). The gate
+  // now takes a userId; user B must be able to sync right after user A did.
+  it("cooldown is per-user: user A's fresh sync does not suppress user B", async () => {
+    const userALastOk = new Date(Date.now() - 60_000); // A synced 1 min ago
+    getLastSuccessfulSyncAtMock.mockImplementation((userId: number) =>
+      userId === 1 ? userALastOk : null,
+    );
+    runWhoopSyncMock.mockResolvedValue(makeSuccessSyncResult());
+
+    // User A is inside the window → skipped, no sync.
+    const aResult = (await executeTool("trigger_whoop_sync", null, {
+      userId: 1,
+      turnState: newToolTurnState(),
+    })) as { skipped?: boolean };
+    expect(aResult.skipped).toBe(true);
+    expect(runWhoopSyncMock).not.toHaveBeenCalled();
+
+    // User B has no successful sync of their own → runs for real.
+    const bResult = await executeTool("trigger_whoop_sync", null, {
+      userId: 2,
+      turnState: newToolTurnState(),
+    });
+    expect((bResult as { skipped?: boolean }).skipped).toBeUndefined();
+    expect(runWhoopSyncMock).toHaveBeenCalledTimes(1);
+    expect(runWhoopSyncMock.mock.calls[0][0]).toMatchObject({ userId: 2 });
+    // And B's sync_logs row is stamped to B, not to A.
+    expect(addSyncLogMock).toHaveBeenCalledTimes(1);
+    expect(addSyncLogMock.mock.calls[0][0].user_id).toBe(2);
   });
 
   it("writes a sync_logs row with source=coach status=ok on a successful sync", async () => {
@@ -141,6 +177,7 @@ describe("trigger_whoop_sync tool", () => {
     const arg = addSyncLogMock.mock.calls[0][0];
     expect(arg.source).toBe("coach");
     expect(arg.status).toBe("ok");
+    expect(arg.user_id).toBe(1);
     expect(arg.error_message).toBeNull();
     expect(arg.recovery_count).toBe(2);
     expect(arg.sleep_count).toBe(1);
@@ -161,6 +198,7 @@ describe("trigger_whoop_sync tool", () => {
     const arg = addSyncLogMock.mock.calls[0][0];
     expect(arg.source).toBe("coach");
     expect(arg.status).toBe("error");
+    expect(arg.user_id).toBe(1);
     expect(arg.error_message).toBe("upstream 503: temporary failure");
     // Real attempts (success or failure) count toward the per-turn cap.
     expect(turnState.syncAttempts).toBe(1);
@@ -348,6 +386,42 @@ describe("query_workouts tool — timestamps", () => {
 
     expect(result.rows[0].start_local).toBeNull();
     expect(result.rows[0].end_local).toBeNull();
+  });
+});
+
+// Issue #494 — query_journal used to call getJournalRange(start, end) with no
+// tenant at all, so ANY user's coach read the maintainer's journal. The tool
+// layer already knows the caller's userId; this asserts it reaches the read.
+// The isolation of the SQL itself is proven in src/lib/db/journal.test.ts.
+describe("query_journal tool — tenant scoping", () => {
+  beforeEach(() => {
+    getJournalRangeMock.mockReset();
+    getJournalRangeMock.mockReturnValue([]);
+  });
+
+  it("passes the calling user's id as the first argument", async () => {
+    await executeTool(
+      "query_journal",
+      { start_date: "2026-05-01", end_date: "2026-05-07" },
+      { userId: 2, turnState: newToolTurnState() },
+    );
+
+    expect(getJournalRangeMock).toHaveBeenCalledWith(2, "2026-05-01", "2026-05-07");
+  });
+
+  it("never reuses another user's id across calls", async () => {
+    await executeTool(
+      "query_journal",
+      { start_date: "2026-05-01", end_date: "2026-05-07" },
+      { userId: 1, turnState: newToolTurnState() },
+    );
+    await executeTool(
+      "query_journal",
+      { start_date: "2026-05-01", end_date: "2026-05-07" },
+      { userId: 2, turnState: newToolTurnState() },
+    );
+
+    expect(getJournalRangeMock.mock.calls.map((c) => c[0])).toEqual([1, 2]);
   });
 });
 

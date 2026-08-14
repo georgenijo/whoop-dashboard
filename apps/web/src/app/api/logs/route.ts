@@ -15,7 +15,7 @@ export async function GET(req: Request) {
       return new Response("Forbidden", { status: 403 });
     }
 
-    return Response.json(getChatLogs(500));
+    return Response.json(getChatLogs(user.id, 500));
   } catch (err) {
     if (err instanceof Response) return err;
     throw err;
@@ -34,7 +34,7 @@ export async function DELETE(req: Request) {
       return new Response("Forbidden", { status: 403 });
     }
 
-    clearChatLogs();
+    clearChatLogs(user.id);
     return new Response(null, { status: 204 });
   } catch (err) {
     if (err instanceof Response) return err;

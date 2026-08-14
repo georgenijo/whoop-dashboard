@@ -41,6 +41,7 @@ export async function POST(req: Request) {
 
   if (result.success) {
     addSyncLog({
+      user_id: user.id,
       started_at: startedAt,
       duration_ms: durationMs,
       status: "ok",
@@ -72,6 +73,7 @@ export async function POST(req: Request) {
 
   const errorMsg = (result.error ?? "sync failed").slice(0, 800);
   addSyncLog({
+    user_id: user.id,
     started_at: startedAt,
     duration_ms: durationMs,
     status: "error",

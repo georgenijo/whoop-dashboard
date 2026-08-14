@@ -72,7 +72,7 @@ export async function GET(req: Request) {
         : "connected";
   }
 
-  const last = getLastSuccessfulSyncAt();
+  const last = getLastSuccessfulSyncAt(auth.user.id);
 
   const body: ConnectorResponse = {
     provider: "whoop",

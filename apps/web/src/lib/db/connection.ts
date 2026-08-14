@@ -157,8 +157,12 @@ export function openWrite(): DB | null {
         type TEXT,
         source TEXT,
         details TEXT,
-        thread_id INTEGER REFERENCES chat_threads(id)
+        thread_id INTEGER REFERENCES chat_threads(id),
+        user_id INTEGER REFERENCES users(id)
       );
+      -- idx_chat_logs_user is created AFTER the lazy ALTER below, not here:
+      -- on a pre-#494 DB the CREATE TABLE above is a no-op, so indexing
+      -- user_id at this point would reference a column that doesn't exist yet.
       CREATE INDEX IF NOT EXISTS idx_chat_logs_started ON chat_logs(started_at DESC);
       -- Issue #421 — Coach-authored, recovery-tuned workout plans. Tenant data
       -- (user_id scoped) but NOT a Phase-D domain table (no composite-PK
@@ -200,8 +204,10 @@ export function openWrite(): DB | null {
         error_message TEXT,
         source TEXT,
         details TEXT,
-        partial INTEGER NOT NULL DEFAULT 0
+        partial INTEGER NOT NULL DEFAULT 0,
+        user_id INTEGER REFERENCES users(id)
       );
+      -- idx_sync_logs_user: created after the lazy ALTER, same reason as above.
       CREATE INDEX IF NOT EXISTS idx_sync_logs_started ON sync_logs(started_at DESC);
       CREATE TABLE IF NOT EXISTS route_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -382,6 +388,57 @@ export function openWrite(): DB | null {
     }
     if (!syncCols.some((c) => c.name === "partial")) {
       db.exec("ALTER TABLE sync_logs ADD COLUMN partial INTEGER NOT NULL DEFAULT 0");
+    }
+    // Issue #494 — tenant-scope chat_logs / sync_logs / journal.
+    //
+    // Nullable INTEGER: existing rows pre-date the column and cannot be given
+    // a NOT NULL value at ALTER time. A REFERENCES clause is legal here only
+    // because the default is NULL (SQLite rejects ADD COLUMN with REFERENCES +
+    // non-NULL DEFAULT while foreign_keys=ON — see the workouts ALTER below).
+    //
+    // Reads filter on `user_id = ?`, so a NULL row is invisible to every
+    // tenant — the secure default. The single-user backfill further down
+    // rescues legacy rows on a DB that has exactly one account.
+    if (!cols.some((c) => c.name === "user_id")) {
+      db.exec("ALTER TABLE chat_logs ADD COLUMN user_id INTEGER REFERENCES users(id)");
+    }
+    db.exec("CREATE INDEX IF NOT EXISTS idx_chat_logs_user ON chat_logs(user_id, id DESC)");
+    if (!syncCols.some((c) => c.name === "user_id")) {
+      db.exec("ALTER TABLE sync_logs ADD COLUMN user_id INTEGER REFERENCES users(id)");
+    }
+    db.exec("CREATE INDEX IF NOT EXISTS idx_sync_logs_user ON sync_logs(user_id, id DESC)");
+    // `journal` is NOT created by this app — it's an optional, externally
+    // populated table that does not exist in the current production DB. We
+    // deliberately do not CREATE it here: inventing a schema for a table we
+    // never write would guess at columns the real producer owns, and
+    // getJournalRange() already degrades to [] when the table is absent. So
+    // the ALTER is gated on the table existing; the moment it does, it gets
+    // scoped like everything else.
+    if (hasTable(db, "journal")) {
+      if (!hasColumn(db, "journal", "user_id")) {
+        db.exec("ALTER TABLE journal ADD COLUMN user_id INTEGER REFERENCES users(id)");
+      }
+      if (hasColumn(db, "journal", "date")) {
+        db.exec(
+          "CREATE INDEX IF NOT EXISTS idx_journal_user_date ON journal(user_id, date)"
+        );
+      }
+    }
+    // One-time, idempotent backfill of legacy rows. Gated on the DB holding
+    // exactly one account: with a single tenant there is no ambiguity about
+    // who those rows belong to, and filtering them out instead would silently
+    // erase the maintainer's entire log history from /logs. On a multi-user DB
+    // we do NOT guess — the rows stay NULL and stay invisible (fail closed).
+    // Re-running is a no-op once no NULLs remain; the (user_id, id) indexes
+    // above make the probe an index seek rather than a table scan.
+    const userRows = db.prepare("SELECT id FROM users").all() as { id: number }[];
+    if (userRows.length === 1) {
+      const soleUserId = userRows[0].id;
+      db.prepare("UPDATE chat_logs SET user_id = ? WHERE user_id IS NULL").run(soleUserId);
+      db.prepare("UPDATE sync_logs SET user_id = ? WHERE user_id IS NULL").run(soleUserId);
+      if (hasTable(db, "journal") && hasColumn(db, "journal", "user_id")) {
+        db.prepare("UPDATE journal SET user_id = ? WHERE user_id IS NULL").run(soleUserId);
+      }
     }
     const routeCols = db.prepare("PRAGMA table_info(route_logs)").all() as { name: string }[];
     if (!routeCols.some((c) => c.name === "details")) {

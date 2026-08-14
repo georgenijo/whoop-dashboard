@@ -1,6 +1,6 @@
 import { headers } from "next/headers";
-import { getChatLogs, getChatThreadInfo, getRouteLogs, getSyncLogs } from "@/lib/db";
 import { requireAuthOrSignin } from "@/lib/auth";
+import { getChatLogs, getChatThreadInfo, getRouteLogs, getSyncLogs } from "@/lib/db";
 import ChatLogsByThread from "./ChatLogsByThread";
 import CollapsibleCard from "./CollapsibleCard";
 import RouteLogsTable from "./RouteLogsTable";
@@ -20,14 +20,18 @@ export const dynamic = "force-dynamic";
 
 export default async function LogsPage() {
   const headerList = await headers();
-  // Authentication only — no admin gate here. #494 (tenant-scoping) is what
-  // narrows getChatLogs/getSyncLogs to the signed-in user's own rows; the
-  // page intentionally does not duplicate that with an ADMIN_APPLE_SUB check
+  // Authentication only — no admin gate here. #494 (tenant-scoping) narrows
+  // getChatLogs/getSyncLogs to the signed-in user's own rows; the page
+  // intentionally does not duplicate that with an ADMIN_APPLE_SUB check
   // (unlike /api/logs, which stays admin-only).
-  await requireAuthOrSignin(new Request("http://localhost", { headers: headerList }));
+  const { user } = await requireAuthOrSignin(
+    new Request("http://localhost", { headers: headerList }),
+  );
 
-  const logs = getChatLogs(500);
-  const syncLogs = getSyncLogs(200);
+  const logs = getChatLogs(user.id, 500);
+  const syncLogs = getSyncLogs(user.id, 200);
+  // route_logs stays global: it has no user_id column and is out of scope for
+  // issue #494. Tracked separately — see #499.
   const routeLogs = getRouteLogs(200);
 
   // Resolve thread metadata for grouping. Pull thread_id from the column when

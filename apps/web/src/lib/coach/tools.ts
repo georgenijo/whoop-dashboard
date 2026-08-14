@@ -484,7 +484,11 @@ async function handleTriggerWhoopSync(
   // Cooldown short-circuit. Mirrors `/api/sync/route.ts` so the manual
   // button and Coach share one cadence and a single fresh sync covers both.
   // No `sync_logs` row on skip — matches route behavior.
-  const lastOk = getLastSuccessfulSyncAt();
+  //
+  // Scoped to `userId` (issue #494). Reading it globally leaked another
+  // tenant's last-sync timestamp straight into the model's context, and let
+  // one tenant's sync lock every other tenant out of syncing for the window.
+  const lastOk = getLastSuccessfulSyncAt(userId);
   if (lastOk && Date.now() - lastOk.getTime() < SYNC_COOLDOWN_MS) {
     return {
       success: true,
@@ -515,6 +519,7 @@ async function handleTriggerWhoopSync(
   try {
     if (result.success) {
       addSyncLog({
+        user_id: userId,
         started_at: startedAt,
         duration_ms: durationMs,
         status: "ok",
@@ -537,6 +542,7 @@ async function handleTriggerWhoopSync(
       });
     } else {
       addSyncLog({
+        user_id: userId,
         started_at: startedAt,
         duration_ms: durationMs,
         status: "error",
@@ -798,9 +804,7 @@ export async function executeTool(
     case "query_naps":
       return getNaps(options.userId, startDate, endDate);
     case "query_journal":
-      // journal has no user_id today — out of scope for Phase D, addressed
-      // in Phase E follow-up. Reads remain unscoped.
-      return getJournalRange(startDate, endDate);
+      return getJournalRange(options.userId, startDate, endDate);
     case "query_daily_snapshot":
       return {
         recovery: getRecoveryRange(options.userId, startDate, endDate),

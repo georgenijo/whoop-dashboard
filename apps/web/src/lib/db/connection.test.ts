@@ -294,6 +294,234 @@ describe("Phase D — domain tables carry user_id", () => {
     }
   });
 
+  // -------------------------------------------------------------------------
+  // Issue #494 — user_id on chat_logs / sync_logs / journal.
+  // -------------------------------------------------------------------------
+
+  it("issue #494: fresh DB has user_id + index on chat_logs and sync_logs", () => {
+    const file = newDbFile();
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    try {
+      expect(columns(db!, "chat_logs")).toContain("user_id");
+      expect(columns(db!, "sync_logs")).toContain("user_id");
+      expect(hasIndex(db!, "idx_chat_logs_user")).toBe(true);
+      expect(hasIndex(db!, "idx_sync_logs_user")).toBe(true);
+    } finally {
+      db?.close();
+    }
+  });
+
+  it("issue #494: lazy ALTER adds user_id to a pre-#494 log schema without losing rows", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE chat_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at TEXT NOT NULL,
+        prompt_preview TEXT NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        response_length INTEGER NOT NULL,
+        error_message TEXT,
+        days_context INTEGER
+      );
+      INSERT INTO chat_logs (started_at, prompt_preview, duration_ms, status, response_length)
+      VALUES ('2026-05-01T00:00:00Z', 'legacy prompt', 42, 'ok', 7);
+      CREATE TABLE sync_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at TEXT NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        recovery_count INTEGER,
+        sleep_count INTEGER,
+        workouts_count INTEGER,
+        error_message TEXT,
+        source TEXT
+      );
+      INSERT INTO sync_logs (started_at, duration_ms, status, source)
+      VALUES ('2026-05-01T00:00:00Z', 900, 'ok', 'manual');
+    `);
+    raw.close();
+
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    try {
+      expect(columns(db!, "chat_logs")).toContain("user_id");
+      expect(columns(db!, "sync_logs")).toContain("user_id");
+      const chat = db!
+        .prepare("SELECT prompt_preview, duration_ms FROM chat_logs WHERE id = 1")
+        .get() as { prompt_preview: string; duration_ms: number };
+      expect(chat.prompt_preview).toBe("legacy prompt");
+      expect(chat.duration_ms).toBe(42);
+      const sync = db!
+        .prepare("SELECT source FROM sync_logs WHERE id = 1")
+        .get() as { source: string };
+      expect(sync.source).toBe("manual");
+    } finally {
+      db?.close();
+    }
+  });
+
+  // Backfill policy: legacy rows carry no user_id and would otherwise be
+  // invisible to everyone. On a single-account DB (the production shape) we
+  // claim them for that account so the maintainer's log history survives.
+  it("issue #494: single-user DB backfills legacy log rows to the sole account", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE chat_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at TEXT NOT NULL,
+        prompt_preview TEXT NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        response_length INTEGER NOT NULL,
+        error_message TEXT,
+        days_context INTEGER
+      );
+      INSERT INTO chat_logs (started_at, prompt_preview, duration_ms, status, response_length)
+      VALUES ('2026-05-01T00:00:00Z', 'legacy prompt', 42, 'ok', 7);
+      CREATE TABLE sync_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at TEXT NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        recovery_count INTEGER,
+        sleep_count INTEGER,
+        workouts_count INTEGER,
+        error_message TEXT,
+        source TEXT
+      );
+      INSERT INTO sync_logs (started_at, duration_ms, status, source)
+      VALUES ('2026-05-01T00:00:00Z', 900, 'ok', 'manual');
+      CREATE TABLE journal (
+        date TEXT PRIMARY KEY,
+        title TEXT,
+        content TEXT,
+        mood TEXT,
+        tags TEXT
+      );
+      INSERT INTO journal (date, title) VALUES ('2026-05-01', 'legacy entry');
+    `);
+    raw.close();
+
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    try {
+      for (const table of ["chat_logs", "sync_logs", "journal"]) {
+        const orphans = db!
+          .prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE user_id IS NULL`)
+          .get() as { n: number };
+        expect(orphans.n, `${table} orphans`).toBe(0);
+        const claimed = db!
+          .prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE user_id = 1`)
+          .get() as { n: number };
+        expect(claimed.n, `${table} claimed`).toBe(1);
+      }
+    } finally {
+      db?.close();
+    }
+  });
+
+  // The other half of the policy: with more than one account there is no
+  // defensible owner, so legacy rows stay NULL and stay unreadable. Guessing
+  // here would be the very cross-tenant leak this change closes.
+  it("issue #494: multi-user DB leaves legacy rows NULL (fails closed)", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        apple_sub TEXT UNIQUE,
+        email TEXT,
+        name TEXT,
+        timezone TEXT
+      );
+      INSERT INTO users (id) VALUES (1);
+      INSERT INTO users (id) VALUES (2);
+      CREATE TABLE chat_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at TEXT NOT NULL,
+        prompt_preview TEXT NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        response_length INTEGER NOT NULL,
+        error_message TEXT,
+        days_context INTEGER
+      );
+      INSERT INTO chat_logs (started_at, prompt_preview, duration_ms, status, response_length)
+      VALUES ('2026-05-01T00:00:00Z', 'ambiguous legacy prompt', 42, 'ok', 7);
+    `);
+    raw.close();
+
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    try {
+      const row = db!
+        .prepare("SELECT user_id FROM chat_logs WHERE id = 1")
+        .get() as { user_id: number | null };
+      expect(row.user_id).toBeNull();
+    } finally {
+      db?.close();
+    }
+  });
+
+  it("issue #494: journal ALTER is skipped when the table does not exist", () => {
+    // The production DB has no `journal` table and this app never creates one
+    // — opening must not throw, and must not conjure the table.
+    const file = newDbFile();
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    expect(db).not.toBeNull();
+    try {
+      const row = db!
+        .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='journal'")
+        .get();
+      expect(row).toBeUndefined();
+    } finally {
+      db?.close();
+    }
+  });
+
+  it("issue #494: the migration is idempotent across repeated opens", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE journal (
+        date TEXT PRIMARY KEY,
+        title TEXT,
+        content TEXT,
+        mood TEXT,
+        tags TEXT
+      );
+      INSERT INTO journal (date, title) VALUES ('2026-05-01', 'entry');
+    `);
+    raw.close();
+    process.env.WHOOP_DB_PATH = file;
+
+    // Three opens: first migrates, the rest must be clean no-ops.
+    conn.openWrite()?.close();
+    conn.openWrite()?.close();
+    const db = conn.openWrite();
+    expect(db).not.toBeNull();
+    try {
+      for (const table of ["chat_logs", "sync_logs", "journal"]) {
+        expect(
+          columns(db!, table).filter((c) => c === "user_id"),
+          `${table} user_id count`,
+        ).toEqual(["user_id"]);
+      }
+      expect(hasIndex(db!, "idx_journal_user_date")).toBe(true);
+      const rows = db!
+        .prepare("SELECT COUNT(*) AS n FROM journal")
+        .get() as { n: number };
+      expect(rows.n).toBe(1);
+    } finally {
+      db?.close();
+    }
+  });
+
   it("backfills existing pre-migration rows to user_id=1", () => {
     const file = newDbFile();
     // Build a pre-migration recovery table (no user_id column) and seed a row.
