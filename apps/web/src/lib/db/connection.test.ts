@@ -467,6 +467,67 @@ describe("Phase D — domain tables carry user_id", () => {
     }
   });
 
+  // REGRESSION for the "backfill is not one-time" defect. Post-migration,
+  // NULL user_id is a DELIBERATE value — the webhook route writes it for
+  // deliveries it cannot attribute, so they stay out of every tenant's /logs
+  // and out of every tenant's sync-cooldown gate. A backfill gated only on
+  // "exactly one user exists" runs on every openWrite() forever and adopts
+  // those rows for the sole user, which would let a webhook for a stranger's
+  // Whoop account suppress the real user's sync.
+  it("issue #494: a NULL sync_logs row written AFTER migration is never claimed", () => {
+    const file = newDbFile();
+    process.env.WHOOP_DB_PATH = file;
+    // First open performs the migration on a single-user DB.
+    conn.openWrite()?.close();
+
+    // Simulate the webhook writing an unattributable delivery.
+    const raw = new Database(file);
+    raw
+      .prepare(
+        "INSERT INTO sync_logs (user_id, started_at, duration_ms, status, source) VALUES (NULL, ?, ?, 'ok', 'webhook')",
+      )
+      .run("2026-06-01T00:00:00Z", 10);
+    raw.close();
+
+    // Several more opens — each one used to re-run the claim.
+    conn.openWrite()?.close();
+    conn.openWrite()?.close();
+    const db = conn.openWrite();
+    try {
+      const row = db!
+        .prepare("SELECT user_id FROM sync_logs WHERE source = 'webhook'")
+        .get() as { user_id: number | null };
+      expect(row.user_id).toBeNull();
+    } finally {
+      db?.close();
+    }
+  });
+
+  it("issue #494: post-migration NULL chat_logs rows survive repeated opens", () => {
+    const file = newDbFile();
+    process.env.WHOOP_DB_PATH = file;
+    conn.openWrite()?.close();
+
+    const raw = new Database(file);
+    raw
+      .prepare(
+        "INSERT INTO chat_logs (user_id, started_at, prompt_preview, duration_ms, status, response_length) VALUES (NULL, ?, ?, 1, 'ok', 1)",
+      )
+      .run("2026-06-01T00:00:00Z", "orphan");
+    raw.close();
+
+    conn.openWrite()?.close();
+    const db = conn.openWrite();
+    try {
+      const row = db!
+        .prepare("SELECT user_id FROM chat_logs WHERE prompt_preview = 'orphan'")
+        .get() as { user_id: number | null };
+      expect(row.user_id).toBeNull();
+    } finally {
+      db?.close();
+    }
+  });
+
   it("issue #494: journal ALTER is skipped when the table does not exist", () => {
     // The production DB has no `journal` table and this app never creates one
     // — opening must not throw, and must not conjure the table.

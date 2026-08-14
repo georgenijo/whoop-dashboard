@@ -397,14 +397,13 @@ export function openWrite(): DB | null {
     // non-NULL DEFAULT while foreign_keys=ON — see the workouts ALTER below).
     //
     // Reads filter on `user_id = ?`, so a NULL row is invisible to every
-    // tenant — the secure default. The single-user backfill further down
-    // rescues legacy rows on a DB that has exactly one account.
+    // tenant — the secure default.
     if (!cols.some((c) => c.name === "user_id")) {
-      db.exec("ALTER TABLE chat_logs ADD COLUMN user_id INTEGER REFERENCES users(id)");
+      addUserIdColumnAndClaimLegacyRows(db, "chat_logs");
     }
     db.exec("CREATE INDEX IF NOT EXISTS idx_chat_logs_user ON chat_logs(user_id, id DESC)");
     if (!syncCols.some((c) => c.name === "user_id")) {
-      db.exec("ALTER TABLE sync_logs ADD COLUMN user_id INTEGER REFERENCES users(id)");
+      addUserIdColumnAndClaimLegacyRows(db, "sync_logs");
     }
     db.exec("CREATE INDEX IF NOT EXISTS idx_sync_logs_user ON sync_logs(user_id, id DESC)");
     // `journal` is NOT created by this app — it's an optional, externally
@@ -416,28 +415,12 @@ export function openWrite(): DB | null {
     // scoped like everything else.
     if (hasTable(db, "journal")) {
       if (!hasColumn(db, "journal", "user_id")) {
-        db.exec("ALTER TABLE journal ADD COLUMN user_id INTEGER REFERENCES users(id)");
+        addUserIdColumnAndClaimLegacyRows(db, "journal");
       }
       if (hasColumn(db, "journal", "date")) {
         db.exec(
           "CREATE INDEX IF NOT EXISTS idx_journal_user_date ON journal(user_id, date)"
         );
-      }
-    }
-    // One-time, idempotent backfill of legacy rows. Gated on the DB holding
-    // exactly one account: with a single tenant there is no ambiguity about
-    // who those rows belong to, and filtering them out instead would silently
-    // erase the maintainer's entire log history from /logs. On a multi-user DB
-    // we do NOT guess — the rows stay NULL and stay invisible (fail closed).
-    // Re-running is a no-op once no NULLs remain; the (user_id, id) indexes
-    // above make the probe an index seek rather than a table scan.
-    const userRows = db.prepare("SELECT id FROM users").all() as { id: number }[];
-    if (userRows.length === 1) {
-      const soleUserId = userRows[0].id;
-      db.prepare("UPDATE chat_logs SET user_id = ? WHERE user_id IS NULL").run(soleUserId);
-      db.prepare("UPDATE sync_logs SET user_id = ? WHERE user_id IS NULL").run(soleUserId);
-      if (hasTable(db, "journal") && hasColumn(db, "journal", "user_id")) {
-        db.prepare("UPDATE journal SET user_id = ? WHERE user_id IS NULL").run(soleUserId);
       }
     }
     const routeCols = db.prepare("PRAGMA table_info(route_logs)").all() as { name: string }[];
@@ -705,6 +688,55 @@ export function safeWriteQuery<T>(fn: (db: DB) => T): T | null {
   } finally {
     db.close();
   }
+}
+
+// ---------------------------------------------------------------------------
+// Issue #494 — log/journal user_id migration
+// ---------------------------------------------------------------------------
+
+/**
+ * Add the `user_id` column to `table` and, in the SAME transaction, claim the
+ * rows that pre-date it for the sole account — but ONLY when the DB has
+ * exactly one user.
+ *
+ * The claim MUST be bound to the ALTER like this rather than run on every
+ * `openWrite()` behind a "one user exists" check. NULL is not only a legacy
+ * marker after this migration — it is a deliberate value. The webhook route
+ * writes `user_id: null` for deliveries it cannot attribute (bad signature
+ * payload, or a Whoop account with no local mapping) precisely so those rows
+ * stay invisible to every tenant's /logs and, critically, to every tenant's
+ * sync-cooldown gate. A recurring claim would adopt them for the sole user,
+ * letting a Whoop-signed webhook for a STRANGER's account suppress the real
+ * user's sync — a residual echo of the bug this issue fixes.
+ *
+ * It also closes a worse transition: a multi-user DB that drops back to one
+ * account (reachable via the mergeUserInto DELETE) would otherwise let the
+ * survivor claim NULL rows that were deliberately left unreadable, which can
+ * include another tenant's chat_logs.prompt_preview.
+ *
+ * Running ALTER + UPDATE in one transaction also means the two can't be
+ * separated by a crash: either the column exists with legacy rows claimed, or
+ * neither happened and the next open retries. Being gated on the ALTER makes
+ * it inherently one-shot, which also drops the standing three-UPDATEs-per-
+ * openWrite() cost of the previous shape.
+ *
+ * On a multi-user DB nothing is claimed: there is no defensible owner, so the
+ * rows stay NULL and stay invisible (fail closed).
+ */
+function addUserIdColumnAndClaimLegacyRows(db: DB, table: string): void {
+  const userRows = db.prepare("SELECT id FROM users").all() as { id: number }[];
+  const soleUserId = userRows.length === 1 ? userRows[0].id : null;
+  const migrate = db.transaction(() => {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN user_id INTEGER REFERENCES users(id)`);
+    if (soleUserId !== null) {
+      // Every row visible here predates the column by construction, so this
+      // cannot touch a deliberately-NULL row written after the migration.
+      db.prepare(`UPDATE ${table} SET user_id = ? WHERE user_id IS NULL`).run(
+        soleUserId,
+      );
+    }
+  });
+  migrate();
 }
 
 // ---------------------------------------------------------------------------
