@@ -275,12 +275,11 @@ export function getLastSuccessfulSyncAt(userId: number): Date | null {
 
 export type RouteLog = {
   id: number;
-  /** Owning tenant. NULL for requests with no authenticated user — an
-   *  unauthenticated /signin visit, /api/health, or a Whoop webhook POST
-   *  never resolves to a local user, so those rows are written with
-   *  user_id = NULL rather than backfilled onto any account (issue #499,
-   *  same policy as sync_logs — see addSyncLog's user_id doc). Reads filter
-   *  strictly on `user_id = ?`, so a NULL row is invisible to every tenant. */
+  /** Owning tenant. Nullable because rows written before the #499 migration
+   *  pre-date this column and can't be given a NOT NULL value at ALTER time
+   *  (issue #499, same shape as chat_logs/sync_logs — see #494). Reads
+   *  filter strictly on `user_id = ?`, so a NULL row is invisible to every
+   *  tenant rather than being backfilled onto whoever happens to be user 1. */
   user_id: number | null;
   started_at: string;
   route: string;

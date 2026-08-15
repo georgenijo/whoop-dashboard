@@ -442,13 +442,6 @@ export function openWrite(): DB | null {
     // combined with REFERENCES is illegal under foreign_keys=ON — see the
     // workouts ALTER further down for the tripwire), legacy rows claimed for
     // the sole account when the DB has exactly one user.
-    //
-    // Unlike chat_logs/sync_logs, NULL here isn't only a "written before this
-    // migration" marker — going forward, requests with no authenticated user
-    // (an unauthenticated /signin visit, /api/health, a Whoop webhook POST)
-    // deliberately write user_id = NULL too. getRouteLogs filters strictly on
-    // `user_id = ?`, so those rows stay invisible to every tenant rather than
-    // being backfilled onto whoever happens to be user 1.
     if (!routeCols.some((c) => c.name === "user_id")) {
       addUserIdColumnAndClaimLegacyRows(db, "route_logs");
     }

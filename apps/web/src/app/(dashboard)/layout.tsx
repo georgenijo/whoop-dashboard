@@ -70,9 +70,7 @@ export default async function RootLayout({
         const renderMs = Math.max(0, now - layoutStartMs);
         addRouteLog({
           // This layout requires auth above (redirects otherwise), so `user`
-          // is always resolved by the time this fires. user_id = NULL is
-          // reserved for call sites that can't resolve an authenticated user
-          // at all (none exist today) — see the RouteLog.user_id doc.
+          // is always resolved by the time this fires.
           user_id: user.id,
           started_at: startedAt,
           route,

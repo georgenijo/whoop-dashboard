@@ -49,6 +49,93 @@ function columns(db: Database.Database, table: string): string[] {
   ).map((r) => r.name);
 }
 
+// ---------------------------------------------------------------------------
+// Issue #502 review — reflection helpers for the USER_FK_TABLES /
+// KNOWN_UNMERGED_USER_FK_TABLES guard test below. These read the live schema
+// (PRAGMA table_info / index_list / index_info / foreign_key_list) rather
+// than trusting either hand-maintained list's doc comment, so "is it actually
+// safe to repoint this table with a bare UPDATE" is an assertion, not prose.
+// ---------------------------------------------------------------------------
+
+/** True if `user_id` is part of `table`'s PRIMARY KEY (single- or composite-key). */
+function userIdInPrimaryKey(db: Database.Database, table: string): boolean {
+  const info = db.prepare(`PRAGMA table_info(${table})`).all() as {
+    name: string;
+    pk: number;
+  }[];
+  return info.some((c) => c.name === "user_id" && c.pk > 0);
+}
+
+/** True if `user_id` is a member of any UNIQUE index on `table`. */
+function userIdInUniqueIndex(db: Database.Database, table: string): boolean {
+  const indexes = db.prepare(`PRAGMA index_list(${table})`).all() as {
+    name: string;
+    unique: number;
+  }[];
+  for (const idx of indexes) {
+    if (!idx.unique) continue;
+    const idxCols = db.prepare(`PRAGMA index_info(${idx.name})`).all() as {
+      name: string;
+    }[];
+    if (idxCols.some((c) => c.name === "user_id")) return true;
+  }
+  return false;
+}
+
+/**
+ * True if `user_id` sits in a PRIMARY KEY or UNIQUE index — the condition
+ * that makes a bare `UPDATE ... SET user_id` repoint unsafe (it would trade
+ * today's FK failure for a UNIQUE constraint failure whenever both merging
+ * accounts hold a matching row).
+ */
+function userIdConstrainsUniqueness(db: Database.Database, table: string): boolean {
+  return userIdInPrimaryKey(db, table) || userIdInUniqueIndex(db, table);
+}
+
+/**
+ * True if `table` declares an FK from `user_id` to `users(id)` with an
+ * ON DELETE action (CASCADE, SET NULL, etc. — anything but the SQLite
+ * default "NO ACTION"). An action here means leaving the table out of
+ * USER_FK_TABLES doesn't fail loudly at merge time — it silently cascades or
+ * detaches instead, which is its own kind of unsafe (see the chat_attachments
+ * cascade-data-loss case fixed in issue #502).
+ */
+function userIdFkHasOnDeleteAction(db: Database.Database, table: string): boolean {
+  const fks = db.prepare(`PRAGMA foreign_key_list(${table})`).all() as {
+    table: string;
+    from: string;
+    on_delete: string;
+  }[];
+  return fks.some(
+    (fk) => fk.table === "users" && fk.from === "user_id" && fk.on_delete !== "NO ACTION",
+  );
+}
+
+/**
+ * Every table in the live schema that carries a `user_id` column — unioned
+ * with tables that declare an FK to users(id) under some other column name,
+ * though in practice every FK-to-users column in this schema is named
+ * user_id. Column presence alone (not "does it declare a REFERENCES
+ * clause") is what makes this catch workout_plans and server_logs: both
+ * carry a plain `user_id INTEGER` with no REFERENCES clause, so a
+ * declared-FK-only reflection is blind to them even though mergeUserInto
+ * silently orphans their rows on every split-brain merge.
+ */
+function tablesWithUserIdOrFk(db: Database.Database, tables: string[]): Set<string> {
+  const candidates = new Set<string>();
+  for (const table of tables) {
+    if (columns(db, table).includes("user_id")) {
+      candidates.add(table);
+      continue;
+    }
+    const fks = db.prepare(`PRAGMA foreign_key_list(${table})`).all() as {
+      table: string;
+    }[];
+    if (fks.some((fk) => fk.table === "users")) candidates.add(table);
+  }
+  return candidates;
+}
+
 describe("Phase D — domain tables carry user_id", () => {
   it("fresh schema includes chat_messages.work_log", () => {
     const file = newDbFile();
@@ -999,11 +1086,24 @@ describe("Phase D — domain tables carry user_id", () => {
   // mergeUserInto sits on the Sign in with Apple path, so the symptom is a
   // 500 on sign-in for anyone whose merged-away account touched that table.
   //
-  // This test reflects the *actual* schema (PRAGMA foreign_key_list) rather
-  // than trusting any hand-maintained list, so a newly-added FK to users(id)
-  // fails loudly here instead of silently at the next split-brain merge.
+  // A first version of this test only checked *membership in a list* — it
+  // couldn't tell "the right list" from "any list", so:
+  //   1. It reflected declared FKs only, missing workout_plans/server_logs
+  //      (plain `user_id` column, no REFERENCES clause).
+  //   2. Moving a PK/UNIQUE-constrained table (e.g. user_settings, whose
+  //      user_id IS the primary key) into USER_FK_TABLES passed the test
+  //      while mergeUserInto would then die with UNIQUE constraint failed.
+  //   3. KNOWN_UNMERGED_USER_FK_TABLES membership was never actually
+  //      verified against the invariant its own doc comment claimed.
+  //
+  // This version reflects the live schema on all three axes — column
+  // presence (not just declared FKs), PK/UNIQUE-index membership (via
+  // PRAGMA table_info/index_list/index_info), and ON DELETE actions (via
+  // PRAGMA foreign_key_list) — so "just move it to the merge list" fails
+  // loudly here instead of silently at the next split-brain merge or, worse,
+  // silently passing review because the guard only checked *a* list.
   // -------------------------------------------------------------------------
-  it("issue #502: every table with an FK to users(id) is accounted for in USER_FK_TABLES", () => {
+  it("issue #502: every user_id-bearing table is in the correct one of USER_FK_TABLES / KNOWN_UNMERGED_USER_FK_TABLES", () => {
     const file = newDbFile();
     process.env.WHOOP_DB_PATH = file;
     const db = conn.openWrite();
@@ -1015,45 +1115,78 @@ describe("Phase D — domain tables carry user_id", () => {
           .all() as { name: string }[]
       ).map((r) => r.name);
 
-      const actualFkReferrers = new Set<string>();
-      for (const table of tables) {
-        const fks = db!.prepare(`PRAGMA foreign_key_list(${table})`).all() as {
-          table: string;
-        }[];
-        if (fks.some((fk) => fk.table === "users")) {
-          actualFkReferrers.add(table);
-        }
-      }
+      const candidates = tablesWithUserIdOrFk(db!, tables);
 
-      const accountedFor = new Set<string>([
-        ...authMod.USER_FK_TABLES,
-        ...authMod.optionalUserFkTables(db!),
-        ...authMod.KNOWN_UNMERGED_USER_FK_TABLES,
-      ]);
+      const userFkTables = new Set<string>(authMod.USER_FK_TABLES);
+      const optional = new Set<string>(authMod.optionalUserFkTables(db!));
+      const knownUnmerged = new Set<string>(authMod.KNOWN_UNMERGED_USER_FK_TABLES);
+      const accountedFor = new Set<string>([...userFkTables, ...optional, ...knownUnmerged]);
 
-      // The failure case that matters: a table now references users(id) but
-      // nobody added it to either list. Name it explicitly — that's the
-      // whole point of this test.
-      const missing = [...actualFkReferrers].filter((t) => !accountedFor.has(t));
+      // Axis 1 — completeness: every table with a user_id column, or an FK to
+      // users(id) under any name, must be accounted for in one of the three
+      // lists. Enumerating by column presence (not declared-FK alone) is what
+      // catches workout_plans and server_logs, which carry a plain `user_id`
+      // column with no REFERENCES clause and were previously invisible here —
+      // mergeUserInto silently orphaned their rows on every split-brain merge.
+      const missing = [...candidates].filter((t) => !accountedFor.has(t));
       expect(
         missing,
         missing.length
-          ? `table(s) reference users(id) but are missing from USER_FK_TABLES ` +
-              `(or KNOWN_UNMERGED_USER_FK_TABLES, if the omission is deliberate — ` +
-              `see its doc comment) in apps/web/src/lib/db/auth.ts: ${missing.join(", ")}`
+          ? `table(s) have a user_id column (or an FK to users(id)) but are missing from ` +
+              `USER_FK_TABLES / optionalUserFkTables / KNOWN_UNMERGED_USER_FK_TABLES in ` +
+              `apps/web/src/lib/db/auth.ts: ${missing.join(", ")}`
           : "",
       ).toEqual([]);
 
-      // The inverse drift: an entry that no longer references users(id) at
-      // all (dropped column, renamed table) should be pruned rather than
-      // left to silently repoint a UPDATE against a column that isn't there.
+      // The inverse drift: an entry that no longer has a user_id column (or
+      // FK to users(id)) at all — dropped column, renamed table — should be
+      // pruned rather than left to silently repoint an UPDATE against a
+      // column that isn't there.
       const stale = [...accountedFor].filter(
-        (t) => tables.includes(t) && !actualFkReferrers.has(t),
+        (t) => tables.includes(t) && !candidates.has(t),
       );
       expect(
         stale,
-        `entries in USER_FK_TABLES / KNOWN_UNMERGED_USER_FK_TABLES that no ` +
-          `longer reference users(id): ${stale.join(", ")}`,
+        `entries in USER_FK_TABLES / KNOWN_UNMERGED_USER_FK_TABLES that no longer have a ` +
+          `user_id column or FK to users(id): ${stale.join(", ")}`,
+      ).toEqual([]);
+
+      // Axis 2 — positive safety: every USER_FK_TABLES member must actually
+      // be safe for a bare `UPDATE ... SET user_id` repoint — user_id must
+      // sit in NO PRIMARY KEY and NO UNIQUE index. This is the assertion that
+      // catches "moving user_settings into USER_FK_TABLES passes review but
+      // throws UNIQUE constraint failed at merge time" — the prose invariant
+      // in USER_FK_TABLES's doc comment, turned into a check.
+      const unsafeInMergeList = [...userFkTables].filter((t) =>
+        userIdConstrainsUniqueness(db!, t),
+      );
+      expect(
+        unsafeInMergeList,
+        unsafeInMergeList.length
+          ? `table(s) in USER_FK_TABLES have user_id in a PRIMARY KEY or UNIQUE index — a ` +
+              `bare repoint would throw UNIQUE constraint failed whenever both merging ` +
+              `accounts hold a matching row. Move to KNOWN_UNMERGED_USER_FK_TABLES (with a ` +
+              `documented conflict policy) instead: ${unsafeInMergeList.join(", ")}`
+          : "",
+      ).toEqual([]);
+
+      // Axis 3 — complement: every KNOWN_UNMERGED_USER_FK_TABLES member must
+      // be excluded for a real, verified reason — user_id in a PRIMARY KEY or
+      // UNIQUE index, OR a declared FK to users(id) with an ON DELETE action
+      // (which silently cascades/detaches instead of failing loudly, its own
+      // kind of unsafe — see the chat_attachments cascade-data-loss case
+      // fixed in issue #502). A table satisfying neither has no reason to be
+      // excluded from the merge list; it belongs in USER_FK_TABLES instead.
+      const wronglyExcluded = [...knownUnmerged].filter(
+        (t) => !userIdConstrainsUniqueness(db!, t) && !userIdFkHasOnDeleteAction(db!, t),
+      );
+      expect(
+        wronglyExcluded,
+        wronglyExcluded.length
+          ? `table(s) in KNOWN_UNMERGED_USER_FK_TABLES have neither user_id in a PK/UNIQUE ` +
+              `index nor an ON DELETE action on their FK to users(id) — nothing stops a bare ` +
+              `repoint. Move to USER_FK_TABLES: ${wronglyExcluded.join(", ")}`
+          : "",
       ).toEqual([]);
     } finally {
       db?.close();
