@@ -54,7 +54,7 @@ export default async function RootLayout({
   // (e.g. settings/page.tsx, a "use client" component that can't call a
   // server-only auth helper directly) and covers any future page in the
   // group by default rather than opt-in.
-  await requireAuthOrSignin(
+  const { user } = await requireAuthOrSignin(
     new Request("http://localhost", { headers: requestHeaders }),
   );
 
@@ -69,6 +69,9 @@ export default async function RootLayout({
         const now = Date.now();
         const renderMs = Math.max(0, now - layoutStartMs);
         addRouteLog({
+          // This layout requires auth above (redirects otherwise), so `user`
+          // is always resolved by the time this fires.
+          user_id: user.id,
           started_at: startedAt,
           route,
           duration_ms: Math.max(0, now - startMs),

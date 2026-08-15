@@ -1,7 +1,14 @@
 import "server-only";
 import { existsSync } from "node:fs";
 import Database, { type Database as DB } from "better-sqlite3";
-import { dbPath, hasColumn, hasTable, openWrite, safeQuery } from "./connection";
+import {
+  addUserIdColumnAndClaimLegacyRows,
+  dbPath,
+  hasColumn,
+  hasTable,
+  openWrite,
+  safeQuery,
+} from "./connection";
 
 let routeLogsSchemaReady = false;
 
@@ -37,6 +44,15 @@ function openRouteLogWrite(): DB | null {
         if (!cols.some((c) => c.name === "render_ms")) {
           db.exec("ALTER TABLE route_logs ADD COLUMN render_ms INTEGER");
         }
+        // Issue #499 — keep in sync with the canonical migration in
+        // connection.ts. route_logs is bootstrapped in BOTH places (this
+        // function opens its own raw connection instead of going through
+        // openWrite()), so whichever runs first must leave the schema
+        // identical to the other, or the shape depends on request ordering.
+        if (!cols.some((c) => c.name === "user_id")) {
+          addUserIdColumnAndClaimLegacyRows(db, "route_logs");
+        }
+        db.exec("CREATE INDEX IF NOT EXISTS idx_route_logs_user ON route_logs(user_id, id DESC)");
         routeLogsSchemaReady = true;
       }
       return db;
@@ -259,6 +275,12 @@ export function getLastSuccessfulSyncAt(userId: number): Date | null {
 
 export type RouteLog = {
   id: number;
+  /** Owning tenant. Nullable because rows written before the #499 migration
+   *  pre-date this column and can't be given a NOT NULL value at ALTER time
+   *  (issue #499, same shape as chat_logs/sync_logs — see #494). Reads
+   *  filter strictly on `user_id = ?`, so a NULL row is invisible to every
+   *  tenant rather than being backfilled onto whoever happens to be user 1. */
+  user_id: number | null;
   started_at: string;
   route: string;
   duration_ms: number;
@@ -271,13 +293,18 @@ export type RouteLog = {
   render_ms?: number | null;
 };
 
+/** `user_id` is a required field of the payload (not an optional trailing
+ *  argument) — pass an explicit `null` only when there is genuinely no
+ *  authenticated user for this request (issue #499, same shape as
+ *  addSyncLog). */
 export function addRouteLog(log: Omit<RouteLog, "id">): void {
   const db = openRouteLogWrite();
   if (!db) return;
   try {
     db.prepare(
-      "INSERT INTO route_logs (started_at, route, duration_ms, status, details, response_bytes, render_ms) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO route_logs (user_id, started_at, route, duration_ms, status, details, response_bytes, render_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     ).run(
+      log.user_id,
       log.started_at,
       log.route,
       log.duration_ms,
@@ -291,10 +318,17 @@ export function addRouteLog(log: Omit<RouteLog, "id">): void {
   }
 }
 
-export function getRouteLogs(limit = 200): RouteLog[] {
+/** Tenant-scoped. `userId` is the first, required argument — omitting it is a
+ *  type error rather than a silent cross-tenant read (issue #499, mirrors
+ *  getChatLogs/getSyncLogs from #494). */
+export function getRouteLogs(userId: number, limit = 200): RouteLog[] {
   return (
     safeQuery((db) => {
       if (!hasTable(db, "route_logs")) return [] as RouteLog[];
+      // Fail closed: a DB whose schema migration hasn't run yet (read-only
+      // handle, no write since deploy) has no user_id column and therefore no
+      // way to tell tenants apart. Return nothing rather than everything.
+      if (!hasColumn(db, "route_logs", "user_id")) return [] as RouteLog[];
       const detailsSelect = hasColumn(db, "route_logs", "details")
         ? "details"
         : "NULL AS details";
@@ -306,9 +340,9 @@ export function getRouteLogs(limit = 200): RouteLog[] {
         : "NULL AS render_ms";
       return db
         .prepare(
-          `SELECT id, started_at, route, duration_ms, status, ${detailsSelect}, ${responseBytesSelect}, ${renderMsSelect} FROM route_logs ORDER BY started_at DESC, id DESC LIMIT ?`
+          `SELECT id, user_id, started_at, route, duration_ms, status, ${detailsSelect}, ${responseBytesSelect}, ${renderMsSelect} FROM route_logs WHERE user_id = ? ORDER BY started_at DESC, id DESC LIMIT ?`
         )
-        .all(limit) as RouteLog[];
+        .all(userId, limit) as RouteLog[];
     }) ?? []
   );
 }

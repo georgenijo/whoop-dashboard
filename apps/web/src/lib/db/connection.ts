@@ -437,6 +437,19 @@ export function openWrite(): DB | null {
     if (!routeCols.some((c) => c.name === "render_ms")) {
       db.exec("ALTER TABLE route_logs ADD COLUMN render_ms INTEGER");
     }
+    // Issue #499 — tenant-scope route_logs. Same shape as the #494 migration
+    // for chat_logs/sync_logs above: nullable INTEGER FK (a non-NULL DEFAULT
+    // combined with REFERENCES is illegal under foreign_keys=ON — see the
+    // workouts ALTER further down for the tripwire), legacy rows claimed for
+    // the sole account when the DB has exactly one user.
+    if (!routeCols.some((c) => c.name === "user_id")) {
+      addUserIdColumnAndClaimLegacyRows(db, "route_logs");
+    }
+    // idx_route_logs_user is created AFTER the lazy ALTER above, not in the
+    // bootstrap CREATE TABLE block — same reasoning as idx_chat_logs_user /
+    // idx_sync_logs_user: on a pre-#499 DB the CREATE TABLE is a no-op, so
+    // indexing user_id here would reference a column that doesn't exist yet.
+    db.exec("CREATE INDEX IF NOT EXISTS idx_route_logs_user ON route_logs(user_id, id DESC)");
     const insightCols = db.prepare("PRAGMA table_info(insights)").all() as { name: string }[];
     if (!insightCols.some((c) => c.name === "created_at")) {
       db.exec("ALTER TABLE insights ADD COLUMN created_at TEXT");
@@ -778,7 +791,7 @@ export function safeWriteQuery<T>(fn: (db: DB) => T): T | null {
  * On a multi-user DB nothing is claimed: there is no defensible owner, so the
  * rows stay NULL and stay invisible (fail closed).
  */
-function addUserIdColumnAndClaimLegacyRows(db: DB, table: string): void {
+export function addUserIdColumnAndClaimLegacyRows(db: DB, table: string): void {
   const userRows = db.prepare("SELECT id FROM users").all() as { id: number }[];
   const soleUserId = userRows.length === 1 ? userRows[0].id : null;
   const migrate = db.transaction(() => {

@@ -276,6 +276,68 @@ describe("split-brain merge repoints the issue #494 log tables", () => {
   });
 });
 
+// Issue #502 review. chat_attachments.user_id is declared
+// `REFERENCES users(id) ON DELETE CASCADE`. Before the #502 fix,
+// chat_attachments was absent from USER_FK_TABLES — but unlike
+// chat_logs/sync_logs pre-#494 (which had NO ON DELETE action and made the
+// trailing `DELETE FROM users` throw), the CASCADE satisfied the FK check by
+// silently deleting the attachment row instead of throwing. That's not a
+// sign-in 500 — it's quieter and worse: the losing account's attachments
+// just vanish instead of following their thread to the surviving account.
+// Moving chat_attachments into USER_FK_TABLES makes it repoint like every
+// other log/history table instead of cascading away.
+describe("split-brain merge repoints chat_attachments instead of cascading (issue #502)", () => {
+  it("attachment survives the merge, repointed to the survivor", () => {
+    let goneId: number;
+    const seed = new Database(dbFile);
+    try {
+      seed.prepare("DELETE FROM chat_attachments").run();
+      seed.prepare("DELETE FROM chat_threads").run();
+      // Surviving row: matched by apple_sub, holds the OLD email.
+      seed
+        .prepare("UPDATE users SET apple_sub = ?, email = ? WHERE id = 1")
+        .run("sub-keep-attach", "old-attach@example.com");
+      // Doomed row: matched by the NEW email the user now signs in with.
+      const gone = seed
+        .prepare("INSERT INTO users (apple_sub, email) VALUES (?, ?)")
+        .run("sub-gone-attach", "new-attach@example.com");
+      goneId = Number(gone.lastInsertRowid);
+      const thread = seed
+        .prepare("INSERT INTO chat_threads (user_id, title) VALUES (?, ?)")
+        .run(goneId, "gone user's thread");
+      const threadId = Number(thread.lastInsertRowid);
+      seed
+        .prepare(
+          `INSERT INTO chat_attachments
+             (id, thread_id, user_id, mime_type, width, height, size_bytes, sha256, ciphertext, key_version, created_at)
+           VALUES (?, ?, ?, 'image/png', 10, 10, 100, 'deadbeef', ?, 1, '2026-06-01T00:00:00Z')`,
+        )
+        .run("att-1", threadId, goneId, Buffer.from("ciphertext"));
+    } finally {
+      seed.close();
+    }
+
+    // Pre-#502-fix this call would still succeed (no FK throw — CASCADE
+    // handled it), but silently deleted the attachment row along the way.
+    const keep = auth.upsertUserByAppleSub("sub-keep-attach", "new-attach@example.com");
+    expect(keep.id).toBe(1);
+
+    const db = new Database(dbFile);
+    try {
+      const row = db
+        .prepare("SELECT user_id FROM chat_attachments WHERE id = 'att-1'")
+        .get() as { user_id: number } | undefined;
+      // The concrete win from issue #502: the row survives at all (pre-fix it
+      // was cascaded away), and it's repointed to the surviving account
+      // rather than left dangling on the deleted one.
+      expect(row).toBeDefined();
+      expect(row!.user_id).toBe(keep.id);
+    } finally {
+      db.close();
+    }
+  });
+});
+
 describe("DB helper trusts caller (no validation at this layer)", () => {
   // Validation is enforced at the route layer (see apple/route.test.ts). The DB
   // helper trusts whatever it's handed — exercised here only to confirm we
