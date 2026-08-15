@@ -52,8 +52,10 @@ export type UserSettingsInput = {
   coach_goals?: string[] | null;
   onboarded_at?: string | null;
   tz?: string | null;
-  // `undefined` = leave existing column untouched. `null` = clear the column
-  // (falls back to the built-in default — see resolveSystemPrompt).
+  // `undefined` = leave existing column untouched. `null` = clear the column,
+  // leaving the coach on its built-in prompt alone. When set, the value is
+  // ADDED to the built-in prompt rather than replacing it (issue #498) — see
+  // normalizeCustomInstructions / buildSystemPrompt in lib/coach/prompts.ts.
   system_prompt?: string | null;
 };
 

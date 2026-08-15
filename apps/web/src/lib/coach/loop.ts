@@ -331,12 +331,17 @@ export async function runAnthropicSdk(
   // Phase E.1 — surface the user's stated goals into the system prompt as a
   // third (uncached) block. Null/empty → byte-identical to the pre-Phase-E.1
   // two-block prompt, preserving the cache hit.
+  //
+  // Issue #498 — the per-user "Instructions" from Settings ride along as a
+  // further uncached block, additive to DEFAULT_SYSTEM_PROMPT rather than a
+  // replacement for it.
   const userSettings = getUserSettings(userId);
   const coachEffort = parseCoachEffort(userSettings?.coach_effort);
   detailState.effort = coachEffort;
   const systemPrompt = buildSystemPrompt(
     new Date(),
     userSettings?.coach_goals ?? null,
+    userSettings?.system_prompt ?? null,
   );
   const messagesToPersist: ChatMessageInsert[] = accumulator ?? [];
   messagesToPersist.push({

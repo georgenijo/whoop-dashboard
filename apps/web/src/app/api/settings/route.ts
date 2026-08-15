@@ -1,8 +1,7 @@
 import { getUserSettings, upsertUserSettings } from "@/lib/db";
 import {
-  DEFAULT_SYSTEM_PROMPT,
   MAX_SYSTEM_PROMPT_LENGTH,
-  resolveSystemPrompt,
+  normalizeCustomInstructions,
 } from "@/lib/coach/prompts";
 import { requireAuth } from "@/lib/auth";
 import {
@@ -21,11 +20,11 @@ import {
   parseModelPref,
 } from "@/lib/coach/provider";
 
-// `system_prompt` is per-user (issue #493 — it used to be a single
-// app-global app_setting that any authenticated user could overwrite for
-// everyone). Resolution falls back straight to the built-in default — see
-// resolveSystemPrompt. The legacy global app_settings row, if any existed,
-// was migrated into user_settings and deleted by connection.ts (openWrite).
+// This returns the user's RAW stored instructions ("" when they have none),
+// not a value resolved against DEFAULT_SYSTEM_PROMPT: instructions are
+// additive (#498), so pre-filling the textarea with the default would let a
+// user edit and resave a copy of it, sending the ~9.4KB default a second
+// time as uncached per-user text on every turn.
 function settingsPayload(userId: number) {
   const settings = getUserSettings(userId);
   const selection = parseModelPref(settings?.model_pref);
@@ -33,8 +32,7 @@ function settingsPayload(userId: number) {
     settings?.cursor_key || process.env.CURSOR_API_KEY,
   );
   return {
-    system_prompt: resolveSystemPrompt(settings?.system_prompt),
-    default_system_prompt: DEFAULT_SYSTEM_PROMPT,
+    system_prompt: normalizeCustomInstructions(settings?.system_prompt) ?? "",
     model_pref:
       selection.provider === "cursor" && cursorAvailable
         ? modelPrefForSelection(selection)
@@ -135,8 +133,8 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
-      // Empty string clears the per-user override (falls back to the
-      // built-in default) rather than pinning an empty prompt.
+      // Empty string clears the per-user override to NULL — no custom
+      // instructions block is added — rather than pinning an empty prompt.
       upsertUserSettings({
         user_id: user.id,
         system_prompt: trimmedSystemPrompt.length > 0 ? trimmedSystemPrompt : null,
