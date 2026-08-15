@@ -334,8 +334,7 @@ export async function runAnthropicSdk(
   //
   // Issue #498 — the per-user "Instructions" from Settings ride along as a
   // further uncached block, additive to DEFAULT_SYSTEM_PROMPT rather than a
-  // replacement for it. Before this the value was stored and displayed but
-  // never reached the model at all.
+  // replacement for it.
   const userSettings = getUserSettings(userId);
   const coachEffort = parseCoachEffort(userSettings?.coach_effort);
   detailState.effort = coachEffort;

@@ -20,20 +20,11 @@ import {
   parseModelPref,
 } from "@/lib/coach/provider";
 
-// `system_prompt` is per-user (issue #493 — it used to be a single
-// app-global app_setting that any authenticated user could overwrite for
-// everyone). The legacy global app_settings row, if any existed, was
-// migrated into user_settings and deleted by connection.ts (openWrite).
-//
-// Issue #498 — this returns the user's RAW stored instructions ("" when they
-// have none), not a value resolved against DEFAULT_SYSTEM_PROMPT. Custom
-// instructions are now additive to the built-in prompt rather than a
-// replacement for it, so pre-filling the Settings textarea with the built-in
-// default would be actively wrong: the user would edit a copy of the default
-// and save it, and the coach would then receive the entire default prompt
-// twice — once cached, once as ~8.5KB of uncached per-user text on every
-// turn. `default_system_prompt` was dropped from this payload for the same
-// reason; nothing should invite the user to edit the operator prompt.
+// This returns the user's RAW stored instructions ("" when they have none),
+// not a value resolved against DEFAULT_SYSTEM_PROMPT: instructions are
+// additive (#498), so pre-filling the textarea with the default would let a
+// user edit and resave a copy of it, sending the ~9.4KB default a second
+// time as uncached per-user text on every turn.
 function settingsPayload(userId: number) {
   const settings = getUserSettings(userId);
   const selection = parseModelPref(settings?.model_pref);
@@ -142,8 +133,8 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
-      // Empty string clears the per-user override (falls back to the
-      // built-in default) rather than pinning an empty prompt.
+      // Empty string clears the per-user override to NULL — no custom
+      // instructions block is added — rather than pinning an empty prompt.
       upsertUserSettings({
         user_id: user.id,
         system_prompt: trimmedSystemPrompt.length > 0 ? trimmedSystemPrompt : null,

@@ -523,6 +523,7 @@ export default function SettingsPage() {
         );
       }
       const data = (await response.json()) as { system_prompt: string };
+      setSystemPrompt(data.system_prompt);
       setSavedSystemPrompt(data.system_prompt);
     } catch (error) {
       setPromptError(

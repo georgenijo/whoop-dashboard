@@ -375,7 +375,7 @@ describe("/api/settings system_prompt (issue #493 — per-user, not app-global)"
   // DEFAULT_SYSTEM_PROMPT. Custom instructions are additive now, so
   // pre-filling the Settings textarea with the built-in prompt would invite
   // the user to save a near-copy of it, which the coach would then receive
-  // twice (once cached, once as ~8.5KB of uncached per-user text per turn).
+  // twice (once cached, once as ~9.4KB of uncached per-user text per turn).
   it("GET returns an empty string when no per-user instructions exist", async () => {
     db.getUserSettings.mockReturnValue({
       cursor_key: null,

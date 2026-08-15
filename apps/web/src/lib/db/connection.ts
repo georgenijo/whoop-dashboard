@@ -570,8 +570,8 @@ export function openWrite(): DB | null {
     }
     // Issue #493 — system_prompt moves from a single app-global app_settings
     // row (writable by ANY authenticated user, for every user) to a per-user
-    // column here. NULL means "no per-user override"; readers fall back to
-    // the legacy global app_settings value, then the built-in default.
+    // column here. NULL means "no per-user override" — no fallback: readers
+    // simply add nothing beyond DEFAULT_SYSTEM_PROMPT for that user.
     if (!userSettingsCols.some((c) => c.name === "system_prompt")) {
       db.exec("ALTER TABLE user_settings ADD COLUMN system_prompt TEXT");
     }
