@@ -1,9 +1,14 @@
+import "client-only";
 // Browser-side markdown -> sanitized HTML for LLM-generated content.
 //
 // This is the client counterpart to `sanitize-html.ts`. It must stay free of
 // `server-only` and of `jsdom`: it is imported from `"use client"` components,
 // so anything it pulls in ships to the browser, and jsdom is several megabytes.
 // That is why the coach transcript cannot reuse `sanitizeHtml()`.
+//
+// The `client-only` import above is symmetrical with `sanitize-html.ts`'s
+// `server-only`: it makes a Server Component that imports this module fail
+// the build instead of silently getting `undefined` and rendering nothing.
 //
 // `dompurify`'s default export is built once at module load. With no `window`
 // present — every server render — the factory bails out early and returns an

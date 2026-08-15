@@ -34,6 +34,34 @@ const eslintConfig = defineConfig([
       ],
     },
   },
+  // Issue #475 section B: a "hoist the effect into a memo" refactor (#458)
+  // silently deleted the SSR gate around a direct `dompurify` call in
+  // `MessageBubble`, because `useEffect` never runs on the server but
+  // `useMemo` does — production served the coach transcript ungated for 8
+  // days. Ban importing `dompurify` outside the two modules that own
+  // sanitization, so that shape of regression fails lint instead of prod.
+  {
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "dompurify",
+              message:
+                "Don't import dompurify directly. Use `renderMarkdownToSafeHtml` from @/lib/render-markdown in client components, or `sanitizeHtml` from @/lib/sanitize-html in server-only code, instead.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/lib/render-markdown.ts", "src/lib/sanitize-html.ts"],
+    rules: {
+      "no-restricted-imports": "off",
+    },
+  },
 ]);
 
 export default eslintConfig;

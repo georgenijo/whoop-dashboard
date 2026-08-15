@@ -86,9 +86,18 @@ describe("MessageBubble server render (no browser DOM)", () => {
   it("never emits a dangerouslySetInnerHTML container server-side", () => {
     // The sanitized-HTML container carries `prose-coach` without the fallback
     // class; seeing it here would mean unsanitized output reached the server
-    // HTML.
+    // HTML. Assert structurally (parse + inspect the actual element) rather
+    // than by substring — a substring check on the exact class attribute
+    // string breaks silently if the sanitized container ever grows an extra
+    // class, since it would still not equal `class="prose-coach"` verbatim.
     const html = ssr("**bold**");
-    expect(html).not.toContain('class="prose-coach"');
+    const body = new JSDOM(`<body>${html}</body>`).window.document.body;
+    const proseCoachElements = body.querySelectorAll(".prose-coach");
+
+    expect(proseCoachElements.length).toBeGreaterThan(0);
+    for (const element of proseCoachElements) {
+      expect(element.classList.contains("coach-markdown-fallback")).toBe(true);
+    }
   });
 
   it("fails closed at the sanitizer rather than throwing", () => {
