@@ -263,12 +263,16 @@ describe("query_workouts tool — timestamps", () => {
     getUserSettingsMock.mockReturnValue({
       user_id: 1,
       anthropic_key: null,
+      cursor_key: null,
       model_pref: null,
+      coach_effort: null,
+      cursor_model_params: {},
       timezone: null,
       monthly_token_cap: null,
       coach_goals: null,
       onboarded_at: null,
       tz: "America/New_York",
+      system_prompt: null,
       updated_at: "2026-05-14T00:00:00.000Z",
     });
     getWorkoutsRangeMock.mockReturnValue({

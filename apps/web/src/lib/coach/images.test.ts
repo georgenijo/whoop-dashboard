@@ -1,5 +1,12 @@
 // @vitest-environment node
-import { File } from "node:buffer";
+//
+// Uses the ambient global `File` (Node 20+ exposes it natively via undici,
+// same as in the browser/Next.js request-handling runtime that
+// normalizeImageFile() actually runs against) rather than importing `File`
+// from node:buffer. The two have incompatible TS types — node:buffer's
+// `File` is missing `webkitRelativePath`, which the DOM-lib `File` type
+// (what normalizeImageFile()'s signature uses) requires — and the global
+// is the one that matches production call sites.
 import sharp from "sharp";
 import { describe, expect, it, vi } from "vitest";
 
@@ -32,7 +39,11 @@ async function imageFile(
       : format === "png"
         ? await pipeline.png().toBuffer()
         : await pipeline.webp().toBuffer();
-  return new File([bytes], `ignored.${format}`, { type: `image/${format}` });
+  // sharp's .toBuffer() returns a Node Buffer typed Buffer<ArrayBufferLike>
+  // (its backing store could in principle be a SharedArrayBuffer), which
+  // isn't structurally assignable to BlobPart. Copying into a fresh
+  // Uint8Array gives a real ArrayBuffer-backed view that is.
+  return new File([new Uint8Array(bytes)], `ignored.${format}`, { type: `image/${format}` });
 }
 
 describe("Coach image normalization", () => {
@@ -64,7 +75,7 @@ describe("Coach image normalization", () => {
       .withMetadata({ orientation: 6 })
       .toBuffer();
     const image = await normalizeImageFile(
-      new File([source], "portrait.jpg", { type: "image/jpeg" }),
+      new File([new Uint8Array(source)], "portrait.jpg", { type: "image/jpeg" }),
     );
     const metadata = await sharp(image.bytes).metadata();
 

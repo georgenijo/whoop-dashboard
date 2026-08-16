@@ -3,7 +3,7 @@ import path from "node:path";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import Database from "better-sqlite3";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/auth", () => ({
@@ -71,20 +71,24 @@ afterAll(() => {
 });
 
 describe("POST /api/devices/test-push", () => {
+  // Next.js declares `process.env.NODE_ENV` readonly (node_modules/next/types/global.d.ts)
+  // to discourage apps from mutating it, but these tests need to exercise
+  // the route's production-gating branch. `vi.stubEnv` sets it through
+  // vitest's own (non-readonly-typed) env-stubbing API instead of writing
+  // through the readonly property directly, and `vi.unstubAllEnvs` restores
+  // the original value.
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("returns 404 in production without ENABLE_PUSH_DEBUG=1", async () => {
-    const orig = process.env.NODE_ENV;
-    process.env.NODE_ENV = "production";
-    try {
-      const res = await route.POST(makeRequest());
-      expect(res.status).toBe(404);
-    } finally {
-      process.env.NODE_ENV = orig;
-    }
+    vi.stubEnv("NODE_ENV", "production");
+    const res = await route.POST(makeRequest());
+    expect(res.status).toBe(404);
   });
 
   it("ENABLE_PUSH_DEBUG=1 unblocks the gate in production (auth still enforced → 401)", async () => {
-    const orig = process.env.NODE_ENV;
-    process.env.NODE_ENV = "production";
+    vi.stubEnv("NODE_ENV", "production");
     process.env.ENABLE_PUSH_DEBUG = "1";
     const { requireAuth } = await import("@/lib/auth");
     vi.mocked(requireAuth).mockRejectedValueOnce(
@@ -96,7 +100,6 @@ describe("POST /api/devices/test-push", () => {
       // the unauthenticated request with 401 — exactly the wiring we want.
       expect(res.status).toBe(401);
     } finally {
-      process.env.NODE_ENV = orig;
       delete process.env.ENABLE_PUSH_DEBUG;
     }
   });
