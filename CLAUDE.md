@@ -153,28 +153,45 @@ Admin routes use a separate gate keyed on `ADMIN_APPLE_SUB` env (fail-closed if 
 
 ## Deploy
 
-Production runs entirely on Optiplex Fleet node `opti`. User-level
-`whoop-web.service` listens on `127.0.0.1:8501`; user-level
-`whoop-cloudflared.service` publishes the web and API hostnames through an
-outbound Cloudflare Tunnel. The canonical database and secrets live under
-`/home/george/services/whoop-dashboard`, outside immutable releases.
+Production runs entirely on Optiplex Fleet node `opti`. **System-level**
+`whoop-web.service` (`/etc/systemd/system/whoop-web.service`, plus a
+root-owned mode-600 `override.conf` drop-in) listens on `127.0.0.1:8501`;
+restarting it needs `sudo`, which is passwordless for `george` on `opti`.
+Public ingress is the shared system `cloudflared.service` (tunnel
+`opti-murmur`), which maps `coach.georgenijo.com` and `coach-api.georgenijo.com`
+straight to `127.0.0.1:8501` — no nginx and no certbot in the whoop path. (The
+node does run nginx on `127.0.0.1:8601`, but that serves the unrelated
+`georgenijo.com` static site and the Murmur endpoints.) Production is a plain
+in-place git checkout at `/home/george/Documents/whoop-dashboard`; the
+canonical database and secrets live under it. There is no `releases/` tree and
+no `current` symlink.
 
 Pull requests and pushes to `main` run GitHub Actions CI only. Deploys are
-explicit operator actions from a machine with Fleet access. **Use
-`scripts/deploy`**: it builds the exact revision on `opti` with Node 20.20.2,
-proves the native SQLite/runtime package, creates an online SQLite backup,
-atomically switches the release, restarts both user services, and verifies the
-local and public endpoints.
+explicit operator actions from a machine with Fleet access, over `fleet exec`.
+**Use `scripts/deploy`**: it fetches over HTTPS and `git reset --hard`s the
+checkout to `origin/main`, runs the Cursor Agent launcher canary, reinstalls
+deps only when the lockfile changed, stages the old build as `.next.prev`,
+builds with Node 20.20.2, restarts `whoop-web` with `sudo`, and verifies both
+the local (`127.0.0.1:8501`) and public endpoints return 307.
 
 ```bash
-scripts/deploy --check    # report drift only (what's live vs main), change nothing
-scripts/deploy --ref <CI-validated-full-sha>
+scripts/deploy            # deploy origin/main
+scripts/deploy --check    # report drift only (what's live vs origin/main)
 ```
+
+Two caveats worth knowing before you rely on it:
+
+- It deploys `origin/main` only — there is no `--ref` flag, and passing one
+  exits 2.
+- Rollback is build-level (`rm -rf .next && mv .next.prev .next && sudo
+  systemctl restart whoop-web`), printed on success. The script does **not**
+  snapshot the database, so take a manual online backup first if the revision
+  touches schema — see the `vm-ops` skill.
 
 Use `fleet exec opti '<command>'` for diagnostics; never address a production
 IP directly. Logs are available with
-`fleet exec opti 'journalctl --user -u whoop-web -n 200'`. The legacy-named
-`vm-ops` skill contains the current Fleet procedures.
+`fleet exec opti 'sudo journalctl -u whoop-web -n 200 --no-pager'`. The
+legacy-named `vm-ops` skill contains the current Fleet procedures.
 
 For direct smoke tests, run curl on `opti` against `127.0.0.1:8501`.
 `/api/health` is auth-exempt and returns the running build SHA to on-box callers.

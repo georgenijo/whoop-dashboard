@@ -66,8 +66,29 @@ fleet exec opti 'sudo journalctl -u whoop-web -f'
 
 ## Deploy and restart
 
-Production is currently updated by an operator-run checkout in place at the
-app directory, followed by a build and a service restart:
+Use `scripts/deploy` from a machine with Fleet access. It now matches the
+in-place checkout model actually running on `opti` — the old immutable-release
+pipeline (`releases/`/`current` symlink swap, user-level services) was removed
+when production moved here, so the script and the box agree again.
+
+```bash
+scripts/deploy            # fetch + reset --hard origin/main, build, restart, verify
+scripts/deploy --check    # report deployed sha vs origin/main, change nothing
+```
+
+`--check` is safe to run at any time: it only updates the checkout's
+`refs/remotes/origin/main`, runs the Cursor Agent canary in a temp dir, and
+prints the deployed sha, `origin/main`, and service state. It does not touch
+the working tree, the service, or the database.
+
+Two limits to know before relying on it:
+
+- It deploys `origin/main` only. There is no `--ref` flag; passing one exits 2.
+- It does **not** snapshot the database. Rollback is build-level only
+  (`.next.prev`). Take the manual online backup below first if the revision
+  touches schema.
+
+The equivalent manual sequence, if you need to drive it by hand:
 
 ```bash
 fleet exec opti 'cd /home/george/Documents/whoop-dashboard && git fetch origin && git status --short'
@@ -77,12 +98,8 @@ fleet exec opti 'sudo systemctl restart whoop-web'
 fleet exec opti 'sudo systemctl restart cloudflared'   # only if the tunnel config changed
 ```
 
-`scripts/deploy`'s automated immutable-release pipeline
-(`releases/`/`current` symlink swap, user-level services, `.env.local`) does
-**not** match what is actually deployed on `opti` — that script predates the
-manual cutover and has not been reconciled with it. Treat its description as
-aspirational until it is updated; verify real state with `sudo systemctl
-status` and the checkout's `git log -1`, not the script's assumptions.
+Verify real state with `sudo systemctl status`, `curl
+http://127.0.0.1:8501/api/health`, and the checkout's `git log -1`.
 
 ## Read-only DB inspection
 
@@ -129,15 +146,37 @@ PY"
 
 ## Rollback
 
+Fastest path, if the previous build is still staged (`scripts/deploy` prints
+this on success):
+
+```bash
+fleet exec opti 'cd /home/george/Documents/whoop-dashboard/apps/web && rm -rf .next && mv .next.prev .next'
+fleet exec opti 'sudo systemctl restart whoop-web'
+```
+
+To go back to an older revision and rebuild:
+
 ```bash
 fleet exec opti 'cd /home/george/Documents/whoop-dashboard && git reset --hard <previous-full-sha>'
 # rebuild, then:
 fleet exec opti 'sudo systemctl restart whoop-web'
 ```
 
-Database restoration is a separate, destructive recovery operation; stop
-`whoop-web` before replacing DB files/sidecars, and never restore while the
-service is running.
+Database restoration is a separate, destructive recovery operation. Stop
+`whoop-web` first, and **delete the `-wal`/`-shm` sidecars before** copying the
+snapshot back — SQLite validates WAL frames by checksum, never by which
+database image they belong to, so a leftover `-wal` will replay onto the
+restored file and silently blend two states:
+
+```bash
+fleet exec opti 'sudo systemctl stop whoop-web'
+fleet exec opti 'cd /home/george/Documents/whoop-dashboard/shared \
+  && rm -f whoop_data.db-wal whoop_data.db-shm \
+  && cp whoop_data.db.backup.<stamp> whoop_data.db'
+fleet exec opti 'sudo systemctl start whoop-web'
+```
+
+Never restore while the service is running.
 
 ## Legacy: whoop-vm (decommissioned)
 
