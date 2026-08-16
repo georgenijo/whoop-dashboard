@@ -22,7 +22,9 @@ coach-api.georgenijo.com ─┘   bearer-only, no Access        │
 - Runtime user: `george`, with passwordless sudo. `whoop-web` is a **system**
   systemd unit (`/etc/systemd/system/whoop-web.service`), not a user unit —
   operations need `sudo` on `opti`.
-- Build/runtime Node: NVM `20.20.2` for a stable native-module ABI.
+- Build/runtime Node: NVM `20.20.2` for a stable native-module ABI — pinned
+  in the repo root `.nvmrc`, which CI also reads via `node-version-file`
+  (issue #500).
 - Public ingress: a single shared, box-level Cloudflare Tunnel named
   `opti-murmur` (`dac9359e-51bd-4ad9-8389-dd510127c04e`), configured at
   `/etc/cloudflared/config.yml` and run by the system `cloudflared.service`.
