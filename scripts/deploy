@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Build and deploy Whoop Dashboard on the Optiplex fleet node (opti).
+# Build and deploy Whoop Dashboard on the Optiplex fleet node (opti), and
+# *verify* it landed.
 #
 # Production layout on opti (verified 2026-08-10):
 #   /home/george/Documents/whoop-dashboard/   <- plain git checkout of this repo
@@ -7,16 +8,31 @@
 #   │   ├── .next/                             <- current build output
 #   │   ├── .next.prev/                        <- previous build, kept for rollback
 #   │   └── .env.local                         <- secrets (never touched by deploy)
-#   ├── shared/whoop_data.db                   <- SQLite DB (never touched by deploy)
+#   ├── shared/whoop_data.db                   <- SQLite DB (snapshotted, never written)
 #   └── .env                                   <- secrets (never touched by deploy)
 #
 # whoop-web.service is a SYSTEM-level systemd unit (not --user), running
 # `next start -p 8501 -H 127.0.0.1`, fronted by the shared Cloudflare tunnel
 # (no nginx, no certbot). Restarting it requires sudo (passwordless on opti).
 #
+# Four properties this script exists to guarantee. Each one is here because the
+# obvious shortcut fails silently:
+#
+#   1. SNAPSHOT THE DB FIRST, with SQLite's online-backup API — never `cp`.
+#      Schema migrations are lazy ALTERs in openWrite(), so ANY deploy can
+#      migrate the DB on the first write after restart.
+#   2. BUILD DETACHED. `next build` outlives a dropped connection; a foreground
+#      build under `fleet exec` does not, and the orphan keeps the lock.
+#   3. VERIFY THE RUNNING SHA, not just that the service is up. Prod once ran
+#      three commits behind main for a day with the fix for a live coach-timeout
+#      bug merged and undeployed, because nothing reported what was serving.
+#   4. PRINT A ROLLBACK RECIPE, including the -wal/-shm deletion, on every exit
+#      once a snapshot exists.
+#
 # Usage:
-#   scripts/deploy            # fetch+reset to origin/main, build, restart, verify
-#   scripts/deploy --check    # report deployed commit vs origin/main only
+#   scripts/deploy              # deploy origin/main
+#   scripts/deploy --ref <ref>  # deploy a specific ref (sha, tag or branch)
+#   scripts/deploy --check      # report drift only, change nothing
 set -euo pipefail
 
 FLEET_NODE=${DEPLOY_FLEET_NODE:-opti}
@@ -30,12 +46,26 @@ NODE_VERSION=${DEPLOY_NODE_VERSION:-20.20.2}
 PORT=${DEPLOY_PORT:-8501}
 PUBLIC_URL=${DEPLOY_PUBLIC_URL:-https://coach-api.georgenijo.com/}
 CURSOR_AGENT_BIN=${DEPLOY_CURSOR_AGENT_BIN:-/home/george/.local/bin/cursor-agent}
+# Snapshots live OUTSIDE the repo (a stray 6MB .db inside shared/ gets picked up
+# by tooling that globs the data dir) and outside any world-readable path — the
+# DB is mode 600 health data.
+BACKUP_DIR=${DEPLOY_BACKUP_DIR:-/home/george/whoop-db-backups}
+BACKUP_KEEP=${DEPLOY_BACKUP_KEEP:-10}
+BUILD_POLL_SECONDS=${DEPLOY_BUILD_POLL_SECONDS:-900}   # 15 min ceiling
+BUILD_POLL_INTERVAL=${DEPLOY_BUILD_POLL_INTERVAL:-15}
+BUILD_LOG=/tmp/whoop-deploy-build.log
+BUILD_EXIT=/tmp/whoop-deploy-build.exit
+BUILD_SH=/tmp/whoop-deploy-build.sh
 
+REF=origin/main
 CHECK_ONLY=0
 while [ $# -gt 0 ]; do
   case "$1" in
+    --ref)
+      [ $# -ge 2 ] || { echo "--ref needs a value" >&2; exit 2; }
+      REF="$2"; shift 2 ;;
     --check) CHECK_ONLY=1; shift ;;
-    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,35p' "$0"; exit 0 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
@@ -46,39 +76,235 @@ die() { printf '\n\033[31mFAILED: %s\033[0m\n' "$*" >&2; exit 1; }
 if [[ ! "$CURSOR_AGENT_BIN" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
   die "DEPLOY_CURSOR_AGENT_BIN must be a safe absolute path"
 fi
+# REF is the only operator-supplied value interpolated into the remote command
+# string. Everything embedded there is single-quoted, so the thing to exclude is
+# a quote (or anything else that could terminate the quoting).
+if [[ ! "$REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/~^-]*$ ]]; then
+  die "--ref must look like a git ref (letters, digits, . _ / ~ ^ -), got: $REF"
+fi
+# The numeric tunables land in `[ -gt ]` and in loop arithmetic, where a
+# non-numeric override would either abort mid-deploy or spin forever.
+for _var in PORT BACKUP_KEEP BUILD_POLL_SECONDS BUILD_POLL_INTERVAL; do
+  [[ "${!_var}" =~ ^[0-9]+$ ]] || die "$_var must be a non-negative integer, got: ${!_var}"
+done
+[ "$BUILD_POLL_INTERVAL" -gt 0 ] || die "DEPLOY_BUILD_POLL_INTERVAL must be > 0"
 
 command -v fleet >/dev/null 2>&1 || die "fleet CLI is required"
 
-if [ "$CHECK_ONLY" = "1" ]; then
-  say "Current state on $FLEET_NODE"
-  fleet exec "$FLEET_NODE" "bash -s -- '$APP_ROOT' '$REPO_URL' '$NODE_VERSION' '$CURSOR_AGENT_BIN'" <<'REMOTE_CHECK' || die "could not inspect $FLEET_NODE"
+DB_PATH="$APP_ROOT/shared/whoop_data.db"
+WEB_DIR="$APP_ROOT/apps/web"
+BACKUP_PATH=""      # set once the snapshot lands; gates the rollback recipe
+ROLLBACK_SHA=""     # the sha that was deployed BEFORE this run
+
+print_rollback() {
+  cat <<EOF
+
+Rollback (SINGLE STEP ONLY — the next deploy overwrites both .next.prev and
+takes a fresh snapshot, so this recipe does not stack across deploys):
+
+  # 1. Build-level rollback. Fast, leaves the DB alone. Try this first.
+  fleet exec $FLEET_NODE 'cd $WEB_DIR && rm -rf .next && mv .next.prev .next && sudo systemctl restart whoop-web'
+
+  # 2. Code + DB rollback. Only if this deploy migrated the schema.
+  fleet exec $FLEET_NODE 'sudo systemctl stop whoop-web'
+  # Delete the sidecars FIRST. SIGTERM to node does not guarantee a clean
+  # SQLite close, and SQLite validates WAL frames by salt/checksum only — it
+  # never checks the WAL belongs to this DB image — so a leftover -wal would
+  # replay onto the restored older file and blend two database states.
+  # The snapshot is journal_mode=delete; connection.ts puts it back into WAL on
+  # the first open, so no extra step is needed after the copy.
+  fleet exec $FLEET_NODE 'rm -f $DB_PATH-wal $DB_PATH-shm && cp $BACKUP_PATH $DB_PATH'
+  scripts/deploy --ref ${ROLLBACK_SHA:-<previous sha>}
+EOF
+}
+
+on_exit() {
+  local rc=$?
+  # Only meaningful once a snapshot exists — before that there is nothing to
+  # roll back to and nothing has been touched.
+  if [ "$rc" -ne 0 ] && [ -n "$BACKUP_PATH" ]; then
+    print_rollback
+  fi
+  return "$rc"
+}
+trap on_exit EXIT
+
+# --- 0. what is live right now ------------------------------------------------
+# Remote phases emit `##KEY=value` lines for this script to parse, plus ordinary
+# human output that is re-printed verbatim. Capturing the output costs nothing:
+# `fleet exec` buffers a phase's stdout and delivers it on completion, so there
+# is no live stream to lose. That buffering is also why the build below is
+# polled rather than run inline — the poll loop is the only progress feedback
+# available during the slow step.
+say "Current state on $FLEET_NODE"
+STATE_OUT=$(fleet exec --timeout 180 "$FLEET_NODE" \
+  "bash -s -- '$APP_ROOT' '$REPO_URL' '$NODE_VERSION' '$CURSOR_AGENT_BIN' '$REF' '$PORT'" <<'REMOTE_STATE'
 set -euo pipefail
 ROOT=$1
 REPO_URL=$2
 NODE_VERSION=$3
 CURSOR_AGENT_BIN=$4
+REF=$5
+PORT=$6
 cd "$ROOT" || { echo "app root $ROOT not found" >&2; exit 1; }
-git fetch -q "$REPO_URL" '+refs/heads/main:refs/remotes/origin/main' || { echo "git fetch failed" >&2; exit 1; }
-echo "  deployed:    $(git rev-parse --short HEAD)"
-echo "  origin/main: $(git rev-parse --short origin/main)"
-echo "  service:     $(systemctl is-active whoop-web.service 2>/dev/null || echo inactive)"
+
+# The default path fetches exactly the one refspec it needs. A non-default --ref
+# may live on another branch, so widen the fetch only then.
+if [ "$REF" = "origin/main" ]; then
+  git fetch -q "$REPO_URL" '+refs/heads/main:refs/remotes/origin/main' \
+    || { echo "git fetch failed" >&2; exit 1; }
+else
+  git fetch -q "$REPO_URL" '+refs/heads/*:refs/remotes/origin/*' \
+    || { echo "git fetch failed" >&2; exit 1; }
+fi
+
+TARGET=$(git rev-parse --short "$REF^{commit}" 2>/dev/null) || {
+  echo "ref '$REF' does not resolve to a commit on $(hostname)" >&2; exit 1
+}
+echo "##DEPLOYED=$(git rev-parse --short HEAD)"
+echo "##TARGET=$TARGET"
+echo "##SERVICE=$(systemctl is-active whoop-web.service 2>/dev/null || echo inactive)"
+# Informational only: a down service must still let --check report the drift it
+# exists to report, so a failed curl is not fatal here. /api/health only reveals
+# the sha to direct on-box callers, which is why this runs on the node.
+SERVING=$(curl -sS --max-time 10 "http://127.0.0.1:$PORT/api/health" 2>/dev/null \
+  | sed -n 's/.*"sha":"\([^"]*\)".*/\1/p' || true)
+echo "##SERVING=$SERVING"
+
 NODE_BIN="$HOME/.nvm/versions/node/v$NODE_VERSION/bin/node"
 [ -x "$NODE_BIN" ] || { echo "Node $NODE_VERSION missing at $NODE_BIN" >&2; exit 1; }
 "$NODE_BIN" scripts/check-cursor-agent.mjs "$CURSOR_AGENT_BIN"
-REMOTE_CHECK
+REMOTE_STATE
+) || die "could not inspect $FLEET_NODE"
+
+kv() { printf '%s\n' "$STATE_OUT" | sed -n "s/^##$1=//p" | tail -1; }
+CHECKOUT_SHA=$(kv DEPLOYED)
+TARGET_SHA=$(kv TARGET)
+SERVING_SHA=$(kv SERVING)
+SERVICE_STATE=$(kv SERVICE)
+[ -n "$CHECKOUT_SHA" ] || die "could not read the deployed sha from $FLEET_NODE"
+[ -n "$TARGET_SHA" ]   || die "could not resolve $REF on $FLEET_NODE"
+ROLLBACK_SHA="$CHECKOUT_SHA"
+
+if [ "$REF" = "origin/main" ]; then TARGET_LABEL="origin/main"; else TARGET_LABEL="target ($REF)"; fi
+printf '  %-12s %s\n' "deployed:"          "$CHECKOUT_SHA"
+printf '  %-12s %s\n' "serving:"           "${SERVING_SHA:-<no sha — service down or pre-health build>}"
+printf '  %-12s %s\n' "$TARGET_LABEL:"     "$TARGET_SHA"
+printf '  %-12s %s\n' "service:"           "$SERVICE_STATE"
+if [ -n "$SERVING_SHA" ] && [ "$SERVING_SHA" != "$CHECKOUT_SHA" ]; then
+  echo "  NOTE: checkout != running build. The service is stale; a restart is pending."
+fi
+# Anything that is not a ##KEY line is the canary's own output.
+printf '%s\n' "$STATE_OUT" | grep -v '^##' || true
+
+if [ "$CHECK_ONLY" = "1" ]; then
   exit 0
 fi
 
-say "Deploying latest origin/main on $FLEET_NODE"
-fleet exec --timeout 900 "$FLEET_NODE" \
-  "bash -s -- '$APP_ROOT' '$NODE_VERSION' '$PORT' '$REPO_URL' '$CURSOR_AGENT_BIN'" <<'REMOTE_DEPLOY' || die "deployment failed on $FLEET_NODE — see output above"
+# --- 1. snapshot the DB -------------------------------------------------------
+# NOT `cp`. The DB is WAL mode (connection.ts sets journal_mode = WAL) and the
+# service is running and writing throughout — nothing is stopped until step 4.
+# Everything committed since the last checkpoint lives only in the -wal sidecar,
+# so copying the main file alone yields a backup that can restore as an EMPTY
+# database, and a copy straddling a checkpoint can tear it. Both exit 0, so the
+# failure is silent precisely when the backup matters. Measured on opti against
+# a live writer: `cp` captured 0 of 48 committed rows; `.backup` captured 48.
+#
+# `VACUUM INTO` runs in a read transaction, so it is consistent against a live
+# writer, and — unlike `.backup` — it emits the destination in journal_mode
+# `delete`: ONE self-contained file with no -wal/-shm sidecars. That matters
+# twice over. A WAL-mode snapshot grows an -shm the moment anything opens it
+# read-only (a read-only connection builds the WAL index and cannot remove it on
+# close), which makes the artifact three files that must travel together and
+# pollutes the backup dir with names the pruner has to distinguish.
+#
+# `-readonly` guarantees this script can never write the prod DB, and makes a
+# wrong or missing DB_PATH fail loudly: a read-write sqlite3 happily CREATES an
+# empty source database and snapshots THAT, exiting 0.
+say "Snapshotting prod DB"
+SNAP_OUT=$(fleet exec --timeout 300 "$FLEET_NODE" \
+  "bash -s -- '$DB_PATH' '$BACKUP_DIR' '$BACKUP_KEEP'" <<'REMOTE_SNAPSHOT'
+set -euo pipefail
+DB=$1
+BACKUP_DIR=$2
+KEEP=$3
+
+[ -s "$DB" ] || { echo "prod DB missing or empty at $DB" >&2; exit 1; }
+mkdir -p -m 700 "$BACKUP_DIR"
+TS=$(date +%Y%m%d-%H%M%S)
+# The `.sqlite` suffix is load-bearing: it is what the pruner's glob anchors on.
+SNAP="$BACKUP_DIR/whoop_data.db.backup.$TS.sqlite"
+# `[ -e X ] && { ...; }` would exit 1 under `set -e` on the HAPPY path; use if.
+if [ -e "$SNAP" ]; then echo "snapshot target $SNAP already exists" >&2; exit 1; fi
+
+# umask so the artifact is never briefly world-readable; the source DB is 0600
+# health data.
+(umask 077 && sqlite3 -readonly -cmd '.timeout 30000' "$DB" "VACUUM INTO '$SNAP';") \
+  || { echo "sqlite3 VACUUM INTO failed" >&2; exit 1; }
+[ -s "$SNAP" ] || { echo "snapshot $SNAP is empty" >&2; exit 1; }
+
+# quick_check returns diagnostic TEXT and exits 0 on a corrupt-but-openable
+# file. Printing it would let a corrupt snapshot pass as a valid rollback
+# artifact, so assert the exact string.
+RESULT=$(sqlite3 -readonly "$SNAP" 'PRAGMA quick_check;' | head -1)
+[ "$RESULT" = "ok" ] || { echo "quick_check FAILED on $SNAP: $RESULT" >&2; exit 1; }
+
+# A structurally valid but EMPTY database also passes quick_check. Compare the
+# table count against the live DB rather than a hardcoded floor, so this keeps
+# working as the schema grows.
+SRC_TABLES=$(sqlite3 -readonly "$DB" "SELECT COUNT(*) FROM sqlite_master WHERE type='table';")
+TABLES=$(sqlite3 -readonly "$SNAP" "SELECT COUNT(*) FROM sqlite_master WHERE type='table';")
+[ "$TABLES" -ge 5 ] || { echo "snapshot has only $TABLES tables — refusing it" >&2; exit 1; }
+[ "$TABLES" = "$SRC_TABLES" ] || {
+  echo "snapshot has $TABLES tables but the live DB has $SRC_TABLES — refusing it" >&2; exit 1; }
+
+echo "  $(stat -c '%s bytes  %n' "$SNAP")  (quick_check ok, $TABLES tables)"
+echo "##SNAPSHOT=$SNAP"
+
+# Prune old snapshots. Deliberately non-fatal: a full backup dir is a chore, a
+# failed deploy is an outage.
+#
+# The glob is anchored on the `.sqlite` suffix and the current snapshot is
+# excluded explicitly. An earlier revision globbed `whoop_data.db.backup.*`,
+# which also matched the `-wal`/`-shm` sidecars a WAL-mode snapshot sprouts —
+# three entries for one backup, so `keep the newest N` deleted the snapshot it
+# had just taken and left the sidecars. Parsing `ls` is safe here only because
+# these names are generated from a timestamp and contain no spaces.
+if [ "$KEEP" -gt 0 ]; then
+  STALE=$(ls -1t "$BACKUP_DIR"/whoop_data.db.backup.*.sqlite 2>/dev/null | tail -n "+$((KEEP + 1))" || true)
+  if [ -n "$STALE" ]; then
+    echo "$STALE" | while IFS= read -r f; do
+      if [ "$f" != "$SNAP" ]; then
+        rm -f "$f" && echo "  pruned $f" || echo "  WARNING: could not prune $f" >&2
+      fi
+    done
+  fi
+fi
+
+# The pruner is the only thing here that deletes, so prove it did not eat the
+# artifact the whole deploy is about to rely on.
+[ -s "$SNAP" ] || { echo "snapshot $SNAP disappeared after pruning" >&2; exit 1; }
+REMOTE_SNAPSHOT
+) || die "DB snapshot failed or did not verify — refusing to deploy without a good rollback artifact"
+
+printf '%s\n' "$SNAP_OUT" | grep -v '^##' || true
+BACKUP_PATH=$(printf '%s\n' "$SNAP_OUT" | sed -n 's/^##SNAPSHOT=//p' | tail -1)
+[ -n "$BACKUP_PATH" ] || die "snapshot reported no path — refusing to continue"
+
+# --- 2. sync code + preflight + deps ------------------------------------------
+say "Syncing $REF and installing deps on $FLEET_NODE"
+SYNC_OUT=$(fleet exec --timeout 900 "$FLEET_NODE" \
+  "bash -s -- '$APP_ROOT' '$NODE_VERSION' '$REPO_URL' '$CURSOR_AGENT_BIN' '$REF'" <<'REMOTE_SYNC'
 set -euo pipefail
 ROOT=$1
 NODE_VERSION=$2
-PORT=$3
-REPO_URL=$4
-CURSOR_AGENT_BIN=$5
+REPO_URL=$3
+CURSOR_AGENT_BIN=$4
+REF=$5
 
+# The service's ExecStart hardcodes this Node; a login shell resolves a
+# different one. Anything touching better-sqlite3 or building the app against
+# the wrong ABI dies with ERR_DLOPEN_FAILED.
 NODE_BIN_DIR="$HOME/.nvm/versions/node/v$NODE_VERSION/bin"
 [ -x "$NODE_BIN_DIR/node" ] || {
   echo "Node $NODE_VERSION is missing at $NODE_BIN_DIR — run: nvm install $NODE_VERSION" >&2
@@ -88,11 +314,24 @@ export PATH="$NODE_BIN_DIR:$PATH"
 
 cd "$ROOT" || { echo "app root $ROOT not found" >&2; exit 1; }
 
-echo "--- syncing code (git fetch + reset --hard origin/main) ---"
-git fetch "$REPO_URL" '+refs/heads/main:refs/remotes/origin/main' || { echo "git fetch failed" >&2; exit 1; }
-git reset --hard origin/main || { echo "git reset --hard origin/main failed" >&2; exit 1; }
+echo "--- syncing code (git fetch + reset --hard $REF) ---"
+if [ "$REF" = "origin/main" ]; then
+  git fetch "$REPO_URL" '+refs/heads/main:refs/remotes/origin/main' || { echo "git fetch failed" >&2; exit 1; }
+else
+  git fetch "$REPO_URL" '+refs/heads/*:refs/remotes/origin/*' || { echo "git fetch failed" >&2; exit 1; }
+fi
+TARGET=$(git rev-parse --short "$REF^{commit}") || { echo "ref $REF did not resolve" >&2; exit 1; }
+git reset --hard "$TARGET" || { echo "git reset --hard $TARGET failed" >&2; exit 1; }
+
+# Re-derive the sha from the node's own git. Abbreviation length is per-repo and
+# core.abbrev is per-machine, so a sha abbreviated locally can legitimately
+# differ in length from the same commit abbreviated here — which would fail sha
+# verification on a perfectly good deploy. next.config.ts stamps the build with
+# `git rev-parse --short HEAD` run in this same checkout, so this is exactly the
+# string /api/health will report.
 DEPLOY_SHA=$(git rev-parse --short HEAD)
 echo "now at $DEPLOY_SHA"
+echo "##DEPLOY_SHA=$DEPLOY_SHA"
 
 echo "--- Cursor Agent launcher canary ---"
 node scripts/check-cursor-agent.mjs "$CURSOR_AGENT_BIN" || {
@@ -118,39 +357,163 @@ if [ "$NEED_CI" = "1" ]; then
 else
   echo "lockfile unchanged — skipping npm ci"
 fi
+REMOTE_SYNC
+) || die "code sync / dependency install failed on $FLEET_NODE — the running service is untouched"
 
-echo "--- staging previous build for rollback ---"
-rm -rf .next.prev
-if [ -d .next ]; then
-  mv .next .next.prev
-fi
+printf '%s\n' "$SYNC_OUT" | grep -v '^##' || true
+EXPECT_SHA=$(printf '%s\n' "$SYNC_OUT" | sed -n 's/^##DEPLOY_SHA=//p' | tail -1)
+[ -n "$EXPECT_SHA" ] || die "could not read the deployed sha from $FLEET_NODE"
 
-echo "--- building (npm run build) ---"
-if ! npm run build; then
-  echo "build failed — restoring previous .next" >&2
-  rm -rf .next
-  [ -d .next.prev ] && mv .next.prev .next
+# --- 3. build (detached — MUST survive a dropped connection) ------------------
+# A foreground `npm run build` under `fleet exec` dies with the connection and
+# leaves an orphan holding .next's lock, so the next attempt fails with
+# "Another next build process". `setsid` puts the build in its own session, so
+# SIGHUP on teardown never reaches it, and the poll below runs over fresh
+# short-lived connections — a dropped poll costs one interval, not the build.
+#
+# Completion is signalled by an EXIT-CODE SENTINEL, not by .next/BUILD_ID. Next
+# writes BUILD_ID well before static generation runs, so a build that dies
+# during prerender still leaves a BUILD_ID behind; polling for that file would
+# happily restart prod into a broken build.
+#
+# No --max-old-space-size here: that pinned V8's heap for the 956M Oracle VM.
+# opti has 7.8G and the default cap is correct.
+say "Building (detached; ~2-6 min)"
+fleet exec --timeout 120 "$FLEET_NODE" \
+  "bash -s -- '$WEB_DIR' '$NODE_VERSION' '$BUILD_SH' '$BUILD_LOG' '$BUILD_EXIT'" <<'REMOTE_BUILD_LAUNCH' \
+  || die "could not launch the build on $FLEET_NODE"
+set -euo pipefail
+WEB_DIR=$1
+NODE_VERSION=$2
+BUILD_SH=$3
+BUILD_LOG=$4
+BUILD_EXIT=$5
+NODE_BIN_DIR="$HOME/.nvm/versions/node/v$NODE_VERSION/bin"
+
+# Refuse to stack builds: a second `next build` just blocks on the first one's
+# lock. `tailscaled` is filtered out because fleet's transport spawns a
+# `tailscaled be-child ... --cmd=<the whole command>` process, so `pgrep -f`
+# happily matches the very invocation asking the question.
+RUNNING=$(pgrep -af 'next build' 2>/dev/null | grep -v tailscaled || true)
+if [ -n "$RUNNING" ]; then
+  echo "a 'next build' is already running — refusing to start a second one:" >&2
+  echo "$RUNNING" >&2
   exit 1
 fi
+
+rm -f "$BUILD_LOG" "$BUILD_EXIT" "$BUILD_SH"
+# Staging + restore live INSIDE the detached script so a failed build restores
+# the previous .next even if this control session is long gone.
+cat > "$BUILD_SH" <<INNER
+#!/usr/bin/env bash
+export PATH="$NODE_BIN_DIR:\$PATH"
+cd "$WEB_DIR" || exit 1
+echo "--- staging previous build for rollback ---"
+rm -rf .next.prev
+if [ -d .next ]; then mv .next .next.prev; fi
+echo "--- building (npm run build) ---"
+npm run build
+rc=\$?
+if [ "\$rc" -ne 0 ]; then
+  echo "build failed — restoring previous .next" >&2
+  rm -rf .next
+  if [ -d .next.prev ]; then mv .next.prev .next; fi
+fi
+echo "\$rc" > "$BUILD_EXIT"
+INNER
+chmod +x "$BUILD_SH"
+setsid nohup bash "$BUILD_SH" > "$BUILD_LOG" 2>&1 < /dev/null &
+echo "launched (log: $BUILD_LOG)"
+REMOTE_BUILD_LAUNCH
+
+waited=0
+BUILD_RC=""
+while [ "$waited" -lt "$BUILD_POLL_SECONDS" ]; do
+  sleep "$BUILD_POLL_INTERVAL"
+  waited=$((waited + BUILD_POLL_INTERVAL))
+  # A failed poll (transient connection error) is not a result — retry. The loop
+  # can only exit on a real sentinel or the ceiling, so this cannot pass as
+  # success.
+  BUILD_RC=$(fleet exec --timeout 60 "$FLEET_NODE" "cat '$BUILD_EXIT' 2>/dev/null || true" 2>/dev/null \
+    | tr -d '[:space:]') || BUILD_RC=""
+  if [ -n "$BUILD_RC" ]; then
+    echo "  build finished after ${waited}s (exit $BUILD_RC)"
+    break
+  fi
+  if fleet exec --timeout 60 "$FLEET_NODE" \
+       "grep -q 'Another next build process' '$BUILD_LOG' 2>/dev/null && echo locked || true" 2>/dev/null \
+     | grep -q locked; then
+    die "another next build holds the lock — an orphan from a dropped session is still running.
+     Inspect: fleet exec $FLEET_NODE 'pgrep -af \"next build\"'"
+  fi
+  printf '  ... %ss\n' "$waited"
+done
+
+[ -n "$BUILD_RC" ] || die "build did not finish in ${BUILD_POLL_SECONDS}s — it may STILL BE RUNNING.
+     Watch it:  fleet exec $FLEET_NODE 'tail -f $BUILD_LOG'
+     The service was not restarted; prod is still serving $CHECKOUT_SHA."
+if [ "$BUILD_RC" != "0" ]; then
+  echo "--- last 30 lines of build log ---"
+  fleet exec --timeout 60 "$FLEET_NODE" "tail -30 '$BUILD_LOG' || true" || true
+  die "build exited $BUILD_RC — NOT restarting the service. Previous .next was restored.
+     Full log: fleet exec $FLEET_NODE 'cat $BUILD_LOG'"
+fi
+
+# --- 4. restart + verify the running sha --------------------------------------
+# "The service is up" is not verification: a restart that silently kept serving
+# the old bundle also comes up. /api/health reports the sha the build was
+# stamped with, and only to direct on-box callers, so the comparison happens on
+# the node.
+say "Restarting whoop-web and verifying the running build"
+fleet exec --timeout 180 "$FLEET_NODE" \
+  "bash -s -- '$PORT' '$EXPECT_SHA'" <<'REMOTE_VERIFY' \
+  || die "restart or verification failed on $FLEET_NODE — see output above"
+set -euo pipefail
+PORT=$1
+EXPECT_SHA=$2
 
 echo "--- restarting whoop-web.service ---"
 sudo systemctl restart whoop-web || { echo "sudo systemctl restart whoop-web failed" >&2; exit 1; }
 sleep 3
 systemctl is-active --quiet whoop-web || { echo "whoop-web.service is not active after restart" >&2; exit 1; }
 
+echo "--- /api/health sha check ---"
+NEW_SHA=""
+for _ in $(seq 1 12); do
+  NEW_SHA=$(curl -sS --max-time 10 "http://127.0.0.1:$PORT/api/health" 2>/dev/null \
+    | sed -n 's/.*"sha":"\([^"]*\)".*/\1/p' || true)
+  [ -n "$NEW_SHA" ] && break
+  sleep 5
+done
+echo "  expected: $EXPECT_SHA"
+echo "  serving : ${NEW_SHA:-<none>}"
+
+# Silence here means the restart did not pick up the new build (or the build
+# predates /api/health). Either way it must not pass as success.
+[ -n "$NEW_SHA" ] || {
+  echo "/api/health returned no sha — the service is not serving the new build" >&2
+  exit 1
+}
+[ "$NEW_SHA" = "$EXPECT_SHA" ] || {
+  echo "running build is $NEW_SHA but $EXPECT_SHA was deployed — the restart did not pick up the build" >&2
+  exit 1
+}
+[ "$NEW_SHA" != "unknown" ] || {
+  echo "/api/health reports sha 'unknown' — the build was not stamped" >&2
+  exit 1
+}
+
 echo "--- local health check (expect 307) ---"
 LOCAL_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "http://127.0.0.1:$PORT/") || LOCAL_CODE=000
 [ "$LOCAL_CODE" = "307" ] || { echo "local health check returned $LOCAL_CODE, expected 307" >&2; exit 1; }
 echo "local check ok ($LOCAL_CODE)"
-
-echo
-echo "Deployed $DEPLOY_SHA on opti"
-echo "  rollback: on opti, in $ROOT/apps/web: rm -rf .next && mv .next.prev .next && sudo systemctl restart whoop-web"
-REMOTE_DEPLOY
+REMOTE_VERIFY
 
 say "Public verification (expect 307)"
 PUBLIC_CODE=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$PUBLIC_URL") || PUBLIC_CODE=000
 echo "  $PUBLIC_URL : $PUBLIC_CODE"
 [ "$PUBLIC_CODE" = "307" ] || die "public verification failed — expected 307, got $PUBLIC_CODE"
 
-say "Deploy complete"
+say "Deployed $EXPECT_SHA on $FLEET_NODE (was $CHECKOUT_SHA)"
+echo "  DB snapshot: $BACKUP_PATH"
+print_rollback
