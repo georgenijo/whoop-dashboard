@@ -10,7 +10,7 @@
     "build": "npm run build:mcp && next build",
     "build:mcp": "esbuild src/coach-mcp/server.ts --bundle --platform=node --format=esm --packages=external --tsconfig=tsconfig.json --outfile=dist/coach-mcp/server.mjs",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint --max-warnings 0",
     "test": "vitest run",
     "test:watch": "vitest"
   },
