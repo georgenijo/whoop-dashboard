@@ -29,6 +29,42 @@
  * `frame-ancestors` is in the enforcing header specifically because it has no
  * effect in a report-only policy on some browsers, and clickjacking protection
  * is the one thing we do not want to defer.
+ *
+ * ## Report coverage limits — read before flipping to enforcing
+ *
+ * The flip gate is "justified by the collected reports" (see `/logs` →
+ * Client events, and `docs/decisions/DECISIONS.md`, 2026-08-16). "No
+ * violations observed" is weaker evidence than it sounds, because the
+ * collection pipeline (`ClientLogBootstrap`, `apps/web/src/components/
+ * ClientLogBootstrap.tsx`) has real coverage gaps:
+ *
+ *   - The `securitypolicyviolation` listener attaches POST-HYDRATION. Any
+ *     violation from Next's own bootstrap scripts, or from a chunk blocked
+ *     before hydration completes, fires before the listener exists and is
+ *     never captured.
+ *   - Reports are rate-limited to 10/s per user by `/api/log/client`. A
+ *     burst of more than ~10 distinct violations on one page load hits that
+ *     bucket; the 429'd remainder is silently dropped (`clog` swallows all
+ *     failures by design).
+ *   - `CSP_REPORTS_PER_PAGE = 20` in `ClientLogBootstrap.tsx` is enforced per
+ *     LAYOUT MOUNT, not per page load — the dedupe `Set` lives in a
+ *     `[]`-dependency effect in `(dashboard)/layout.tsx`, which persists
+ *     across client-side navigations. A single all-day SPA session reports
+ *     at most 20 distinct violations TOTAL until a hard reload remounts the
+ *     layout.
+ *   - Verification only drove Chromium (Playwright). Safari and the iOS
+ *     app's WKWebView are unverified — different CSP engines can behave
+ *     differently on edge cases (e.g. `'unsafe-inline'`/nonce interaction).
+ *   - Anything Cloudflare injects in front of this app (challenge pages,
+ *     email obfuscation, RUM beacons) would violate `script-src` today and
+ *     could actually break at flip time — that traffic never reaches this
+ *     collector because it's injected client-side by the CDN, outside the
+ *     app's own render.
+ *
+ * None of this blocks shipping report-only. It means: treat an empty
+ * `client_logs` CSP section as "nothing *observed*," not "nothing *would
+ * break*," and budget real dogfooding time (including Safari/iOS and a hard
+ * page reload per route) before flipping any directive to enforcing.
  */
 
 /** Directives that are safe to enforce on day one. */
@@ -40,7 +76,14 @@ const ENFORCED_DIRECTIVES = [
   // Nothing in this app is ever framed. Belt-and-braces with X-Frame-Options
   // for pre-CSP2 clients.
   "frame-ancestors 'none'",
-  // No <object>/<embed>/<applet> anywhere in the codebase.
+  // `object-src` IS a CSP fetch directive (it can block a real resource load,
+  // same as script-src or img-src) — it is enforced here only because it was
+  // individually audited, not because directives-that-block-things are
+  // exempt from the report-only gate. No <object>/<embed>/<applet> anywhere
+  // in the codebase, and DOMPurify's default allowlist excludes both tags,
+  // so even a hostile LLM reply rendered through the coach markdown pipeline
+  // can't reintroduce one. See security-headers.test.ts for the invariant
+  // this enforces.
   "object-src 'none'",
   // Stops injected markup from repointing relative URLs at another origin.
   "base-uri 'self'",
@@ -57,6 +100,23 @@ const ENFORCED_DIRECTIVES = [
  * (the app makes no http:// subresource request, and HSTS already covers the
  * origin), but it is a cheap guard against a future mixed-content mistake.
  * Left out in development so it cannot interfere with plain-http localhost.
+ *
+ * KNOWN TRADE-OFF, kept deliberately: prod (`whoop-web.service`) listens on
+ * plain HTTP at `127.0.0.1:8501` — Cloudflare Tunnel terminates TLS in front
+ * of it, so from the tunnel's perspective this is fine. But if someone
+ * browses straight to that port over the tailnet (port-forward, tailnet
+ * hostname, or the box's IP — CLAUDE.md already says never to address prod
+ * this way, but it happens during debugging), this directive rewrites every
+ * `/_next/static` and same-origin navigation request to `https://…:8501`.
+ * There is nothing listening on TLS there, so the connection is refused and
+ * the page renders BLANK — no error banner, nothing in the Network tab but
+ * failed requests. Chrome's built-in `localhost` exemption can mask this for
+ * `http://localhost:8501` but does not extend to a tailnet hostname or a raw
+ * IP. `curl` smoke tests never see it (no browser CSP engine) and the public
+ * Cloudflare path never sees it (already HTTPS). If a prod page ever renders
+ * blank when hit directly instead of through `coach.georgenijo.com`, this is
+ * almost certainly why — check the Network tab for upgraded `https://` requests
+ * failing to connect before assuming anything else broke.
  */
 export function enforcedCsp(isDev: boolean): string {
   const directives = [...ENFORCED_DIRECTIVES];

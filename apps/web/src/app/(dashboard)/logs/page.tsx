@@ -1,7 +1,8 @@
 import { headers } from "next/headers";
 import { requireAuthOrSignin } from "@/lib/auth";
-import { getChatLogs, getChatThreadInfo, getRouteLogs, getSyncLogs } from "@/lib/db";
+import { getChatLogs, getChatThreadInfo, getRouteLogs, getSyncLogs, recentClientLogs } from "@/lib/db";
 import ChatLogsByThread from "./ChatLogsByThread";
+import ClientLogsTable from "./ClientLogsTable";
 import CollapsibleCard from "./CollapsibleCard";
 import RouteLogsTable from "./RouteLogsTable";
 import SyncLogsTable from "./SyncLogsTable";
@@ -31,6 +32,11 @@ export default async function LogsPage() {
   const logs = getChatLogs(user.id, 500);
   const syncLogs = getSyncLogs(user.id, 200);
   const routeLogs = getRouteLogs(user.id, 200);
+  // Issue #501 follow-up: the CSP-violation collector (ClientLogBootstrap)
+  // has been writing to client_logs since the CSP PR shipped, but nothing
+  // read them back — a write-only report pipe. This is the read path.
+  const clientLogs = recentClientLogs({ user_id: user.id, limit: 200 });
+  const cspViolationCount = clientLogs.filter((l) => l.message === "csp-violation").length;
 
   // Resolve thread metadata for grouping. Pull thread_id from the column when
   // present, fall back to the legacy details JSON for older rows.
@@ -141,6 +147,21 @@ export default async function LogsPage() {
           </div>
         ) : (
           <RouteLogsTable logs={routeLogs} />
+        )}
+      </CollapsibleCard>
+
+      <CollapsibleCard
+        title="Client events"
+        sub={`${clientLogs.length} events · ${cspViolationCount} CSP violation${cspViolationCount === 1 ? "" : "s"} · most recent first`}
+        defaultOpen={false}
+      >
+        {clientLogs.length === 0 ? (
+          <div className="empty-state">
+            <div className="title">No client events yet</div>
+            <div className="sub">Errors, CSP violations, and lifecycle events reported from the browser show up here</div>
+          </div>
+        ) : (
+          <ClientLogsTable logs={clientLogs} />
         )}
       </CollapsibleCard>
     </div>

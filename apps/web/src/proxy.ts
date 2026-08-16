@@ -169,6 +169,36 @@ const CSP_REPORT_ONLY_HEADER = "Content-Security-Policy-Report-Only";
  * Only responses a browser parses as a document need the policy. Skipping
  * `/api/*` also avoids minting a nonce (a CSPRNG call) on every XHR the
  * dashboard fires, which on the coach page is a lot of them.
+ *
+ * KNOWN GAP: `/_not-found` is not, and cannot cleanly be, excluded here. This
+ * middleware runs on the ORIGINAL requested pathname before Next decides the
+ * route doesn't exist — by the time the 404 is known, this function has
+ * already returned. There's also no single `app/not-found.tsx` to force
+ * dynamic instead: this app has three separate route-group root layouts
+ * ((auth)/(dashboard)/(onboarding), no top-level `app/layout.tsx`), so Next
+ * falls back to its own built-in `global-not-found` component, which is
+ * static-prerendered (confirmed via `npm run build`: `/_not-found` is the
+ * only `○` route, everything else is `ƒ`). Overriding that would mean
+ * opting into the `experimental.globalNotFound` flag and hand-building a
+ * full `<html>/<body>` shell that duplicates every root layout's fonts and
+ * globals — real risk for a single-box prod deploy with no staging tier, to
+ * fix a cosmetic console warning.
+ *
+ * Net effect: every authenticated 404 gets a nonce-bearing
+ * Content-Security-Policy-Report-Only header (from this function returning
+ * true), but the prerendered `/_not-found` HTML has no nonce on its inline
+ * bootstrap scripts, so Chrome logs spurious `script-src` report-only
+ * violations for that one page. `ClientLogBootstrap` never mounts on this
+ * page (it lives in `(dashboard)/layout.tsx`, and `/_not-found` uses none of
+ * the app's layouts), so these never reach `client_logs` — they are
+ * browser-console-only noise today.
+ *
+ * THIS BECOMES REAL AT FLIP TIME: when the candidate policy in
+ * `security-headers.ts` moves from report-only to enforcing, `/_not-found`'s
+ * own scripts will actually be blocked, breaking the 404 page's hydration
+ * (the page text still renders — it's SSR'd HTML — but nothing interactive
+ * on it will work). Re-check this comment before flipping; either accept a
+ * broken-but-legible 404 page or solve it properly at that point.
  */
 function needsCsp(pathname: string): boolean {
   return pathname !== "/api" && !pathname.startsWith("/api/");

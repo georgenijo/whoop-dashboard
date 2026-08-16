@@ -142,6 +142,9 @@ export {
   getRouteLogs,
 } from "./logs";
 
+export type { ClientLogRow, ClientLogSource, ClientLogLevel, ClientLogKind } from "./client-logs";
+export { recentClientLogs } from "./client-logs";
+
 export type { SettingLock } from "./settings";
 export {
   getSetting,

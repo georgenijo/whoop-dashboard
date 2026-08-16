@@ -26,25 +26,63 @@ describe("enforcedCsp", () => {
     expect(d.get("form-action")).toEqual(["'self'"]);
   });
 
-  it("never enforces a directive that could block a resource", () => {
-    // The whole point of the #501 rollout: the enforcing header must not be
-    // able to break a page. Any fetch-directive here would do exactly that,
-    // so adding one has to be a deliberate change to this test too.
-    const fetchDirectives = [
+  it("only enforces fetch directives that were individually audited as safe here — never a blanket one", () => {
+    // #501 review finding: an earlier version of this test claimed "every
+    // enforced directive is a non-fetch directive, so none can block a
+    // resource." That's false — `object-src` IS a CSP fetch directive
+    // (https://www.w3.org/TR/CSP3/#directives-fetch) and `object-src 'none'`
+    // absolutely can block a resource (an <object>/<embed> load), same as
+    // `form-action` can block a form submission. The old list quietly
+    // omitted `object-src` to keep this assertion green, which is a test
+    // shaped to fit a claim rather than reality.
+    //
+    // The TRUE invariant: every enforced directive — fetch or not — has been
+    // individually audited against this codebase and cannot block anything
+    // the app actually does:
+    //   - object-src 'none'  — no <object>/<embed>/<applet> anywhere in the
+    //     codebase, and DOMPurify's default allowlist excludes both tags, so
+    //     even a hostile LLM reply can't reintroduce one.
+    //   - form-action 'self' — the only <form> (settings/page.tsx) posts
+    //     same-origin to /api/auth/logout; /signin is a plain <a> link, not
+    //     a form; Apple's `form_post` back to the callback is governed by
+    //     Apple's own CSP, not ours.
+    //   - frame-ancestors / base-uri — not fetch directives at all; nothing
+    //     in this app is ever framed or relies on a non-'self' <base>.
+    //
+    // Any FETCH directive not on this short, audited allowlist (default-src,
+    // script-src, style-src, img-src, font-src, connect-src, media-src,
+    // worker-src, manifest-src, frame-src, script-src-elem, script-src-attr,
+    // style-src-elem, style-src-attr, prefetch-src) enforcing it here would
+    // be exactly the class of bug #501 exists to prevent: shipping a
+    // resource-blocking rule without measuring it report-only first. Adding
+    // one has to be a deliberate change to this test, including a fresh
+    // audit comment like the ones above.
+    const auditedSafeFetchDirectives = new Set(["object-src"]);
+    const allFetchDirectives = [
       "default-src",
       "script-src",
+      "script-src-elem",
+      "script-src-attr",
       "style-src",
+      "style-src-elem",
+      "style-src-attr",
       "img-src",
       "font-src",
       "connect-src",
       "media-src",
+      "object-src",
       "worker-src",
       "manifest-src",
       "frame-src",
+      "prefetch-src",
     ];
     const d = parse(enforcedCsp(false));
-    for (const name of fetchDirectives) {
-      expect(d.has(name), `${name} must not be enforced yet`).toBe(false);
+    for (const name of allFetchDirectives) {
+      if (auditedSafeFetchDirectives.has(name)) {
+        expect(d.has(name), `${name} is on the audited allowlist and should be enforced`).toBe(true);
+      } else {
+        expect(d.has(name), `${name} is not audited-safe and must not be enforced yet`).toBe(false);
+      }
     }
   });
 
