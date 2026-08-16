@@ -22,7 +22,6 @@ describe("GET /api/health", () => {
     expect(b.status).toBe("ok");
     expect(b.sha).toBeDefined();
     expect(b.built_at).toBeDefined();
-    expect(b.node).toBe(process.version);
   });
 
   it("direct call with no forwarding headers at all gets the sha", async () => {
@@ -38,12 +37,11 @@ describe("GET /api/health", () => {
     },
   );
 
-  it("public request through nginx gets status only — no sha, no node version", async () => {
+  it("public request through nginx gets status only — no sha", async () => {
     const b = await body(
       GET(req({ "x-forwarded-for": "203.0.113.9, ::1", "x-real-ip": "203.0.113.9" })),
     );
     expect(b).toEqual({ status: "ok" });
-    expect(b.node).toBeUndefined();
   });
 
   it("fails closed when x-real-ip is present even if xff claims loopback", async () => {
