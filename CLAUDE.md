@@ -133,6 +133,19 @@ Public web requests are gated upstream by `apps/web/src/proxy.ts authGate()`, wh
 
 Admin routes use a separate gate keyed on `ADMIN_APPLE_SUB` env (fail-closed if unset).
 
+### Security headers (`src/lib/security-headers.ts`)
+
+Two response surfaces, deliberately split:
+
+- **`next.config.ts` `headers()`** — enforcing, on every path *including* `/_next/static/*` (which the proxy matcher skips): `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, HSTS (prod only), plus a small enforcing `Content-Security-Policy` (`frame-ancestors`/`object-src`/`base-uri`/`form-action`, + `upgrade-insecure-requests` in prod).
+- **`src/proxy.ts`** — `Content-Security-Policy-Report-Only`, carrying a fresh per-request nonce. It lives here because `headers()` runs once at server start and cannot mint a nonce. The nonce is set on the *request* headers; Next 16.2.4 parses it back out (it reads `content-security-policy` **or** `content-security-policy-report-only`) and stamps every script tag with it. All 24 inline scripts in a prod HTML response are nonce'd — `script-src 'self'` without a nonce does **not** work.
+
+The full policy is report-only on purpose. Do not flip it to enforcing without reading collected violations first — and read `security-headers.ts`'s "Report coverage limits" doc comment before trusting a quiet report window: the collector attaches post-hydration (misses early-load violations), rate-limits at 10/s, caps at 20 distinct violations per **layout mount** (not per page load — an all-day SPA session can undercount), and was only verified against Chromium.
+
+Violations are collected from the `securitypolicyviolation` DOM event in `ClientLogBootstrap` and forwarded through the already-authenticated, already-rate-limited `/api/log/client`, so they land in `client_logs` and render on `/logs` under the "Client events" card (`message = 'csp-violation'`; expand a row for directive/blocked-URI detail). There is deliberately no `report-uri` endpoint — that would require adding an unauthenticated POST route to `AUTH_EXEMPT_PREFIXES`. See `docs/decisions/DECISIONS.md` (2026-08-16).
+
+Adding a third-party script, font, image host, or `fetch` target means widening a directive here. nginx/cloudflared sit in front in prod; the app is the source of truth, the proxy must not duplicate these.
+
 ### Data flow
 
 1. OAuth callback (`/api/auth/callback`) verifies HMAC `state`, exchanges code → writes encrypted tokens to `integrations` row (user_id, provider='whoop'), fetches `/v2/user/profile/basic` and captures `provider_user_id` for webhook routing
