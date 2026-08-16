@@ -22,8 +22,10 @@ export default async function LogsPage() {
   const headerList = await headers();
   // Authentication only — no admin gate here. #494 (tenant-scoping) narrows
   // getChatLogs/getSyncLogs to the signed-in user's own rows; the page
-  // intentionally does not duplicate that with an ADMIN_APPLE_SUB check
-  // (unlike /api/logs, which stays admin-only).
+  // intentionally does not duplicate that with an ADMIN_APPLE_SUB check.
+  // The former /api/logs endpoint duplicated this read via HTTP with a
+  // stale, now-redundant admin gate — removed in #503; this page (and
+  // scripts/coach for CLI debugging) are the supported surfaces.
   const { user } = await requireAuthOrSignin(
     new Request("http://localhost", { headers: headerList }),
   );
