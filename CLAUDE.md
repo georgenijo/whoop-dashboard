@@ -121,7 +121,7 @@ Threads have auto-titles via Haiku 4.5 fired in `after()` (Next.js post-response
   Assuming `(user_id, date)` everywhere is wrong and was the cause of a stale test suite. The rebuild runs once at first `openWrite()` against a pre-Phase-D DB — idempotent via `PRAGMA table_info` gate. **NEVER write domain tables from Python**; the Next.js side is the sole owner.
 - Read paths against domain tables MUST go through `forUser(userId).all/get/read(...)` in `apps/web/src/lib/db/scoped.ts`. The wrapper appends `userId` as the trailing positional `?`; call sites write `... AND user_id = ?` as the LAST placeholder. A CI vitest (`scoped.test.ts`) blocks any stray `FROM recovery|cycles|sleep|workouts|daily_summary|body_measurements` outside the wrapper + allowlist.
 - Other read paths use `safeQuery` (read-only open). Other write paths use `safeWriteQuery` or direct `openWrite()`.
-- Lazy-bootstrapped tables: `users`, `sessions`, `chat_threads`, `chat_messages`, `chat_logs`, `sync_logs`, `app_settings`, `integrations`, `user_settings`, `device_tokens`, `webhook_events`.
+- Lazy-bootstrapped tables: `users`, `sessions`, `chat_threads`, `chat_messages`, `chat_logs`, `sync_logs`, `route_logs`, `app_settings`, `integrations`, `user_settings`, `device_tokens`, `webhook_events`. `route_logs`'s migration is factored into `migrateRouteLogsSchema()` (`connection.ts`) so it can be shared with `logs.ts`'s `openRouteLogWrite()`, which deliberately opens its own connection instead of calling `openWrite()` — see that function's doc comment for the hot-path cost rationale (issue #505).
 
 ### Auth
 

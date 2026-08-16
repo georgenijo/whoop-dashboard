@@ -749,6 +749,130 @@ describe("Phase D — domain tables carry user_id", () => {
     }
   });
 
+  // -------------------------------------------------------------------------
+  // Issue #505 part 2 — idx_route_logs_user matches getRouteLogs' actual
+  // ORDER BY (started_at DESC, id DESC), not just (user_id, id DESC).
+  // -------------------------------------------------------------------------
+
+  it("issue #505: idx_route_logs_user is (user_id, started_at DESC, id DESC) and serves the sort with no temp b-tree", () => {
+    const file = newDbFile();
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    try {
+      const idxSql = db!
+        .prepare("SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_route_logs_user'")
+        .get() as { sql: string };
+      expect(idxSql.sql).toBe(
+        "CREATE INDEX idx_route_logs_user ON route_logs(user_id, started_at DESC, id DESC)"
+      );
+
+      const plan = db!
+        .prepare(
+          "EXPLAIN QUERY PLAN SELECT id FROM route_logs WHERE user_id = ? ORDER BY started_at DESC, id DESC LIMIT 10"
+        )
+        .all(1) as { detail: string }[];
+      const detail = plan.map((r) => r.detail).join(" | ");
+      expect(detail).toContain("idx_route_logs_user");
+      expect(detail).not.toContain("TEMP B-TREE");
+    } finally {
+      db?.close();
+    }
+  });
+
+  it("issue #505: a pre-existing (user_id, id DESC) index is replaced, not left alongside the new one", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        apple_sub TEXT UNIQUE,
+        email TEXT,
+        name TEXT,
+        timezone TEXT
+      );
+      INSERT INTO users (id) VALUES (1);
+      CREATE TABLE route_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at TEXT NOT NULL,
+        route TEXT NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        status INTEGER NOT NULL,
+        details TEXT,
+        response_bytes INTEGER,
+        render_ms INTEGER,
+        user_id INTEGER REFERENCES users(id)
+      );
+      CREATE INDEX idx_route_logs_user ON route_logs(user_id, id DESC);
+    `);
+    raw.close();
+
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    try {
+      const rows = db!
+        .prepare("SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='route_logs' AND name='idx_route_logs_user'")
+        .all() as { sql: string }[];
+      expect(rows).toHaveLength(1);
+      expect(rows[0].sql).toBe(
+        "CREATE INDEX idx_route_logs_user ON route_logs(user_id, started_at DESC, id DESC)"
+      );
+    } finally {
+      db?.close();
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Blocking perf regression fix (post-#505 review) — migrateRouteLogsSchema
+  // used to DROP+CREATE idx_route_logs_user unconditionally on every call,
+  // meaning every openWrite() after the first paid a full route_logs table
+  // scan to rebuild an index that hadn't changed. The fix gates the rebuild
+  // on the index's current stored definition (see ROUTE_LOGS_INDEX_DEFINITION
+  // in connection.ts). This test proves the no-op path actually no-ops.
+  //
+  // Deliberately NOT asserting on sqlite_master.rootpage as the signal:
+  // verified empirically that DROP INDEX immediately followed by CREATE
+  // INDEX with no other page allocation in between (which is exactly what
+  // the buggy unconditional code does — the two statements are adjacent)
+  // gets the SAME freed page handed straight back by SQLite, so rootpage
+  // stays identical whether or not the rebuild fires. A rootpage-based
+  // assertion here would pass even with the bug reintroduced — a brittle
+  // check that looks like coverage but isn't. Spying on the exec() calls
+  // that would perform the DROP/CREATE is the reliable, deterministic
+  // signal: confirmed this test fails when the gate is removed (unconditional
+  // DROP+CREATE reintroduced) and passes with the gate in place.
+  it("issue #505 perf fix: a second migrateRouteLogsSchema() call does not DROP or CREATE idx_route_logs_user again", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        apple_sub TEXT UNIQUE,
+        email TEXT,
+        name TEXT,
+        timezone TEXT
+      );
+      INSERT INTO users (id) VALUES (1);
+    `);
+    try {
+      // First call: route_logs doesn't exist yet, so this bootstraps the
+      // table, adds user_id, and creates idx_route_logs_user from scratch.
+      conn.migrateRouteLogsSchema(raw);
+
+      const execSpy = vi.spyOn(raw, "exec");
+      // Second call: everything — including the index — is already current.
+      conn.migrateRouteLogsSchema(raw);
+
+      const indexStatements = execSpy.mock.calls
+        .map(([sql]) => sql)
+        .filter((sql): sql is string => typeof sql === "string" && sql.includes("idx_route_logs_user"));
+      expect(indexStatements).toEqual([]);
+
+      execSpy.mockRestore();
+    } finally {
+      raw.close();
+    }
+  });
+
   it("issue #499: lazy ALTER adds user_id to a legacy route_logs table without losing rows", () => {
     const file = newDbFile();
     // Mimic a prod DB that pre-dates issue #499: route_logs has the #296
