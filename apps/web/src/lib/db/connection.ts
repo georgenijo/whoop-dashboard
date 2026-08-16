@@ -788,6 +788,30 @@ function addUserIdColumnAndClaimLegacyRows(db: DB, table: string): void {
 // logs.ts's openRouteLogWrite()
 // ---------------------------------------------------------------------------
 
+const ROUTE_LOGS_INDEX_NAME = "idx_route_logs_user";
+// Canonical definition of idx_route_logs_user, deliberately WITHOUT
+// "IF NOT EXISTS" — SQLite strips that clause from the text it stores in
+// sqlite_master, so a comparison literal that included it would never match
+// the stored row and the gate below would silently no-op forever, firing the
+// DROP+CREATE rebuild on every call (see migrateRouteLogsSchema()'s doc
+// comment for why that's the exact regression this constant exists to
+// prevent).
+const ROUTE_LOGS_INDEX_DEFINITION =
+  "CREATE INDEX idx_route_logs_user ON route_logs(user_id, started_at DESC, id DESC)";
+
+/** Collapse whitespace and lowercase for comparing stored index SQL against
+ *  ROUTE_LOGS_INDEX_DEFINITION. Empirically (better-sqlite3 / SQLite here),
+ *  sqlite_master.sql is stored close to verbatim — case, spacing, and
+ *  quoting are preserved as typed, and the only textual normalization
+ *  SQLite itself performs is stripping "IF NOT EXISTS". This normalizer is
+ *  extra insurance against incidental formatting drift (e.g. someone
+ *  reflowing the literal above across lines, or a future SQLite version
+ *  normalizing more aggressively) — it does not change what the index
+ *  covers, only how the definition text is compared. */
+function normalizeIndexSql(sql: string): string {
+  return sql.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
 /**
  * Full route_logs schema: CREATE TABLE, every lazy ALTER (issue #296 perf
  * columns, issue #499 user_id + index). Single source of truth for both
@@ -828,6 +852,21 @@ function addUserIdColumnAndClaimLegacyRows(db: DB, table: string): void {
  * has no `users` table yet, so calling this function directly would throw,
  * get swallowed by openRouteLogWrite()'s catch, and silently leave
  * route_logs created without `user_id`.
+ *
+ * Cost note (post-review correction): the index step at the bottom of this
+ * function is gated on the CURRENT stored index definition (sqlite_master),
+ * not run unconditionally. An earlier revision of this diff dropped and
+ * recreated idx_route_logs_user on every single call — cheap on an empty
+ * table but a full table-scan rebuild on a populated one, so it got more
+ * expensive, without bound, as route_logs grew (measured on a 20k-row table:
+ * openWrite() cost ~16.9ms/call unconditional vs ~0.9ms/call gated, i.e. the
+ * unconditional version regressed openWrite() to roughly 18x its cost on
+ * `main` and undid essentially all of the ~0.81ms/~0.23ms benchmark above,
+ * which was only ever valid on an already-migrated, effectively-empty table).
+ * With the gate, the DROP+CREATE only fires the one time the stored
+ * definition actually differs from ROUTE_LOGS_INDEX_DEFINITION — migrating a
+ * legacy 2-column index, or bootstrapping a fresh DB — and every call after
+ * that is a single indexed sqlite_master lookup plus a string compare.
  */
 export function migrateRouteLogsSchema(db: DB): void {
   db.exec(`
@@ -878,10 +917,25 @@ export function migrateRouteLogsSchema(db: DB): void {
   // drop: nothing else in the codebase queries route_logs by
   // `(user_id, id DESC)` alone (grepped) or references the index by name
   // outside this migration and its test.
-  db.exec("DROP INDEX IF EXISTS idx_route_logs_user");
-  db.exec(
-    "CREATE INDEX IF NOT EXISTS idx_route_logs_user ON route_logs(user_id, started_at DESC, id DESC)"
-  );
+  //
+  // Gated on the index's CURRENT stored definition, not run unconditionally.
+  // DROP+CREATE INDEX rebuilds the whole b-tree with a full table scan, and
+  // this function runs on every openWrite() call — unconditionally
+  // dropping/recreating here would mean every write after the first pays a
+  // full route_logs table scan just to rebuild an index that hasn't
+  // changed. route_logs grows on every page view, so that cost is
+  // unbounded and grows with the table. See ROUTE_LOGS_INDEX_DEFINITION
+  // above for why the comparison literal omits "IF NOT EXISTS".
+  const existingIndex = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?")
+    .get(ROUTE_LOGS_INDEX_NAME) as { sql: string } | undefined;
+  const indexUpToDate =
+    existingIndex !== undefined &&
+    normalizeIndexSql(existingIndex.sql) === normalizeIndexSql(ROUTE_LOGS_INDEX_DEFINITION);
+  if (!indexUpToDate) {
+    db.exec(`DROP INDEX IF EXISTS ${ROUTE_LOGS_INDEX_NAME}`);
+    db.exec(`CREATE INDEX IF NOT EXISTS ${ROUTE_LOGS_INDEX_NAME} ON route_logs(user_id, started_at DESC, id DESC)`);
+  }
 }
 
 // ---------------------------------------------------------------------------

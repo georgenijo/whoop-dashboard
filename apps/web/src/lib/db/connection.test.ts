@@ -821,6 +821,58 @@ describe("Phase D — domain tables carry user_id", () => {
     }
   });
 
+  // -------------------------------------------------------------------------
+  // Blocking perf regression fix (post-#505 review) — migrateRouteLogsSchema
+  // used to DROP+CREATE idx_route_logs_user unconditionally on every call,
+  // meaning every openWrite() after the first paid a full route_logs table
+  // scan to rebuild an index that hadn't changed. The fix gates the rebuild
+  // on the index's current stored definition (see ROUTE_LOGS_INDEX_DEFINITION
+  // in connection.ts). This test proves the no-op path actually no-ops.
+  //
+  // Deliberately NOT asserting on sqlite_master.rootpage as the signal:
+  // verified empirically that DROP INDEX immediately followed by CREATE
+  // INDEX with no other page allocation in between (which is exactly what
+  // the buggy unconditional code does — the two statements are adjacent)
+  // gets the SAME freed page handed straight back by SQLite, so rootpage
+  // stays identical whether or not the rebuild fires. A rootpage-based
+  // assertion here would pass even with the bug reintroduced — a brittle
+  // check that looks like coverage but isn't. Spying on the exec() calls
+  // that would perform the DROP/CREATE is the reliable, deterministic
+  // signal: confirmed this test fails when the gate is removed (unconditional
+  // DROP+CREATE reintroduced) and passes with the gate in place.
+  it("issue #505 perf fix: a second migrateRouteLogsSchema() call does not DROP or CREATE idx_route_logs_user again", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        apple_sub TEXT UNIQUE,
+        email TEXT,
+        name TEXT,
+        timezone TEXT
+      );
+      INSERT INTO users (id) VALUES (1);
+    `);
+    try {
+      // First call: route_logs doesn't exist yet, so this bootstraps the
+      // table, adds user_id, and creates idx_route_logs_user from scratch.
+      conn.migrateRouteLogsSchema(raw);
+
+      const execSpy = vi.spyOn(raw, "exec");
+      // Second call: everything — including the index — is already current.
+      conn.migrateRouteLogsSchema(raw);
+
+      const indexStatements = execSpy.mock.calls
+        .map(([sql]) => sql)
+        .filter((sql): sql is string => typeof sql === "string" && sql.includes("idx_route_logs_user"));
+      expect(indexStatements).toEqual([]);
+
+      execSpy.mockRestore();
+    } finally {
+      raw.close();
+    }
+  });
+
   it("issue #499: lazy ALTER adds user_id to a legacy route_logs table without losing rows", () => {
     const file = newDbFile();
     // Mimic a prod DB that pre-dates issue #499: route_logs has the #296

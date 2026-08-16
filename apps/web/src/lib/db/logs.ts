@@ -49,7 +49,15 @@ function openRouteLogWrite(): DB | null {
           if (!bootstrapped) return null;
           bootstrapped.close();
           const reopened = new Database(p, { fileMustExist: true });
-          reopened.pragma("journal_mode = WAL");
+          try {
+            reopened.pragma("journal_mode = WAL");
+          } catch {
+            // `db` (the outer try's connection) is already closed above —
+            // closing it again here would be a no-op on the wrong handle.
+            // `reopened` is the live connection that needs cleanup.
+            reopened.close();
+            return null;
+          }
           routeLogsSchemaReady = true;
           return reopened;
         }
