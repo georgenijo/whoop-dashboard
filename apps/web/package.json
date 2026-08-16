@@ -2,6 +2,9 @@
   "name": "web",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.20.2"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "npm run build:mcp && next build",

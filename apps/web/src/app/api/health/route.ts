@@ -14,6 +14,12 @@
 // a known fix is not yet live. `scripts/deploy` verifies from opti against
 // localhost:8501, so it never needs the sha to be public.
 //
+// `node` (process.version) rides in the same privileged branch as sha, for
+// the same reason: it lets an on-box caller check which Node the running
+// process actually loaded without an SSH session (see issue #500 — CI, prod,
+// and local dev had silently drifted apart on Node major version). It is
+// NOT exposed on the public payload.
+//
 // Discriminator: the VALUE of x-forwarded-for, not its presence. Next 16.2.4
 // SYNTHESIZES x-forwarded-for/-host/-port/-proto on every request, so a direct
 // `curl localhost:8501` still arrives carrying `x-forwarded-for: ::1` —
@@ -54,5 +60,6 @@ export function GET(req: Request) {
     sha: BUILD_SHA,
     built_at: BUILD_TIME,
     uptime_s: Math.floor((Date.now() - STARTED_AT) / 1000),
+    node: process.version,
   });
 }
