@@ -89,16 +89,19 @@ export default function HRVTrend({ subtitle, data }: Props) {
     return acc;
   }, []);
 
-  const anomalies = new Map<number, { baseline: number; pctBelow: number }>();
-  data.forEach((d, i) => {
-    if (d.hrv == null || !Number.isFinite(d.hrv)) return;
-    const s = stats[i];
-    if (s.mean == null || s.std == null || s.std === 0) return;
-    if (d.hrv < s.mean - ANOMALY_SIGMA * s.std) {
-      const pctBelow = ((s.mean - d.hrv) / s.mean) * 100;
-      anomalies.set(i, { baseline: s.mean, pctBelow });
-    }
-  });
+  const anomalies = useMemo(() => {
+    const map = new Map<number, { baseline: number; pctBelow: number }>();
+    data.forEach((d, i) => {
+      if (d.hrv == null || !Number.isFinite(d.hrv)) return;
+      const s = stats[i];
+      if (s.mean == null || s.std == null || s.std === 0) return;
+      if (d.hrv < s.mean - ANOMALY_SIGMA * s.std) {
+        const pctBelow = ((s.mean - d.hrv) / s.mean) * 100;
+        map.set(i, { baseline: s.mean, pctBelow });
+      }
+    });
+    return map;
+  }, [data, stats]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!bodyRef.current || valid.length < 2) return;

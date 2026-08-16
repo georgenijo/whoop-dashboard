@@ -42,8 +42,10 @@ vi.mock("@anthropic-ai/sdk", async () => {
     ...actual,
     default: class FakeClient {
       models = { list: modelsListMock };
-      constructor(_opts: { apiKey: string }) {
-        // No-op — we don't need the real client.
+      constructor() {
+        // No-op — we don't need the real client. Accepts (and ignores) the
+        // real client's constructor args at call sites; the API key isn't
+        // needed here since `models.list` is mocked directly.
       }
     },
   };

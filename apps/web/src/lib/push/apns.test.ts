@@ -29,7 +29,10 @@ type StubBehavior = {
 };
 
 function buildStubConnect(captured: CapturedRequest[], behavior: StubBehavior) {
-  return function stubConnect(_authority: string | URL) {
+  // Stubs http2.connect (cast at call sites), which is called with an
+  // authority arg this stub doesn't need — JS ignores extra call-site args
+  // for a function that declares fewer params, so it's safe to drop it here.
+  return function stubConnect() {
     const session = new EventEmitter() as EventEmitter & {
       request: (h: Record<string, unknown>) => unknown;
       close: () => void;

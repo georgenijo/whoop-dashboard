@@ -198,7 +198,6 @@ function SportPanel({ sport }: { sport: CardiacDriftSport }) {
     { day: span, fit: sport.intercept + sport.slope * span },
   ];
 
-  const allDays = points.map((p) => p.day);
   const allHrs = points.map((p) => p.avg_hr).concat(lineData.map((l) => l.fit));
   const xMin = 0;
   const xMax = span;
