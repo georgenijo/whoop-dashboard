@@ -15,7 +15,7 @@
 # `next start -p 8501 -H 127.0.0.1`, fronted by the shared Cloudflare tunnel
 # (no nginx, no certbot). Restarting it requires sudo (passwordless on opti).
 #
-# Four properties this script exists to guarantee. Each one is here because the
+# Six properties this script exists to guarantee. Each one is here because the
 # obvious shortcut fails silently:
 #
 #   1. SNAPSHOT THE DB FIRST, with SQLite's online-backup API — never `cp`.
@@ -28,11 +28,30 @@
 #      bug merged and undeployed, because nothing reported what was serving.
 #   4. PRINT A ROLLBACK RECIPE, including the -wal/-shm deletion, on every exit
 #      once a snapshot exists.
+#   5. RESOLVE --ref AGAINST THE REMOTE, not against opti's local branches.
+#      opti's checkout sits ON local `main` and every deploy `reset --hard`s it
+#      to the sha being deployed, so `git rev-parse main^{commit}` there returns
+#      the ALREADY-DEPLOYED commit (refs/heads beats refs/remotes in rev-parse's
+#      lookup order). `--ref main` therefore used to redeploy the running build
+#      and report success: the target resolved, the build ran, sha verification
+#      passed, and nothing was updated. Resolution happens ONCE, in phase 0,
+#      logs which ref won, and the resulting full sha is what later phases use —
+#      so a push landing mid-deploy also cannot swap the commit under us.
+#   6. TAKE THE NODE VERSION FROM .nvmrc AT THE DEPLOYED REF. Hardcoding it here
+#      recreates issue #500 one layer down: .nvmrc bumps, CI goes green on the
+#      new version, and prod silently keeps building on the old one. Read from
+#      `git show <target-sha>:.nvmrc` on opti — the deployed ref's own value, not
+#      the operator's local checkout (which is usually a different branch, and
+#      must never influence what prod builds with). Missing or malformed is
+#      FATAL, never a silent fallback; DEPLOY_NODE_VERSION is the escape hatch.
 #
 # Usage:
 #   scripts/deploy              # deploy origin/main
 #   scripts/deploy --ref <ref>  # deploy a specific ref (sha, tag or branch)
 #   scripts/deploy --check      # report drift only, change nothing
+#
+# Env overrides: DEPLOY_NODE_VERSION (bypass .nvmrc — needed to deploy a ref
+# that predates it), DEPLOY_FLEET_NODE, DEPLOY_APP_ROOT, DEPLOY_REPO_URL.
 set -euo pipefail
 
 FLEET_NODE=${DEPLOY_FLEET_NODE:-opti}
@@ -42,7 +61,9 @@ APP_ROOT=${DEPLOY_APP_ROOT:-/home/george/Documents/whoop-dashboard}
 # origin` fails with "Permission denied (publickey)"; HTTPS resolves through the
 # `gh auth git-credential` helper that is already configured on opti.
 REPO_URL=${DEPLOY_REPO_URL:-https://github.com/georgenijo/whoop-dashboard.git}
-NODE_VERSION=${DEPLOY_NODE_VERSION:-20.20.2}
+# Empty by default: the real value comes from .nvmrc at the deployed ref, read on
+# opti (see property 6). This is only the operator's override.
+NODE_VERSION_OVERRIDE=${DEPLOY_NODE_VERSION:-}
 PORT=${DEPLOY_PORT:-8501}
 PUBLIC_URL=${DEPLOY_PUBLIC_URL:-https://coach-api.georgenijo.com/}
 CURSOR_AGENT_BIN=${DEPLOY_CURSOR_AGENT_BIN:-/home/george/.local/bin/cursor-agent}
@@ -65,7 +86,9 @@ while [ $# -gt 0 ]; do
       [ $# -ge 2 ] || { echo "--ref needs a value" >&2; exit 2; }
       REF="$2"; shift 2 ;;
     --check) CHECK_ONLY=1; shift ;;
-    -h|--help) sed -n '2,35p' "$0"; exit 0 ;;
+    # Print the header block, however long it happens to be — a hardcoded line
+    # range silently truncates the usage text the moment the header grows.
+    -h|--help) awk 'NR > 1 { if (!/^#/) exit; print }' "$0"; exit 0 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
 done
@@ -82,6 +105,14 @@ fi
 if [[ ! "$REF" =~ ^[A-Za-z0-9][A-Za-z0-9._/~^-]*$ ]]; then
   die "--ref must look like a git ref (letters, digits, . _ / ~ ^ -), got: $REF"
 fi
+# The override is interpolated into a PATH on the node, and into an nvm
+# directory name, so it must be an exact x.y.z — `20` or `lts/*` would resolve to
+# a directory that does not exist and take the PATH down with it.
+if [ -n "$NODE_VERSION_OVERRIDE" ] \
+  && [[ ! "$NODE_VERSION_OVERRIDE" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  die "DEPLOY_NODE_VERSION must be an exact version like 20.20.2, got: $NODE_VERSION_OVERRIDE"
+fi
+NODE_VERSION_OVERRIDE=${NODE_VERSION_OVERRIDE#v}
 # The numeric tunables land in `[ -gt ]` and in loop arithmetic, where a
 # non-numeric override would either abort mid-deploy or spin forever.
 for _var in PORT BACKUP_KEEP BUILD_POLL_SECONDS BUILD_POLL_INTERVAL; do
@@ -115,6 +146,10 @@ takes a fresh snapshot, so this recipe does not stack across deploys):
   # the first open, so no extra step is needed after the copy.
   fleet exec $FLEET_NODE 'rm -f $DB_PATH-wal $DB_PATH-shm && cp $BACKUP_PATH $DB_PATH'
   scripts/deploy --ref ${ROLLBACK_SHA:-<previous sha>}
+
+  # The build Node comes from .nvmrc at the ref being deployed. If that sha
+  # predates .nvmrc, the redeploy above refuses to guess — pass it explicitly:
+  #   DEPLOY_NODE_VERSION=${NODE_VERSION:-20.20.2} scripts/deploy --ref ${ROLLBACK_SHA:-<previous sha>}
 EOF
 }
 
@@ -138,31 +173,68 @@ trap on_exit EXIT
 # available during the slow step.
 say "Current state on $FLEET_NODE"
 STATE_OUT=$(fleet exec --timeout 180 "$FLEET_NODE" \
-  "bash -s -- '$APP_ROOT' '$REPO_URL' '$NODE_VERSION' '$CURSOR_AGENT_BIN' '$REF' '$PORT'" <<'REMOTE_STATE'
+  "bash -s -- '$APP_ROOT' '$REPO_URL' '$NODE_VERSION_OVERRIDE' '$CURSOR_AGENT_BIN' '$REF' '$PORT'" <<'REMOTE_STATE'
 set -euo pipefail
 ROOT=$1
 REPO_URL=$2
-NODE_VERSION=$3
+NODE_OVERRIDE=$3
 CURSOR_AGENT_BIN=$4
 REF=$5
 PORT=$6
 cd "$ROOT" || { echo "app root $ROOT not found" >&2; exit 1; }
 
 # The default path fetches exactly the one refspec it needs. A non-default --ref
-# may live on another branch, so widen the fetch only then.
+# may live on another branch, so widen the fetch only then. Tags are fetched too:
+# `--ref v1.2.3` has to resolve, and refs/tags is not covered by refs/heads/*.
 if [ "$REF" = "origin/main" ]; then
   git fetch -q "$REPO_URL" '+refs/heads/main:refs/remotes/origin/main' \
     || { echo "git fetch failed" >&2; exit 1; }
 else
-  git fetch -q "$REPO_URL" '+refs/heads/*:refs/remotes/origin/*' \
+  git fetch -q --tags "$REPO_URL" '+refs/heads/*:refs/remotes/origin/*' \
     || { echo "git fetch failed" >&2; exit 1; }
 fi
 
-TARGET=$(git rev-parse --short "$REF^{commit}" 2>/dev/null) || {
-  echo "ref '$REF' does not resolve to a commit on $(hostname)" >&2; exit 1
+# Resolve REF to a full sha, preferring the remote-tracking ref over anything
+# local. `git rev-parse main^{commit}` searches refs/heads BEFORE refs/remotes,
+# and this checkout sits on local `main`, which every deploy reset --hard's to
+# the sha it deployed — so a bare `--ref main` resolved to the ALREADY-DEPLOYED
+# commit and the whole deploy reported success having changed nothing. Falling
+# back to the literal ref only when the origin/ candidate misses is what keeps
+# shas (which have no refs/remotes/origin/<sha>) and tags working.
+RESOLVED_SHA=""
+RESOLVED_FROM=""
+resolve_ref() {
+  local ref=$1 candidate sha full
+  case "$ref" in
+    origin/*) candidate="refs/remotes/$ref" ;;
+    refs/*)   candidate="$ref" ;;
+    *)        candidate="refs/remotes/origin/$ref" ;;
+  esac
+  if sha=$(git rev-parse --verify -q "${candidate}^{commit}" 2>/dev/null); then
+    RESOLVED_SHA=$sha; RESOLVED_FROM=$candidate; return 0
+  fi
+  # No remote-tracking match. If the literal name is a LOCAL branch, that is the
+  # trap above, not a fallback — refuse rather than deploy this box's own state.
+  full=$(git rev-parse --symbolic-full-name --verify -q "$ref" 2>/dev/null || true)
+  case "$full" in
+    refs/heads/*)
+      echo "ref '$ref' matches only the local branch $full on $(hostname), and no" >&2
+      echo "$candidate exists. Local branches here are reset --hard'd to whatever" >&2
+      echo "was last deployed, so this would silently redeploy the running build." >&2
+      return 1 ;;
+  esac
+  if sha=$(git rev-parse --verify -q "${ref}^{commit}" 2>/dev/null); then
+    RESOLVED_SHA=$sha; RESOLVED_FROM=${full:-"$ref (literal object)"}; return 0
+  fi
+  echo "ref '$ref' does not resolve to a commit on $(hostname)" >&2
+  return 1
 }
+resolve_ref "$REF" || exit 1
+
 echo "##DEPLOYED=$(git rev-parse --short HEAD)"
-echo "##TARGET=$TARGET"
+echo "##TARGET=$(git rev-parse --short "$RESOLVED_SHA")"
+echo "##TARGET_FULL=$RESOLVED_SHA"
+echo "##TARGET_FROM=$RESOLVED_FROM"
 echo "##SERVICE=$(systemctl is-active whoop-web.service 2>/dev/null || echo inactive)"
 # Informational only: a down service must still let --check report the drift it
 # exists to report, so a failed curl is not fatal here. /api/health only reveals
@@ -171,35 +243,127 @@ SERVING=$(curl -sS --max-time 10 "http://127.0.0.1:$PORT/api/health" 2>/dev/null
   | sed -n 's/.*"sha":"\([^"]*\)".*/\1/p' || true)
 echo "##SERVING=$SERVING"
 
-NODE_BIN="$HOME/.nvm/versions/node/v$NODE_VERSION/bin/node"
-[ -x "$NODE_BIN" ] || { echo "Node $NODE_VERSION missing at $NODE_BIN" >&2; exit 1; }
-"$NODE_BIN" scripts/check-cursor-agent.mjs "$CURSOR_AGENT_BIN"
+# --- which Node builds this ref ---
+# From .nvmrc AT THE TARGET SHA, via `git show` — not the working tree (still on
+# the OLD commit at this point) and not the operator's laptop. Nothing here is
+# fatal: --check must still report drift on a ref that predates .nvmrc. The
+# caller decides, and refuses to deploy without a version.
+NODE_VERSION=""
+NODE_FROM=""
+NODE_ERROR=""
+if [ -n "$NODE_OVERRIDE" ]; then
+  NODE_VERSION=$NODE_OVERRIDE
+  NODE_FROM="DEPLOY_NODE_VERSION override"
+else
+  NVMRC=$(git show "$RESOLVED_SHA:.nvmrc" 2>/dev/null || true)
+  if [ -z "$NVMRC" ]; then
+    NODE_ERROR=".nvmrc is missing at $RESOLVED_SHA — cannot determine the build Node.
+     Deploy a ref that carries .nvmrc, or set DEPLOY_NODE_VERSION=x.y.z explicitly."
+  else
+    # First non-empty, non-comment line, CR and whitespace stripped, leading v
+    # optional. An exact x.y.z is required: the value names an nvm directory, so
+    # `20` or `lts/*` would build a PATH that does not exist.
+    RAW=$(printf '%s\n' "$NVMRC" | sed -e 's/#.*//' -e 's/[[:space:]]//g' | grep -v '^$' | head -1 || true)
+    RAW=${RAW#v}
+    if printf '%s' "$RAW" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+      NODE_VERSION=$RAW
+      NODE_FROM=".nvmrc@$(git rev-parse --short "$RESOLVED_SHA")"
+    else
+      NODE_ERROR=".nvmrc at $RESOLVED_SHA is not an exact version (got: '$RAW').
+     scripts/deploy needs x.y.z because the value names an nvm directory.
+     Fix .nvmrc, or set DEPLOY_NODE_VERSION=x.y.z explicitly."
+    fi
+  fi
+fi
+
+if [ -n "$NODE_VERSION" ]; then
+  NODE_BIN="$HOME/.nvm/versions/node/v$NODE_VERSION/bin/node"
+  if [ -x "$NODE_BIN" ]; then
+    # The service's ExecStart pins its own Node, and better-sqlite3 is compiled
+    # against whatever built it. NODE_MODULE_VERSION is per-MAJOR, so a major
+    # mismatch is a guaranteed ERR_DLOPEN_FAILED after restart — fatal. A patch
+    # difference is ABI-compatible; say so and carry on.
+    UNIT_NODE=$(systemctl cat whoop-web.service 2>/dev/null \
+      | sed -n 's#^ExecStart=.*/\.nvm/versions/node/v\([0-9][0-9.]*\)/bin/node .*#\1#p' | head -1 || true)
+    if [ -n "$UNIT_NODE" ] && [ "$UNIT_NODE" != "$NODE_VERSION" ]; then
+      if [ "${UNIT_NODE%%.*}" != "${NODE_VERSION%%.*}" ]; then
+        NODE_ERROR="build Node $NODE_VERSION ($NODE_FROM) and the service's own Node $UNIT_NODE
+     differ in MAJOR version. better-sqlite3 would be compiled against the wrong
+     ABI and the service would come back up with ERR_DLOPEN_FAILED.
+     Update systemd/whoop-web.service and reload it, or fix .nvmrc."
+        NODE_VERSION=""
+      else
+        echo "  NOTE: .nvmrc says $NODE_VERSION, whoop-web.service runs $UNIT_NODE (same major, ABI-compatible)."
+      fi
+    fi
+  else
+    NODE_ERROR="Node $NODE_VERSION ($NODE_FROM) is not installed at $NODE_BIN.
+     Install it on $(hostname):  nvm install $NODE_VERSION"
+    NODE_VERSION=""
+  fi
+fi
+
+echo "##NODE_VERSION=$NODE_VERSION"
+echo "##NODE_FROM=$NODE_FROM"
+if [ -n "$NODE_ERROR" ]; then
+  # Single-line for the ##KEY protocol; the caller re-expands it.
+  printf '##NODE_ERROR=%s\n' "$(printf '%s' "$NODE_ERROR" | tr '\n' '\a')"
+fi
+
+# The canary needs a working Node; skip it (rather than fail) when there is
+# none, so --check still reports drift.
+if [ -n "$NODE_VERSION" ]; then
+  "$HOME/.nvm/versions/node/v$NODE_VERSION/bin/node" scripts/check-cursor-agent.mjs "$CURSOR_AGENT_BIN"
+fi
 REMOTE_STATE
 ) || die "could not inspect $FLEET_NODE"
 
 kv() { printf '%s\n' "$STATE_OUT" | sed -n "s/^##$1=//p" | tail -1; }
 CHECKOUT_SHA=$(kv DEPLOYED)
 TARGET_SHA=$(kv TARGET)
+TARGET_FULL=$(kv TARGET_FULL)
+TARGET_FROM=$(kv TARGET_FROM)
 SERVING_SHA=$(kv SERVING)
 SERVICE_STATE=$(kv SERVICE)
+NODE_VERSION=$(kv NODE_VERSION)
+NODE_FROM=$(kv NODE_FROM)
+NODE_ERROR=$(kv NODE_ERROR | tr '\a' '\n')
 [ -n "$CHECKOUT_SHA" ] || die "could not read the deployed sha from $FLEET_NODE"
 [ -n "$TARGET_SHA" ]   || die "could not resolve $REF on $FLEET_NODE"
+[ -n "$TARGET_FULL" ]  || die "could not resolve $REF to a full sha on $FLEET_NODE"
 ROLLBACK_SHA="$CHECKOUT_SHA"
 
 if [ "$REF" = "origin/main" ]; then TARGET_LABEL="origin/main"; else TARGET_LABEL="target ($REF)"; fi
-printf '  %-12s %s\n' "deployed:"          "$CHECKOUT_SHA"
-printf '  %-12s %s\n' "serving:"           "${SERVING_SHA:-<no sha — service down or pre-health build>}"
-printf '  %-12s %s\n' "$TARGET_LABEL:"     "$TARGET_SHA"
-printf '  %-12s %s\n' "service:"           "$SERVICE_STATE"
+printf '  %-14s %s\n' "deployed:"          "$CHECKOUT_SHA"
+printf '  %-14s %s\n' "serving:"           "${SERVING_SHA:-<no sha — service down or pre-health build>}"
+printf '  %-14s %s\n' "$TARGET_LABEL:"     "$TARGET_SHA"
+# Which ref actually won the resolution. Printed always, because the failure
+# this guards against is invisible: everything reports green and nothing moved.
+printf '  %-14s %s\n' "resolved via:"      "${TARGET_FROM:-<unknown>}"
+if [ -n "$NODE_VERSION" ]; then NODE_LABEL="$NODE_VERSION ($NODE_FROM)"; else NODE_LABEL="<unresolved>"; fi
+printf '  %-14s %s\n' "build node:"        "$NODE_LABEL"
+printf '  %-14s %s\n' "service:"           "$SERVICE_STATE"
 if [ -n "$SERVING_SHA" ] && [ "$SERVING_SHA" != "$CHECKOUT_SHA" ]; then
   echo "  NOTE: checkout != running build. The service is stale; a restart is pending."
 fi
 # Anything that is not a ##KEY line is the canary's own output.
 printf '%s\n' "$STATE_OUT" | grep -v '^##' || true
 
+if [ -n "$NODE_ERROR" ]; then
+  printf '\n  NODE: %s\n' "$NODE_ERROR"
+fi
+
 if [ "$CHECK_ONLY" = "1" ]; then
+  # --check is read-only and must keep reporting drift even when the build Node
+  # cannot be resolved (e.g. a ref that predates .nvmrc).
   exit 0
 fi
+
+# Deploying without a verified build Node is how you get a service that comes
+# back up with ERR_DLOPEN_FAILED. Never fall back to a hardcoded default here:
+# a silent default is exactly the drift issue #500 was filed about.
+[ -n "$NODE_VERSION" ] || die "cannot determine the Node version to build with.
+     $NODE_ERROR"
 
 # --- 1. snapshot the DB -------------------------------------------------------
 # NOT `cp`. The DB is WAL mode (connection.ts sets journal_mode = WAL) and the
@@ -292,19 +456,21 @@ BACKUP_PATH=$(printf '%s\n' "$SNAP_OUT" | sed -n 's/^##SNAPSHOT=//p' | tail -1)
 [ -n "$BACKUP_PATH" ] || die "snapshot reported no path — refusing to continue"
 
 # --- 2. sync code + preflight + deps ------------------------------------------
-say "Syncing $REF and installing deps on $FLEET_NODE"
+say "Syncing $TARGET_SHA ($TARGET_FROM) and installing deps on $FLEET_NODE"
 SYNC_OUT=$(fleet exec --timeout 900 "$FLEET_NODE" \
-  "bash -s -- '$APP_ROOT' '$NODE_VERSION' '$REPO_URL' '$CURSOR_AGENT_BIN' '$REF'" <<'REMOTE_SYNC'
+  "bash -s -- '$APP_ROOT' '$NODE_VERSION' '$REPO_URL' '$CURSOR_AGENT_BIN' '$REF' '$TARGET_FULL'" <<'REMOTE_SYNC'
 set -euo pipefail
 ROOT=$1
 NODE_VERSION=$2
 REPO_URL=$3
 CURSOR_AGENT_BIN=$4
 REF=$5
+TARGET=$6
 
-# The service's ExecStart hardcodes this Node; a login shell resolves a
-# different one. Anything touching better-sqlite3 or building the app against
-# the wrong ABI dies with ERR_DLOPEN_FAILED.
+# NODE_VERSION came from .nvmrc at the target ref (phase 0 already checked it is
+# installed and ABI-compatible with the service's own Node). A login shell here
+# resolves a different one — opti's default is 24.x — and anything touching
+# better-sqlite3 built against the wrong ABI dies with ERR_DLOPEN_FAILED.
 NODE_BIN_DIR="$HOME/.nvm/versions/node/v$NODE_VERSION/bin"
 [ -x "$NODE_BIN_DIR/node" ] || {
   echo "Node $NODE_VERSION is missing at $NODE_BIN_DIR — run: nvm install $NODE_VERSION" >&2
@@ -314,13 +480,19 @@ export PATH="$NODE_BIN_DIR:$PATH"
 
 cd "$ROOT" || { echo "app root $ROOT not found" >&2; exit 1; }
 
-echo "--- syncing code (git fetch + reset --hard $REF) ---"
+echo "--- syncing code (git fetch + reset --hard $TARGET, from $REF) ---"
 if [ "$REF" = "origin/main" ]; then
   git fetch "$REPO_URL" '+refs/heads/main:refs/remotes/origin/main' || { echo "git fetch failed" >&2; exit 1; }
 else
-  git fetch "$REPO_URL" '+refs/heads/*:refs/remotes/origin/*' || { echo "git fetch failed" >&2; exit 1; }
+  git fetch --tags "$REPO_URL" '+refs/heads/*:refs/remotes/origin/*' || { echo "git fetch failed" >&2; exit 1; }
 fi
-TARGET=$(git rev-parse --short "$REF^{commit}") || { echo "ref $REF did not resolve" >&2; exit 1; }
+# TARGET is the FULL sha phase 0 already resolved, not a re-resolution of REF.
+# Resolving once means the ref-lookup-order trap (refs/heads beating
+# refs/remotes) is fixed in exactly one place, and a push landing between the
+# two phases cannot swap the commit out from under a deploy that already
+# printed, snapshotted and reported a different target.
+git rev-parse --verify -q "$TARGET^{commit}" >/dev/null \
+  || { echo "target $TARGET is not present on $(hostname) after fetch" >&2; exit 1; }
 git reset --hard "$TARGET" || { echo "git reset --hard $TARGET failed" >&2; exit 1; }
 
 # Re-derive the sha from the node's own git. Abbreviation length is per-repo and
@@ -363,6 +535,11 @@ REMOTE_SYNC
 printf '%s\n' "$SYNC_OUT" | grep -v '^##' || true
 EXPECT_SHA=$(printf '%s\n' "$SYNC_OUT" | sed -n 's/^##DEPLOY_SHA=//p' | tail -1)
 [ -n "$EXPECT_SHA" ] || die "could not read the deployed sha from $FLEET_NODE"
+# Both shas are `git rev-parse --short` from the SAME checkout, so they agree
+# unless the reset landed somewhere other than the target that was reported,
+# snapshotted and announced. That must not proceed to a build.
+[ "$EXPECT_SHA" = "$TARGET_SHA" ] \
+  || die "checkout is at $EXPECT_SHA but $TARGET_SHA ($TARGET_FROM) was the target"
 
 # --- 3. build (detached — MUST survive a dropped connection) ------------------
 # A foreground `npm run build` under `fleet exec` dies with the connection and
@@ -388,7 +565,15 @@ NODE_VERSION=$2
 BUILD_SH=$3
 BUILD_LOG=$4
 BUILD_EXIT=$5
+# Re-check here, not just in the sync phase: this directory is prepended to the
+# PATH the detached script builds, and if it does not exist the PATH silently
+# falls through to the login shell's Node (24.x on opti) — which compiles
+# better-sqlite3 against the wrong ABI and takes the service down on restart.
 NODE_BIN_DIR="$HOME/.nvm/versions/node/v$NODE_VERSION/bin"
+[ -x "$NODE_BIN_DIR/npm" ] || {
+  echo "Node $NODE_VERSION is missing at $NODE_BIN_DIR — refusing to build with an unpinned PATH" >&2
+  exit 1
+}
 
 # Refuse to stack builds: a second `next build` just blocks on the first one's
 # lock. `tailscaled` is filtered out because fleet's transport spawns a
@@ -494,12 +679,18 @@ echo "  serving : ${NEW_SHA:-<none>}"
   echo "/api/health returned no sha — the service is not serving the new build" >&2
   exit 1
 }
-[ "$NEW_SHA" = "$EXPECT_SHA" ] || {
-  echo "running build is $NEW_SHA but $EXPECT_SHA was deployed — the restart did not pick up the build" >&2
+# Order matters: EXPECT_SHA comes from `git rev-parse` so it can never be
+# "unknown", which means an unstamped build fails the equality check below with
+# a misleading "the restart did not pick up the build". Check the specific case
+# first so it reports its own cause. (Previously this sat AFTER the equality
+# check, where it was unreachable.)
+[ "$NEW_SHA" != "unknown" ] || {
+  echo "/api/health reports sha 'unknown' — the build was not stamped with a commit" >&2
+  echo "(next.config.ts runs 'git rev-parse --short HEAD'; check the checkout is a git repo)" >&2
   exit 1
 }
-[ "$NEW_SHA" != "unknown" ] || {
-  echo "/api/health reports sha 'unknown' — the build was not stamped" >&2
+[ "$NEW_SHA" = "$EXPECT_SHA" ] || {
+  echo "running build is $NEW_SHA but $EXPECT_SHA was deployed — the restart did not pick up the build" >&2
   exit 1
 }
 
@@ -515,5 +706,7 @@ echo "  $PUBLIC_URL : $PUBLIC_CODE"
 [ "$PUBLIC_CODE" = "307" ] || die "public verification failed — expected 307, got $PUBLIC_CODE"
 
 say "Deployed $EXPECT_SHA on $FLEET_NODE (was $CHECKOUT_SHA)"
-echo "  DB snapshot: $BACKUP_PATH"
+echo "  resolved via: $TARGET_FROM"
+echo "  built with:   Node $NODE_VERSION ($NODE_FROM)"
+echo "  DB snapshot:  $BACKUP_PATH"
 print_rollback
