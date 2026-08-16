@@ -17,6 +17,15 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 **Status:** active
 
 **References:** #501, #492, `apps/web/src/lib/security-headers.ts`, `apps/web/src/proxy.ts`, `apps/web/next.config.ts`, `apps/web/src/components/ClientLogBootstrap.tsx`, `apps/web/src/app/(dashboard)/logs/page.tsx`
+## 2026-08-16: Split-brain user merge resolves conflicts survivor-wins
+
+**Decision:** `mergeUserInto` merges every table that carries a `user_id`, using one of two strategies. Surrogate-keyed tables (`USER_FK_TABLES`) get a bare `UPDATE ... SET user_id`. The seven tables where `user_id` sits in a PRIMARY KEY or UNIQUE index (`USER_FK_CONFLICT_TABLES`: `recovery`, `cycles`, `daily_summary`, `sleep`, `integrations`, `user_settings`, `device_tokens`) are merged **survivor wins** — non-colliding loser rows are repointed, colliding loser rows are deleted, and the per-table drop count is logged on the merge line at warn level. Both strategies run inside the existing merge transaction. `KNOWN_UNMERGED_USER_FK_TABLES` must stay empty; a table left unmerged is not a safe parking spot.
+
+**Rationale:** Survivor-wins is deterministic, never mutates data belonging to the account that is staying, and in practice both rows derive from the same Whoop account so they are near-identical. Excluding the conflicting tables did not dodge the conflict question — it converted a UNIQUE collision into a `FOREIGN KEY constraint failed` on the trailing `DELETE FROM users`, taking Sign in with Apple down (and, for `chat_attachments`' `ON DELETE CASCADE`, silently destroying data) instead of losing one duplicate row.
+
+**Status:** active
+
+**References:** #504, #502, `apps/web/src/lib/db/auth.ts`, `apps/web/src/lib/db/connection.test.ts`
 
 ---
 

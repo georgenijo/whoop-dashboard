@@ -121,7 +121,7 @@ Threads have auto-titles via Haiku 4.5 fired in `after()` (Next.js post-response
   Assuming `(user_id, date)` everywhere is wrong and was the cause of a stale test suite. The rebuild runs once at first `openWrite()` against a pre-Phase-D DB — idempotent via `PRAGMA table_info` gate. **NEVER write domain tables from Python**; the Next.js side is the sole owner.
 - Read paths against domain tables MUST go through `forUser(userId).all/get/read(...)` in `apps/web/src/lib/db/scoped.ts`. The wrapper appends `userId` as the trailing positional `?`; call sites write `... AND user_id = ?` as the LAST placeholder. A CI vitest (`scoped.test.ts`) blocks any stray `FROM recovery|cycles|sleep|workouts|daily_summary|body_measurements` outside the wrapper + allowlist.
 - Other read paths use `safeQuery` (read-only open). Other write paths use `safeWriteQuery` or direct `openWrite()`.
-- Lazy-bootstrapped tables: `users`, `sessions`, `chat_threads`, `chat_messages`, `chat_logs`, `sync_logs`, `app_settings`, `integrations`, `user_settings`, `device_tokens`, `webhook_events`.
+- Lazy-bootstrapped tables: `users`, `sessions`, `chat_threads`, `chat_messages`, `chat_logs`, `sync_logs`, `route_logs`, `app_settings`, `integrations`, `user_settings`, `device_tokens`, `webhook_events`. `route_logs`'s migration is factored into `migrateRouteLogsSchema()` (`connection.ts`) so it can be shared with `logs.ts`'s `openRouteLogWrite()`, which deliberately opens its own connection instead of calling `openWrite()` — see that function's doc comment for the hot-path cost rationale (issue #505).
 
 ### Auth
 
@@ -181,25 +181,39 @@ no `current` symlink.
 
 Pull requests and pushes to `main` run GitHub Actions CI only. Deploys are
 explicit operator actions from a machine with Fleet access, over `fleet exec`.
-**Use `scripts/deploy`**: it fetches over HTTPS and `git reset --hard`s the
-checkout to `origin/main`, runs the Cursor Agent launcher canary, reinstalls
-deps only when the lockfile changed, stages the old build as `.next.prev`,
-builds with Node 20.20.2, restarts `whoop-web` with `sudo`, and verifies both
-the local (`127.0.0.1:8501`) and public endpoints return 307.
+**Use `scripts/deploy`**: it snapshots the database, fetches over HTTPS and
+`git reset --hard`s the checkout to the target ref, runs the Cursor Agent
+launcher canary, reinstalls deps only when the lockfile changed, stages the old
+build as `.next.prev`, builds with Node 20.20.2 **detached**, restarts
+`whoop-web` with `sudo`, and verifies the running `/api/health` sha matches the
+commit it just deployed before checking that the local (`127.0.0.1:8501`) and
+public endpoints return 307.
 
 ```bash
 scripts/deploy            # deploy origin/main
-scripts/deploy --check    # report drift only (what's live vs origin/main)
+scripts/deploy --ref <r>  # deploy a specific ref (resolved on opti)
+scripts/deploy --check    # report drift only (deployed / serving / target)
 ```
 
-Two caveats worth knowing before you rely on it:
+What it guarantees, and why each one is there:
 
-- It deploys `origin/main` only — there is no `--ref` flag, and passing one
-  exits 2.
-- Rollback is build-level (`rm -rf .next && mv .next.prev .next && sudo
-  systemctl restart whoop-web`), printed on success. The script does **not**
-  snapshot the database, so take a manual online backup first if the revision
-  touches schema — see the `vm-ops` skill.
+- **DB snapshot first.** `sqlite3 -readonly ... VACUUM INTO` into
+  `/home/george/whoop-db-backups/` (newest 10 kept), asserted with `PRAGMA
+  quick_check` and a table-count comparison against the live DB. Never `cp`: the
+  DB is WAL mode with a live writer, so a raw copy can restore as an EMPTY
+  database and a copy straddling a checkpoint can tear it — both exit 0.
+  Schema migrations are lazy `ALTER`s in `openWrite()`, so any deploy can
+  migrate on the first write after restart.
+- **Detached build.** `setsid` + an exit-code sentinel, polled over fresh
+  connections. A foreground `next build` dies with a dropped connection and
+  leaves an orphan holding the lock.
+- **Sha verification.** "The service is up" does not catch a restart that kept
+  serving the old bundle; the deployed sha is compared against `/api/health`.
+- **Rollback recipe** printed on success and on any failure after the snapshot,
+  covering both the build-level rollback and the DB restore (delete the
+  `-wal`/`-shm` sidecars FIRST, or a leftover WAL replays onto the restored file
+  and blends two database states). It is **single-step only** — the next deploy
+  overwrites `.next.prev`.
 
 Use `fleet exec opti '<command>'` for diagnostics; never address a production
 IP directly. Logs are available with

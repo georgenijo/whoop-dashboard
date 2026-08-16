@@ -213,4 +213,89 @@ describe("route_logs — tenant scoping (issue #499)", () => {
     expect(logs.getRouteLogs(1)).toHaveLength(0);
     expect(logs.getRouteLogs(2)).toHaveLength(0);
   });
+
+  // ---------------------------------------------------------------------
+  // Issue #505 — the "real edge": a DB file where openWrite() has NEVER
+  // run yet. Before the fix, openRouteLogWrite() called
+  // addUserIdColumnAndClaimLegacyRows() directly, which does
+  // `SELECT id FROM users` — but `users` doesn't exist on a totally fresh
+  // file, so it threw, the throw was swallowed, addRouteLog() silently
+  // dropped the row, and route_logs was left without `user_id` until the
+  // next openWrite() call.
+  // ---------------------------------------------------------------------
+
+  it("addRouteLog on a DB where openWrite() has never run does not drop the row, and route_logs ends up with a correct schema", async () => {
+    const file = path.join(tmpRoot, `db-${Math.random().toString(36).slice(2)}.db`);
+    // Only create the empty file — deliberately skip calling openWrite() or
+    // seeding `users`, unlike bootstrap() above.
+    new Database(file).close();
+    process.env.WHOOP_DB_PATH = file;
+    const logs = await import("./logs");
+
+    // Must not throw, and must not silently no-op.
+    logs.addRouteLog(routeLog(null, "2026-05-01T00:00:00Z", "/recovery"));
+
+    // The fallback path (delegating to a one-time openWrite()) creates the
+    // sole bootstrap user (id=1), so a NULL-user_id insert immediately after
+    // still can't be retroactively claimed — but the SCHEMA must be correct:
+    // route_logs must exist with every column, including user_id, and the
+    // row must be present (not dropped).
+    const raw = new Database(file, { readonly: true });
+    try {
+      const cols = (raw.prepare("PRAGMA table_info(route_logs)").all() as { name: string }[]).map(
+        (c) => c.name
+      );
+      expect(cols).toEqual(
+        expect.arrayContaining([
+          "id",
+          "started_at",
+          "route",
+          "duration_ms",
+          "status",
+          "details",
+          "response_bytes",
+          "render_ms",
+          "user_id",
+        ])
+      );
+      const row = raw.prepare("SELECT route FROM route_logs WHERE id = 1").get() as
+        | { route: string }
+        | undefined;
+      expect(row?.route).toBe("/recovery");
+    } finally {
+      raw.close();
+    }
+  });
+
+  it("a user_id-attributed addRouteLog on a never-migrated DB is attributed correctly once users exist", async () => {
+    const file = path.join(tmpRoot, `db-${Math.random().toString(36).slice(2)}.db`);
+    new Database(file).close();
+    process.env.WHOOP_DB_PATH = file;
+    const conn = await import("./connection");
+    // Seed a single user directly via the raw file — still without ever
+    // calling openWrite() — so the fallback path's one-time openWrite() call
+    // sees an existing sole user rather than creating a fresh one.
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        apple_sub TEXT UNIQUE,
+        email TEXT,
+        name TEXT,
+        timezone TEXT
+      )
+    `);
+    raw.prepare("INSERT INTO users (id) VALUES (1)").run();
+    raw.close();
+
+    const logs = await import("./logs");
+    logs.addRouteLog(routeLog(1, "2026-05-01T00:00:00Z", "/sleep"));
+
+    expect(logs.getRouteLogs(1).map((r) => r.route)).toEqual(["/sleep"]);
+    // Confirm the fallback truly ran openWrite()'s full bootstrap, not a
+    // partial one — e.g. chat_logs should exist and be migrated too.
+    const chatDb = conn.openWrite();
+    expect(chatDb).not.toBeNull();
+    chatDb?.close();
+  });
 });

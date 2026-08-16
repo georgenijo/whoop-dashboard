@@ -2,16 +2,26 @@ import "server-only";
 import { existsSync } from "node:fs";
 import Database, { type Database as DB } from "better-sqlite3";
 import {
-  addUserIdColumnAndClaimLegacyRows,
   dbPath,
   hasColumn,
   hasTable,
+  migrateRouteLogsSchema,
   openWrite,
   safeQuery,
 } from "./connection";
 
 let routeLogsSchemaReady = false;
 
+/**
+ * Opens its own raw better-sqlite3 connection instead of going through
+ * openWrite() — deliberately, not by accident. See migrateRouteLogsSchema()'s
+ * doc comment in connection.ts (issue #505) for the full cost rationale:
+ * route_logs is written on every page render, and openWrite() re-derives the
+ * whole app's schema state on every call with no caching, so routing this
+ * hot path through it would be a real, measured per-request tax. The
+ * `routeLogsSchemaReady` flag below makes the migration a one-time cost per
+ * process instead.
+ */
 function openRouteLogWrite(): DB | null {
   const p = dbPath();
   if (!existsSync(p)) return null;
@@ -20,39 +30,38 @@ function openRouteLogWrite(): DB | null {
     try {
       db.pragma("journal_mode = WAL");
       if (!routeLogsSchemaReady) {
-        db.exec(`
-          CREATE TABLE IF NOT EXISTS route_logs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            started_at TEXT NOT NULL,
-            route TEXT NOT NULL,
-            duration_ms INTEGER NOT NULL,
-            status INTEGER NOT NULL,
-            details TEXT,
-            response_bytes INTEGER,
-            render_ms INTEGER
-          );
-          CREATE INDEX IF NOT EXISTS route_logs_started_at_idx ON route_logs(started_at DESC);
-        `);
-        const cols = db.prepare("PRAGMA table_info(route_logs)").all() as { name: string }[];
-        if (!cols.some((c) => c.name === "details")) {
-          db.exec("ALTER TABLE route_logs ADD COLUMN details TEXT");
+        if (!hasTable(db, "users")) {
+          // Issue #505 edge case: nothing has ever called openWrite() against
+          // this DB file, so `users` doesn't exist yet and
+          // migrateRouteLogsSchema()'s user_id step (SELECT id FROM users)
+          // would throw. That throw used to be swallowed by the catch below,
+          // silently dropping the log line and leaving route_logs created
+          // without user_id until the next openWrite() call.
+          //
+          // Rather than duplicate app-wide bootstrap here, delegate this
+          // one-time case to the real thing: openWrite() creates `users` and
+          // migrates every table, including route_logs, in one shot. This
+          // only runs once per process (routeLogsSchemaReady latches true
+          // right after), so it doesn't reintroduce the per-request cost
+          // this function exists to avoid.
+          db.close();
+          const bootstrapped = openWrite();
+          if (!bootstrapped) return null;
+          bootstrapped.close();
+          const reopened = new Database(p, { fileMustExist: true });
+          try {
+            reopened.pragma("journal_mode = WAL");
+          } catch {
+            // `db` (the outer try's connection) is already closed above —
+            // closing it again here would be a no-op on the wrong handle.
+            // `reopened` is the live connection that needs cleanup.
+            reopened.close();
+            return null;
+          }
+          routeLogsSchemaReady = true;
+          return reopened;
         }
-        // Issue #296 — keep in sync with the canonical migration in connection.ts.
-        if (!cols.some((c) => c.name === "response_bytes")) {
-          db.exec("ALTER TABLE route_logs ADD COLUMN response_bytes INTEGER");
-        }
-        if (!cols.some((c) => c.name === "render_ms")) {
-          db.exec("ALTER TABLE route_logs ADD COLUMN render_ms INTEGER");
-        }
-        // Issue #499 — keep in sync with the canonical migration in
-        // connection.ts. route_logs is bootstrapped in BOTH places (this
-        // function opens its own raw connection instead of going through
-        // openWrite()), so whichever runs first must leave the schema
-        // identical to the other, or the shape depends on request ordering.
-        if (!cols.some((c) => c.name === "user_id")) {
-          addUserIdColumnAndClaimLegacyRows(db, "route_logs");
-        }
-        db.exec("CREATE INDEX IF NOT EXISTS idx_route_logs_user ON route_logs(user_id, id DESC)");
+        migrateRouteLogsSchema(db);
         routeLogsSchemaReady = true;
       }
       return db;

@@ -136,6 +136,80 @@ function tablesWithUserIdOrFk(db: Database.Database, tables: string[]): Set<stri
   return candidates;
 }
 
+/**
+ * Insert one row into `table` owned by `userId`, deriving the column list
+ * from the live schema (issue #504). Every NOT NULL column without a default
+ * gets a type-appropriate value, plus any non-INTEGER PRIMARY KEY (workouts
+ * and chat_attachments key on a TEXT id).
+ *
+ * Reflected rather than hand-written so the behavioural merge test seeds a
+ * table that is added later without anyone remembering to extend a fixture —
+ * an unseeded table would make "nothing was lost" vacuously true for it.
+ *
+ * NOT NULL foreign keys to tables other than `users` are resolved to a real
+ * parent row (seeding the parent first if need be), so the seed itself runs
+ * clean under foreign_keys = ON.
+ */
+let seedCounter = 0;
+function seedUserRow(
+  db: Database.Database,
+  table: string,
+  userId: number,
+  tag: string,
+  depth = 0,
+): void {
+  if (depth > 4) throw new Error(`seedUserRow: FK chain too deep at ${table}`);
+  const info = db.prepare(`PRAGMA table_info("${table}")`).all() as {
+    name: string;
+    type: string;
+    notnull: number;
+    dflt_value: unknown;
+    pk: number;
+  }[];
+  const fks = db.prepare(`PRAGMA foreign_key_list("${table}")`).all() as {
+    from: string;
+    table: string;
+    to: string;
+  }[];
+
+  const values: Record<string, unknown> = { user_id: userId };
+  for (const col of info) {
+    if (col.name === "user_id") continue;
+    const required = col.notnull === 1 && col.dflt_value === null;
+    const textPk = col.pk > 0 && !/INT/i.test(col.type);
+    if (!required && !textPk) continue;
+
+    const fk = fks.find((f) => f.from === col.name && f.table !== "users");
+    if (fk) {
+      const parentCol = fk.to || "rowid";
+      let parent = db
+        .prepare(`SELECT "${parentCol}" AS v FROM "${fk.table}" LIMIT 1`)
+        .get() as { v: unknown } | undefined;
+      if (!parent) {
+        seedUserRow(db, fk.table, userId, `${tag}-p`, depth + 1);
+        parent = db
+          .prepare(`SELECT "${parentCol}" AS v FROM "${fk.table}" LIMIT 1`)
+          .get() as { v: unknown } | undefined;
+      }
+      values[col.name] = parent!.v;
+      continue;
+    }
+
+    const unique = `${tag}-${col.name}-${++seedCounter}`;
+    const type = col.type.toUpperCase();
+    if (type.includes("INT")) values[col.name] = seedCounter;
+    else if (/REAL|FLOA|DOUB/.test(type)) values[col.name] = seedCounter + 0.5;
+    else if (type.includes("BLOB")) values[col.name] = Buffer.from(unique);
+    else values[col.name] = unique;
+  }
+
+  const cols = Object.keys(values);
+  db.prepare(
+    `INSERT INTO "${table}" (${cols.map((c) => `"${c}"`).join(", ")}) ` +
+      `VALUES (${cols.map(() => "?").join(", ")})`,
+  ).run(...cols.map((c) => values[c]));
+}
+
 describe("Phase D — domain tables carry user_id", () => {
   it("fresh schema includes chat_messages.work_log", () => {
     const file = newDbFile();
@@ -675,6 +749,130 @@ describe("Phase D — domain tables carry user_id", () => {
     }
   });
 
+  // -------------------------------------------------------------------------
+  // Issue #505 part 2 — idx_route_logs_user matches getRouteLogs' actual
+  // ORDER BY (started_at DESC, id DESC), not just (user_id, id DESC).
+  // -------------------------------------------------------------------------
+
+  it("issue #505: idx_route_logs_user is (user_id, started_at DESC, id DESC) and serves the sort with no temp b-tree", () => {
+    const file = newDbFile();
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    try {
+      const idxSql = db!
+        .prepare("SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_route_logs_user'")
+        .get() as { sql: string };
+      expect(idxSql.sql).toBe(
+        "CREATE INDEX idx_route_logs_user ON route_logs(user_id, started_at DESC, id DESC)"
+      );
+
+      const plan = db!
+        .prepare(
+          "EXPLAIN QUERY PLAN SELECT id FROM route_logs WHERE user_id = ? ORDER BY started_at DESC, id DESC LIMIT 10"
+        )
+        .all(1) as { detail: string }[];
+      const detail = plan.map((r) => r.detail).join(" | ");
+      expect(detail).toContain("idx_route_logs_user");
+      expect(detail).not.toContain("TEMP B-TREE");
+    } finally {
+      db?.close();
+    }
+  });
+
+  it("issue #505: a pre-existing (user_id, id DESC) index is replaced, not left alongside the new one", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        apple_sub TEXT UNIQUE,
+        email TEXT,
+        name TEXT,
+        timezone TEXT
+      );
+      INSERT INTO users (id) VALUES (1);
+      CREATE TABLE route_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at TEXT NOT NULL,
+        route TEXT NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        status INTEGER NOT NULL,
+        details TEXT,
+        response_bytes INTEGER,
+        render_ms INTEGER,
+        user_id INTEGER REFERENCES users(id)
+      );
+      CREATE INDEX idx_route_logs_user ON route_logs(user_id, id DESC);
+    `);
+    raw.close();
+
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    try {
+      const rows = db!
+        .prepare("SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='route_logs' AND name='idx_route_logs_user'")
+        .all() as { sql: string }[];
+      expect(rows).toHaveLength(1);
+      expect(rows[0].sql).toBe(
+        "CREATE INDEX idx_route_logs_user ON route_logs(user_id, started_at DESC, id DESC)"
+      );
+    } finally {
+      db?.close();
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Blocking perf regression fix (post-#505 review) — migrateRouteLogsSchema
+  // used to DROP+CREATE idx_route_logs_user unconditionally on every call,
+  // meaning every openWrite() after the first paid a full route_logs table
+  // scan to rebuild an index that hadn't changed. The fix gates the rebuild
+  // on the index's current stored definition (see ROUTE_LOGS_INDEX_DEFINITION
+  // in connection.ts). This test proves the no-op path actually no-ops.
+  //
+  // Deliberately NOT asserting on sqlite_master.rootpage as the signal:
+  // verified empirically that DROP INDEX immediately followed by CREATE
+  // INDEX with no other page allocation in between (which is exactly what
+  // the buggy unconditional code does — the two statements are adjacent)
+  // gets the SAME freed page handed straight back by SQLite, so rootpage
+  // stays identical whether or not the rebuild fires. A rootpage-based
+  // assertion here would pass even with the bug reintroduced — a brittle
+  // check that looks like coverage but isn't. Spying on the exec() calls
+  // that would perform the DROP/CREATE is the reliable, deterministic
+  // signal: confirmed this test fails when the gate is removed (unconditional
+  // DROP+CREATE reintroduced) and passes with the gate in place.
+  it("issue #505 perf fix: a second migrateRouteLogsSchema() call does not DROP or CREATE idx_route_logs_user again", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        apple_sub TEXT UNIQUE,
+        email TEXT,
+        name TEXT,
+        timezone TEXT
+      );
+      INSERT INTO users (id) VALUES (1);
+    `);
+    try {
+      // First call: route_logs doesn't exist yet, so this bootstraps the
+      // table, adds user_id, and creates idx_route_logs_user from scratch.
+      conn.migrateRouteLogsSchema(raw);
+
+      const execSpy = vi.spyOn(raw, "exec");
+      // Second call: everything — including the index — is already current.
+      conn.migrateRouteLogsSchema(raw);
+
+      const indexStatements = execSpy.mock.calls
+        .map(([sql]) => sql)
+        .filter((sql): sql is string => typeof sql === "string" && sql.includes("idx_route_logs_user"));
+      expect(indexStatements).toEqual([]);
+
+      execSpy.mockRestore();
+    } finally {
+      raw.close();
+    }
+  });
+
   it("issue #499: lazy ALTER adds user_id to a legacy route_logs table without losing rows", () => {
     const file = newDbFile();
     // Mimic a prod DB that pre-dates issue #499: route_logs has the #296
@@ -1102,8 +1300,26 @@ describe("Phase D — domain tables carry user_id", () => {
   // PRAGMA foreign_key_list) — so "just move it to the merge list" fails
   // loudly here instead of silently at the next split-brain merge or, worse,
   // silently passing review because the guard only checked *a* list.
+  //
+  // Issue #504 — and why even THAT was not enough. Every axis above is
+  // bookkeeping: it asks "is this table named in one of the lists, and is the
+  // list it is named in consistent with the schema". It never asks whether a
+  // merge works. So all seven tables that made mergeUserInto throw
+  // `FOREIGN KEY constraint failed` (recovery, cycles, sleep, daily_summary,
+  // integrations, user_settings, device_tokens) sat in
+  // KNOWN_UNMERGED_USER_FK_TABLES and passed this test cleanly while Sign in
+  // with Apple was 500ing in production. Membership in the "deliberately not
+  // merged" list was accepted as equivalent to being merged; it is the
+  // opposite. A table left out of the repoint still points at the losing
+  // account when `DELETE FROM users` runs.
+  //
+  // The fix is a fourth, behavioural axis (the test after this one): build a
+  // real DB, give the LOSER a row in every user_id-bearing table enumerated
+  // from the live schema, run a real merge, and assert it neither throws nor
+  // loses rows. That axis fails on the pre-#504 code and cannot be satisfied
+  // by editing a list.
   // -------------------------------------------------------------------------
-  it("issue #502: every user_id-bearing table is in the correct one of USER_FK_TABLES / KNOWN_UNMERGED_USER_FK_TABLES", () => {
+  it("issue #502/#504: every user_id-bearing table is in the correct one of USER_FK_TABLES / USER_FK_CONFLICT_TABLES", () => {
     const file = newDbFile();
     process.env.WHOOP_DB_PATH = file;
     const db = conn.openWrite();
@@ -1119,12 +1335,18 @@ describe("Phase D — domain tables carry user_id", () => {
 
       const userFkTables = new Set<string>(authMod.USER_FK_TABLES);
       const optional = new Set<string>(authMod.optionalUserFkTables(db!));
+      const conflictTables = new Set<string>(authMod.USER_FK_CONFLICT_TABLES);
       const knownUnmerged = new Set<string>(authMod.KNOWN_UNMERGED_USER_FK_TABLES);
-      const accountedFor = new Set<string>([...userFkTables, ...optional, ...knownUnmerged]);
+      const accountedFor = new Set<string>([
+        ...userFkTables,
+        ...optional,
+        ...conflictTables,
+        ...knownUnmerged,
+      ]);
 
       // Axis 1 — completeness: every table with a user_id column, or an FK to
-      // users(id) under any name, must be accounted for in one of the three
-      // lists. Enumerating by column presence (not declared-FK alone) is what
+      // users(id) under any name, must be accounted for in one of the lists.
+      // Enumerating by column presence (not declared-FK alone) is what
       // catches workout_plans and server_logs, which carry a plain `user_id`
       // column with no REFERENCES clause and were previously invisible here —
       // mergeUserInto silently orphaned their rows on every split-brain merge.
@@ -1133,9 +1355,25 @@ describe("Phase D — domain tables carry user_id", () => {
         missing,
         missing.length
           ? `table(s) have a user_id column (or an FK to users(id)) but are missing from ` +
-              `USER_FK_TABLES / optionalUserFkTables / KNOWN_UNMERGED_USER_FK_TABLES in ` +
-              `apps/web/src/lib/db/auth.ts: ${missing.join(", ")}`
+              `USER_FK_TABLES / optionalUserFkTables / USER_FK_CONFLICT_TABLES / ` +
+              `KNOWN_UNMERGED_USER_FK_TABLES in apps/web/src/lib/db/auth.ts: ${missing.join(", ")}`
           : "",
+      ).toEqual([]);
+
+      // Axis 1b — the lists must be disjoint. A table in both USER_FK_TABLES
+      // and USER_FK_CONFLICT_TABLES would be repointed twice by mergeUserInto:
+      // the bare UPDATE runs first and throws on the very collision the
+      // conflict path exists to resolve, so "belt and braces" here is a bug.
+      const doubleListed = [...candidates].filter(
+        (t) =>
+          [userFkTables, optional, conflictTables, knownUnmerged].filter((s) =>
+            s.has(t),
+          ).length > 1,
+      );
+      expect(
+        doubleListed,
+        `table(s) appear in more than one of the auth.ts merge lists — each needs exactly ` +
+          `one merge strategy: ${doubleListed.join(", ")}`,
       ).toEqual([]);
 
       // The inverse drift: an entry that no longer has a user_id column (or
@@ -1147,7 +1385,7 @@ describe("Phase D — domain tables carry user_id", () => {
       );
       expect(
         stale,
-        `entries in USER_FK_TABLES / KNOWN_UNMERGED_USER_FK_TABLES that no longer have a ` +
+        `entries in the auth.ts merge lists that no longer have a ` +
           `user_id column or FK to users(id): ${stale.join(", ")}`,
       ).toEqual([]);
 
@@ -1165,29 +1403,301 @@ describe("Phase D — domain tables carry user_id", () => {
         unsafeInMergeList.length
           ? `table(s) in USER_FK_TABLES have user_id in a PRIMARY KEY or UNIQUE index — a ` +
               `bare repoint would throw UNIQUE constraint failed whenever both merging ` +
-              `accounts hold a matching row. Move to KNOWN_UNMERGED_USER_FK_TABLES (with a ` +
-              `documented conflict policy) instead: ${unsafeInMergeList.join(", ")}`
+              `accounts hold a matching row. Move to USER_FK_CONFLICT_TABLES (survivor-wins) ` +
+              `instead: ${unsafeInMergeList.join(", ")}`
           : "",
       ).toEqual([]);
 
-      // Axis 3 — complement: every KNOWN_UNMERGED_USER_FK_TABLES member must
-      // be excluded for a real, verified reason — user_id in a PRIMARY KEY or
-      // UNIQUE index, OR a declared FK to users(id) with an ON DELETE action
-      // (which silently cascades/detaches instead of failing loudly, its own
-      // kind of unsafe — see the chat_attachments cascade-data-loss case
-      // fixed in issue #502). A table satisfying neither has no reason to be
-      // excluded from the merge list; it belongs in USER_FK_TABLES instead.
-      const wronglyExcluded = [...knownUnmerged].filter(
-        (t) => !userIdConstrainsUniqueness(db!, t) && !userIdFkHasOnDeleteAction(db!, t),
+      // Axis 3 — complement: USER_FK_CONFLICT_TABLES pays for a delete pass
+      // per uniqueness key on every merge, so a table only belongs there if
+      // user_id really is in a PRIMARY KEY or UNIQUE index. Anything else is
+      // safe (and cheaper) as a bare repoint in USER_FK_TABLES.
+      const cheapEnoughForBareRepoint = [...conflictTables].filter(
+        (t) => !userIdConstrainsUniqueness(db!, t),
       );
       expect(
-        wronglyExcluded,
-        wronglyExcluded.length
-          ? `table(s) in KNOWN_UNMERGED_USER_FK_TABLES have neither user_id in a PK/UNIQUE ` +
-              `index nor an ON DELETE action on their FK to users(id) — nothing stops a bare ` +
-              `repoint. Move to USER_FK_TABLES: ${wronglyExcluded.join(", ")}`
+        cheapEnoughForBareRepoint,
+        cheapEnoughForBareRepoint.length
+          ? `table(s) in USER_FK_CONFLICT_TABLES have user_id in no PRIMARY KEY and no ` +
+              `UNIQUE index, so nothing can collide and the survivor-wins delete pass can ` +
+              `only lose rows for no reason. Move to USER_FK_TABLES: ` +
+              `${cheapEnoughForBareRepoint.join(", ")}`
           : "",
       ).toEqual([]);
+
+      // Axis 3b — the escape hatch stays shut. Anything in
+      // KNOWN_UNMERGED_USER_FK_TABLES is genuinely not merged, so it still
+      // points at the losing account when `DELETE FROM users` runs: the merge
+      // throws FOREIGN KEY constraint failed (issue #504's sign-in 500) or,
+      // with ON DELETE CASCADE, silently destroys the rows (issue #504's
+      // chat_attachments case). There is no schema property that makes that
+      // acceptable, which is why this is an emptiness check and not another
+      // "is the exclusion justified" check — the previous formulation of that
+      // check is precisely what rubber-stamped all seven #504 tables.
+      expect(
+        [...knownUnmerged],
+        `KNOWN_UNMERGED_USER_FK_TABLES must stay empty: a listed table still points at the ` +
+          `losing user when mergeUserInto runs DELETE FROM users, which throws (or cascades ` +
+          `the rows away). Give it a merge strategy in USER_FK_TABLES or ` +
+          `USER_FK_CONFLICT_TABLES instead`,
+      ).toEqual([]);
+
+      // Sanity-check the ON DELETE reflection helper still has a subject —
+      // chat_attachments is the schema's only cascading user_id FK and the
+      // reason a missing table can fail silently rather than loudly. If this
+      // ever goes false the helper has gone blind, not the risk away.
+      expect(
+        userIdFkHasOnDeleteAction(db!, "chat_attachments"),
+        "chat_attachments.user_id should still declare ON DELETE CASCADE",
+      ).toBe(true);
+    } finally {
+      db?.close();
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Issue #504 — the behavioural axis. Everything above is list bookkeeping;
+  // this runs an actual split-brain merge through the real code path
+  // (upsertUserByAppleSub → mergeUserInto) against a real openWrite() schema
+  // with foreign_keys = ON.
+  //
+  // Table set and required columns are reflected from the live schema, not
+  // hardcoded, so a table added later without a merge strategy fails here on
+  // its first run instead of on someone's next sign-in.
+  // -------------------------------------------------------------------------
+  it("issue #504: a real merge succeeds and loses nothing when the loser holds a row in every user_id table", () => {
+    const file = newDbFile();
+    process.env.WHOOP_DB_PATH = file;
+    let boot = conn.openWrite();
+    expect(boot).not.toBeNull();
+    const tables = (
+      boot!
+        .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+        .all() as { name: string }[]
+    ).map((r) => r.name);
+    const candidates = [...tablesWithUserIdOrFk(boot!, tables)];
+    boot!.close();
+    boot = null;
+
+    // Split-brain state: `keep` matched by apple_sub (holds the OLD email),
+    // `gone` matched by the NEW email the user now signs in with.
+    const seed = new Database(file);
+    let goneId: number;
+    try {
+      seed.pragma("foreign_keys = ON");
+      seed
+        .prepare("UPDATE users SET apple_sub = ?, email = ? WHERE id = 1")
+        .run("sub-504-keep", "old-504@example.com");
+      goneId = Number(
+        seed
+          .prepare("INSERT INTO users (apple_sub, email) VALUES (?, ?)")
+          .run("sub-504-gone", "new-504@example.com").lastInsertRowid,
+      );
+      for (const table of candidates) {
+        seedUserRow(seed, table, goneId, `l-${table}`);
+      }
+    } finally {
+      seed.close();
+    }
+
+    const before = new Database(file);
+    const rowsBefore = new Map<string, number>();
+    try {
+      for (const table of candidates) {
+        const n = before
+          .prepare(`SELECT COUNT(*) AS n FROM "${table}" WHERE user_id = ?`)
+          .get(goneId) as { n: number };
+        // The seeder has to actually have seeded, or "nothing was lost" is
+        // vacuously true for that table.
+        expect(n.n, `${table} was not seeded for the losing user`).toBeGreaterThan(0);
+        rowsBefore.set(table, n.n);
+      }
+    } finally {
+      before.close();
+    }
+
+    // Pre-#504 this threw `FOREIGN KEY constraint failed` on the first of the
+    // seven conflict tables (and, for chat_attachments, silently cascaded).
+    const keep = authMod.upsertUserByAppleSub("sub-504-keep", "new-504@example.com");
+    expect(keep.id).toBe(1);
+
+    const after = new Database(file);
+    try {
+      const users = after.prepare("SELECT id FROM users").all() as { id: number }[];
+      expect(users.map((u) => u.id)).toEqual([1]);
+
+      for (const table of candidates) {
+        const dangling = after
+          .prepare(`SELECT COUNT(*) AS n FROM "${table}" WHERE user_id = ?`)
+          .get(goneId) as { n: number };
+        expect(dangling.n, `${table} still points at the deleted user`).toBe(0);
+
+        // Survivor held no rows, so every loser row must have MOVED — none
+        // dropped by the survivor-wins policy, none cascaded away.
+        const moved = after
+          .prepare(`SELECT COUNT(*) AS n FROM "${table}" WHERE user_id = ?`)
+          .get(keep.id) as { n: number };
+        expect(moved.n, `${table} lost rows during the merge`).toBe(
+          rowsBefore.get(table),
+        );
+      }
+
+      // Belt and braces on the FK invariant itself.
+      const violations = after.pragma("foreign_key_check") as unknown[];
+      expect(violations).toEqual([]);
+    } finally {
+      after.close();
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Issue #504 — the collision path. Both accounts hold a row on the same
+  // uniqueness key, so the repoint cannot just move it. Policy: SURVIVOR
+  // WINS, and the drop is counted in the merge log line.
+  // -------------------------------------------------------------------------
+  it("issue #504: survivor's row wins a collision, the loser's is dropped and counted in the log", () => {
+    const file = newDbFile();
+    process.env.WHOOP_DB_PATH = file;
+    const boot = conn.openWrite();
+    boot?.close();
+
+    const seed = new Database(file);
+    let goneId: number;
+    try {
+      seed.pragma("foreign_keys = ON");
+      seed
+        .prepare("UPDATE users SET apple_sub = ?, email = ? WHERE id = 1")
+        .run("sub-504-conflict-keep", "old-conflict@example.com");
+      goneId = Number(
+        seed
+          .prepare("INSERT INTO users (apple_sub, email) VALUES (?, ?)")
+          .run("sub-504-conflict-gone", "new-conflict@example.com").lastInsertRowid,
+      );
+      // Same PK (user_id, date) → collision. Distinct scores so we can tell
+      // which row survived.
+      for (const userId of [1, goneId]) {
+        seed
+          .prepare("INSERT INTO recovery (user_id, date, recovery_score) VALUES (?, ?, ?)")
+          .run(userId, "2026-05-01", userId === 1 ? 88 : 11);
+      }
+      // Non-colliding date on the loser — must still be moved, not dropped.
+      seed
+        .prepare("INSERT INTO recovery (user_id, date, recovery_score) VALUES (?, ?, ?)")
+        .run(goneId, "2026-05-02", 42);
+      // Same (user_id, provider) → collision on a different key shape.
+      for (const userId of [1, goneId]) {
+        seed
+          .prepare(
+            `INSERT INTO integrations (user_id, provider, access_token, refresh_token, expires_at, updated_at)
+             VALUES (?, 'whoop', ?, 'r', '2026-05-01T00:00:00Z', '2026-05-01T00:00:00Z')`,
+          )
+          .run(userId, userId === 1 ? "survivor-token" : "loser-token");
+      }
+      // user_settings keys on user_id ALONE — any row on both sides collides.
+      for (const userId of [1, goneId]) {
+        seed
+          .prepare(
+            "INSERT INTO user_settings (user_id, model_pref, updated_at) VALUES (?, ?, '2026-05-01T00:00:00Z')",
+          )
+          .run(userId, userId === 1 ? "survivor-pref" : "loser-pref");
+      }
+      // sleep keys on (user_id, sleep_id), NOT (user_id, date) — same date,
+      // different sleep_id, so both rows must survive the merge.
+      seed
+        .prepare("INSERT INTO sleep (user_id, sleep_id, date) VALUES (?, ?, ?)")
+        .run(1, "sleep-main", "2026-05-01");
+      seed
+        .prepare("INSERT INTO sleep (user_id, sleep_id, date) VALUES (?, ?, ?)")
+        .run(goneId, "sleep-nap", "2026-05-01");
+    } finally {
+      seed.close();
+    }
+
+    const logged: string[] = [];
+    const capture = (...args: unknown[]) => {
+      logged.push(args.map(String).join(" "));
+    };
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(capture);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(capture);
+    try {
+      const keep = authMod.upsertUserByAppleSub(
+        "sub-504-conflict-keep",
+        "new-conflict@example.com",
+      );
+      expect(keep.id).toBe(1);
+    } finally {
+      warnSpy.mockRestore();
+      logSpy.mockRestore();
+    }
+
+    const after = new Database(file);
+    try {
+      // Survivor's data is untouched; the loser's colliding rows are gone.
+      const rec = after
+        .prepare("SELECT date, recovery_score FROM recovery WHERE user_id = 1 ORDER BY date")
+        .all() as { date: string; recovery_score: number }[];
+      expect(rec).toEqual([
+        { date: "2026-05-01", recovery_score: 88 },
+        { date: "2026-05-02", recovery_score: 42 },
+      ]);
+
+      const integ = after
+        .prepare("SELECT access_token FROM integrations WHERE user_id = 1")
+        .all() as { access_token: string }[];
+      expect(integ).toEqual([{ access_token: "survivor-token" }]);
+
+      const settings = after
+        .prepare("SELECT model_pref FROM user_settings")
+        .all() as { model_pref: string }[];
+      expect(settings).toEqual([{ model_pref: "survivor-pref" }]);
+
+      // (user_id, sleep_id) — a shared date is NOT a collision here.
+      const sleeps = after
+        .prepare("SELECT sleep_id FROM sleep WHERE user_id = 1 ORDER BY sleep_id")
+        .all() as { sleep_id: string }[];
+      expect(sleeps).toEqual([{ sleep_id: "sleep-main" }, { sleep_id: "sleep-nap" }]);
+
+      expect((after.prepare("SELECT id FROM users").all() as unknown[]).length).toBe(1);
+    } finally {
+      after.close();
+    }
+
+    // The drop is counted, per table, in the merge log line — and visibly
+    // separated from the move counts. A silent drop is the failure mode #504
+    // is about, so this assertion is load-bearing, not cosmetic.
+    const mergeLine = logged.find((l) => l.includes("[upsertUserByAppleSub] merged user"));
+    expect(mergeLine, `no merge log line in: ${logged.join(" | ")}`).toBeDefined();
+    expect(mergeLine).toContain("dropped(survivor-wins, total=3)");
+    expect(mergeLine).toMatch(/dropped\(survivor-wins, total=3\):[^;]*\brecovery=1\b/);
+    expect(mergeLine).toMatch(/dropped\(survivor-wins, total=3\):[^;]*\bintegrations=1\b/);
+    expect(mergeLine).toMatch(/dropped\(survivor-wins, total=3\):[^;]*\buser_settings=1\b/);
+    // Moves are still reported, and the non-colliding rows are among them.
+    expect(mergeLine).toMatch(/moved:[^;]*\brecovery=1\b/);
+    expect(mergeLine).toMatch(/moved:[^;]*\bsleep=1\b/);
+  });
+
+  // The collision keys mergeUserInto derives must match the primary keys
+  // documented in CLAUDE.md's DB layer table. Assuming `(user_id, date)`
+  // everywhere is wrong and has broken this repo's suite before.
+  it("issue #504: collision keys are reflected per table, not assumed uniform", () => {
+    const file = newDbFile();
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    try {
+      const keyOf = (t: string) =>
+        authMod.userIdUniqueKeys(db!, t).map((k) => [...k].sort().join(","));
+      expect(keyOf("recovery")).toEqual(["date,user_id"]);
+      expect(keyOf("cycles")).toEqual(["date,user_id"]);
+      expect(keyOf("daily_summary")).toEqual(["date,user_id"]);
+      expect(keyOf("sleep")).toEqual(["sleep_id,user_id"]);
+      expect(keyOf("integrations")).toEqual(["provider,user_id"]);
+      expect(keyOf("user_settings")).toEqual(["user_id"]);
+      expect(keyOf("device_tokens")).toEqual(["token,user_id"]);
+      // Surrogate-keyed tables have no user_id-bearing uniqueness constraint
+      // at all — which is exactly why they get the cheap bare repoint.
+      for (const t of ["workouts", "chat_attachments", "client_logs", "perf_metrics"]) {
+        expect(keyOf(t), `${t} should have no user_id uniqueness key`).toEqual([]);
+      }
     } finally {
       db?.close();
     }
