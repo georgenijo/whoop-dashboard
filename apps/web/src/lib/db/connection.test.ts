@@ -675,6 +675,78 @@ describe("Phase D — domain tables carry user_id", () => {
     }
   });
 
+  // -------------------------------------------------------------------------
+  // Issue #505 part 2 — idx_route_logs_user matches getRouteLogs' actual
+  // ORDER BY (started_at DESC, id DESC), not just (user_id, id DESC).
+  // -------------------------------------------------------------------------
+
+  it("issue #505: idx_route_logs_user is (user_id, started_at DESC, id DESC) and serves the sort with no temp b-tree", () => {
+    const file = newDbFile();
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    try {
+      const idxSql = db!
+        .prepare("SELECT sql FROM sqlite_master WHERE type='index' AND name='idx_route_logs_user'")
+        .get() as { sql: string };
+      expect(idxSql.sql).toBe(
+        "CREATE INDEX idx_route_logs_user ON route_logs(user_id, started_at DESC, id DESC)"
+      );
+
+      const plan = db!
+        .prepare(
+          "EXPLAIN QUERY PLAN SELECT id FROM route_logs WHERE user_id = ? ORDER BY started_at DESC, id DESC LIMIT 10"
+        )
+        .all(1) as { detail: string }[];
+      const detail = plan.map((r) => r.detail).join(" | ");
+      expect(detail).toContain("idx_route_logs_user");
+      expect(detail).not.toContain("TEMP B-TREE");
+    } finally {
+      db?.close();
+    }
+  });
+
+  it("issue #505: a pre-existing (user_id, id DESC) index is replaced, not left alongside the new one", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        apple_sub TEXT UNIQUE,
+        email TEXT,
+        name TEXT,
+        timezone TEXT
+      );
+      INSERT INTO users (id) VALUES (1);
+      CREATE TABLE route_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        started_at TEXT NOT NULL,
+        route TEXT NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        status INTEGER NOT NULL,
+        details TEXT,
+        response_bytes INTEGER,
+        render_ms INTEGER,
+        user_id INTEGER REFERENCES users(id)
+      );
+      CREATE INDEX idx_route_logs_user ON route_logs(user_id, id DESC);
+    `);
+    raw.close();
+
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    try {
+      const rows = db!
+        .prepare("SELECT sql FROM sqlite_master WHERE type='index' AND tbl_name='route_logs' AND name='idx_route_logs_user'")
+        .all() as { sql: string }[];
+      expect(rows).toHaveLength(1);
+      expect(rows[0].sql).toBe(
+        "CREATE INDEX idx_route_logs_user ON route_logs(user_id, started_at DESC, id DESC)"
+      );
+    } finally {
+      db?.close();
+    }
+  });
+
   it("issue #499: lazy ALTER adds user_id to a legacy route_logs table without losing rows", () => {
     const file = newDbFile();
     // Mimic a prod DB that pre-dates issue #499: route_logs has the #296

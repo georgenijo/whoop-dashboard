@@ -210,17 +210,11 @@ export function openWrite(): DB | null {
       );
       -- idx_sync_logs_user: created after the lazy ALTER, same reason as above.
       CREATE INDEX IF NOT EXISTS idx_sync_logs_started ON sync_logs(started_at DESC);
-      CREATE TABLE IF NOT EXISTS route_logs (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        started_at TEXT NOT NULL,
-        route TEXT NOT NULL,
-        duration_ms INTEGER NOT NULL,
-        status INTEGER NOT NULL,
-        details TEXT,
-        response_bytes INTEGER,
-        render_ms INTEGER
-      );
-      CREATE INDEX IF NOT EXISTS route_logs_started_at_idx ON route_logs(started_at DESC);
+      -- route_logs itself is bootstrapped and migrated by
+      -- migrateRouteLogsSchema() below (issue #505), not inline here — it's
+      -- the one table whose migration needs to run from two different
+      -- connections (see that function's doc comment), so it's the one
+      -- table pulled out of this shared schema string.
       CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         apple_sub TEXT UNIQUE,
@@ -425,31 +419,13 @@ export function openWrite(): DB | null {
         );
       }
     }
-    const routeCols = db.prepare("PRAGMA table_info(route_logs)").all() as { name: string }[];
-    if (!routeCols.some((c) => c.name === "details")) {
-      db.exec("ALTER TABLE route_logs ADD COLUMN details TEXT");
-    }
-    // Issue #296 — page-render perf signal. response_bytes always NULL
-    // (Next.js 16 `after()` has no handle on the streamed response body).
-    if (!routeCols.some((c) => c.name === "response_bytes")) {
-      db.exec("ALTER TABLE route_logs ADD COLUMN response_bytes INTEGER");
-    }
-    if (!routeCols.some((c) => c.name === "render_ms")) {
-      db.exec("ALTER TABLE route_logs ADD COLUMN render_ms INTEGER");
-    }
-    // Issue #499 — tenant-scope route_logs. Same shape as the #494 migration
-    // for chat_logs/sync_logs above: nullable INTEGER FK (a non-NULL DEFAULT
-    // combined with REFERENCES is illegal under foreign_keys=ON — see the
-    // workouts ALTER further down for the tripwire), legacy rows claimed for
-    // the sole account when the DB has exactly one user.
-    if (!routeCols.some((c) => c.name === "user_id")) {
-      addUserIdColumnAndClaimLegacyRows(db, "route_logs");
-    }
-    // idx_route_logs_user is created AFTER the lazy ALTER above, not in the
-    // bootstrap CREATE TABLE block — same reasoning as idx_chat_logs_user /
-    // idx_sync_logs_user: on a pre-#499 DB the CREATE TABLE is a no-op, so
-    // indexing user_id here would reference a column that doesn't exist yet.
-    db.exec("CREATE INDEX IF NOT EXISTS idx_route_logs_user ON route_logs(user_id, id DESC)");
+    // route_logs — issue #505: bootstrap + every lazy ALTER for this table
+    // live in one place (migrateRouteLogsSchema) shared with logs.ts's
+    // openRouteLogWrite(), instead of being hand-duplicated across the two
+    // connections. See that function's doc comment for why route_logs still
+    // gets its own connection in logs.ts rather than routing every call
+    // through openWrite().
+    migrateRouteLogsSchema(db);
     const insightCols = db.prepare("PRAGMA table_info(insights)").all() as { name: string }[];
     if (!insightCols.some((c) => c.name === "created_at")) {
       db.exec("ALTER TABLE insights ADD COLUMN created_at TEXT");
@@ -791,7 +767,7 @@ export function safeWriteQuery<T>(fn: (db: DB) => T): T | null {
  * On a multi-user DB nothing is claimed: there is no defensible owner, so the
  * rows stay NULL and stay invisible (fail closed).
  */
-export function addUserIdColumnAndClaimLegacyRows(db: DB, table: string): void {
+function addUserIdColumnAndClaimLegacyRows(db: DB, table: string): void {
   const userRows = db.prepare("SELECT id FROM users").all() as { id: number }[];
   const soleUserId = userRows.length === 1 ? userRows[0].id : null;
   const migrate = db.transaction(() => {
@@ -805,6 +781,107 @@ export function addUserIdColumnAndClaimLegacyRows(db: DB, table: string): void {
     }
   });
   migrate();
+}
+
+// ---------------------------------------------------------------------------
+// Issue #505 — route_logs bootstrap + migration, shared by openWrite() and
+// logs.ts's openRouteLogWrite()
+// ---------------------------------------------------------------------------
+
+/**
+ * Full route_logs schema: CREATE TABLE, every lazy ALTER (issue #296 perf
+ * columns, issue #499 user_id + index). Single source of truth for both
+ * openWrite() (called above, unconditionally, on every write call) and
+ * logs.ts's openRouteLogWrite() (called once per process, cached — see
+ * below), so the two can no longer drift the way they did before #505, when
+ * this whole block was hand-copied into logs.ts and kept in sync "by
+ * comment."
+ *
+ * route_logs still gets bootstrapped from a SEPARATE better-sqlite3
+ * connection in logs.ts rather than every write simply calling openWrite().
+ * That split is deliberate, not an accident, and the reason is cost:
+ * route_logs is written on literally every page render — see the `after()`
+ * hook in `apps/web/src/app/(dashboard)/layout.tsx`, which fires for every
+ * route in the app — making it the single hottest write path in this
+ * codebase, far hotter than chat_logs (once per chat turn) or sync_logs
+ * (rate-limited to roughly once per 5 minutes).
+ *
+ * openWrite() has no memoization: every call re-execs the ~20-table bootstrap
+ * string and re-runs every ALTER guard via a fresh PRAGMA table_info per
+ * table. Benchmarked against an already-migrated DB (apps/web, 2026-08,
+ * better-sqlite3, warm FS cache, 2000 iterations): openWrite() cost ~0.81ms/
+ * call versus ~0.23ms/call for logs.ts's cached fast path (open a raw
+ * connection, skip migration entirely once `routeLogsSchemaReady` is true) —
+ * roughly 3.5x, ~0.6ms of pure avoidable overhead on every single page
+ * request. It runs inside `after()` so it doesn't add to response latency,
+ * but it still holds the sole SQLite writer lock for that much longer on
+ * every request, which is real contention against chat/sync writes under
+ * concurrent load. logs.ts's module-level `routeLogsSchemaReady` flag makes
+ * this a one-time cost per process instead of a per-request one.
+ *
+ * Precondition: `users` must already exist (addUserIdColumnAndClaimLegacyRows
+ * below does `SELECT id FROM users`). openWrite() satisfies this by
+ * construction (users is created and seeded earlier in the same function).
+ * logs.ts's openRouteLogWrite() checks for `users` before calling this and
+ * falls back to a one-time, full openWrite() bootstrap if it's missing —
+ * that's the issue #505 edge case: a DB file where openWrite() has never run
+ * has no `users` table yet, so calling this function directly would throw,
+ * get swallowed by openRouteLogWrite()'s catch, and silently leave
+ * route_logs created without `user_id`.
+ */
+export function migrateRouteLogsSchema(db: DB): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS route_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      started_at TEXT NOT NULL,
+      route TEXT NOT NULL,
+      duration_ms INTEGER NOT NULL,
+      status INTEGER NOT NULL,
+      details TEXT,
+      response_bytes INTEGER,
+      render_ms INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS route_logs_started_at_idx ON route_logs(started_at DESC);
+  `);
+  const routeCols = db.prepare("PRAGMA table_info(route_logs)").all() as { name: string }[];
+  if (!routeCols.some((c) => c.name === "details")) {
+    db.exec("ALTER TABLE route_logs ADD COLUMN details TEXT");
+  }
+  // Issue #296 — page-render perf signal. response_bytes always NULL
+  // (Next.js 16 `after()` has no handle on the streamed response body).
+  if (!routeCols.some((c) => c.name === "response_bytes")) {
+    db.exec("ALTER TABLE route_logs ADD COLUMN response_bytes INTEGER");
+  }
+  if (!routeCols.some((c) => c.name === "render_ms")) {
+    db.exec("ALTER TABLE route_logs ADD COLUMN render_ms INTEGER");
+  }
+  // Issue #499 — tenant-scope route_logs. Same shape as the #494 migration
+  // for chat_logs/sync_logs above: nullable INTEGER FK (a non-NULL DEFAULT
+  // combined with REFERENCES is illegal under foreign_keys=ON — see the
+  // workouts ALTER further down for the tripwire), legacy rows claimed for
+  // the sole account when the DB has exactly one user.
+  if (!routeCols.some((c) => c.name === "user_id")) {
+    addUserIdColumnAndClaimLegacyRows(db, "route_logs");
+  }
+  // idx_route_logs_user is (re)created AFTER the lazy ALTER above, not in the
+  // bootstrap CREATE TABLE block — same reasoning as idx_chat_logs_user /
+  // idx_sync_logs_user: on a pre-#499 DB the CREATE TABLE is a no-op, so
+  // indexing user_id here would reference a column that doesn't exist yet.
+  //
+  // Issue #505 part 2 — the real query (logs.ts getRouteLogs) orders by
+  // `started_at DESC, id DESC`, not `id DESC` alone (unlike chat_logs /
+  // sync_logs, whose real queries DO order by `id DESC` alone and whose
+  // existing (user_id, id DESC) indexes already serve that with no temp
+  // b-tree — verified with EXPLAIN QUERY PLAN against a populated DB, so
+  // those two are intentionally left untouched here). The old two-column
+  // index forced `USE TEMP B-TREE FOR ORDER BY` on every /logs load. Safe to
+  // drop: nothing else in the codebase queries route_logs by
+  // `(user_id, id DESC)` alone (grepped) or references the index by name
+  // outside this migration and its test.
+  db.exec("DROP INDEX IF EXISTS idx_route_logs_user");
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_route_logs_user ON route_logs(user_id, started_at DESC, id DESC)"
+  );
 }
 
 // ---------------------------------------------------------------------------
