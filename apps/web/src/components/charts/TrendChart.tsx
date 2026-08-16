@@ -91,7 +91,15 @@ export default function TrendChart({
   const [rollingMode, setRollingMode] = useState<RollingMode>("raw");
 
   useEffect(() => {
-    setShowTrendline(localStorage.getItem("trendline") === "1");
+    // localStorage is browser-only, so this can't be read during the render
+    // that produces the SSR'd/hydrated markup without a mismatch — it has to
+    // happen post-mount. Deferring the resulting setState to a microtask
+    // (rather than calling it synchronously in the effect body) avoids the
+    // cascading-render pattern react-hooks/set-state-in-effect flags; see the
+    // same technique for the same reason in settings/page.tsx.
+    queueMicrotask(() => {
+      setShowTrendline(localStorage.getItem("trendline") === "1");
+    });
   }, []);
 
   const valid = data.filter((d): d is { date: string; value: number } => d.value != null && Number.isFinite(d.value));

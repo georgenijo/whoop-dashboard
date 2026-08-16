@@ -1,6 +1,6 @@
 import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useCoachThread, type ThreadSummary } from "./useCoachThread";
+import { useCoachThread, type ChatMessage, type ThreadSummary } from "./useCoachThread";
 
 const router = vi.hoisted(() => ({
   push: vi.fn(),
@@ -20,7 +20,7 @@ const initialThreads: ThreadSummary[] = [
     last_preview: null,
   },
 ];
-const initialMessages = [];
+const initialMessages: ChatMessage[] = [];
 
 describe("useCoachThread", () => {
   beforeEach(() => {

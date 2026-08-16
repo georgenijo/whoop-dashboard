@@ -39,6 +39,38 @@ export const viewport: Viewport = {
   themeColor: "oklch(20% 0.004 70)",
 };
 
+// Plain (non-component, non-hook) helper so the render-timing math lives
+// outside anything the react-hooks/purity rule treats as a component body.
+// It's only ever invoked from inside `after()` (post-response), so calling
+// Date.now() here can never be observed during render.
+function logRouteRender(args: {
+  userId: number;
+  startedAt: string;
+  route: string;
+  startMs: number;
+  details: string | null;
+  layoutStartMs: number;
+}) {
+  try {
+    const now = Date.now();
+    const renderMs = Math.max(0, now - args.layoutStartMs);
+    addRouteLog({
+      user_id: args.userId,
+      started_at: args.startedAt,
+      route: args.route,
+      duration_ms: Math.max(0, now - args.startMs),
+      status: 200,
+      details: args.details,
+      // response_bytes stays NULL: Next.js 16's `after()` runs after the
+      // streamed response is closed and exposes no rendered byte count.
+      response_bytes: null,
+      render_ms: renderMs,
+    });
+  } catch {
+    // Route timing must never affect the rendered page.
+  }
+}
+
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -64,28 +96,18 @@ export default async function RootLayout({
   const details = requestHeaders.get("x-whoop-route-log-details");
 
   if (route && startedAt && Number.isFinite(startMs)) {
-    after(() => {
-      try {
-        const now = Date.now();
-        const renderMs = Math.max(0, now - layoutStartMs);
-        addRouteLog({
-          // This layout requires auth above (redirects otherwise), so `user`
-          // is always resolved by the time this fires.
-          user_id: user.id,
-          started_at: startedAt,
-          route,
-          duration_ms: Math.max(0, now - startMs),
-          status: 200,
-          details,
-          // response_bytes stays NULL: Next.js 16's `after()` runs after the
-          // streamed response is closed and exposes no rendered byte count.
-          response_bytes: null,
-          render_ms: renderMs,
-        });
-      } catch {
-        // Route timing must never affect the rendered page.
-      }
-    });
+    // This layout requires auth above (redirects otherwise), so `user` is
+    // always resolved by the time this fires.
+    after(() =>
+      logRouteRender({
+        userId: user.id,
+        startedAt,
+        route,
+        startMs,
+        details,
+        layoutStartMs,
+      }),
+    );
   }
 
   return (

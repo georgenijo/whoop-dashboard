@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { NAV_ICONS } from "./icons";
 
 type Item = { href: string; label: string; icon: string };
@@ -31,13 +31,18 @@ export default function BottomNav() {
   const params = useSearchParams();
   const range = params.get("range");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Close the drawer on navigation. Adjusting state during render (rather
+  // than in an effect) per the documented "store prevProp, compare, adjust"
+  // pattern (https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes)
+  // avoids the extra commit + flash-open a post-navigation effect would cause.
+  const [prevPathname, setPrevPathname] = useState(pathname);
+  if (pathname !== prevPathname) {
+    setPrevPathname(pathname);
+    setDrawerOpen(false);
+  }
 
   const withRange = (h: string) => (range ? `${h}?range=${range}` : h);
   const moreActive = moreHrefs.has(pathname);
-
-  useEffect(() => {
-    setDrawerOpen(false);
-  }, [pathname]);
 
   return (
     <>

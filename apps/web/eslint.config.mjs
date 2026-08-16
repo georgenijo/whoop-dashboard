@@ -12,6 +12,13 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Not part of eslint-config-next's defaults, but needed here: `npm run
+    // build` runs `build:mcp` (esbuild) before `next build`, dropping a
+    // bundled, gitignored (see /dist/ in .gitignore) build artifact at
+    // dist/coach-mcp/server.mjs. Without this, running `npm run lint` after
+    // a build lints that generated bundle instead of source and reports
+    // spurious no-unused-vars warnings on re-exported/tree-shaken bindings.
+    "dist/**",
   ]),
   // Issue #290: forbid raw `req.nextUrl.origin` in API route handlers and
   // the proxy/middleware. Behind nginx + CF Access it leaks the upstream

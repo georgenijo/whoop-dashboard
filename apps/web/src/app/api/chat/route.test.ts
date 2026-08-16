@@ -145,8 +145,8 @@ function makeRequest(body: unknown, query?: string): Request {
   });
 }
 
-async function makePng(): Promise<Buffer> {
-  return sharp({
+async function makePng(): Promise<Uint8Array<ArrayBuffer>> {
+  const buffer = await sharp({
     create: {
       width: 12,
       height: 8,
@@ -156,6 +156,15 @@ async function makePng(): Promise<Buffer> {
   })
     .png()
     .toBuffer();
+  // `new Blob([...])` (a BlobPart[]) wants an ArrayBufferView backed by a
+  // plain ArrayBuffer. Node's Buffer.buffer is typed ArrayBufferLike (it
+  // may be backed by a SharedArrayBuffer), so it isn't structurally
+  // assignable to BlobPart even though it's fine at runtime. Copying into a
+  // fresh Uint8Array gives a real ArrayBuffer-backed view — but the return
+  // type must be pinned to `Uint8Array<ArrayBuffer>` explicitly, since a
+  // bare `Uint8Array` annotation defaults the generic back to
+  // `ArrayBufferLike` and reintroduces the same mismatch at call sites.
+  return new Uint8Array(buffer);
 }
 
 function makeMultipartRequest(
@@ -418,7 +427,7 @@ describe("POST /api/chat — multipart images", () => {
     let received: unknown;
     runAndPersistImpl = async (_uid, _thread, turn) => {
       received = turn;
-      return "ok";
+      return { reply: "ok", workLog: completedWorkLog };
     };
     const res = await POST(
       makeRequest(
@@ -443,7 +452,7 @@ describe("POST /api/chat — multipart images", () => {
     }> = [];
     runAndPersistImpl = async (_uid, _thread, turn) => {
       turns.push(turn as (typeof turns)[number]);
-      return "ok";
+      return { reply: "ok", workLog: completedWorkLog };
     };
 
     const textOnly = new FormData();
