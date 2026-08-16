@@ -3,8 +3,17 @@
  * One-shot migration: collapse the legacy bootstrap user (`user_id = 1`) onto
  * the canonical SIWA user row matched by CANONICAL_EMAIL.
  *
- * Idempotent. Single transaction. Repoints every user_id FK in the schema
- * (kept in sync with apps/web/src/lib/db/connection.ts).
+ * Idempotent. Single transaction.
+ *
+ * NOTE (issue #504): the USER_FK_TABLES snapshot below is FROZEN at the three
+ * tables that existed when this one-shot ran; it is NOT the current schema and
+ * must not be treated as such. Re-running it against today's DB would hit the
+ * same `FOREIGN KEY constraint failed` that #504 fixed in mergeUserInto —
+ * every table added since (chat_logs, sync_logs, route_logs, workouts,
+ * chat_attachments, …) plus the seven tables that need the survivor-wins
+ * conflict policy would still point at the collapsed user. Use
+ * upsertUserByAppleSub / mergeUserInto (apps/web/src/lib/db/auth.ts) for any
+ * new merge; that is the maintained path.
  *
  * Usage (run from anywhere — script resolves better-sqlite3 from
  * apps/web/node_modules):
@@ -33,8 +42,9 @@ const CANONICAL_EMAIL = (
 ).trim().toLowerCase();
 const BOOTSTRAP_USER_ID = 1;
 
-// Tables with a `user_id` FK to users(id). MUST match USER_FK_TABLES in
-// apps/web/src/lib/db/auth.ts and the schema in connection.ts.
+// Frozen snapshot of the user_id FK tables as of this one-shot's run — see
+// the #504 note in the header. Deliberately NOT kept in sync with
+// USER_FK_TABLES in apps/web/src/lib/db/auth.ts.
 const USER_FK_TABLES = ["chat_threads", "body_measurements", "sessions"] as const;
 
 function dbPath(): string {
