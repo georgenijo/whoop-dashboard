@@ -158,3 +158,85 @@ describe("proxy auth gate — publicOrigin (issue #290)", () => {
     expect(loc.startsWith("http://localhost:3000/signin")).toBe(true);
   });
 });
+
+describe("proxy — Content-Security-Policy-Report-Only (issue #501)", () => {
+  const HEADER = "content-security-policy-report-only";
+
+  it("attaches a report-only policy to page responses", async () => {
+    const { proxy } = await import("./proxy");
+    const res = proxy(makeRequest("/sleep", { cookie: "__Host-coach_session=x" }));
+    const csp = res.headers.get(HEADER);
+    expect(csp).toBeTruthy();
+    expect(csp).toContain("default-src 'self'");
+    expect(csp).toContain("img-src 'self' data: blob:");
+  });
+
+  it("attaches it to the /signin redirect too, not just 200s", async () => {
+    // The auth gate returns early, before the rest of the proxy runs. An
+    // earlier draft of this change let those responses out bare.
+    const { proxy } = await import("./proxy");
+    const res = proxy(makeRequest("/sleep"));
+    expect(res.status).toBe(307);
+    expect(res.headers.get(HEADER)).toContain("default-src 'self'");
+  });
+
+  it("mints a fresh nonce for every request", async () => {
+    const { proxy } = await import("./proxy");
+    const nonceOf = (path: string) =>
+      proxy(makeRequest(path, { cookie: "__Host-coach_session=x" }))
+        .headers.get(HEADER)
+        ?.match(/'nonce-([^']+)'/)?.[1];
+    const first = nonceOf("/sleep");
+    const second = nonceOf("/sleep");
+    expect(first).toBeTruthy();
+    expect(first).not.toBe(second);
+  });
+
+  it("skips /api/* — JSON responses are not parsed as documents", async () => {
+    const { proxy } = await import("./proxy");
+    const res = proxy(
+      makeRequest("/api/dashboard/today", { cookie: "__Host-coach_session=x" })
+    );
+    expect(res.headers.get(HEADER)).toBeNull();
+  });
+
+  it("ignores a client-supplied policy header on the request", async () => {
+    // Next.js reads the nonce back out of the REQUEST header to stamp its
+    // script tags. If a caller could set that header, they would choose the
+    // nonce the page renders — which is the entire protection.
+    const { proxy } = await import("./proxy");
+    const req = new NextRequest("https://example.test/sleep", {
+      headers: {
+        cookie: "__Host-coach_session=x",
+        "content-security-policy-report-only":
+          "script-src 'nonce-attacker-chosen'",
+      },
+    });
+    const res = proxy(req);
+    expect(res.headers.get(HEADER)).not.toContain("attacker-chosen");
+    // Next serialises the rewritten request headers into
+    // `x-middleware-request-*` and rebuilds the request from them. That is
+    // the value the renderer will read the nonce out of.
+    const forwarded = res.headers.get(`x-middleware-request-${HEADER}`);
+    expect(forwarded).toBeTruthy();
+    expect(forwarded).not.toContain("attacker-chosen");
+    expect(forwarded).toMatch(/'nonce-[A-Za-z0-9+/=]+'/);
+  });
+
+  it("strips a client-supplied policy header on /api/* too", async () => {
+    // The API branch mints no nonce, so it must DELETE rather than overwrite
+    // — otherwise the spoofed header would be forwarded verbatim.
+    const { proxy } = await import("./proxy");
+    const req = new NextRequest("https://example.test/api/dashboard/today", {
+      headers: {
+        cookie: "__Host-coach_session=x",
+        "content-security-policy-report-only":
+          "script-src 'nonce-attacker-chosen'",
+      },
+    });
+    const res = proxy(req);
+    const overridden = res.headers.get("x-middleware-override-headers") ?? "";
+    expect(overridden.split(",")).not.toContain(HEADER);
+    expect(res.headers.get(`x-middleware-request-${HEADER}`)).toBeNull();
+  });
+});

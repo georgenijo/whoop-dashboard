@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { COACH_SESSION_COOKIE } from "@/lib/auth/cookies";
 import { publicOrigin } from "@/lib/auth/origin";
+import { buildReportOnlyCsp, generateNonce } from "@/lib/security-headers";
 
 const PUBLIC_FILE = /\.[^/]+$/;
 const SENSITIVE_QUERY_KEY = /token|secret|code|state|key|password|auth/i;
@@ -152,14 +153,47 @@ function referrerDetails(req: NextRequest): {
   }
 }
 
+/**
+ * Issue #501. The candidate Content-Security-Policy ships REPORT-ONLY; the
+ * enforcing floor (frame-ancestors, object-src, base-uri, form-action) is set
+ * statically in `next.config.ts`. See `src/lib/security-headers.ts` for the
+ * rationale on every directive.
+ *
+ * It lives in the proxy rather than `next.config.ts` because the policy
+ * carries a per-request nonce, and `headers()` in the config is evaluated
+ * once at server start.
+ */
+const CSP_REPORT_ONLY_HEADER = "Content-Security-Policy-Report-Only";
+
+/**
+ * Only responses a browser parses as a document need the policy. Skipping
+ * `/api/*` also avoids minting a nonce (a CSPRNG call) on every XHR the
+ * dashboard fires, which on the coach page is a lot of them.
+ */
+function needsCsp(pathname: string): boolean {
+  return pathname !== "/api" && !pathname.startsWith("/api/");
+}
+
+function withCsp(res: NextResponse, csp: string | null): NextResponse {
+  if (csp) res.headers.set(CSP_REPORT_ONLY_HEADER, csp);
+  return res;
+}
+
 export function proxy(req: NextRequest) {
+  const pathname = req.nextUrl.pathname;
+  const csp = needsCsp(pathname)
+    ? buildReportOnlyCsp(
+        generateNonce(),
+        process.env.NODE_ENV === "development",
+      )
+    : null;
+
   // Auth gate runs BEFORE logging — there's no value in logging requests
   // that get redirected to /signin. Logger still attaches headers to the
   // genuine request below.
   const gate = authGate(req);
-  if (gate) return gate;
+  if (gate) return withCsp(gate, csp);
 
-  const pathname = req.nextUrl.pathname;
   const ts = new Date().toISOString();
   const rawUa = req.headers.get("user-agent") ?? "";
   const ua = rawUa.slice(0, 60);
@@ -172,12 +206,27 @@ export function proxy(req: NextRequest) {
   requestHeaders.delete("x-whoop-route-log-start-ms");
   requestHeaders.delete("x-whoop-route-log-details");
 
+  // Next.js parses the nonce back out of this REQUEST header and stamps it
+  // onto every script tag it emits (verified in Next 16.2.4:
+  // `app-render.js` reads `content-security-policy` OR
+  // `content-security-policy-report-only`). Without this the response header
+  // would advertise a policy that Next's own bootstrap script violates.
+  //
+  // Unconditionally cleared first: a client-supplied policy header would
+  // otherwise let a caller choose the nonce Next renders, which is the whole
+  // ballgame. Same spoofing guard as the x-whoop-route-log-* headers above.
+  requestHeaders.delete(CSP_REPORT_ONLY_HEADER);
+  if (csp) requestHeaders.set(CSP_REPORT_ONLY_HEADER, csp);
+
   if (!shouldLogRoute(pathname, req.method) || isNextInternalRequest(req)) {
-    return NextResponse.next({
-      request: {
-        headers: requestHeaders,
-      },
-    });
+    return withCsp(
+      NextResponse.next({
+        request: {
+          headers: requestHeaders,
+        },
+      }),
+      csp,
+    );
   }
 
   requestHeaders.set("x-whoop-route-log-route", pathname);
@@ -194,11 +243,14 @@ export function proxy(req: NextRequest) {
     })
   );
 
-  return NextResponse.next({
-    request: {
-      headers: requestHeaders,
-    },
-  });
+  return withCsp(
+    NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    }),
+    csp,
+  );
 }
 
 export const config = {

