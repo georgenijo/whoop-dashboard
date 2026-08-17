@@ -7,7 +7,7 @@ Standard end-to-end flow for any code-changing issue in this repo. Referenced fr
 Enter plan mode. Read every file relevant to the ticket — actual code, not just headers. Write a plan covering:
 
 - **Files to change** and why
-- **Approach**, reusing existing patterns: `openWrite()` lazy ALTER, `safeQuery`, Recharts component shape, Anthropic SDK, `requireAuth(req)`, `@st.fragment` for legacy Streamlit
+- **Approach**, reusing existing patterns: `openWrite()` lazy ALTER, `forUser()` scoped reads, `safeQuery`, Recharts component shape, the coach provider abstraction, `requireAuth(req)`
 - **Verification:** what build target, browser route, or curl confirms it works
 - **Risks:** schema migration on existing data, auth changes, race conditions, idle gaps, rate limits, cross-process locks
 
@@ -44,9 +44,11 @@ Each fix round is its own commit (`fix(review): <what>`). Don't squash review it
 
 ## 5. Local verification
 
-- `cd apps/web && npm run build` — production build passes
-- Python changes: `python3 -m py_compile streamlit/app.py streamlit/whoop/*.py sync/daily_sync.py`
-- TypeScript changes: a passing `npm run build` already covers `tsc`. ESLint runs as part of `next build`.
+- `cd apps/web && npm run lint && npx tsc --noEmit && npx vitest run && npm run build`
+  All four are CI gates. `npm run lint` is `eslint --max-warnings 0`, so a warning fails the build. Do not assume `next build` covers lint or `tsc` — it does not.
+- Python changes: `python3 -m py_compile streamlit/whoop/*.py` plus `pytest` for `tests/`.
+  Note `streamlit/whoop/` is library code used only by `scripts/` and `tests/` — the Streamlit UI and the `sync/daily_sync.py` path were both retired.
+- Rendering or behavioral changes: verify in a real browser via the `whoop-dev` skill, not just a green build.
 
 If a check fails, fix and return to step 4.
 
