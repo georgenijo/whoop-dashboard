@@ -22,7 +22,10 @@ from pathlib import Path
 from typing import Any
 
 FLEET_NODE = os.environ.get("COACH_FLEET_NODE", "opti")
-PROD_DB_PATH = "/home/george/services/whoop-dashboard/shared/whoop_data.db"
+# Mirrors scripts/deploy's DEPLOY_APP_ROOT convention (default matches the
+# post-migration prod checkout on opti; override if that ever moves again).
+PROD_APP_ROOT = os.environ.get("COACH_PROD_APP_ROOT", "/home/george/Documents/whoop-dashboard")
+PROD_DB_PATH = f"{PROD_APP_ROOT}/shared/whoop_data.db"
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 LOCAL_DB_PATH = REPO_ROOT / "shared" / "whoop_data.db"
