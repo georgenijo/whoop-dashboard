@@ -1702,4 +1702,292 @@ describe("Phase D — domain tables carry user_id", () => {
       db?.close();
     }
   });
+
+  // -------------------------------------------------------------------------
+  // Issue #518 — `journal` is externally populated and absent from every
+  // openWrite() schema, so it was never enumerated by userIdUniqueKeys() or
+  // by the reflection guard above, and mergeUserInto repointed it with the
+  // bare USER_FK_TABLES UPDATE unconditionally. A live journal table with a
+  // unique index touching user_id (`UNIQUE(user_id, date)` is the natural
+  // shape for a daily journal) would throw UNIQUE constraint failed there —
+  // the same failure class #504 fixed for every table this app's schema
+  // controls, reintroduced through the one table it doesn't.
+  //
+  // These four tests seed `journal` by hand, the way an external producer
+  // would, exactly like journal.test.ts and the #494 tests above already do.
+  // -------------------------------------------------------------------------
+
+  it("issue #518: journal with a UNIQUE(user_id, date) index merges survivor-wins, with the drop logged", () => {
+    const file = newDbFile();
+    // Seed journal BEFORE the first openWrite() so the lazy ALTER path
+    // (connection.ts's `if (hasTable(db, "journal"))` block) also exercises
+    // against it — the table pre-exists exactly like a real external
+    // producer's table would.
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE journal (
+        user_id INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        title TEXT,
+        content TEXT,
+        mood TEXT,
+        tags TEXT,
+        UNIQUE (user_id, date)
+      );
+    `);
+    raw.close();
+    process.env.WHOOP_DB_PATH = file;
+
+    // First open runs the schema bootstrap (users table, etc.) and the lazy
+    // journal ALTER (idx_journal_user_date) without touching the UNIQUE
+    // index above — user_id already exists on this table.
+    conn.openWrite()?.close();
+
+    const seed = new Database(file);
+    let goneId: number;
+    try {
+      seed.pragma("foreign_keys = ON");
+      seed
+        .prepare("UPDATE users SET apple_sub = ?, email = ? WHERE id = 1")
+        .run("sub-518-keep", "old-518@example.com");
+      goneId = Number(
+        seed
+          .prepare("INSERT INTO users (apple_sub, email) VALUES (?, ?)")
+          .run("sub-518-gone", "new-518@example.com").lastInsertRowid,
+      );
+      // Colliding row: both users journaled on the same date.
+      seed
+        .prepare(
+          "INSERT INTO journal (user_id, date, title) VALUES (?, '2026-06-01', 'survivor entry')",
+        )
+        .run(1);
+      seed
+        .prepare(
+          "INSERT INTO journal (user_id, date, title) VALUES (?, '2026-06-01', 'loser entry — should be dropped')",
+        )
+        .run(goneId);
+      // Non-colliding row on the loser — must still move, not drop.
+      seed
+        .prepare(
+          "INSERT INTO journal (user_id, date, title) VALUES (?, '2026-06-02', 'loser entry — should move')",
+        )
+        .run(goneId);
+    } finally {
+      seed.close();
+    }
+
+    const logged: string[] = [];
+    const capture = (...args: unknown[]) => {
+      logged.push(args.map(String).join(" "));
+    };
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(capture);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(capture);
+    let keep: { id: number };
+    try {
+      // Pre-#518 fix, this throws UNIQUE constraint failed on the collision
+      // row instead of merging.
+      keep = authMod.upsertUserByAppleSub("sub-518-keep", "new-518@example.com");
+    } finally {
+      warnSpy.mockRestore();
+      logSpy.mockRestore();
+    }
+    expect(keep.id).toBe(1);
+
+    const after = new Database(file);
+    try {
+      const rows = after
+        .prepare("SELECT user_id, date, title FROM journal ORDER BY date")
+        .all() as { user_id: number; date: string; title: string }[];
+      expect(rows).toEqual([
+        { user_id: 1, date: "2026-06-01", title: "survivor entry" },
+        { user_id: 1, date: "2026-06-02", title: "loser entry — should move" },
+      ]);
+      expect((after.prepare("SELECT id FROM users").all() as unknown[]).length).toBe(1);
+      const violations = after.pragma("foreign_key_check") as unknown[];
+      expect(violations).toEqual([]);
+    } finally {
+      after.close();
+    }
+
+    const mergeLine = logged.find((l) => l.includes("[upsertUserByAppleSub] merged user"));
+    expect(mergeLine, `no merge log line in: ${logged.join(" | ")}`).toBeDefined();
+    expect(mergeLine).toMatch(/dropped\(survivor-wins, total=1\):[^;]*\bjournal=1\b/);
+    expect(mergeLine).toMatch(/moved:[^;]*\bjournal=1\b/);
+  });
+
+  it("issue #518: merge still succeeds cleanly when journal is absent entirely (pre-existing behavior, unregressed)", () => {
+    const file = newDbFile();
+    process.env.WHOOP_DB_PATH = file;
+    conn.openWrite()?.close();
+
+    const seed = new Database(file);
+    let goneId: number;
+    try {
+      seed.pragma("foreign_keys = ON");
+      seed
+        .prepare("UPDATE users SET apple_sub = ?, email = ? WHERE id = 1")
+        .run("sub-518-noj-keep", "old-518-noj@example.com");
+      goneId = Number(
+        seed
+          .prepare("INSERT INTO users (apple_sub, email) VALUES (?, ?)")
+          .run("sub-518-noj-gone", "new-518-noj@example.com").lastInsertRowid,
+      );
+    } finally {
+      seed.close();
+    }
+    expect(goneId).toBeGreaterThan(1);
+
+    const keep = authMod.upsertUserByAppleSub("sub-518-noj-keep", "new-518-noj@example.com");
+    expect(keep.id).toBe(1);
+
+    const after = new Database(file);
+    try {
+      expect(
+        (
+          after
+            .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='journal'")
+            .get()
+        ),
+      ).toBeUndefined();
+      expect((after.prepare("SELECT id FROM users").all() as unknown[]).length).toBe(1);
+    } finally {
+      after.close();
+    }
+  });
+
+  it("issue #518: journal with no uniqueness on user_id takes the bare-repoint path and moves every row", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE journal (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        title TEXT
+      );
+    `);
+    raw.close();
+    process.env.WHOOP_DB_PATH = file;
+    conn.openWrite()?.close();
+
+    // Sanity: this shape really has no user_id-bearing uniqueness key.
+    const check = conn.openWrite();
+    try {
+      expect(authMod.userIdUniqueKeys(check!, "journal")).toEqual([]);
+    } finally {
+      check?.close();
+    }
+
+    const seed = new Database(file);
+    let goneId: number;
+    try {
+      seed.pragma("foreign_keys = ON");
+      seed
+        .prepare("UPDATE users SET apple_sub = ?, email = ? WHERE id = 1")
+        .run("sub-518-bare-keep", "old-518-bare@example.com");
+      goneId = Number(
+        seed
+          .prepare("INSERT INTO users (apple_sub, email) VALUES (?, ?)")
+          .run("sub-518-bare-gone", "new-518-bare@example.com").lastInsertRowid,
+      );
+      // Survivor and loser both journal on the SAME date. With no uniqueness
+      // constraint this is legal — the bare repoint must move BOTH loser
+      // rows rather than dropping the "colliding" one the conflict path
+      // would have deleted.
+      seed
+        .prepare("INSERT INTO journal (user_id, date, title) VALUES (1, '2026-06-01', 'survivor')")
+        .run();
+      seed
+        .prepare(
+          "INSERT INTO journal (user_id, date, title) VALUES (?, '2026-06-01', 'loser same date')",
+        )
+        .run(goneId);
+      seed
+        .prepare(
+          "INSERT INTO journal (user_id, date, title) VALUES (?, '2026-06-02', 'loser other date')",
+        )
+        .run(goneId);
+    } finally {
+      seed.close();
+    }
+
+    const logged: string[] = [];
+    const logSpy = vi
+      .spyOn(console, "log")
+      .mockImplementation((...args: unknown[]) => {
+        logged.push(args.map(String).join(" "));
+      });
+    let keep: { id: number };
+    try {
+      keep = authMod.upsertUserByAppleSub("sub-518-bare-keep", "new-518-bare@example.com");
+    } finally {
+      logSpy.mockRestore();
+    }
+    expect(keep.id).toBe(1);
+
+    const after = new Database(file);
+    try {
+      const rows = after
+        .prepare("SELECT user_id, date, title FROM journal ORDER BY id")
+        .all() as { user_id: number; date: string; title: string }[];
+      // All three rows survive — nothing dropped — and all point at the
+      // survivor now.
+      expect(rows).toEqual([
+        { user_id: 1, date: "2026-06-01", title: "survivor" },
+        { user_id: 1, date: "2026-06-01", title: "loser same date" },
+        { user_id: 1, date: "2026-06-02", title: "loser other date" },
+      ]);
+      expect((after.prepare("SELECT id FROM users").all() as unknown[]).length).toBe(1);
+    } finally {
+      after.close();
+    }
+
+    const mergeLine = logged.find((l) => l.includes("[upsertUserByAppleSub] merged user"));
+    expect(mergeLine, `no merge log line in: ${logged.join(" | ")}`).toBeDefined();
+    // No drops at all — dropped total is 0 — and the bare path reports both
+    // loser rows moved.
+    expect(mergeLine).toContain("dropped(survivor-wins, total=0): none");
+    expect(mergeLine).toMatch(/moved:[^;]*\bjournal=2\b/);
+  });
+
+  // Issue #518, verification point 4 — the routing decision itself must be
+  // driven by the live schema, not by the literal string "journal". Proven
+  // directly against partitionOptionalMergeTables (the function mergeUserInto
+  // delegates to) with a synthetic second optional table that has nothing to
+  // do with journal, so a table added to optionalUserFkTables() in the
+  // future gets the same protection with no new branch in auth.ts.
+  it("issue #518: the bare-vs-conflict split is schema-driven, not name-hardcoded — proven with a non-journal table", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE journal (
+        user_id INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        UNIQUE (user_id, date)
+      );
+      CREATE TABLE future_widget_notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        note TEXT
+      );
+    `);
+    raw.close();
+    process.env.WHOOP_DB_PATH = file;
+    const db = conn.openWrite();
+    try {
+      const { bare, conflict } = authMod.partitionOptionalMergeTables(db!, [
+        "journal",
+        "future_widget_notes",
+      ]);
+      // journal has a UNIQUE(user_id, date) index → conflict path.
+      expect(conflict).toEqual(["journal"]);
+      // future_widget_notes has a user_id column but no PK/UNIQUE touching it
+      // → bare-repoint path. Nothing in partitionOptionalMergeTables mentions
+      // either table's name — the split comes entirely from
+      // userIdUniqueKeys() reading the schema at call time.
+      expect(bare).toEqual(["future_widget_notes"]);
+    } finally {
+      db?.close();
+    }
+  });
 });

@@ -430,20 +430,58 @@ function mergeConflictTable(
 }
 
 /**
+ * Split `tables` into those safe for a bare `UPDATE ... SET user_id` repoint
+ * versus those that need the survivor-wins conflict merge, purely by asking
+ * the live schema whether `user_id` participates in a PRIMARY KEY or UNIQUE
+ * index (`userIdUniqueKeys`).
+ *
+ * Exists as its own function (issue #518) because `optionalUserFkTables()`
+ * tables — currently just `journal` — can't get this check for free from
+ * USER_FK_TABLES / USER_FK_CONFLICT_TABLES: those are static lists a human
+ * verified against a known schema, but an optional table's schema isn't
+ * known (may not even exist), so the check has to run at merge time instead.
+ * Table-name-agnostic on purpose: it takes whatever list it's given, so a
+ * second optional table added later gets the same protection without a new
+ * branch — see connection.test.ts for a synthetic second-table proof.
+ */
+export function partitionOptionalMergeTables(
+  db: DB,
+  tables: string[],
+): { bare: string[]; conflict: string[] } {
+  const bare: string[] = [];
+  const conflict: string[] = [];
+  for (const table of tables) {
+    (userIdUniqueKeys(db, table).length > 0 ? conflict : bare).push(table);
+  }
+  return { bare, conflict };
+}
+
+/**
  * Repoint every `user_id` row from `fromId` onto `toId`, then delete `fromId`.
  * Caller must wrap in a transaction — issue #504 requires it: a partial merge
  * that dropped conflicting rows and then failed must not be committable.
  *
  * Two mechanisms, because the schema has two shapes:
  *
- *  - USER_FK_TABLES — surrogate-keyed, `user_id` in no PK/UNIQUE index, so a
- *    bare `UPDATE ... SET user_id` can never collide.
- *  - USER_FK_CONFLICT_TABLES — `user_id` is in the PK or a UNIQUE index, so
- *    the repoint is survivor-wins (see mergeConflictTable).
+ *  - Bare repoint — surrogate-keyed, `user_id` in no PK/UNIQUE index, so a
+ *    bare `UPDATE ... SET user_id` can never collide. USER_FK_TABLES is
+ *    always routed here.
+ *  - Survivor-wins conflict merge — `user_id` is in the PK or a UNIQUE index,
+ *    so the repoint goes through mergeConflictTable instead.
+ *    USER_FK_CONFLICT_TABLES is always routed here.
+ *
+ * optionalUserFkTables() (tables that may not exist, e.g. `journal`) picks
+ * between the two per table, at run time, via partitionOptionalMergeTables —
+ * issue #518: a static list can't hardcode a uniqueness check for a table
+ * whose schema this app doesn't own and that is absent from every test DB.
+ * A live `journal` table with e.g. `UNIQUE(user_id, date)` (the natural
+ * shape for a daily journal) would throw on a bare UPDATE and 500 the SIWA
+ * callback — the exact failure class #504 fixed for every table whose schema
+ * we DO control.
  *
  * Every table that references users(id), or merely carries a `user_id`
- * column, must be in one list or the other. Anything left out still points at
- * `fromId` when the trailing `DELETE FROM users` runs, and under
+ * column, must be in one list/bucket or the other. Anything left out still
+ * points at `fromId` when the trailing `DELETE FROM users` runs, and under
  * `foreign_keys = ON` (connection.ts) that either throws FOREIGN KEY
  * constraint failed — 500ing the Sign in with Apple callback — or, for an FK
  * declaring ON DELETE CASCADE, silently destroys the rows. connection.test.ts
@@ -453,14 +491,18 @@ function mergeUserInto(db: DB, fromId: number, toId: number): void {
   const moves: Record<string, number> = {};
   const drops: Record<string, number> = {};
 
-  for (const table of [...USER_FK_TABLES, ...optionalUserFkTables(db)]) {
+  const optional = partitionOptionalMergeTables(db, optionalUserFkTables(db));
+  const bareTables = [...USER_FK_TABLES, ...optional.bare];
+  const conflictTables = [...USER_FK_CONFLICT_TABLES, ...optional.conflict];
+
+  for (const table of bareTables) {
     const result = db
       .prepare(`UPDATE ${table} SET user_id = ? WHERE user_id = ?`)
       .run(toId, fromId);
     moves[table] = result.changes;
   }
 
-  for (const table of USER_FK_CONFLICT_TABLES) {
+  for (const table of conflictTables) {
     const { dropped, moved } = mergeConflictTable(db, table, fromId, toId);
     moves[table] = moved;
     drops[table] = dropped;
