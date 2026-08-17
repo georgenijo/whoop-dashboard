@@ -60,6 +60,19 @@
 # that predates it), DEPLOY_FLEET_NODE, DEPLOY_APP_ROOT, DEPLOY_REPO_URL.
 set -euo pipefail
 
+# poll_detached_step uses a nameref (`local -n`), which needs bash >= 4.3.
+# Checked HERE, before the DB snapshot, because the first call is the build
+# poll — by which point we would already have snapshotted, reset the checkout,
+# and launched a detached build. Failing there would orphan a running build and
+# leave the service un-restarted, i.e. a half-finished deploy. macOS ships
+# bash 3.2 as /bin/bash, so this is reachable from an operator's laptop.
+if [ "${BASH_VERSINFO[0]}" -lt 4 ] ||
+   { [ "${BASH_VERSINFO[0]}" -eq 4 ] && [ "${BASH_VERSINFO[1]}" -lt 3 ]; }; then
+  echo "deploy: needs bash >= 4.3 (namerefs); this is ${BASH_VERSION}" >&2
+  echo "  on macOS: brew install bash, then re-run with the homebrew bash" >&2
+  exit 1
+fi
+
 FLEET_NODE=${DEPLOY_FLEET_NODE:-opti}
 APP_ROOT=${DEPLOY_APP_ROOT:-/home/george/Documents/whoop-dashboard}
 # Fetch over HTTPS rather than the checkout's configured `origin`. opti's origin
@@ -130,9 +143,16 @@ die() { printf '\n\033[31mFAILED: %s\033[0m\n' "$*" >&2; exit 1; }
 # $6 lock_check remote shell snippet that echoes "locked" if a stale-lock
 #               orphan is detected in the log; pass "" to skip this check
 # $7 outvar     name of the caller's variable to receive the exit code
+# $8 stall_note per-step text appended to the ceiling die. REQUIRED to say what
+#               state prod is in, because it differs by step: a stalled build
+#               leaves the running service untouched, a stalled npm ci does not.
+#               Getting this backwards is worse than saying nothing (#523 review).
+# $9 lock_hint  per-step text appended to the stale-lock die; the operator needs
+#               to know which orphan to kill, not just where the log is
 poll_detached_step() {
   local label=$1 exit_file=$2 log_file=$3 ceiling=$4 interval=$5 lock_check=$6
   local -n _poll_out=$7
+  local stall_note=${8:-} lock_hint=${9:-}
   local waited=0 rc=""
   while [ "$waited" -lt "$ceiling" ]; do
     sleep "$interval"
@@ -146,12 +166,14 @@ poll_detached_step() {
     fi
     if [ -n "$lock_check" ] && fleet exec --timeout 60 "$FLEET_NODE" "$lock_check" 2>/dev/null | grep -q locked; then
       die "another $label holds the lock — an orphan from a dropped session is still running.
-     Log: fleet exec $FLEET_NODE 'tail -f $log_file'"
+     Log: fleet exec $FLEET_NODE 'tail -f $log_file'${lock_hint:+
+$lock_hint}"
     fi
     printf '  ... %ss\n' "$waited"
   done
   die "$label did not finish in ${ceiling}s — it may STILL BE RUNNING.
-     Watch it:  fleet exec $FLEET_NODE 'tail -f $log_file'"
+     Watch it:  fleet exec $FLEET_NODE 'tail -f $log_file'${stall_note:+
+$stall_note}"
 }
 
 if [[ ! "$CURSOR_AGENT_BIN" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
@@ -648,11 +670,13 @@ NODE_BIN_DIR="$HOME/.nvm/versions/node/v$NODE_VERSION/bin"
 # line. That is a different self-match than the tailscaled one below —
 # caught by testing this against a real stub run, not by inspection.
 #
-# Filtered for tailscaled too, for the reason the build guard is: fleet's
-# transport spawns `tailscaled be-child ... --cmd=<the whole command>`, which
-# embeds this script's own source (including the string being grepped for)
-# and would otherwise self-match.
-RUNNING=$(pgrep -af "^bash $INSTALL_SH\$" 2>/dev/null | grep -v tailscaled || true)
+# The `^bash <path>$` anchor is load-bearing, not cosmetic. $INSTALL_SH is
+# passed to pgrep as a positional argument, so fleet's transport puts it into
+# TWO self-matching command lines — `tailscaled be-child ... --cmd=<the whole
+# command>` and `/usr/bin/zsh -c <the whole command>`. A `grep -v tailscaled`
+# filter would only have excluded the first. setsid/nohup exec through, so the
+# real detached process's argv is exactly `bash <path>` and nothing else is.
+RUNNING=$(pgrep -af "^bash $INSTALL_SH\$" 2>/dev/null || true)
 if [ -n "$RUNNING" ]; then
   echo "a dependency install is already running — refusing to start a second one:" >&2
   echo "$RUNNING" >&2
@@ -683,13 +707,27 @@ REMOTE_INSTALL_LAUNCH
 
   INSTALL_RC=""
   poll_detached_step "npm ci" "$INSTALL_EXIT" "$INSTALL_LOG" \
-    "$INSTALL_POLL_SECONDS" "$INSTALL_POLL_INTERVAL" "" INSTALL_RC
+    "$INSTALL_POLL_SECONDS" "$INSTALL_POLL_INTERVAL" "" INSTALL_RC \
+    "     THE RUNNING SERVICE MAY BE BROKEN. npm ci removes node_modules before
+     repopulating it, so the live service is serving off a tree mid-rewrite.
+     Check now:  fleet exec $FLEET_NODE 'curl -s -o /dev/null -w \"%{http_code}\\n\" http://127.0.0.1:8501/api/health'
+     Recover by re-running scripts/deploy — the install retries." \
+    "     Kill it:  fleet exec $FLEET_NODE 'pgrep -af \"^bash $INSTALL_SH\$\"'"
   if [ "$INSTALL_RC" != "0" ]; then
     echo "--- last 30 lines of install log ---"
     fleet exec --timeout 60 "$FLEET_NODE" "tail -30 '$INSTALL_LOG' || true" || true
+    echo "--- service health right now ---"
+    fleet exec --timeout 60 "$FLEET_NODE" \
+      "curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8501/api/health || true" || true
+    # Do NOT say "the running service is untouched" here. npm ci deletes
+    # node_modules before repopulating it, so a mid-install failure leaves the
+    # live service requiring from a half-built tree — it stays "active" while
+    # every route touching an externalized package 500s (#523 review).
     die "npm ci exited $INSTALL_RC — NOT building or restarting the service.
-     node_modules may be half-populated; the running service is untouched and
-     the next deploy will retry the install (the lockfile marker was not written).
+     node_modules was being rewritten UNDER THE LIVE SERVICE and is now
+     half-populated. If the health code above is not 307/200, prod is down.
+     Recover by re-running scripts/deploy — the lockfile marker was not
+     written, so the install retries.
      Full log: fleet exec $FLEET_NODE 'cat $INSTALL_LOG'"
   fi
 fi
@@ -766,7 +804,9 @@ REMOTE_BUILD_LAUNCH
 
 BUILD_RC=""
 poll_detached_step "build" "$BUILD_EXIT" "$BUILD_LOG" "$BUILD_POLL_SECONDS" "$BUILD_POLL_INTERVAL" \
-  "grep -q 'Another next build process' '$BUILD_LOG' 2>/dev/null && echo locked || true" BUILD_RC
+  "grep -q 'Another next build process' '$BUILD_LOG' 2>/dev/null && echo locked || true" BUILD_RC \
+  "     The service was not restarted; prod is still serving $CHECKOUT_SHA." \
+  "     Inspect: fleet exec $FLEET_NODE 'pgrep -af \"next build\"'"
 if [ "$BUILD_RC" != "0" ]; then
   echo "--- last 30 lines of build log ---"
   fleet exec --timeout 60 "$FLEET_NODE" "tail -30 '$BUILD_LOG' || true" || true
