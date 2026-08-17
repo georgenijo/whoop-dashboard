@@ -50,15 +50,37 @@
 #      the operator's local checkout (which is usually a different branch, and
 #      must never influence what prod builds with). Missing or malformed is
 #      FATAL, never a silent fallback; DEPLOY_NODE_VERSION is the escape hatch.
-#   7. SERIALIZE THE WHOLE MUTATING SEQUENCE UNDER ONE ON-BOX LOCK. Two deploys
-#      started close together both reach the sync phase; one `reset --hard`s the
-#      shared checkout to sha A while the other is mid-flight toward sha B, and
-#      the snapshot, the build and the sha check then describe three different
-#      commits (issue #469). Per-phase pgrep guards cannot see this — each one
-#      is individually correct and the COMPOSITION is not. Phases 1-5 therefore
-#      run inside a single flock taken on opti, because opti's working tree is
-#      the contended resource: two operators on two laptops must contend, and a
-#      lock on either laptop would not make them. See acquire_deploy_lock.
+#   7. SERIALIZE THE MUTATING PHASES UNDER ONE ON-BOX LOCK. Two deploys started
+#      close together both reach the sync phase; one `reset --hard`s the shared
+#      checkout to sha A while the other is mid-flight toward sha B, and the
+#      snapshot, install, build and sha check that follow then describe three
+#      different commits (issue #469). The per-phase pgrep guards already in the
+#      install/build launchers cannot see this — each is individually correct
+#      and the COMPOSITION across phases is not. The lock must live on opti,
+#      because opti's working tree is the contended resource: two operators on
+#      two laptops must contend, and a lock on either laptop would not make
+#      them.
+#
+#      It is a PID-stamped lockfile DIRECTORY on opti ($LOCK_DIR, default
+#      /tmp/whoop-deploy.lock) — not a `flock` fd held by one long-lived remote
+#      shell, deliberately. A held flock only lives as long as the process/fd
+#      holding it, and phases 1-5 are NOT one continuous connection: the whole
+#      point of the detached install/build (property 2) is that they outlive a
+#      dropped `fleet exec` session and get polled afterward over many fresh
+#      short-lived connections. There is no single remote shell alive for the
+#      full duration to hold an fd in. So acquire_deploy_lock atomically
+#      `mkdir`s the lock dir (mkdir is atomic — two racers can never both win)
+#      and spawns a tiny sentinel process on opti (`sleep`, self-expiring after
+#      6h as a backstop) whose only job is to stay alive for as long as the lock
+#      is held; its PID is what a contending deploy validates. A lockfile naming
+#      a LIVE pid is a real in-flight deploy and is never touched; one naming a
+#      DEAD pid is a crashed/killed deploy's leftover and is reaped
+#      automatically, no manual intervention required. Contention fails fast —
+#      no retry, no wait — naming the holder's pid and start time. Acquired
+#      right after --check's read-only exit (so --check never takes the lock)
+#      and right before phase 1; released by the operator's own EXIT trap
+#      (release_deploy_lock, called from on_exit), so it comes off on success,
+#      on any die(), and on Ctrl-C.
 #
 # Usage:
 #   scripts/deploy              # deploy origin/main
@@ -112,6 +134,13 @@ INSTALL_POLL_INTERVAL=${DEPLOY_INSTALL_POLL_INTERVAL:-15}
 INSTALL_LOG=/tmp/whoop-deploy-install.log
 INSTALL_EXIT=/tmp/whoop-deploy-install.exit
 INSTALL_SH=/tmp/whoop-deploy-install.sh
+# On-box mutual-exclusion lock for phases 1-5 (see header property 7). A
+# directory, not a plain file: `mkdir` is atomic, so two racing deploys can
+# never both "win" acquisition. LOCK_SENTINEL_SECONDS bounds how long the
+# holder process can live if release_deploy_lock somehow never runs (it is
+# not the normal release path — that kills the sentinel directly).
+LOCK_DIR=${DEPLOY_LOCK_DIR:-/tmp/whoop-deploy.lock}
+LOCK_SENTINEL_SECONDS=21600   # 6h self-expiry backstop
 
 REF=origin/main
 CHECK_ONLY=0
@@ -243,8 +272,122 @@ takes a fresh snapshot, so this recipe does not stack across deploys):
 EOF
 }
 
+# --- on-box deploy lock (see header property 7) -------------------------------
+LOCK_HELD=0   # gates release_deploy_lock; never release a lock we don't hold
+LOCK_PID=""   # sentinel pid on $FLEET_NODE, once acquired
+
+# Acquires the lock on $FLEET_NODE or dies naming the current holder. Single
+# attempt, no retry-with-wait — contention must fail fast, not hang. The only
+# retry here is the one-shot reap-then-recreate for a lock whose recorded pid
+# is confirmed dead.
+acquire_deploy_lock() {
+  say "Taking the on-box deploy lock ($FLEET_NODE:$LOCK_DIR)"
+  local out
+  out=$(fleet exec --timeout 60 "$FLEET_NODE" \
+    "bash -s -- '$LOCK_DIR' '$LOCK_SENTINEL_SECONDS'" <<'REMOTE_LOCK'
+set -euo pipefail
+LOCK_DIR=$1
+TTL=$2
+PIDFILE="$LOCK_DIR/pid"
+METAFILE="$LOCK_DIR/meta"
+
+try_acquire() {
+  mkdir "$LOCK_DIR" 2>/dev/null || return 1
+  # Sentinel: the only thing on this box actually alive for the whole duration
+  # of the lock (phases 1-5 span many short-lived fleet-exec calls, not one —
+  # see header property 7). Its pid is what a contending deploy validates.
+  # `sleep $TTL` is a self-expiry backstop, not the release mechanism — the
+  # normal release path (release_deploy_lock) kills it directly.
+  setsid nohup bash -c "exec -a whoop-deploy-lock-holder sleep $TTL" \
+    >/dev/null 2>&1 </dev/null &
+  HOLDER_PID=$!
+  echo "$HOLDER_PID" > "$PIDFILE"
+  date -u +'%Y-%m-%dT%H:%M:%SZ' > "$METAFILE"
+  echo "##LOCK_PID=$HOLDER_PID"
+}
+
+if try_acquire; then
+  exit 0
+fi
+
+# Contended. Validate the recorded pid BEFORE touching anything: a live pid is
+# a real in-flight deploy and must not be reaped; a dead pid is a
+# crashed/killed deploy's leftover and is safe to reap automatically.
+EXISTING_PID=$(cat "$PIDFILE" 2>/dev/null || true)
+if [ -n "$EXISTING_PID" ] && kill -0 "$EXISTING_PID" 2>/dev/null; then
+  echo "##LOCK_HOLDER_PID=$EXISTING_PID"
+  echo "##LOCK_HOLDER_SINCE=$(cat "$METAFILE" 2>/dev/null || echo unknown)"
+  exit 0
+fi
+
+# Stale — reap and retry once. A second racer reaping at the same instant
+# loses the rm -rf harmlessly (both end up with an absent dir); one of the two
+# try_acquire calls below wins the re-mkdir.
+rm -rf "$LOCK_DIR" 2>/dev/null || true
+if try_acquire; then
+  exit 0
+fi
+
+# Lost the retry to a fresh concurrent acquirer — report as ordinary
+# contention, not staleness.
+EXISTING_PID=$(cat "$PIDFILE" 2>/dev/null || true)
+echo "##LOCK_HOLDER_PID=${EXISTING_PID:-unknown}"
+echo "##LOCK_HOLDER_SINCE=$(cat "$METAFILE" 2>/dev/null || echo unknown)"
+REMOTE_LOCK
+  ) || die "could not reach $FLEET_NODE to take the deploy lock"
+
+  LOCK_PID=$(printf '%s\n' "$out" | sed -n 's/^##LOCK_PID=//p' | tail -1)
+  if [ -n "$LOCK_PID" ]; then
+    LOCK_HELD=1
+    echo "  lock held (sentinel pid $LOCK_PID on $FLEET_NODE)"
+    return 0
+  fi
+
+  local holder_pid holder_since
+  holder_pid=$(printf '%s\n' "$out" | sed -n 's/^##LOCK_HOLDER_PID=//p' | tail -1)
+  holder_since=$(printf '%s\n' "$out" | sed -n 's/^##LOCK_HOLDER_SINCE=//p' | tail -1)
+  die "another deploy is already running on $FLEET_NODE
+     holder pid:  ${holder_pid:-<unknown>}
+     started:     ${holder_since:-<unknown>} (UTC)
+     Wait for it to finish. If it is confirmed dead and did not self-heal
+     above (this box crashed mid-deploy, or the holder was kill -9'd), clear
+     it by hand:
+       fleet exec $FLEET_NODE 'kill ${holder_pid:-<pid>} 2>/dev/null; rm -rf $LOCK_DIR'"
+}
+
+# Releases the lock iff we still hold it. Best-effort: a failure here must not
+# mask the deploy's real exit code (on_exit already captured it), so this only
+# warns — the 6h sentinel self-expiry (LOCK_SENTINEL_SECONDS) is the backstop.
+release_deploy_lock() {
+  [ "$LOCK_HELD" = 1 ] || return 0
+  if ! fleet exec --timeout 60 "$FLEET_NODE" \
+    "bash -s -- '$LOCK_DIR' '$LOCK_PID'" <<'REMOTE_UNLOCK'
+set -uo pipefail
+LOCK_DIR=$1
+LOCK_PID=$2
+[ -d "$LOCK_DIR" ] || exit 0
+CUR=$(cat "$LOCK_DIR/pid" 2>/dev/null || true)
+# Only remove a lock still recognized as ours. If the recorded pid no longer
+# matches, something else already reaped or replaced it — releasing here
+# would clobber a different, legitimate in-flight lock.
+if [ "$CUR" = "$LOCK_PID" ]; then
+  kill "$LOCK_PID" 2>/dev/null || true
+  rm -rf "$LOCK_DIR"
+fi
+REMOTE_UNLOCK
+  then
+    echo "WARNING: could not release the deploy lock on $FLEET_NODE (dir: $LOCK_DIR, sentinel pid: $LOCK_PID)." >&2
+    echo "  It self-expires in ${LOCK_SENTINEL_SECONDS}s, or clear it now:" >&2
+    echo "  fleet exec $FLEET_NODE 'kill $LOCK_PID 2>/dev/null; rm -rf $LOCK_DIR'" >&2
+  fi
+  LOCK_HELD=0
+}
+
 on_exit() {
   local rc=$?
+  # Released on every exit path — success, any die(), or a signal (Ctrl-C) —
+  # because this is a trap on EXIT, not on a specific phase's success path.
+  release_deploy_lock
   # Only meaningful once a snapshot exists — before that there is nothing to
   # roll back to and nothing has been touched.
   if [ "$rc" -ne 0 ] && [ -n "$BACKUP_PATH" ]; then
@@ -454,6 +597,12 @@ fi
 # a silent default is exactly the drift issue #500 was filed about.
 [ -n "$NODE_VERSION" ] || die "cannot determine the Node version to build with.
      $NODE_ERROR"
+
+# Everything from here on mutates opti's checkout, node_modules, .next and the
+# running service — take the on-box lock before any of it (see header
+# property 7 and acquire_deploy_lock). --check already exited above, so a
+# read-only run never reaches this line and never contends for the lock.
+acquire_deploy_lock
 
 # --- 1. snapshot the DB -------------------------------------------------------
 # NOT `cp`. The DB is WAL mode (connection.ts sets journal_mode = WAL) and the
