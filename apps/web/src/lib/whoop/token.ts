@@ -19,35 +19,6 @@ import {
 const REFRESH_BUFFER_S = 60;
 const WHOOP_PROVIDER = "whoop";
 
-// Definitive "credentials are dead, user must reconnect" error codes from
-// the refresh_token grant response, scoped to THIS module because
-// REAUTH_ERROR_CODES is only ever consulted inside `refreshTokens` below
-// (the authorization_code exchange in `@/lib/auth` `exchangeCode` doesn't
-// touch this set — it just throws on !resp.ok). Excluded on purpose:
-//   - invalid_client / unauthorized_client → server-side config bugs (bad
-//     WHOOP_CLIENT_ID/SECRET); reconnecting tokens won't help, so the
-//     banner would mislead.
-//
-// invalid_request IS included, deliberately, for the refresh grant only.
-// Per #263, a real expired/dead Whoop refresh token and a deliberately
-// bogus one both come back as `400 {"error":"invalid_request"}` with a
-// misleading redirect_uri `error_hint` — Whoop does not distinguish
-// "your token is dead" from "your request is malformed" in the response
-// body for this grant. That would normally make invalid_request unsafe to
-// treat as reauth-worthy (a real client bug could also produce it), but
-// the refresh grant's request body (`grant_type`, `refresh_token`,
-// `client_id`, `client_secret`) is fully static/computed in
-// `refreshTokens` below with no user-supplied input, so in practice a
-// `400 invalid_request` here can only mean the token itself is rejected.
-// Do NOT reuse this set for the authorization_code exchange
-// (`exchangeCode` in `@/lib/auth`) — that grant carries a user-supplied
-// `code` and redirect, so invalid_request there really can be our bug.
-const REAUTH_ERROR_CODES = new Set([
-  "invalid_grant",
-  "invalid_token",
-  "invalid_request",
-]);
-
 /**
  * Per-user in-flight refresh singletons. Keying on user_id (not a single
  * global) lets concurrent refreshes for distinct users proceed in parallel
@@ -136,13 +107,41 @@ async function refreshTokens(
     );
     // Flip flag only on definitive credential-rejection signals so a code
     // bug or upstream config issue doesn't train the user to reconnect.
-    // Allowlist lives at module scope (REAUTH_ERROR_CODES) and is scoped to
-    // THIS function (the refresh_token grant) — see the comment there for
-    // why invalid_request is safe to include here specifically. 401 catches
-    // the RFC-canonical token-rejection case when no parsable error code
-    // is present. 403 (scope/permission), 5xx, network, parse failure,
-    // and unknown error codes → log only.
     //
+    // Both sets are declared HERE, inside `refreshTokens`, on purpose. They
+    // are only sound for the refresh_token grant, and module scope would let
+    // any function added to this file later (e.g. the keepalive endpoint
+    // proposed in #263) inherit them silently. Lexical scope makes the
+    // "refresh grant only" claim structural instead of aspirational — if you
+    // need this classification elsewhere, re-derive it for that grant.
+    //
+    // invalid_request is reauth-worthy for THIS grant specifically. Per #263,
+    // a genuinely dead/expired Whoop refresh token and a deliberately bogus
+    // one both come back as `400 {"error":"invalid_request"}` with a
+    // misleading redirect_uri `error_hint` — Whoop does not distinguish "your
+    // token is dead" from "your request is malformed" here. That would
+    // normally make invalid_request unsafe to treat as reauth-worthy, but this
+    // request body (`grant_type`, `refresh_token`, `client_id`,
+    // `client_secret`) is fully static/computed below with no user-supplied
+    // input, so in practice a 400 invalid_request can only mean the token was
+    // rejected. Do NOT copy this to the authorization_code exchange
+    // (`exchangeCode` in `@/lib/auth`) — that grant carries a user-supplied
+    // `code`, so invalid_request there really can be our bug.
+    const reauthErrorCodes = new Set([
+      "invalid_grant",
+      "invalid_token",
+      "invalid_request",
+    ]);
+    // Never reauth-worthy, whatever the status: these mean OUR client
+    // credentials are wrong (rotated/typo'd WHOOP_CLIENT_ID or SECRET), not
+    // that the user's grant died. Reconnecting cannot help — `exchangeCode`
+    // signs the authorization_code round-trip with the same credentials, so
+    // the banner would send the user to a remedy that also fails. Whoop
+    // answers bad credentials with `401 {"error":"invalid_client"}` (#263),
+    // which is exactly why this has to be checked BEFORE the bare-401 branch
+    // rather than documented as an exclusion the 401 branch then overrides.
+    const configErrorCodes = new Set(["invalid_client", "unauthorized_client"]);
+
     // Non-atomic with the upsert. Single-process Next.js serializes via
     // the per-user `inflightRefreshByUser` singleton, but a concurrent
     // Python sync (sync/daily_sync.py) could in theory race a flag-set
@@ -150,8 +149,18 @@ async function refreshTokens(
     // reshape this.
     const errorCode =
       typeof bodyExcerpt.error === "string" ? bodyExcerpt.error : null;
-    if (
-      (errorCode && REAUTH_ERROR_CODES.has(errorCode)) ||
+    if (errorCode && configErrorCodes.has(errorCode)) {
+      // Log-only. Surfacing this as "reconnect Whoop" is worse than silence.
+      console.error(
+        `[token] refresh rejected our client credentials (${errorCode}) — check WHOOP_CLIENT_ID/WHOOP_CLIENT_SECRET; not flagging needs_reauth`
+      );
+    } else if (
+      (errorCode && reauthErrorCodes.has(errorCode)) ||
+      // Bare 401 with no parsable error code: the RFC-canonical
+      // token-rejection status, and with invalid_client/unauthorized_client
+      // already peeled off above, a dead grant is the likeliest remaining
+      // cause. 403 (scope/permission), 5xx, network, parse failure, and
+      // unknown error codes → log only.
       resp.status === 401
     ) {
       setIntegrationNeedsReauth(userId, WHOOP_PROVIDER, true);

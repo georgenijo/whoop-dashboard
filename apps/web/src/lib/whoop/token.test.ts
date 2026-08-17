@@ -73,6 +73,9 @@ beforeEach(() => {
 afterEach(() => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   delete (globalThis as any).fetch;
+  // The exchangeCode test stubs WHOOP_CLIENT_ID / WHOOP_CLIENT_SECRET; restore
+  // so this file can't leak credentials-shaped env into other suites.
+  vi.unstubAllEnvs();
 });
 
 describe("getValidAccessToken → refreshTokens reauth detection", () => {
@@ -108,12 +111,19 @@ describe("getValidAccessToken → refreshTokens reauth detection", () => {
     // exchangeCode is the authorization_code grant (real fetch call, using
     // the actual `@/lib/auth` implementation, not the top-of-file mock).
     // It's a structurally different function from `refreshTokens` — it just
-    // throws on !resp.ok and never touches REAUTH_ERROR_CODES or
+    // throws on !resp.ok and never touches the reauth classification or
     // setIntegrationNeedsReauth. Driving it end-to-end with a 400
     // invalid_request response proves the "scoped to refresh grant" claim
     // isn't just an error-code check: this path can't reach the flag at all.
-    process.env.WHOOP_CLIENT_ID = "test-client-id";
-    process.env.WHOOP_CLIENT_SECRET = "test-client-secret";
+    // Kept even though the classification sets are now lexically scoped
+    // inside `refreshTokens`: this is a regression guard for a future
+    // refactor that routes the code exchange through shared detection logic,
+    // and it covers a real user-facing scenario (a failed OAuth callback must
+    // not raise the reconnect banner). `@/lib/db/integrations` is mocked for
+    // the whole module graph, so the assertion would fire if exchangeCode
+    // ever started importing it.
+    vi.stubEnv("WHOOP_CLIENT_ID", "test-client-id");
+    vi.stubEnv("WHOOP_CLIENT_SECRET", "test-client-secret");
 
     const { exchangeCode } = await vi.importActual<typeof import("@/lib/auth")>(
       "@/lib/auth",
@@ -130,17 +140,49 @@ describe("getValidAccessToken → refreshTokens reauth detection", () => {
     expect(setIntegrationNeedsReauthMock).not.toHaveBeenCalled();
   });
 
-  it("flips needs_reauth on 401 invalid_client (existing behavior preserved)", async () => {
+  it.each(["invalid_client", "unauthorized_client"])(
+    "does not flip needs_reauth on 401 %s — that's our client credentials, and reconnecting uses the same ones",
+    async (errorCode) => {
+      const { getValidAccessToken } = await import("./token");
+
+      fetchMock.mockResolvedValueOnce(jsonResponse({ error: errorCode }, 401));
+
+      const token = await getValidAccessToken(1);
+
+      expect(token).toBeNull();
+      expect(setIntegrationNeedsReauthMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it("flips needs_reauth on a bare 401 with no parsable error code", async () => {
+    // With invalid_client / unauthorized_client peeled off above, a 401 whose
+    // body we can't classify is most likely a dead grant — keep flagging it.
     const { getValidAccessToken } = await import("./token");
 
     fetchMock.mockResolvedValueOnce(
-      jsonResponse({ error: "invalid_client" }, 401),
+      new Response("<html>gateway says no</html>", {
+        status: 401,
+        headers: { "Content-Type": "text/html" },
+      }),
     );
 
     const token = await getValidAccessToken(1);
 
     expect(token).toBeNull();
     expect(setIntegrationNeedsReauthMock).toHaveBeenCalledWith(1, "whoop", true);
+  });
+
+  it("does not flip needs_reauth on 400 invalid_client (config error, non-401 status)", async () => {
+    const { getValidAccessToken } = await import("./token");
+
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ error: "invalid_client" }, 400),
+    );
+
+    const token = await getValidAccessToken(1);
+
+    expect(token).toBeNull();
+    expect(setIntegrationNeedsReauthMock).not.toHaveBeenCalled();
   });
 
   it.each(["invalid_grant", "invalid_token"])(
