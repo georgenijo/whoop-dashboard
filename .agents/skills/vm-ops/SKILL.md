@@ -44,7 +44,7 @@ redeploying, or touching the retired Oracle archive.
 | Canonical DB | `/home/george/Documents/whoop-dashboard/shared/whoop_data.db` |
 | Hardening | `NoNewPrivileges`, `PrivateTmp`, `ProtectSystem=full` on the unit |
 | Public ingress | shared system `cloudflared.service`, config `/etc/cloudflared/config.yml`, tunnel `opti-murmur` (`dac9359e-51bd-4ad9-8389-dd510127c04e`) — no nginx, no certbot, no public IP |
-| Access control | `coach.georgenijo.com` is gated by Cloudflare Access (george.nijo8@gmail.com) with a path-scoped bypass app for the Whoop webhook; `coach-api.georgenijo.com` stays bearer-only, no Access |
+| Access control | `coach.georgenijo.com` is gated by Sign in with Apple via `authGate()` in `apps/web/src/proxy.ts` — unauthenticated page requests 307 to `/signin`, API requests get JSON 401. Exempt prefixes: `/signin`, `/api/auth/`, `/api/whoop/webhook`, `/api/admin/`, `/api/health`. `coach-api.georgenijo.com` stays bearer-only (session JWT), same gate |
 | Firewall | `ufw` default-deny; tailnet fully trusted; LAN-scoped allows only for Home Assistant / go2rtc (unrelated to whoop-dashboard, but part of the host's posture) |
 
 ## Status and logs

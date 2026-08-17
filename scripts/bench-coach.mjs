@@ -51,6 +51,11 @@ const DEFAULT_PROMPTS = [
   "How has my HRV changed over the last 14 days?",
 ];
 
+// Hosts that route to the real production deployment. A sweep against either
+// of these spends real API budget on the shared key and pollutes production
+// chat_logs (see issue #446) — refuse by default, not just warn.
+const PROD_HOSTS = new Set(["coach.georgenijo.com", "coach-api.georgenijo.com"]);
+
 const HELP = `bench-coach — latency bench harness for the Cursor coach turn
 
 Usage:
@@ -80,6 +85,12 @@ Options:
                       instead of a fresh thread per run (default: fresh
                       thread per run, so runs don't inherit conversation
                       history / prior tool context).
+  --allow-prod       Required (in addition to typing the URL) to run against
+                      a production host (coach.georgenijo.com /
+                      coach-api.georgenijo.com). Refused otherwise — a sweep
+                      spends real API budget on the shared key and pollutes
+                      production chat_logs. BENCH_ALLOW_PROD=1 works too, for
+                      non-interactive callers.
   -h, --help         Show this help.
 
 The DB must already have its schema bootstrapped (users, chat_threads,
@@ -110,6 +121,7 @@ function parseArgs(argv) {
     email: "bench@local.test",
     appleSub: "bench-coach-harness",
     reuseThread: false,
+    allowProd: false,
     help: false,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -141,6 +153,9 @@ function parseArgs(argv) {
         break;
       case "--reuse-thread":
         args.reuseThread = true;
+        break;
+      case "--allow-prod":
+        args.allowProd = true;
         break;
       case "-h":
       case "--help":
@@ -213,6 +228,29 @@ async function signSessionToken(userId, rawKey) {
     .setIssuedAt(nowSec)
     .setExpirationTime(expSec)
     .sign(new Uint8Array(bytes));
+}
+
+/**
+ * Refuse (not warn) when --url resolves to a production host, unless the
+ * caller explicitly opted in via --allow-prod or BENCH_ALLOW_PROD=1. A
+ * benchmark sweep is real model turns on the shared Cursor key, landing in
+ * production chat_logs — see issue #446.
+ */
+function guardAgainstProd(url, allowProd) {
+  let hostname;
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    throw new Error(`--url ${url} is not a valid URL`);
+  }
+  if (!PROD_HOSTS.has(hostname)) return;
+  if (allowProd || process.env.BENCH_ALLOW_PROD === "1") return;
+  throw new Error(
+    `refusing to bench against production host "${hostname}".\n` +
+      "  A sweep runs real model turns on the shared Cursor key and writes " +
+      "to production chat_logs (see issue #446).\n" +
+      "  If you really mean it, rerun with --allow-prod or BENCH_ALLOW_PROD=1."
+  );
 }
 
 function requireTable(db, name) {
@@ -456,14 +494,21 @@ async function main() {
   }
   const runs = args.runs;
 
+  guardAgainstProd(args.url, args.allowProd);
+
   const signingKey = resolveJwtSigningKey(args);
   const db = openBenchDb(args.db);
   const userId = args.userId ?? seedBenchUser(db, { appleSub: args.appleSub, email: args.email });
   const token = await signSessionToken(userId, signingKey);
   const prompts = loadPrompts(args.prompts);
+  const totalTurns = prompts.length * runs;
 
   console.log(
     `bench-coach: url=${args.url} db=${args.db} user_id=${userId} runs=${runs} prompts=${prompts.length}`
+  );
+  console.log(
+    `bench-coach: about to run ${totalTurns} real model turn${totalTurns === 1 ? "" : "s"} ` +
+      `(${prompts.length} prompt${prompts.length === 1 ? "" : "s"} x ${runs} run${runs === 1 ? "" : "s"}) against ${args.url}`
   );
   console.log("");
 
