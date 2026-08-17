@@ -12,6 +12,10 @@ const SENSITIVE_QUERY_KEY = /token|secret|code|state|key|password|auth/i;
  *   - `/signin`      — the sign-in page itself.
  *   - `/api/auth/*`  — Apple round-trip, Whoop OAuth, logout, token endpoints.
  *   - `/api/whoop/webhook` — HMAC-only path, no cookie ever attaches.
+ *   - `/api/whoop/refresh` — background keepalive (#273), its own fail-closed
+ *     shared-secret bearer auth (see route file). Exact path only — NOT a
+ *     `/api/whoop/` prefix, which would also expose future siblings under
+ *     that namespace without a cookie.
  *   - `/api/admin/*` — admin uses its own bearer-only auth.
  *   - `/_next/*`, `/favicon.ico` — Next.js plumbing + static.
  *
@@ -27,6 +31,7 @@ const AUTH_EXEMPT_PREFIXES: readonly string[] = [
   "/signin",
   "/api/auth/",
   "/api/whoop/webhook",
+  "/api/whoop/refresh",
   "/api/admin/",
   // Build identity only (commit sha + build time, no user data, no secrets).
   // Must be reachable without a session so a deploy can verify which build is

@@ -188,6 +188,14 @@ export function clearChatLogs(userId: number): void {
   }
 }
 
+/**
+ * `sync_logs.source` value written by the #273 refresh-only keepalive route
+ * (`apps/web/src/app/api/whoop/refresh/route.ts`). Shared as a constant so
+ * the write site and the `getLastSuccessfulSyncAt` exclusion below can't
+ * drift out of sync with each other.
+ */
+export const KEEPALIVE_SYNC_SOURCE = "keepalive";
+
 export type SyncLog = {
   id: number;
   /** Owning tenant. NULL is legitimate here (unlike chat_logs): a webhook
@@ -268,6 +276,12 @@ export function getSyncLogs(userId: number, limit = 200): SyncLog[] {
  * Missing `user_id` column ⇒ null, i.e. the gate opens and a sync is allowed.
  * That's the safe direction to fail: an extra sync costs an API call, whereas
  * falling back to a global row would resurrect the leak.
+ *
+ * Excludes `source = 'keepalive'` rows (the #273 refresh-only route, every
+ * 30 min). Those are token-refresh pings, not data syncs — if they counted
+ * here, the cooldown gate in `/api/sync` would see a fresh "successful
+ * sync" every 30 minutes forever and permanently skip real syncs, which is
+ * strictly worse than the bug #273 was fixing.
  */
 export function getLastSuccessfulSyncAt(userId: number): Date | null {
   return safeQuery((db) => {
@@ -275,9 +289,12 @@ export function getLastSuccessfulSyncAt(userId: number): Date | null {
     if (!hasColumn(db, "sync_logs", "user_id")) return null;
     const row = db
       .prepare(
-        "SELECT started_at FROM sync_logs WHERE status = 'ok' AND user_id = ? ORDER BY id DESC LIMIT 1"
+        `SELECT started_at FROM sync_logs
+         WHERE status = 'ok' AND user_id = ?
+           AND (source IS NULL OR source != ?)
+         ORDER BY id DESC LIMIT 1`
       )
-      .get(userId) as { started_at: string } | undefined;
+      .get(userId, KEEPALIVE_SYNC_SOURCE) as { started_at: string } | undefined;
     return row ? new Date(row.started_at) : null;
   });
 }

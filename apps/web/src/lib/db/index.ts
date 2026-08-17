@@ -140,6 +140,7 @@ export {
   getLastSuccessfulSyncAt,
   addRouteLog,
   getRouteLogs,
+  KEEPALIVE_SYNC_SOURCE,
 } from "./logs";
 
 export type { ClientLogRow, ClientLogSource, ClientLogLevel, ClientLogKind } from "./client-logs";
