@@ -6,7 +6,7 @@ import {
   getLastSuccessfulSyncAt,
   getNaps,
   getRecoveryRange,
-  getSleepRange,
+  getSleepRangeRaw,
   getStrainRange,
   getUserSettings,
   getWorkoutPlans,
@@ -208,7 +208,7 @@ export const TOOLS: ToolSchema[] = [
   {
     name: "query_sleep",
     description:
-      "Query nightly Whoop sleep rows for a date range. Excludes naps. Returns sleep duration, stage breakdown (light/deep/REM/awake ms), sleep need (with baseline / debt / strain / nap-credit components when available), performance, efficiency, consistency, disturbances, cycles, respiratory rate, and local-time bedtime/waketime when available (start_local/end_local in YYYY-MM-DDTHH:MM:SS format).",
+      "Query nightly Whoop sleep rows for a date range. Excludes naps. Returns sleep duration, stage breakdown (light/deep/REM/awake ms), sleep need (with baseline / debt / strain / nap-credit components when available), performance, efficiency, consistency, disturbances, cycles, respiratory rate, and local-time bedtime/waketime when available (start_local/end_local in YYYY-MM-DDTHH:MM:SS format). `date` is the WAKE day (the calendar day the sleep ended), not the day it started — a sleep starting 23:11 and ending 08:38 the next morning is dated the morning it ended, matching the recovery score from that same night. A date can occasionally have more than one row (e.g. wake at 03:00, sleep again, wake at 09:00) — this tool returns all of them, not just one.",
     input_schema: DATE_RANGE_SCHEMA,
     strict: true,
   },
@@ -796,7 +796,7 @@ export async function executeTool(
     case "query_recovery":
       return getRecoveryRange(options.userId, startDate, endDate);
     case "query_sleep":
-      return getSleepRange(options.userId, startDate, endDate);
+      return getSleepRangeRaw(options.userId, startDate, endDate);
     case "query_strain":
       return getStrainRange(options.userId, startDate, endDate);
     case "query_workouts":
@@ -808,7 +808,7 @@ export async function executeTool(
     case "query_daily_snapshot":
       return {
         recovery: getRecoveryRange(options.userId, startDate, endDate),
-        sleep: getSleepRange(options.userId, startDate, endDate),
+        sleep: getSleepRangeRaw(options.userId, startDate, endDate),
         strain: getStrainRange(options.userId, startDate, endDate),
         workouts: buildWorkoutsPayload(options.userId, startDate, endDate),
       };

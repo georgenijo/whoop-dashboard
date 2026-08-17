@@ -42,8 +42,24 @@ function avgOrNull(values: (number | null)[]): number | null {
   return valid.reduce((a, b) => a + b, 0) / valid.length;
 }
 
+/** Next local calendar date, as a "YYYY-MM-DD" string. UTC-anchored so it's
+ *  independent of the caller's tz — the input is already a local date
+ *  string; this just walks it forward one whole day. */
+function nextDateStr(date: string): string {
+  const d = new Date(date + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 export function computeNapImpact(naps: NapRow[], sleep: SleepRow[]): NapImpact {
-  const napDates = new Set(naps.map((n) => n.date));
+  // The night sleep Whoop credits for a nap taken on date D (via
+  // `need_from_nap_ms`) is the sleep that starts the evening of D and ends
+  // the morning of D+1 — that night is now dated D+1 under wake-day
+  // attribution (issue #440), not D. Pre-fix, `sleep.date` was the BED day,
+  // so matching directly against the nap's own date (D) was correct; post-
+  // fix the credited night has moved a day later, so the match set shifts
+  // to nextDateStr(nap.date).
+  const nightDates = new Set(naps.map((n) => nextDateStr(n.date)));
 
   const totalNaps = naps.length;
   const avgDurationMin = totalNaps > 0
@@ -51,15 +67,15 @@ export function computeNapImpact(naps: NapRow[], sleep: SleepRow[]): NapImpact {
     : 0;
 
   const napCredits = sleep
-    .filter((s) => napDates.has(s.date))
+    .filter((s) => nightDates.has(s.date))
     .map((s) => s.need_from_nap_ms)
     .filter((v): v is number => v != null && v < 0);
   const avgSleepNeedReductionHrs = napCredits.length > 0
     ? -napCredits.reduce((a, b) => a + b, 0) / napCredits.length / MS_PER_HOUR
     : null;
 
-  const withSleep = sleep.filter((s) => napDates.has(s.date));
-  const withoutSleep = sleep.filter((s) => !napDates.has(s.date));
+  const withSleep = sleep.filter((s) => nightDates.has(s.date));
+  const withoutSleep = sleep.filter((s) => !nightDates.has(s.date));
 
   function side(group: SleepRow[]): NapImpactSide {
     return {

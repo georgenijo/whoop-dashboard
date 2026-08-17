@@ -1,5 +1,5 @@
 import "server-only";
-import { openWrite, type DB } from "@/lib/db/connection";
+import { openWrite, safeQuery, type DB } from "@/lib/db/connection";
 import { MATCH_WINDOW_MS, SQL_WINDOW_MS, sportsCompatible } from "@/lib/healthkit/match";
 
 // KEEP IN SYNC WITH streamlit/whoop/db.py:147-262 (column lists for recovery/cycles/sleep/workouts)
@@ -104,8 +104,37 @@ export function parseDate(iso: string, tz: string): string {
   }).format(new Date(iso));
 }
 
+// File a sleep under the calendar day it ENDED (the wake day), not the day it
+// started. A sleep beginning 23:11 and ending 08:38 the next morning used to
+// be filed on the day it began, colliding with the early-morning sleep
+// already on that day — while the day it actually belongs to got no sleep
+// row at all. `recoverySummaryDate` keys on `created_at` (recovery is
+// created when the sleep ENDS), so wake-day attribution here realigns a
+// night's sleep with its own recovery row (issue #440).
+// Callers MUST gate on `score_state === "SCORED"` (and a truthy `score`)
+// before calling this — every SCORED record carries `end` from the Whoop v2
+// API, but a PENDING_SCORE record may not. All four call sites do gate:
+// `upsertSleep` and `persistAll`'s sleep loop check before calling;
+// `syncedDates` checks `score_state === "SCORED"` before calling (and still
+// wraps the call in try/catch — see its comment); the webhook handler's
+// `sleep.updated` case checks before calling and treats a not-yet-scored
+// update as a no-op. `persistAll` additionally catches a throw here PER
+// RECORD and skips just that one (issue #440 review, second pass, WARN 2) —
+// this function itself does not swallow anything.
 export function sleepSummaryDate(r: WhoopSleepRecord, tz: string): string {
-  return parseDate(r.start, tz);
+  if (!r.end) {
+    // `end` is optional only in the TS type. Falling back to `r.start` here
+    // would silently reintroduce exactly the start-day misfiling this
+    // function exists to fix, with no signal it happened — a wrong date is
+    // indistinguishable from a right one after the fact. Fail loud instead
+    // (issue #440 review) so the caller's per-record skip-and-count (or,
+    // for the webhook handler, the score_state gate) is what decides the
+    // outcome — not a quietly-wrong date.
+    throw new Error(
+      `sleepSummaryDate: record ${r.id} is missing 'end' (expected on every SCORED sleep)`,
+    );
+  }
+  return parseDate(r.end, tz);
 }
 
 export function workoutSummaryDate(r: WhoopWorkoutRecord, tz: string): string {
@@ -174,7 +203,7 @@ export function upsertSleep(record: WhoopSleepRecord, userId: number, tz: string
     `).run({
       user_id: userId,
       sleep_id: record.id,
-      date: parseDate(record.start, tz),
+      date: sleepSummaryDate(record, tz),
       in_bed_ms: ss.total_in_bed_time_milli,
       light_ms: ss.total_light_sleep_time_milli,
       deep_ms: ss.total_slow_wave_sleep_time_milli,
@@ -204,6 +233,27 @@ export function upsertSleep(record: WhoopSleepRecord, userId: number, tz: string
   } finally {
     db.close();
   }
+}
+
+/**
+ * The sleep row's CURRENT `date`, read BEFORE an upsert overwrites it.
+ *
+ * `upsertSleep` computes the row's date via `sleepSummaryDate` and
+ * `INSERT OR REPLACE`s over the same `(user_id, sleep_id)` row. If a row
+ * already existed under a DIFFERENT date — e.g. a legacy row still on its
+ * pre-migration start-day date, the first time a `sleep.updated` webhook
+ * touches it after this deploy — that old date's `daily_summary` becomes
+ * stale the moment the upsert moves the row, and needs its own recompute,
+ * not just the new date's (issue #440 review, BLOCK 5). Returns null if no
+ * row exists yet for this sleep_id (first-ever write — nothing to vacate).
+ */
+export function getSleepDate(sleepId: string, userId: number): string | null {
+  return safeQuery((db) => {
+    const row = db
+      .prepare("SELECT date FROM sleep WHERE sleep_id = ? AND user_id = ?")
+      .get(sleepId, userId) as { date: string } | undefined;
+    return row?.date ?? null;
+  });
 }
 
 // KEEP IN SYNC WITH streamlit/whoop/db.py:187-206 (sync_cycles column order)
@@ -538,7 +588,23 @@ SELECT
     COALESCE(workout_summary.workouts_count, 0) AS workouts_count
 FROM day
 LEFT JOIN recovery ON recovery.date = day.date AND recovery.user_id = ?
-LEFT JOIN sleep ON sleep.date = day.date AND COALESCE(sleep.nap, 0) = 0 AND sleep.user_id = ?
+-- Deterministic one-row-per-date pick (issue #440): wake-day attribution
+-- removes same-day collisions caused by the old start-day filing, but two
+-- sleeps CAN still legitimately end on the same local date (wake 03:00,
+-- sleep again, wake 09:00). Longest in_bed_ms wins; sleep_id breaks ties.
+-- KEEP THIS SUBSELECT IN SYNC WITH sync.ts's SUMMARY_SELECT_SQL and with
+-- db/sleep.ts's SLEEP_DEDUP_WHERE (same tie-break rule, three call sites).
+LEFT JOIN (
+    SELECT s.date, s.light_ms, s.deep_ms, s.rem_ms, s.efficiency, s.performance
+    FROM sleep s
+    WHERE COALESCE(s.nap, 0) = 0 AND s.user_id = ?
+      AND s.sleep_id = (
+        SELECT s2.sleep_id FROM sleep s2
+        WHERE s2.user_id = s.user_id AND s2.date = s.date AND COALESCE(s2.nap, 0) = 0
+        ORDER BY s2.in_bed_ms DESC, s2.sleep_id DESC
+        LIMIT 1
+      )
+) sleep ON sleep.date = day.date
 LEFT JOIN cycles ON cycles.date = day.date AND cycles.user_id = ?
 LEFT JOIN workout_summary ON workout_summary.date = day.date
 `;

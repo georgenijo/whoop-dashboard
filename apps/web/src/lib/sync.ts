@@ -76,6 +76,14 @@ export type SyncResult = {
     fetch_breakdown: Record<string, number>;
     page_counts: Record<string, number>;
     summary_dates: number;
+    /** SCORED sleep records this sync fetched but could not date (missing
+     *  `end` — `sleepSummaryDate` throws rather than silently misfiling
+     *  them; see its doc comment). Should be 0 in practice — every SCORED
+     *  record carries `end` from the Whoop v2 API — but if it's ever
+     *  nonzero, these records were skipped rather than written under a
+     *  wrong-but-plausible date, and rather than failing the whole sync
+     *  (recovery/cycles/workouts still commit). */
+    sleep_missing_end_skipped: number;
     body_error?: string;
     /** Cycles reconcile (issue #415) outcome. Absent if it threw before
      *  producing a result (see `reconcile_error`), or if the one-time
@@ -87,6 +95,10 @@ export type SyncResult = {
     /** Present only on the single sync where the one-time historical
      *  cycles backfill (issue #415) ran. */
     cycles_backfill?: ReconcileCyclesResult;
+    /** Present only on the single sync where the one-time sleep wake-day
+     *  re-date backfill (issue #440) ran. */
+    sleep_backfill?: SleepWakeDayBackfillResult;
+    sleep_backfill_error?: string;
   };
   error?: string;
   /**
@@ -264,7 +276,23 @@ SELECT
     COALESCE(workout_summary.workouts_count, 0) AS workouts_count
 FROM day
 LEFT JOIN recovery ON recovery.date = day.date AND recovery.user_id = ?
-LEFT JOIN sleep ON sleep.date = day.date AND COALESCE(sleep.nap, 0) = 0 AND sleep.user_id = ?
+-- Deterministic one-row-per-date pick (issue #440): wake-day attribution
+-- removes same-day collisions caused by the old start-day filing, but two
+-- sleeps CAN still legitimately end on the same local date (wake 03:00,
+-- sleep again, wake 09:00). Longest in_bed_ms wins; sleep_id breaks ties.
+-- KEEP THIS SUBSELECT IN SYNC WITH upsert.ts's SELECT_DAILY_SUMMARY and with
+-- db/sleep.ts's SLEEP_DEDUP_WHERE (same tie-break rule, three call sites).
+LEFT JOIN (
+    SELECT s.date, s.light_ms, s.deep_ms, s.rem_ms, s.efficiency, s.performance
+    FROM sleep s
+    WHERE COALESCE(s.nap, 0) = 0 AND s.user_id = ?
+      AND s.sleep_id = (
+        SELECT s2.sleep_id FROM sleep s2
+        WHERE s2.user_id = s.user_id AND s2.date = s.date AND COALESCE(s2.nap, 0) = 0
+        ORDER BY s2.in_bed_ms DESC, s2.sleep_id DESC
+        LIMIT 1
+      )
+) sleep ON sleep.date = day.date
 LEFT JOIN cycles ON cycles.date = day.date AND cycles.user_id = ?
 LEFT JOIN workout_summary ON workout_summary.date = day.date
 `;
@@ -288,7 +316,17 @@ function syncedDates(data: FetchedData, tz: string): string[] {
     if (r.score_state === "SCORED") dates.add(cycleSummaryDate(r, tz));
   }
   for (const r of data.sleep) {
-    if (r.score_state === "SCORED") dates.add(sleepSummaryDate(r, tz));
+    if (r.score_state !== "SCORED") continue;
+    // Mirrors persistAll's sleep loop: a SCORED record without `end` throws
+    // from `sleepSummaryDate` (issue #440 review) rather than silently
+    // misfiling it. persistAll already skips-and-counts it; this is purely
+    // about not crashing the (separate, post-commit) `summary_dates` count
+    // over the identical record.
+    try {
+      dates.add(sleepSummaryDate(r, tz));
+    } catch {
+      // already logged/counted by persistAll
+    }
   }
   // Workouts are not gated on score_state in Python (require_scored=False),
   // so we mirror that here.
@@ -306,19 +344,30 @@ function syncedDates(data: FetchedData, tz: string): string[] {
  *
  * Body measurement and the latest_*_date reads run separately *after* this
  * function returns — see `runWhoopSync` for those.
+ *
+ * A SCORED sleep record missing `end` makes `sleepSummaryDate` throw
+ * (issue #440 review) — this loop catches that PER RECORD and skips just
+ * that one, rather than letting it escape into the shared `db.transaction`
+ * and roll back recovery/cycles/workouts too. This should never happen in
+ * practice (every SCORED record carries `end`), but "one malformed sleep
+ * record takes down the whole sync, every sync, until Whoop fixes its API"
+ * is a worse failure mode than skipping the one record and surfacing the
+ * count.
  */
 function persistAll(
   data: FetchedData,
   userId: number,
   signal: AbortSignal | undefined,
   tz: string,
-): SyncCounts {
+): { counts: SyncCounts; sleepMissingEndSkipped: number } {
   const counts: SyncCounts = {
     recovery: 0,
     sleep: 0,
     cycles: 0,
     workouts: 0,
   };
+  let sleepMissingEndSkipped = 0;
+  const skippedSleepRecords: { sleep_id: string; err: string }[] = [];
   const db = openWrite();
   if (!db) throw new Error("DB unavailable (no whoop_data.db at expected path)");
   try {
@@ -394,12 +443,31 @@ function persistAll(
       checkAborted(signal);
       for (const r of data.sleep) {
         if (r.score_state !== "SCORED" || !r.score) continue;
+        let date: string;
+        try {
+          date = sleepSummaryDate(r, tz);
+        } catch (err) {
+          // Should never happen — every SCORED record carries `end` — but
+          // skip just this record rather than rolling back the whole
+          // transaction (recovery/cycles/workouts) for a single bad row.
+          // Logging happens AFTER `persist()` returns below, not here: the
+          // logger persists warn+ events via its own `openWrite()` call
+          // (`server_logs`), and calling that from inside this transaction
+          // deadlocks against the write lock this same transaction already
+          // holds (SQLITE_BUSY).
+          sleepMissingEndSkipped += 1;
+          skippedSleepRecords.push({
+            sleep_id: r.id,
+            err: err instanceof Error ? err.message : String(err),
+          });
+          continue;
+        }
         const ss = r.score.stage_summary;
         const sn = r.score.sleep_needed;
         sleepStmt.run({
           user_id: userId,
           sleep_id: r.id,
-          date: parseDate(r.start, tz),
+          date,
           in_bed_ms: ss.total_in_bed_time_milli,
           light_ms: ss.total_light_sleep_time_milli,
           deep_ms: ss.total_slow_wave_sleep_time_milli,
@@ -469,7 +537,15 @@ function persistAll(
       }
     });
     persist();
-    return counts;
+    // Logged here, after the transaction committed — see the try/catch
+    // above for why logging from inside it deadlocks.
+    for (const skipped of skippedSleepRecords) {
+      log.error(
+        { user_id: userId, ...skipped },
+        "sleep record skipped: missing end",
+      );
+    }
+    return { counts, sleepMissingEndSkipped };
   } finally {
     db.close();
   }
@@ -823,6 +899,248 @@ export async function backfillOrphanedCyclesOnce(
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// Sleep wake-day re-date backfill (issue #440)
+//
+// ROOT CAUSE: `sleepSummaryDate` used to key a sleep row on the local day it
+// STARTED. A sleep beginning 23:11 and ending 08:38 the next morning was
+// filed under the day it began — colliding with the early-morning sleep
+// already on that day, while the day it actually belongs to got no sleep
+// row at all. `recoverySummaryDate` keys on `created_at` (recovery is
+// created when the sleep ENDS), so the two halves of one night ended up
+// filed under different dates. `sleepSummaryDate` now keys on `r.end`
+// instead, realigning the two. This backfill re-dates EXISTING rows to
+// match.
+//
+// Unlike the cycles backfill, this needs no Whoop API call: every `sleep`
+// row already carries its own `raw` JSON (100% populated, including all 141
+// legacy rows with NULL `start_local`/`end_local` — verified against prod),
+// so the corrected date is derived locally from `raw.end`.
+// ---------------------------------------------------------------------------
+
+export type SleepWakeDayBackfillResult = {
+  rows_scanned: number;
+  rows_changed: number;
+  /** Rows whose `raw` was missing, unparseable, or lacked `.end` — left
+   *  untouched rather than treated as fatal. */
+  rows_skipped: number;
+  /** Distinct dates whose `daily_summary` was recomputed — both the date a
+   *  changed row LEFT and the date it moved TO, since a row leaving date D
+   *  means D's `daily_summary` is stale too, not just the destination. The
+   *  re-date UPDATEs and every recompute here share one transaction (see
+   *  the function's doc comment), so this result object is only ever
+   *  returned after a clean commit — there is no "some recomputes failed"
+   *  partial state to report. */
+  dates_recomputed: number;
+  /** Dates where re-dating left MORE THAN ONE non-nap sleep sharing that
+   *  date. Not data loss — the PK is `(user_id, sleep_id)` and nothing is
+   *  deleted — but every deduped read (charts, `daily_summary`, the Coach)
+   *  picks exactly one winner per date, so the loser becomes invisible with
+   *  no other signal. Prod pre-measurement said 0, but a one-shot
+   *  irreversible migration of a dataset with no other copy must not just
+   *  trust that number blind — this is the actual post-migration count. */
+  collisions: number;
+};
+
+/**
+ * `app_settings` marker for the one-time sleep wake-day re-date backfill,
+ * keyed per user (precedent: `cyclesBackfillSettingKey`). Bump the `v1`
+ * suffix to force a re-run.
+ */
+function sleepWakeDayBackfillSettingKey(userId: number): string {
+  return `sleep_wake_day_v1:user:${userId}`;
+}
+
+/**
+ * One-time per-user re-date of existing `sleep` rows from start-day to
+ * wake-day attribution. Guarded by an `app_settings` marker so it runs
+ * exactly once; returns null when the marker is already present.
+ *
+ * MUST run before `persistAll` writes this sync's fetched window (see the
+ * call site in `runWhoopSync`): `persistAll` already computes each sleep's
+ * `date` via the fixed `sleepSummaryDate` (keyed on `r.end`), so if it runs
+ * first it silently pre-corrects any pre-existing wrong-dated row inside the
+ * fetch window via `INSERT OR REPLACE` — by the time this function scans the
+ * table, `raw.end` and `date` already agree, so the row is never flagged as
+ * "changed" and the date it VACATED never gets recomputed. Scanning before
+ * `persistAll` runs lets this function see genuine pre-migration state.
+ *
+ * The marker is written even when zero rows change (a user with no
+ * midnight-spanning sleeps) — the point is "ran once", not "changed
+ * something". It's also written when the DB has zero sleep rows at all, so
+ * a fresh install doesn't re-scan an empty table on every sync.
+ *
+ * Rows whose `raw` is missing, unparseable, or lacks `.end` are skipped
+ * (counted, not thrown) rather than failing the whole pass — a handful of
+ * bad rows shouldn't block every other row's correction, and there is no
+ * retry-count state, so a genuinely bad row would just be skipped forever,
+ * which is the correct outcome (there's nothing to re-derive it from).
+ *
+ * Fails CLOSED if the DB can't even be opened: this is a one-shot,
+ * effectively irreversible migration (the marker disables all future runs),
+ * so a transient DB-unavailable blip must not be allowed to write the
+ * marker having scanned zero rows — that would look identical to the
+ * legitimate "fresh install, no sleep rows yet" case forever after. Throws
+ * instead; the caller in `runWhoopSync` already treats this like the other
+ * best-effort post-persist steps (catches it into `sleep_backfill_error`
+ * without failing the sync) and will retry on the next one.
+ *
+ * The re-date UPDATEs and the `daily_summary` recomputes for every touched
+ * date run inside ONE transaction on ONE connection — nothing commits
+ * unless everything commits. This is load-bearing for retry safety, not
+ * just atomicity theater: once a row's `date` UPDATE commits on its own,
+ * `raw.end` and `date` agree for that row, so a later re-run of this
+ * function (because the marker was withheld) would compute
+ * `newDate === row.date`, never re-flag the row as "changed", and never
+ * rediscover the date it vacated — the idempotent re-date is exactly what
+ * makes a split-transaction retry blind. An earlier version of this
+ * function ran the UPDATEs in their own transaction and the recomputes
+ * afterward via separate `recomputeDailySummary()` calls; a recompute
+ * failure there left the re-date committed, the recompute silently
+ * unattempted-forever, and (worse) the marker still got written on the
+ * NEXT call because the now-idempotent scan found nothing left to do
+ * (issue #440 review, second pass). Folding both into one transaction means
+ * a mid-recompute failure now rolls back the UPDATEs too, so the next call
+ * sees the original pre-migration state and gets a genuine second attempt.
+ */
+export function backfillSleepWakeDayOnce(
+  userId: number,
+  tz: string,
+): SleepWakeDayBackfillResult | null {
+  const key = sleepWakeDayBackfillSettingKey(userId);
+  if (getSetting(key) !== null) return null;
+
+  const db = openWrite();
+  if (!db) {
+    throw new Error(
+      "[backfillSleepWakeDayOnce] DB unavailable (no whoop_data.db at expected path)",
+    );
+  }
+
+  const result: SleepWakeDayBackfillResult = {
+    rows_scanned: 0,
+    rows_changed: 0,
+    rows_skipped: 0,
+    dates_recomputed: 0,
+    collisions: 0,
+  };
+
+  try {
+    const rows = db
+      .prepare("SELECT sleep_id, date, raw, nap FROM sleep WHERE user_id = ?")
+      .all(userId) as {
+      sleep_id: string;
+      date: string;
+      raw: string | null;
+      nap: number | null;
+    }[];
+    result.rows_scanned = rows.length;
+
+    // Final (post-backfill) date per sleep_id — needed for the collision
+    // check below, independent of whether this particular row's date
+    // changed.
+    const finalDateBySleepId = new Map<string, string>();
+    const changes: { sleep_id: string; new_date: string; old_date: string }[] = [];
+    for (const row of rows) {
+      let end: unknown;
+      try {
+        end = row.raw ? (JSON.parse(row.raw) as { end?: unknown }).end : undefined;
+      } catch {
+        end = undefined;
+      }
+      if (typeof end !== "string" || end.length === 0) {
+        result.rows_skipped += 1;
+        finalDateBySleepId.set(row.sleep_id, row.date);
+        continue;
+      }
+      let newDate: string;
+      try {
+        newDate = parseDate(end, tz);
+      } catch {
+        result.rows_skipped += 1;
+        finalDateBySleepId.set(row.sleep_id, row.date);
+        continue;
+      }
+      finalDateBySleepId.set(row.sleep_id, newDate);
+      if (newDate !== row.date) {
+        changes.push({ sleep_id: row.sleep_id, new_date: newDate, old_date: row.date });
+      }
+    }
+
+    const touchedDates = new Set<string>();
+    for (const c of changes) {
+      touchedDates.add(c.old_date);
+      touchedDates.add(c.new_date);
+    }
+
+    const update = db.prepare(
+      "UPDATE sleep SET date = ? WHERE user_id = ? AND sleep_id = ?",
+    );
+    const summarySelect = db.prepare(SUMMARY_SELECT_SQL);
+    const summaryInsert = db.prepare(SUMMARY_INSERT_SQL);
+
+    // Single transaction: every re-date UPDATE and every touched date's
+    // daily_summary recompute, or none of them. See the doc comment above
+    // for why splitting these across transactions/connections makes a
+    // partial failure unrecoverable rather than merely incomplete.
+    db.transaction(() => {
+      for (const c of changes) {
+        update.run(c.new_date, userId, c.sleep_id);
+      }
+      for (const date of touchedDates) {
+        const row = summarySelect.get(
+          date,
+          date,
+          userId,
+          userId,
+          userId,
+          userId,
+        ) as Record<string, unknown> | undefined;
+        if (row) summaryInsert.run({ ...row, user_id: userId });
+      }
+    })();
+    result.rows_changed = changes.length;
+    result.dates_recomputed = touchedDates.size;
+
+    // Collision check: dates where re-dating leaves >1 non-nap sleep.
+    // Naps are excluded — the read-side dedup selector only applies to
+    // COALESCE(nap,0)=0 rows, so two naps (or a nap plus a night) sharing a
+    // date isn't a collision in that sense.
+    const nonNapDateCounts = new Map<string, number>();
+    for (const row of rows) {
+      if (row.nap) continue;
+      const finalDate = finalDateBySleepId.get(row.sleep_id)!;
+      nonNapDateCounts.set(finalDate, (nonNapDateCounts.get(finalDate) ?? 0) + 1);
+    }
+    for (const count of nonNapDateCounts.values()) {
+      if (count > 1) result.collisions += 1;
+    }
+    if (result.collisions > 0) {
+      log.warn(
+        { user_id: userId, collisions: result.collisions },
+        "sleep wake-day backfill: dates with >1 non-nap sleep after re-date",
+      );
+    }
+  } finally {
+    db.close();
+  }
+
+  // Only reached if the transaction above committed cleanly — a throw from
+  // inside it (e.g. SQLITE_BUSY on a recompute) propagates past this point
+  // uncaught, so the marker is never written. `runWhoopSync` catches it
+  // into `details.sleep_backfill_error` without failing the sync, and the
+  // next sync gets a clean retry against the still-unmigrated rows.
+  setSetting(
+    key,
+    JSON.stringify({ completed_at: new Date().toISOString(), ...result }),
+  );
+  log.info(
+    { user_id: userId, ...result },
+    "sleep wake-day backfill complete",
+  );
+  return result;
+}
+
 export async function runWhoopSync(
   opts: {
     /** Owner of the Whoop integration to sync. Required — no fallback. */
@@ -842,6 +1160,7 @@ export async function runWhoopSync(
     fetch_breakdown: {},
     page_counts: {},
     summary_dates: 0,
+    sleep_missing_end_skipped: 0,
   };
   const baseResult: SyncResult = {
     success: false,
@@ -908,12 +1227,42 @@ export async function runWhoopSync(
 
     checkAborted(opts.signal);
 
-    opts.onProgress?.({ stage: "upserting" });
-    const dbT0 = Date.now();
     const userSettings = getUserSettings(opts.userId);
     const tz = userSettings?.tz ?? "UTC";
-    const counts = persistAll(data, opts.userId, opts.signal, tz);
+
+    // Sleep wake-day re-date backfill (issue #440) — best-effort: a failure
+    // here must not fail an otherwise-successful sync. Unlike the cycles
+    // backfill this makes no Whoop API call (pure local re-date from
+    // already-synced `raw` JSON), so it's cheap even the one time it does
+    // real work.
+    //
+    // MUST run BEFORE `persistAll` below. `persistAll` computes each
+    // sleep's `date` via the fixed `sleepSummaryDate` (keyed on `r.end`), so
+    // if it ran first it would silently pre-correct any pre-existing
+    // wrong-dated row inside this sync's fetch window via `INSERT OR
+    // REPLACE` — by the time the backfill scanned the table, the row would
+    // already show the right date and never register as "changed", so the
+    // date it vacated would never get recomputed. Running first lets the
+    // backfill see genuine pre-migration state. See the function's doc
+    // comment for the full rationale (issue #440 review, BLOCK 5).
+    try {
+      const sleepBackfill = backfillSleepWakeDayOnce(opts.userId, tz);
+      if (sleepBackfill) details.sleep_backfill = sleepBackfill;
+    } catch (err) {
+      details.sleep_backfill_error =
+        err instanceof Error ? err.message : String(err);
+    }
+
+    opts.onProgress?.({ stage: "upserting" });
+    const dbT0 = Date.now();
+    const { counts, sleepMissingEndSkipped } = persistAll(
+      data,
+      opts.userId,
+      opts.signal,
+      tz,
+    );
     details.sync_db_ms = Date.now() - dbT0;
+    details.sleep_missing_end_skipped = sleepMissingEndSkipped;
     post = {
       counts,
       fetched: {

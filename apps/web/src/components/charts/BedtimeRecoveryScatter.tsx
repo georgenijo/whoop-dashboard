@@ -22,6 +22,19 @@ function formatLongDate(date: string): string {
 
 type PointDatum = { date: string; bt_dev_min: number; recovery: number };
 
+// Issue #440 review, second pass, WARN 4: checked whether this tooltip has
+// the same "clock time shown under the wrong date" bug BedWakeTimeline and
+// BedtimePatternsCard had — it doesn't, so it's left as-is rather than
+// plumbing a bedDate through (unlike those two, which now show both dates
+// when they differ). `bt_dev_min` is a RELATIVE deviation from mean
+// bedtime, not an absolute clock time — there's no implied "this happened
+// at HH:MM on this date" the way "bedtime 11:11pm" under a date reads.
+// `d.date` is the night's own wake day, which is also `recovery`'s date
+// (both are computed from and about the SAME night by construction — see
+// computeBedtimeRecoveryCorr's direct s.date lookup, BLOCK 1 of the first
+// review pass) — so the header date is the correct, canonical identifier
+// for the point as a whole, and "bedtime {dev}m" is honestly a property of
+// that same night, not a separately-dated event.
 function PointTooltip({
   active,
   payload,
