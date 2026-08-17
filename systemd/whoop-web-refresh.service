@@ -9,14 +9,29 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 User=george
-# The Authorization header is read from a root-owned, mode-600 file by curl
-# itself (`-H @file`, curl >=7.55) — NOT expanded into the command line.
-# A secret placed in ExecStart's argv (via `${VAR}` expansion, whether done
-# by systemd natively from an EnvironmentFile or by wrapping in `sh -c`)
-# is world-readable for the life of the process via /proc/<pid>/cmdline and
-# `ps auxww`, 48 times a day. Full install steps, including how this header
-# file and the app's own WHOOP_REFRESH_SECRET stay in sync, are in
-# docs/operations/environment-and-deploy.md — NOT in the decisions log.
+# The Authorization header is read from a mode-640, root:george-owned file
+# by curl itself (`-H @file`, curl >=7.55) — NOT expanded into the command
+# line. A secret placed in ExecStart's argv (via `${VAR}` expansion,
+# whether done by systemd natively from an EnvironmentFile or by wrapping
+# in `sh -c`) is world-readable for the life of the process via
+# /proc/<pid>/cmdline and `ps auxww`, 48 times a day.
+#
+# Ownership MUST be root:george mode 640, not root:root mode 600: this
+# unit deliberately runs as `User=george` (a oneshot curl to localhost has
+# no business running as root), so a root-only file would be unreadable by
+# the process reading it — every invocation would fail closed with a
+# permission error, 48x/day, forever, and #273 would be silently unfixed
+# again. `chown root:george` + `chmod 640` keeps the file out of every
+# OTHER account while letting this unit's own user read it.
+#
+# ProtectSystem=full below makes /usr, /boot, and /etc READ-ONLY for this
+# unit, not inaccessible — reading /etc/whoop-web-refresh.header is
+# unaffected by it. Don't "fix" that; it isn't broken.
+#
+# Full install steps, including how this header file and the app's own
+# WHOOP_REFRESH_SECRET stay in sync (and a post-install verification step),
+# are in docs/operations/environment-and-deploy.md — NOT in the decisions
+# log.
 ExecStart=/usr/bin/curl --fail --silent --show-error --max-time 25 -o /dev/null -X POST -H @/etc/whoop-web-refresh.header http://127.0.0.1:8501/api/whoop/refresh
 NoNewPrivileges=yes
 PrivateTmp=true

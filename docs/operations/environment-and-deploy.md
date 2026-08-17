@@ -64,7 +64,7 @@ kept out of this repository.
 | `systemd/whoop-web.service` | yes | Reference copy of the deployed system unit |
 | `systemd/whoop-cloudflared.service` | yes | Historical — superseded by the shared system `cloudflared.service`; not currently deployed |
 | `systemd/whoop-web-refresh.{service,timer}` | yes | Reference copy of the refresh-only keepalive units (#273) — not installed by `scripts/deploy`, see "Refresh-only keepalive" below |
-| `/etc/whoop-web-refresh.header` | no | Root-owned, mode-600 curl header file (`Authorization: Bearer <secret>`) read by the keepalive unit — kept out of argv, not in repo |
+| `/etc/whoop-web-refresh.header` | no | `root:george`-owned, mode-640 curl header file (`Authorization: Bearer <secret>`) read by the keepalive unit — kept out of argv, not in repo. Owner group MUST match the unit's `User=` (george), not root-only, or the unit (which deliberately does not run as root) can never read it |
 
 ## Application variables
 
@@ -189,10 +189,16 @@ this way. The unit files are tracked in
 **The same secret value must be provisioned in TWO separate places.** The
 Next.js process reads it from its own environment (`WHOOP_REFRESH_SECRET`
 in `apps/web/.env.local`); the systemd timer's curl call reads it from a
-separate root-owned header file. Provisioning only one of the two leaves the
-timer *running* but doing nothing useful — every tick either 404s (app side
-missing) or fails to authenticate (curl side missing) — and, short of
-`systemctl --failed` or reading the journal, nothing surfaces that.
+separate `root:george`-owned, mode-640 header file. Provisioning only one of
+the two leaves the timer *running* but doing nothing useful — every tick
+either 404s (app side missing) or fails to authenticate (curl side missing)
+— and, short of `systemctl --failed` or reading the journal, nothing
+surfaces that. Getting the header file's ownership/mode wrong is its own
+silent-failure trap: the unit runs as `User=george` (see the unit file's
+comment for why it isn't root), so a root-only file it can't read fails
+`curl`'s header-file open on every single invocation — same "timer runs
+forever, does nothing" failure, just from a different cause. Step 5 below
+exists specifically to catch both classes before walking away.
 
 1. Generate a secret. Never commit it, paste it into an issue/PR, or print
    it in a command log:
@@ -208,17 +214,24 @@ missing) or fails to authenticate (curl side missing) — and, short of
    ```bash
    fleet exec opti 'sudo systemctl restart whoop-web'
    ```
-3. **curl side.** Write the SAME value into a root-owned, mode-600 header
-   file. This is deliberately a file curl reads directly with `-H @file`,
-   not an `EnvironmentFile` expanded into `ExecStart` — either systemd's
-   native `${VAR}` expansion or a `sh -c` wrapper would put the secret into
-   the process's argv, which is world-readable via `/proc/<pid>/cmdline`
-   and `ps auxww` for the life of the call, 48 times a day:
+3. **curl side.** Write the SAME value into a header file owned
+   `root:george`, mode **640** — readable by root and by the `george` group
+   member the unit runs as (`User=george`), unreadable by anyone else. NOT
+   `root:root` mode 600: this unit deliberately does not run as root (a
+   oneshot curl to localhost has no business with root), so a root-only
+   file would be unreadable by the process that needs to read it, and every
+   invocation would fail closed forever with no signal louder than a failed
+   systemd unit. This is deliberately a file curl reads directly with
+   `-H @file`, not an `EnvironmentFile` expanded into `ExecStart` — either
+   systemd's native `${VAR}` expansion or a `sh -c` wrapper would put the
+   secret into the process's argv, which is world-readable via
+   `/proc/<pid>/cmdline` and `ps auxww` for the life of the call, 48 times a
+   day:
    ```bash
    printf 'Authorization: Bearer %s\n' '<paste-same-secret>' \
      | sudo tee /etc/whoop-web-refresh.header > /dev/null
-   sudo chown root:root /etc/whoop-web-refresh.header
-   sudo chmod 600 /etc/whoop-web-refresh.header
+   sudo chown root:george /etc/whoop-web-refresh.header
+   sudo chmod 640 /etc/whoop-web-refresh.header
    ```
 4. Install and enable the unit + timer:
    ```bash
@@ -226,20 +239,41 @@ missing) or fails to authenticate (curl side missing) — and, short of
    sudo systemctl daemon-reload
    sudo systemctl enable --now whoop-web-refresh.timer
    ```
-5. Verify:
+5. **Verify with a positive confirmation, not just "it's enabled."** This
+   install has two independent silent-failure modes (step 2 vs. step 3
+   missing or wrong), and `--fail --silent --show-error` means neither one
+   throws anything louder than a failed unit — so don't stop at
+   `enable --now`; run one cycle by hand and check its actual result:
    ```bash
    sudo systemctl list-timers whoop-web-refresh.timer
-   sudo systemctl start whoop-web-refresh.service   # run one cycle by hand
-   sudo systemctl status whoop-web-refresh.service --no-pager
+   fleet exec opti 'sudo systemctl start whoop-web-refresh.service; systemctl is-failed --quiet whoop-web-refresh.service && echo FAILED || echo OK'
+   ```
+   `is-failed --quiet` exits 0 (true) precisely when the unit IS in the
+   failed state — the inverse of the usual "0 means success" shell
+   convention — so this prints `FAILED`/`OK` explicitly rather than relying
+   on a bare exit code, which is easy to misread here in either direction.
+   A healthy oneshot run goes back to `inactive` (not "failed", even though
+   it's also not sitting "active"), so the correct output is `OK`. Then
+   confirm the *route* actually did something, not just that curl saw a
+   2xx — read back a real `sync_logs` row:
+   ```bash
+   fleet exec opti "sqlite3 -readonly /home/george/Documents/whoop-dashboard/shared/whoop_data.db \"SELECT started_at, user_id, status FROM sync_logs WHERE source = 'keepalive' ORDER BY id DESC LIMIT 3;\""
+   ```
+   Expect at least one row with `status = ok` and a `started_at` from the
+   last few minutes. If the unit failed instead, read the journal to tell
+   the two failure modes apart:
+   ```bash
    sudo journalctl -u whoop-web-refresh.service -n 20 --no-pager
    ```
-   A healthy run exits 0. A logged HTTP 404 means step 2 didn't take — the
-   app doesn't have `WHOOP_REFRESH_SECRET`, or `whoop-web` wasn't restarted
-   after setting it. A logged HTTP 401 means step 3 didn't take, or the two
-   secret values don't match. Any other non-2xx (curl `--fail` reports it)
-   means the route ran and at least one tenant's refresh genuinely failed —
-   check `/logs` (Sync History table, rows with `source = keepalive`) for
-   which user and why.
+   A logged HTTP 404 means step 2 didn't take — the app doesn't have
+   `WHOOP_REFRESH_SECRET`, or `whoop-web` wasn't restarted after setting it.
+   A logged HTTP 401, or curl failing to open the header file at all, means
+   step 3 didn't take — check `ls -l /etc/whoop-web-refresh.header` reads
+   `root:george` / `-rw-r-----` (640), and that the two secret values
+   actually match. Any other non-2xx (curl `--fail` reports it) means the
+   route ran and at least one tenant's refresh genuinely failed — the
+   `sync_logs` query above will show `status = error` rows; check `/logs`
+   (Sync History table, `source = keepalive`) for which user and why.
 6. Acceptance from #273: pause the timer for 4h
    (`sudo systemctl stop whoop-web-refresh.timer`), confirm a manual sync
    still works via the existing on-demand refresh path, then re-enable it
