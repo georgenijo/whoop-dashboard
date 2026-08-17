@@ -331,7 +331,40 @@ function applyTzUpdate(db: DB, user: User, tz: string | null | undefined): void 
  * invalidating a copied-out list.
  */
 export function userIdUniqueKeys(db: DB, table: string): string[][] {
+  const { keys, partialIndexes } = reflectUserIdUniqueness(db, table);
+  // A partial unique index constrains only the rows matching its WHERE clause,
+  // which this key-set model cannot express: treating it as total would delete
+  // loser rows that were never going to collide — silent data loss, the exact
+  // failure mode #504 exists to remove. No table whose schema this repo owns
+  // has one, so fail loudly if one ever appears instead of guessing. Callers
+  // merging a table this app does NOT own must not use this entry point: see
+  // partitionOptionalMergeTables, which reflects the same schema without
+  // turning an unknown-but-harmless index into a sign-in outage.
+  if (partialIndexes.length > 0) {
+    throw new Error(
+      `mergeUserInto: ${table}.${partialIndexes[0]} is a PARTIAL unique index covering user_id; ` +
+        `the survivor-wins conflict policy needs an explicit predicate for it`,
+    );
+  }
+  return keys;
+}
+
+/**
+ * The raw reflection behind userIdUniqueKeys: every TOTAL (non-partial)
+ * uniqueness constraint on `table` containing `user_id`, plus the names of the
+ * PARTIAL unique indexes containing it, which are reported rather than used as
+ * collision keys.
+ *
+ * Split out so the two callers can disagree about the partial case — for the
+ * tables this repo owns one is a bug (throw); for an optional table whose
+ * schema this app doesn't own it is merely "not a usable collision key".
+ */
+function reflectUserIdUniqueness(
+  db: DB,
+  table: string,
+): { keys: string[][]; partialIndexes: string[] } {
   const keys: string[][] = [];
+  const partialIndexes: string[] = [];
 
   // A composite PRIMARY KEY shows up in index_list as sqlite_autoindex_*, but
   // an INTEGER PRIMARY KEY (user_settings.user_id) is a rowid alias with no
@@ -364,26 +397,61 @@ export function userIdUniqueKeys(db: DB, table: string): string[][] {
     if (cols.some((c) => c == null)) continue;
     if (!cols.includes("user_id")) continue;
     // A partial unique index constrains only the rows matching its WHERE
-    // clause, which this key-set model cannot express: treating it as total
-    // would delete loser rows that were never going to collide — silent data
-    // loss, the exact failure mode #504 exists to remove. The schema has none
-    // today, so fail loudly if one ever appears instead of guessing.
+    // clause, which this key-set model cannot express, so it is reported and
+    // never used as a collision key. What the caller does with that is the
+    // caller's call (see both call sites).
     if (idx.partial) {
-      throw new Error(
-        `mergeUserInto: ${table}.${idx.name} is a PARTIAL unique index covering user_id; ` +
-          `the survivor-wins conflict policy needs an explicit predicate for it`,
-      );
+      partialIndexes.push(idx.name);
+      continue;
     }
     keys.push(cols as string[]);
   }
 
   const seen = new Set<string>();
-  return keys.filter((k) => {
-    const sig = k.join(" ");
-    if (seen.has(sig)) return false;
-    seen.add(sig);
-    return true;
-  });
+  return {
+    keys: keys.filter((k) => {
+      const sig = k.join(" ");
+      if (seen.has(sig)) return false;
+      seen.add(sig);
+      return true;
+    }),
+    partialIndexes,
+  };
+}
+
+/**
+ * ON DELETE actions that make a DELETE on the parent mutate or destroy child
+ * rows instead of failing. NO ACTION / RESTRICT are deliberately absent: those
+ * throw, and a merge that throws inside the transaction rolls back and can be
+ * retried — issue #504's rule is that loud beats silent.
+ */
+const DESTRUCTIVE_ON_DELETE = new Set(["CASCADE", "SET NULL", "SET DEFAULT"]);
+
+/**
+ * Every `child (ON DELETE ACTION)` in the live schema whose FK to `parent`
+ * would destroy or blank child rows when a row of `parent` is deleted.
+ *
+ * mergeConflictTable works by DELETEing losing rows, so this is what makes
+ * that DELETE safe to issue against a table whose schema this app does not own
+ * and cannot check by hand ahead of time.
+ */
+function destructiveDeleteChildren(db: DB, parent: string): string[] {
+  const tables = db
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+    .all() as { name: string }[];
+  const hits: string[] = [];
+  for (const { name } of tables) {
+    const fks = db.prepare(`PRAGMA foreign_key_list("${name}")`).all() as {
+      table: string | null;
+      on_delete: string | null;
+    }[];
+    for (const fk of fks) {
+      if (fk.table?.toLowerCase() !== parent.toLowerCase()) continue;
+      const action = (fk.on_delete ?? "NO ACTION").toUpperCase();
+      if (DESTRUCTIVE_ON_DELETE.has(action)) hits.push(`${name} (ON DELETE ${action})`);
+    }
+  }
+  return hits;
 }
 
 /**
@@ -396,13 +464,26 @@ export function userIdUniqueKeys(db: DB, table: string): string[][] {
  * conflict by *deleting the survivor's row* and inserting the loser's, which
  * inverts the policy, and its delete fires ON DELETE CASCADE actions (the
  * exact mechanism behind the silent `chat_attachments` data loss in #504).
- * A plain DELETE on these seven tables cascades nowhere: nothing in the
- * schema references them.
  *
- * After the collision deletes, the trailing UPDATE cannot collide: two
- * surviving loser rows would have to share a collision key, which they
- * already can't (they coexist under the same `user_id` today).
+ * THE DELETE MUST NOT CASCADE. That holds by inspection for the seven
+ * USER_FK_CONFLICT_TABLES — nothing in this repo's schema references any of
+ * them — but it is a property of those tables, NOT of this function. Any
+ * caller passing a table outside that set has to establish it first, because a
+ * child row lost to ON DELETE CASCADE here would be destroyed silently: the
+ * counts returned below only see `table` itself. partitionOptionalMergeTables
+ * is the caller that does establish it (via destructiveDeleteChildren) for
+ * tables whose schema this app does not own.
  *
+ * After the collision deletes, the trailing UPDATE cannot collide on any key
+ * in `keys`: two surviving loser rows would have to share a collision key,
+ * which they already can't (they coexist under the same `user_id` today). It
+ * can still throw on a uniqueness constraint `keys` does not model (a partial
+ * or expression index, or one keyed on a non-BINARY collation) — that is a
+ * loud, in-transaction failure and therefore acceptable; see
+ * partitionOptionalMergeTables.
+ *
+ * @param keys collision keys, from userIdUniqueKeys or an equivalent
+ *   reflection the caller has already vetted.
  * @returns rows dropped (loser lost the collision) and rows moved.
  */
 function mergeConflictTable(
@@ -410,9 +491,10 @@ function mergeConflictTable(
   table: string,
   fromId: number,
   toId: number,
+  keys: string[][],
 ): { dropped: number; moved: number } {
   let dropped = 0;
-  for (const key of userIdUniqueKeys(db, table)) {
+  for (const key of keys) {
     const others = key.filter((c) => c !== "user_id").map((c) => `"${c}"`);
     // `user_settings` keys on user_id alone, so there is no residual column to
     // match on — any row the survivor already owns is the collision.
@@ -430,29 +512,67 @@ function mergeConflictTable(
 }
 
 /**
- * Split `tables` into those safe for a bare `UPDATE ... SET user_id` repoint
- * versus those that need the survivor-wins conflict merge, purely by asking
- * the live schema whether `user_id` participates in a PRIMARY KEY or UNIQUE
- * index (`userIdUniqueKeys`).
+ * Route each of `tables` to the bare repoint or to the survivor-wins conflict
+ * merge, decided from the live schema rather than the table's name (issue
+ * #518) — an optional table's schema is unknown, and may not exist at all, so
+ * a static list can't answer for it.
  *
- * Exists as its own function (issue #518) because `optionalUserFkTables()`
- * tables — currently just `journal` — can't get this check for free from
- * USER_FK_TABLES / USER_FK_CONFLICT_TABLES: those are static lists a human
- * verified against a known schema, but an optional table's schema isn't
- * known (may not even exist), so the check has to run at merge time instead.
- * Table-name-agnostic on purpose: it takes whatever list it's given, so a
- * second optional table added later gets the same protection without a new
- * branch — see connection.test.ts for a synthetic second-table proof.
+ * A table goes to `conflict` only when BOTH hold:
+ *   1. `user_id` sits in a total (non-partial) PK/UNIQUE key, so a bare
+ *      `UPDATE ... SET user_id` could throw UNIQUE constraint failed; and
+ *   2. no other table's FK to it declares a destructive ON DELETE action, so
+ *      the conflict path's DELETE cannot cascade past the rows it counts.
+ * Otherwise it goes to `bare`, which is exactly what this code did before
+ * #518 — the routing can therefore never be worse than a plain repoint.
+ *
+ * What it deliberately does NOT close (all pre-existing, all loud):
+ *   - Partial unique indexes are reported and skipped, never used as keys. A
+ *     collision only a partial index sees fails the bare UPDATE loudly.
+ *   - Expression indexes (`lower(title)`) are invisible to `PRAGMA index_info`
+ *     and are skipped by the same rule.
+ *   - A unique index on a non-BINARY collation (`slug COLLATE NOCASE`) is
+ *     reported by `index_info` without its collation, so the conflict path's
+ *     key comparison under-deletes and the trailing UPDATE throws.
+ * Each of those throws inside the merge transaction, which rolls back and can
+ * be retried; none of them silently drops rows. Closing them would need the
+ * collision key to model a predicate/expression/collation, which is a larger
+ * change than #518 and is not attempted here.
  */
 export function partitionOptionalMergeTables(
   db: DB,
   tables: string[],
-): { bare: string[]; conflict: string[] } {
+): { bare: string[]; conflict: { table: string; keys: string[][] }[] } {
   const bare: string[] = [];
-  const conflict: string[] = [];
+  const conflict: { table: string; keys: string[][] }[] = [];
+
   for (const table of tables) {
-    (userIdUniqueKeys(db, table).length > 0 ? conflict : bare).push(table);
+    const { keys, partialIndexes } = reflectUserIdUniqueness(db, table);
+    if (partialIndexes.length > 0) {
+      console.warn(
+        `[mergeUserInto] ${table}: ignoring PARTIAL unique index ` +
+          `${partialIndexes.join(", ")} when deriving merge collision keys — a partial ` +
+          `index's predicate can't be expressed as a key set. Any collision only that ` +
+          `index sees will fail the repoint loudly instead of dropping rows silently.`,
+      );
+    }
+    if (keys.length === 0) {
+      bare.push(table);
+      continue;
+    }
+    const cascades = destructiveDeleteChildren(db, table);
+    if (cascades.length > 0) {
+      console.warn(
+        `[mergeUserInto] ${table}: has a unique key on user_id but ${cascades.join(", ")} ` +
+          `would lose rows if the survivor-wins path deleted colliding rows, so falling ` +
+          `back to a bare user_id repoint. A genuine collision now aborts the merge ` +
+          `loudly (retryable) instead of silently destroying child rows — issue #504.`,
+      );
+      bare.push(table);
+      continue;
+    }
+    conflict.push({ table, keys });
   }
+
   return { bare, conflict };
 }
 
@@ -477,7 +597,9 @@ export function partitionOptionalMergeTables(
  * A live `journal` table with e.g. `UNIQUE(user_id, date)` (the natural
  * shape for a daily journal) would throw on a bare UPDATE and 500 the SIWA
  * callback — the exact failure class #504 fixed for every table whose schema
- * we DO control.
+ * we DO control. That routing is bounded on both sides: it never leaves an
+ * optional table worse off than the bare repoint it used before #518, and it
+ * never issues a DELETE that could cascade into a table it isn't counting.
  *
  * Every table that references users(id), or merely carries a `user_id`
  * column, must be in one list/bucket or the other. Anything left out still
@@ -493,17 +615,27 @@ function mergeUserInto(db: DB, fromId: number, toId: number): void {
 
   const optional = partitionOptionalMergeTables(db, optionalUserFkTables(db));
   const bareTables = [...USER_FK_TABLES, ...optional.bare];
-  const conflictTables = [...USER_FK_CONFLICT_TABLES, ...optional.conflict];
+  // The static list keeps the strict userIdUniqueKeys() reflection, which
+  // throws on anything it can't model — these tables' schemas are this repo's
+  // to fix. Optional tables arrive with keys their own reflection already
+  // vetted.
+  const conflictTables = [
+    ...USER_FK_CONFLICT_TABLES.map((table) => ({
+      table: String(table),
+      keys: userIdUniqueKeys(db, table),
+    })),
+    ...optional.conflict,
+  ];
 
   for (const table of bareTables) {
     const result = db
-      .prepare(`UPDATE ${table} SET user_id = ? WHERE user_id = ?`)
+      .prepare(`UPDATE "${table}" SET user_id = ? WHERE user_id = ?`)
       .run(toId, fromId);
     moves[table] = result.changes;
   }
 
-  for (const table of conflictTables) {
-    const { dropped, moved } = mergeConflictTable(db, table, fromId, toId);
+  for (const { table, keys } of conflictTables) {
+    const { dropped, moved } = mergeConflictTable(db, table, fromId, toId, keys);
     moves[table] = moved;
     drops[table] = dropped;
   }

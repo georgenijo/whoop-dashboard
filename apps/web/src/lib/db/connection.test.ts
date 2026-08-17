@@ -1870,10 +1870,18 @@ describe("Phase D — domain tables carry user_id", () => {
     process.env.WHOOP_DB_PATH = file;
     conn.openWrite()?.close();
 
-    // Sanity: this shape really has no user_id-bearing uniqueness key.
+    // Routing assertion. This is what discriminates the path — the row
+    // outcome below cannot: with no uniqueness key, mergeConflictTable's key
+    // loop is empty, so it deletes nothing and its trailing UPDATE moves the
+    // same rows the bare repoint does. Both paths produce identical rows and
+    // identical log counts for this shape, so the merge assertions that follow
+    // cover the OUTCOME only; routing is asserted here and, schema-driven,
+    // in the test after this one.
     const check = conn.openWrite();
     try {
       expect(authMod.userIdUniqueKeys(check!, "journal")).toEqual([]);
+      const routed = authMod.partitionOptionalMergeTables(check!, ["journal"]);
+      expect(routed).toEqual({ bare: ["journal"], conflict: [] });
     } finally {
       check?.close();
     }
@@ -1891,9 +1899,8 @@ describe("Phase D — domain tables carry user_id", () => {
           .run("sub-518-bare-gone", "new-518-bare@example.com").lastInsertRowid,
       );
       // Survivor and loser both journal on the SAME date. With no uniqueness
-      // constraint this is legal — the bare repoint must move BOTH loser
-      // rows rather than dropping the "colliding" one the conflict path
-      // would have deleted.
+      // constraint this is legal, so every row must survive the merge and end
+      // up owned by the survivor.
       seed
         .prepare("INSERT INTO journal (user_id, date, title) VALUES (1, '2026-06-01', 'survivor')")
         .run();
@@ -1950,12 +1957,13 @@ describe("Phase D — domain tables carry user_id", () => {
     expect(mergeLine).toMatch(/moved:[^;]*\bjournal=2\b/);
   });
 
-  // Issue #518, verification point 4 — the routing decision itself must be
-  // driven by the live schema, not by the literal string "journal". Proven
-  // directly against partitionOptionalMergeTables (the function mergeUserInto
-  // delegates to) with a synthetic second optional table that has nothing to
-  // do with journal, so a table added to optionalUserFkTables() in the
-  // future gets the same protection with no new branch in auth.ts.
+  // Issue #518 — THE routing guard. The bucket a table lands in must be
+  // derived from its schema, not from the literal string "journal", so this
+  // asserts partitionOptionalMergeTables directly (row-level merge outcomes
+  // can't tell the two paths apart when the table has no uniqueness key).
+  // `future_widget_notes` is not a table this repo plans to add; it is a
+  // second, differently-shaped input that journal's name can't explain, which
+  // is the only way to show the decision is schema-derived.
   it("issue #518: the bare-vs-conflict split is schema-driven, not name-hardcoded — proven with a non-journal table", () => {
     const file = newDbFile();
     const raw = new Database(file);
@@ -1979,15 +1987,358 @@ describe("Phase D — domain tables carry user_id", () => {
         "journal",
         "future_widget_notes",
       ]);
-      // journal has a UNIQUE(user_id, date) index → conflict path.
-      expect(conflict).toEqual(["journal"]);
+      // journal has a UNIQUE(user_id, date) index → conflict path, carrying
+      // the derived collision key the merge will actually use.
+      expect(conflict).toEqual([{ table: "journal", keys: [["user_id", "date"]] }]);
       // future_widget_notes has a user_id column but no PK/UNIQUE touching it
       // → bare-repoint path. Nothing in partitionOptionalMergeTables mentions
-      // either table's name — the split comes entirely from
-      // userIdUniqueKeys() reading the schema at call time.
+      // either table's name — the split comes entirely from reflecting the
+      // schema at call time.
       expect(bare).toEqual(["future_widget_notes"]);
     } finally {
       db?.close();
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // PR #520 review — two regressions the first cut of the optional-table
+  // routing introduced, both against shapes `journal` is entitled to have
+  // because this app does not own its schema:
+  //
+  //   1. userIdUniqueKeys THROWS on a partial unique index covering user_id.
+  //      That guarantee is right for the seven tables this repo owns (a
+  //      partial index there is a bug to fix), but routing `journal` through
+  //      it made an ordinary soft-delete index 500 every split-brain sign-in
+  //      even with the table EMPTY — strictly worse than the bare repoint
+  //      that ran before #520.
+  //   2. The conflict path DELETEs losing rows. That cascades nowhere for the
+  //      seven owned tables, but a child table with ON DELETE CASCADE on an
+  //      unknown-schema table would have its rows destroyed silently — #504's
+  //      exact chat_attachments symptom, reintroduced.
+  //
+  // The rule both tests encode: routing an optional table may never be worse
+  // than the bare repoint, and a loud in-transaction throw is acceptable
+  // where silent data loss is not.
+  // -------------------------------------------------------------------------
+
+  /** Point users id=1 at `keepSub` and add a second user; returns its id. */
+  function seedSplitBrainUsers(file: string, keepSub: string, goneSub: string): number {
+    const seed = new Database(file);
+    try {
+      seed.pragma("foreign_keys = ON");
+      seed
+        .prepare("UPDATE users SET apple_sub = ?, email = ? WHERE id = 1")
+        .run(keepSub, `old-${keepSub}@example.com`);
+      return Number(
+        seed
+          .prepare("INSERT INTO users (apple_sub, email) VALUES (?, ?)")
+          .run(goneSub, `new-${keepSub}@example.com`).lastInsertRowid,
+      );
+    } finally {
+      seed.close();
+    }
+  }
+
+  /** Run a merge with console.log/warn captured. */
+  function mergeCapturingLogs(keepSub: string, email: string): {
+    result: { id: number } | null;
+    error: unknown;
+    logged: string[];
+  } {
+    const logged: string[] = [];
+    const capture = (...args: unknown[]) => {
+      logged.push(args.map(String).join(" "));
+    };
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(capture);
+    const logSpy = vi.spyOn(console, "log").mockImplementation(capture);
+    try {
+      return { result: authMod.upsertUserByAppleSub(keepSub, email), error: null, logged };
+    } catch (err) {
+      return { result: null, error: err, logged };
+    } finally {
+      warnSpy.mockRestore();
+      logSpy.mockRestore();
+    }
+  }
+
+  it("PR #520 review: an EMPTY journal with a partial unique index on user_id still merges — a soft-delete index must not 500 sign-in", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    // The reproduction from the review: an ordinary soft-delete shape.
+    raw.exec(`
+      CREATE TABLE journal (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        date TEXT,
+        deleted INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE UNIQUE INDEX journal_live_uq ON journal(user_id, date) WHERE deleted = 0;
+    `);
+    raw.close();
+    process.env.WHOOP_DB_PATH = file;
+    conn.openWrite()?.close();
+
+    const goneId = seedSplitBrainUsers(file, "sub-520-partial-empty-keep", "sub-520-partial-empty-gone");
+    expect(goneId).toBeGreaterThan(1);
+
+    const { result, error, logged } = mergeCapturingLogs(
+      "sub-520-partial-empty-keep",
+      "new-sub-520-partial-empty-keep@example.com",
+    );
+    expect(error, `merge threw: ${String(error)}`).toBeNull();
+    expect(result?.id).toBe(1);
+
+    const after = new Database(file);
+    try {
+      expect((after.prepare("SELECT id FROM users").all() as unknown[]).length).toBe(1);
+    } finally {
+      after.close();
+    }
+
+    // The partial index is skipped, and says so — silence here would be the
+    // review's other complaint (an unexplained routing decision).
+    const warned = logged.find((l) => l.includes("journal_live_uq"));
+    expect(warned, `no partial-index warning in: ${logged.join(" | ")}`).toBeDefined();
+    expect(warned).toContain("PARTIAL");
+  });
+
+  it("PR #520 review: a partial-index-only collision fails loudly and loses nothing — never a silent drop", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE journal (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        date TEXT,
+        deleted INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE UNIQUE INDEX journal_live_uq ON journal(user_id, date) WHERE deleted = 0;
+    `);
+    raw.close();
+    process.env.WHOOP_DB_PATH = file;
+    conn.openWrite()?.close();
+
+    const goneId = seedSplitBrainUsers(file, "sub-520-partial-rows-keep", "sub-520-partial-rows-gone");
+    const seed = new Database(file);
+    try {
+      seed
+        .prepare("INSERT INTO journal (id, user_id, date, deleted) VALUES (1, 1, '2026-06-01', 0)")
+        .run();
+      // Live row on the loser for the same date — collides once repointed.
+      seed
+        .prepare("INSERT INTO journal (id, user_id, date, deleted) VALUES (2, ?, '2026-06-01', 0)")
+        .run(goneId);
+      seed
+        .prepare("INSERT INTO journal (id, user_id, date, deleted) VALUES (3, ?, '2026-06-02', 0)")
+        .run(goneId);
+    } finally {
+      seed.close();
+    }
+
+    const { error } = mergeCapturingLogs(
+      "sub-520-partial-rows-keep",
+      "new-sub-520-partial-rows-keep@example.com",
+    );
+    // Chosen behaviour: the partial index is not a usable collision key, so
+    // the table takes the bare repoint and SQLite rejects it. Loud and
+    // retryable — identical to the behaviour before #520 — where guessing at
+    // the predicate would have deleted the loser's row.
+    expect(error).toBeInstanceOf(Error);
+    expect(String(error)).toMatch(/UNIQUE constraint failed/);
+
+    const after = new Database(file);
+    try {
+      // The merge transaction rolled back: nothing dropped, nothing moved,
+      // both accounts still present for a retry.
+      expect(
+        after.prepare("SELECT id, user_id FROM journal ORDER BY id").all(),
+      ).toEqual([
+        { id: 1, user_id: 1 },
+        { id: 2, user_id: goneId },
+        { id: 3, user_id: goneId },
+      ]);
+      expect((after.prepare("SELECT id FROM users").all() as unknown[]).length).toBe(2);
+    } finally {
+      after.close();
+    }
+  });
+
+  it("PR #520 review: a partial index does not disable the TOTAL unique key next to it", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE journal (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        date TEXT,
+        deleted INTEGER NOT NULL DEFAULT 0,
+        UNIQUE (user_id, date)
+      );
+      CREATE UNIQUE INDEX journal_live_uq ON journal(user_id, date) WHERE deleted = 0;
+    `);
+    raw.close();
+    process.env.WHOOP_DB_PATH = file;
+    conn.openWrite()?.close();
+
+    const goneId = seedSplitBrainUsers(file, "sub-520-partial-mixed-keep", "sub-520-partial-mixed-gone");
+    const seed = new Database(file);
+    try {
+      seed
+        .prepare("INSERT INTO journal (id, user_id, date) VALUES (1, 1, '2026-06-01')")
+        .run();
+      seed.prepare("INSERT INTO journal (id, user_id, date) VALUES (2, ?, '2026-06-01')").run(goneId);
+      seed.prepare("INSERT INTO journal (id, user_id, date) VALUES (3, ?, '2026-06-02')").run(goneId);
+    } finally {
+      seed.close();
+    }
+
+    const { result, error, logged } = mergeCapturingLogs(
+      "sub-520-partial-mixed-keep",
+      "new-sub-520-partial-mixed-keep@example.com",
+    );
+    expect(error, `merge threw: ${String(error)}`).toBeNull();
+    expect(result?.id).toBe(1);
+
+    const after = new Database(file);
+    try {
+      // Survivor-wins on the total UNIQUE(user_id, date): the colliding loser
+      // row is dropped, the other one moves.
+      expect(after.prepare("SELECT id, user_id FROM journal ORDER BY id").all()).toEqual([
+        { id: 1, user_id: 1 },
+        { id: 3, user_id: 1 },
+      ]);
+    } finally {
+      after.close();
+    }
+    const mergeLine = logged.find((l) => l.includes("[upsertUserByAppleSub] merged user"));
+    expect(mergeLine).toMatch(/dropped\(survivor-wins, total=1\):[^;]*\bjournal=1\b/);
+  });
+
+  it("PR #520 review: a child table with ON DELETE CASCADE keeps its rows — the conflict path's DELETE must not cascade", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    // The reproduction from the review: attachments hanging off journal.
+    raw.exec(`
+      CREATE TABLE journal (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        date TEXT,
+        UNIQUE (user_id, date)
+      );
+      CREATE TABLE journal_photos (
+        id INTEGER PRIMARY KEY,
+        journal_id INTEGER REFERENCES journal(id) ON DELETE CASCADE
+      );
+    `);
+    raw.close();
+    process.env.WHOOP_DB_PATH = file;
+    conn.openWrite()?.close();
+
+    // Routing: journal DOES carry a unique key on user_id, so the uniqueness
+    // check alone would send it to the conflict path. The cascading child
+    // overrides that — this is the assertion that discriminates, since with no
+    // colliding row the conflict path would delete nothing and the photos
+    // would survive either way.
+    const check = conn.openWrite();
+    try {
+      expect(authMod.userIdUniqueKeys(check!, "journal")).toEqual([["user_id", "date"]]);
+      expect(authMod.partitionOptionalMergeTables(check!, ["journal"])).toEqual({
+        bare: ["journal"],
+        conflict: [],
+      });
+    } finally {
+      check?.close();
+    }
+
+    const goneId = seedSplitBrainUsers(file, "sub-520-cascade-keep", "sub-520-cascade-gone");
+    const seed = new Database(file);
+    try {
+      seed.prepare("INSERT INTO journal (id, user_id, date) VALUES (1, 1, '2026-06-01')").run();
+      // Loser rows on dates the survivor does not hold — no collision, so the
+      // merge completes and every photo must come with them.
+      seed.prepare("INSERT INTO journal (id, user_id, date) VALUES (2, ?, '2026-06-02')").run(goneId);
+      seed.prepare("INSERT INTO journal (id, user_id, date) VALUES (3, ?, '2026-06-03')").run(goneId);
+      seed.prepare("INSERT INTO journal_photos (id, journal_id) VALUES (10, 1)").run();
+      seed.prepare("INSERT INTO journal_photos (id, journal_id) VALUES (11, 2)").run();
+      seed.prepare("INSERT INTO journal_photos (id, journal_id) VALUES (12, 3)").run();
+    } finally {
+      seed.close();
+    }
+
+    const { result, error, logged } = mergeCapturingLogs(
+      "sub-520-cascade-keep",
+      "new-sub-520-cascade-keep@example.com",
+    );
+    expect(error, `merge threw: ${String(error)}`).toBeNull();
+    expect(result?.id).toBe(1);
+
+    const after = new Database(file);
+    try {
+      expect(after.prepare("SELECT id, user_id FROM journal ORDER BY id").all()).toEqual([
+        { id: 1, user_id: 1 },
+        { id: 2, user_id: 1 },
+        { id: 3, user_id: 1 },
+      ]);
+      // The count the review found at zero.
+      expect(
+        (after.prepare("SELECT id FROM journal_photos").all() as unknown[]).length,
+      ).toBe(3);
+      expect(after.pragma("foreign_key_check")).toEqual([]);
+    } finally {
+      after.close();
+    }
+
+    const warned = logged.find((l) => l.includes("journal_photos"));
+    expect(warned, `no cascade warning in: ${logged.join(" | ")}`).toBeDefined();
+    expect(warned).toContain("ON DELETE CASCADE");
+  });
+
+  it("PR #520 review: with a cascading child, a genuine collision aborts loudly instead of destroying child rows", () => {
+    const file = newDbFile();
+    const raw = new Database(file);
+    raw.exec(`
+      CREATE TABLE journal (
+        id INTEGER PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        date TEXT,
+        UNIQUE (user_id, date)
+      );
+      CREATE TABLE journal_photos (
+        id INTEGER PRIMARY KEY,
+        journal_id INTEGER REFERENCES journal(id) ON DELETE CASCADE
+      );
+    `);
+    raw.close();
+    process.env.WHOOP_DB_PATH = file;
+    conn.openWrite()?.close();
+
+    const goneId = seedSplitBrainUsers(file, "sub-520-cascade-clash-keep", "sub-520-cascade-clash-gone");
+    const seed = new Database(file);
+    try {
+      seed.prepare("INSERT INTO journal (id, user_id, date) VALUES (1, 1, '2026-06-01')").run();
+      // Same date on both accounts: the survivor-wins path would delete this
+      // row and cascade its photo away.
+      seed.prepare("INSERT INTO journal (id, user_id, date) VALUES (2, ?, '2026-06-01')").run(goneId);
+      seed.prepare("INSERT INTO journal_photos (id, journal_id) VALUES (10, 1)").run();
+      seed.prepare("INSERT INTO journal_photos (id, journal_id) VALUES (11, 2)").run();
+    } finally {
+      seed.close();
+    }
+
+    const { error } = mergeCapturingLogs(
+      "sub-520-cascade-clash-keep",
+      "new-sub-520-cascade-clash-keep@example.com",
+    );
+    expect(error).toBeInstanceOf(Error);
+    expect(String(error)).toMatch(/UNIQUE constraint failed/);
+
+    const after = new Database(file);
+    try {
+      expect((after.prepare("SELECT id FROM journal_photos").all() as unknown[]).length).toBe(2);
+      expect((after.prepare("SELECT id FROM journal").all() as unknown[]).length).toBe(2);
+      expect((after.prepare("SELECT id FROM users").all() as unknown[]).length).toBe(2);
+    } finally {
+      after.close();
     }
   });
 });
