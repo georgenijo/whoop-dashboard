@@ -219,6 +219,29 @@ export function integrationRowExists(
   }
 }
 
+/**
+ * Every local user_id that has an integration row for `provider`, ascending.
+ * Read-only, no decrypt — used to fan a provider-wide operation (e.g. the
+ * refresh-only keepalive, #273) out across every tenant without guessing at
+ * a fixed user_id. Multi-tenant since Phase D; this must never hardcode
+ * user 1.
+ */
+export function listIntegrationUserIds(provider: string): number[] {
+  const db = open();
+  if (!db) return [];
+  try {
+    if (!hasTable(db, "integrations")) return [];
+    const rows = db
+      .prepare(
+        "SELECT user_id FROM integrations WHERE provider = ? ORDER BY user_id ASC"
+      )
+      .all(provider) as { user_id: number }[];
+    return rows.map((r) => r.user_id);
+  } finally {
+    db.close();
+  }
+}
+
 export type IntegrationStatus = { exists: boolean; needs_reauth: boolean };
 
 /**

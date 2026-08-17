@@ -1,0 +1,14 @@
+[Unit]
+Description=Run the Whoop refresh-only keepalive every 30 minutes (#273)
+
+[Timer]
+OnCalendar=*:0/30
+# Fire promptly on the next tick after a boot/restart that missed a
+# scheduled run, instead of waiting up to 30 minutes.
+Persistent=true
+# Small jitter so this doesn't line up exactly with other :00/:30 timers
+# on the box.
+RandomizedDelaySec=90
+
+[Install]
+WantedBy=timers.target

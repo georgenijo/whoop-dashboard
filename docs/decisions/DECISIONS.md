@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-17: Refresh-only keepalive authenticates via fail-closed shared-secret bearer, exempted by exact path
+
+**Decision:** `POST /api/whoop/refresh` (#273) force-refreshes every user's Whoop token via the existing `getValidAccessToken({ forceRefresh: true })` path on a 30-minute systemd timer, and is gated by a shared-secret `Authorization: Bearer <secret>` compared with `crypto.timingSafeEqual` (length-guarded so mismatched lengths can't throw). The secret lives in `WHOOP_REFRESH_SECRET`; when unset or empty the route returns 404 and does nothing — same fail-closed shape as the `ADMIN_APPLE_SUB` admin gate. The exact path `/api/whoop/refresh` (not a broader `/api/whoop/` prefix, which would also expose the webhook-adjacent surface) is added to `AUTH_EXEMPT_PREFIXES` in `apps/web/src/proxy.ts` so the timer can reach it without a session cookie. No loopback/source-IP check was added.
+
+**Rationale:** 30 minutes gives 4x margin under Whoop's observed ~3h idle refresh-token TTL (48 calls/day) versus 60 minutes' 2x margin, which lets a single missed tick (box asleep, deploy restart, timer skew) put the next attempt past the TTL — decided in the #263 audit comment (2026-08-17) that resolved this issue's two open decisions. A bearer secret was chosen over HMAC because it buys nothing extra for a caller running on the same box as the app. Widening `AUTH_EXEMPT_PREFIXES` is a real cost — CLAUDE.md requires this log entry for it — so the route is designed to fail closed and to leak nothing (no tokens, no secrets, response bodies carry only user ids and ok/failed counts). A loopback/source-IP check was deliberately rejected: every request arrives via the shared `cloudflared` tunnel and therefore already looks loopback at the app layer, so such a check would be security theatre, not a real second factor — the bearer secret is the only actual gate.
+
+**Status:** active
+
+**References:** #273, #263 (audit + decision comments, 2026-08-16/17), #521, `apps/web/src/app/api/whoop/refresh/route.ts`, `apps/web/src/proxy.ts`, `apps/web/src/lib/whoop/token.ts`, `systemd/whoop-web-refresh.service`, `systemd/whoop-web-refresh.timer`
+
+---
+
 ## 2026-08-16: CSP ships report-only, and its violations are collected authenticated
 
 **Decision:** Split the app's Content-Security-Policy in two. A small enforcing header (`frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, plus `upgrade-insecure-requests` in production) ships immediately from `next.config.ts` alongside `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` and HSTS. The full candidate policy — `default-src 'self'`, nonce-based `script-src 'self'`, `img-src 'self' data: blob:` — ships as `Content-Security-Policy-Report-Only` from `src/proxy.ts`, which is the only place a per-request nonce can be minted. Violations are collected from the `securitypolicyviolation` DOM event and forwarded through the existing authenticated `/api/log/client`, land in `client_logs`, and render on `/logs` under a "Client events" card (`recentClientLogs` in `apps/web/src/lib/db/client-logs.ts`, previously written but never read — added as part of the same PR). No `report-uri`/`report-to` endpoint is added, and `AUTH_EXEMPT_PREFIXES` is unchanged. Flipping the candidate policy to enforcing is a separate, later change that must be justified by the collected reports — with the coverage limits below taken into account, not just an empty-looking report window.

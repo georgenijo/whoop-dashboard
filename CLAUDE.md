@@ -160,7 +160,7 @@ Adding a third-party script, font, image host, or `fetch` target means widening 
 - Naps excluded at query time (`WHERE nap = 0`), not at sync — naps still land in DB
 - Whoop API base: `https://api.prod.whoop.com/developer`
 - Required env: `WHOOP_CLIENT_ID`, `WHOOP_CLIENT_SECRET`, `ANTHROPIC_API_KEY`
-- Optional env: `WHOOP_REDIRECT_URI`, `WHOOP_DB_PATH`, `WHOOP_TOKENS_PATH`, `CYCLES_RECONCILE_LOOKBACK_DAYS` (default 30 — look-back for the per-sync orphaned-cycles reconcile in `sync.ts`; historical orphans are handled by the one-time `app_settings`-guarded backfill instead, so this rarely needs changing)
+- Optional env: `WHOOP_REDIRECT_URI`, `WHOOP_DB_PATH`, `WHOOP_TOKENS_PATH`, `CYCLES_RECONCILE_LOOKBACK_DAYS` (default 30 — look-back for the per-sync orphaned-cycles reconcile in `sync.ts`; historical orphans are handled by the one-time `app_settings`-guarded backfill instead, so this rarely needs changing), `WHOOP_REFRESH_SECRET` (bearer secret for `POST /api/whoop/refresh`, the background refresh-only keepalive on a 30-min systemd timer, #273 — route fails closed with 404 when unset)
 - Optional push env (iOS only, all five required for push to work): `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, `APNS_PRIVATE_KEY`, `APNS_ENVIRONMENT`. Set `ENABLE_PUSH_DEBUG=1` to expose `/api/devices/test-push` in production.
 - Use Anthropic SDK, not raw HTTP. Default model: `claude-sonnet-4-6` for chat, `claude-haiku-4-5` for titles.
 

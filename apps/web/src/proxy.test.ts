@@ -64,6 +64,20 @@ describe("proxy auth gate — exempt prefixes", () => {
     expect(res.headers.get("location")).toBeNull();
   });
 
+  it("lets /api/whoop/refresh through (exact match — the #273 keepalive, own bearer auth)", async () => {
+    const { proxy } = await import("./proxy");
+    const res = proxy(makeRequest("/api/whoop/refresh"));
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("does NOT exempt other /api/whoop/* paths — the addition is the exact route, not a prefix", async () => {
+    const { proxy } = await import("./proxy");
+    const res = proxy(makeRequest("/api/whoop/refresh/anything-else"));
+    // No cookie/bearer attached to this unauthenticated /api/* request, so
+    // the gate must return JSON 401 rather than let it through.
+    expect(res.status).toBe(401);
+  });
+
   it("redirects an unauthenticated request for / to /signin (no `from` for root)", async () => {
     const { proxy } = await import("./proxy");
     const res = proxy(makeRequest("/"));
