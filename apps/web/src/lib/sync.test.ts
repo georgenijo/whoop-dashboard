@@ -66,11 +66,27 @@ vi.mock("@/lib/whoop/token", () => ({
 // it (semantic trigger) without coupling to checkAborted call counts. Other
 // tests don't assert on body upsert behavior, so the default no-op is fine.
 const upsertBodyMock = vi.fn();
+// recomputeDailySummary defaults to a passthrough to the real implementation
+// (set in the mock factory below) — the sleep-backfill "recompute failure"
+// tests override it per-test to simulate `recomputeDailySummary` returning
+// false (its own openWrite() swallows errors rather than throwing) without
+// needing to actually break the DB connection.
+type RecomputeFn = (date: string, userId: number) => boolean;
+let actualRecomputeDailySummary: RecomputeFn;
+const recomputeDailySummaryMock = vi.fn<RecomputeFn>((...args) =>
+  actualRecomputeDailySummary(...args),
+);
 vi.mock("@/lib/whoop/upsert", async () => {
   const actual = await vi.importActual<typeof import("@/lib/whoop/upsert")>(
     "@/lib/whoop/upsert",
   );
-  return { ...actual, upsertBodyMeasurement: (...args: unknown[]) => upsertBodyMock(...args) };
+  actualRecomputeDailySummary = actual.recomputeDailySummary;
+  return {
+    ...actual,
+    upsertBodyMeasurement: (...args: unknown[]) => upsertBodyMock(...args),
+    recomputeDailySummary: (...args: Parameters<RecomputeFn>) =>
+      recomputeDailySummaryMock(...args),
+  };
 });
 
 type SyncModule = typeof import("./sync");
@@ -216,6 +232,8 @@ beforeEach(() => {
   whoopGetAllMock.mockReset();
   getValidAccessTokenMock.mockReset();
   upsertBodyMock.mockReset();
+  recomputeDailySummaryMock.mockReset();
+  recomputeDailySummaryMock.mockImplementation((...args) => actualRecomputeDailySummary(...args));
   // Default: token is fresh, no refresh fired.
   getValidAccessTokenMock.mockImplementation(async () => "stub-token");
   clearTables();
@@ -914,14 +932,20 @@ function seedSleepRow(
   sleepId: string,
   date: string,
   raw: string | null,
-  opts: { inBedMs?: number; lightMs?: number; deepMs?: number; remMs?: number } = {},
+  opts: {
+    inBedMs?: number;
+    lightMs?: number;
+    deepMs?: number;
+    remMs?: number;
+    nap?: number;
+  } = {},
 ): void {
   const db = new Database(dbFile);
   try {
     db.prepare("INSERT OR IGNORE INTO users (id) VALUES (?)").run(userId);
     db.prepare(
       "INSERT INTO sleep (user_id, sleep_id, date, in_bed_ms, light_ms, deep_ms, rem_ms, nap, raw) " +
-        "VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)",
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     ).run(
       userId,
       sleepId,
@@ -930,6 +954,7 @@ function seedSleepRow(
       opts.lightMs ?? 14_400_000,
       opts.deepMs ?? 5_400_000,
       opts.remMs ?? 7_200_000,
+      opts.nap ?? 0,
       raw,
     );
   } finally {
@@ -1059,6 +1084,7 @@ describe("sleep wake-day backfill (issue #440)", () => {
       rows_changed: 0,
       rows_skipped: 0,
       dates_recomputed: 0,
+      collisions: 0,
     });
     expect(sleepBackfillMarker(1)).toContain("completed_at");
   });
@@ -1137,6 +1163,101 @@ describe("sleep wake-day backfill (issue #440)", () => {
     expect(syncMod.backfillSleepWakeDayOnce(1, "UTC")).not.toBeNull();
     expect(syncMod.backfillSleepWakeDayOnce(1, "UTC")).toBeNull();
     expect(syncMod.backfillSleepWakeDayOnce(7, "UTC")).not.toBeNull();
+  });
+
+  // Issue #440 review, WARN 1: prod pre-measurement said 0 collisions, but a
+  // one-shot irreversible migration of a dataset with no other backup must
+  // count and log the real post-migration number rather than trust that.
+  it("counts a collision when re-dating leaves two non-nap sleeps on the same date", () => {
+    // A legitimate double-sleep night: wake ~03:00, sleep again, wake
+    // ~09:00 — both re-date onto 2026-04-29.
+    seedSleepRow(
+      1,
+      "sleep-a",
+      "2026-04-28",
+      JSON.stringify({ id: "sleep-a", end: "2026-04-29T03:00:00.000Z" }),
+    );
+    seedSleepRow(
+      1,
+      "sleep-b",
+      "2026-04-28",
+      JSON.stringify({ id: "sleep-b", end: "2026-04-29T09:00:00.000Z" }),
+    );
+
+    const result = syncMod.backfillSleepWakeDayOnce(1, "UTC");
+
+    expect(result).toMatchObject({ rows_changed: 2, collisions: 1 });
+    // Not data loss — both rows still exist under their own sleep_id.
+    expect(sleepDateFor(1, "sleep-a")).toBe("2026-04-29");
+    expect(sleepDateFor(1, "sleep-b")).toBe("2026-04-29");
+  });
+
+  it("does not count a nap sharing a date with a re-dated night sleep as a collision", () => {
+    seedSleepRow(
+      1,
+      "sleep-night",
+      "2026-04-28",
+      JSON.stringify({ id: "sleep-night", end: "2026-04-29T08:38:56.000Z" }),
+    );
+    seedSleepRow(
+      1,
+      "nap-1",
+      "2026-04-29",
+      JSON.stringify({ id: "nap-1", end: "2026-04-29T15:00:00.000Z" }),
+      { nap: 1 },
+    );
+
+    const result = syncMod.backfillSleepWakeDayOnce(1, "UTC");
+
+    expect(result?.collisions).toBe(0);
+  });
+
+  // Issue #440 review, BLOCK 4: a one-shot migration must fail CLOSED —
+  // never mark itself complete having scanned zero rows just because the DB
+  // was momentarily unavailable.
+  it("fails closed: throws and writes no marker when the DB is unavailable", () => {
+    vi.stubEnv("WHOOP_DB_PATH", "/nonexistent/dir/whoop-missing.db");
+    try {
+      expect(() => syncMod.backfillSleepWakeDayOnce(1, "UTC")).toThrow(
+        /DB unavailable/,
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    // The real DB (restored above) was never touched by the branch above,
+    // so its marker is still absent — confirming no marker leaked through.
+    expect(sleepBackfillMarker(1)).toBeNull();
+  });
+
+  // Issue #440 review, BLOCK 3: `recomputeDailySummary` returns `false`
+  // rather than throwing on failure (its own `openWrite()` swallows
+  // errors). The boolean must be checked: silently discarding it would let
+  // a transient failure leave a vacated date's `daily_summary` permanently
+  // stale while the marker still gets written.
+  it("withholds the marker and reports the true count when a recompute fails", () => {
+    seedSleepRow(
+      1,
+      "sleep-a",
+      "2026-04-28",
+      JSON.stringify({ id: "sleep-a", end: "2026-04-29T08:38:56.000Z" }),
+    );
+    // Simulate the vacated date's recompute failing (e.g. a concurrent
+    // writer holding the write lock) while the destination date's succeeds.
+    recomputeDailySummaryMock.mockImplementation((date: string, userId: number) => {
+      if (date === "2026-04-28") return false;
+      return actualRecomputeDailySummary(date, userId);
+    });
+
+    const result = syncMod.backfillSleepWakeDayOnce(1, "UTC");
+
+    // Row re-dating still committed (it's idempotent and safe).
+    expect(result).toMatchObject({ rows_changed: 1 });
+    // Only the destination date's recompute actually succeeded — the count
+    // must reflect that, not touchedDates.size (which would say 2).
+    expect(result?.dates_recomputed).toBe(1);
+    expect(sleepDateFor(1, "sleep-a")).toBe("2026-04-29");
+    // Marker withheld — a future sync gets to retry.
+    expect(sleepBackfillMarker(1)).toBeNull();
   });
 });
 

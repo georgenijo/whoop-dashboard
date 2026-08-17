@@ -152,3 +152,120 @@ describe("handleEvent — Phase D webhook user mapping", () => {
     expect(whoopGetMock).not.toHaveBeenCalled();
   });
 });
+
+function sleepUpdatedPayload(id: string, start: string, end: string) {
+  return {
+    id,
+    start,
+    end,
+    timezone_offset: "+00:00",
+    nap: false,
+    score_state: "SCORED",
+    score: {
+      sleep_performance_percentage: 90,
+      sleep_efficiency_percentage: 92,
+      sleep_consistency_percentage: 80,
+      respiratory_rate: 14.5,
+      stage_summary: {
+        total_in_bed_time_milli: 28_800_000,
+        total_light_sleep_time_milli: 14_400_000,
+        total_slow_wave_sleep_time_milli: 5_400_000,
+        total_rem_sleep_time_milli: 7_200_000,
+        total_awake_time_milli: 1_800_000,
+        disturbance_count: 3,
+        sleep_cycle_count: 5,
+      },
+      sleep_needed: {
+        baseline_milli: 28_800_000,
+        need_from_sleep_debt_milli: 0,
+        need_from_recent_strain_milli: 0,
+        need_from_recent_nap_milli: 0,
+      },
+    },
+  };
+}
+
+// Issue #440 review, BLOCK 5: `upsertSleep` computes the new date via
+// `sleepSummaryDate` and `INSERT OR REPLACE`s over the same
+// `(user_id, sleep_id)` row. If the row already existed under a DIFFERENT
+// date (e.g. a legacy row still on its pre-migration start-day date, the
+// first time this webhook touches it post-deploy), that vacated date's
+// `daily_summary` is now stale and needs its own recompute — not just the
+// destination's.
+describe("handleEvent — sleep.updated re-dates and recomputes both old and new dates (issue #440)", () => {
+  it("recomputes both the vacated (old) date and the destination date when a sleep moves", async () => {
+    seedIntegration(1, "1001");
+    const db = new Database(dbFile);
+    try {
+      // Pre-existing row filed on the OLD (pre-migration) date.
+      db.prepare(
+        "INSERT INTO sleep (user_id, sleep_id, date, in_bed_ms, light_ms, deep_ms, rem_ms, nap) " +
+          "VALUES (1, 's-1', '2026-04-28', 28800000, 14400000, 5400000, 7200000, 0)",
+      ).run();
+      db.prepare(
+        "INSERT INTO daily_summary (user_id, date, sleep_hours) VALUES (1, '2026-04-28', 7.5)",
+      ).run();
+    } finally {
+      db.close();
+    }
+
+    whoopGetMock.mockResolvedValue(
+      sleepUpdatedPayload("s-1", "2026-04-28T23:11:23.000Z", "2026-04-29T08:38:56.000Z"),
+    );
+
+    const outcome = await webhook.handleEvent({
+      type: "sleep.updated",
+      id: "s-1",
+      user_id: 1001,
+    });
+
+    expect(outcome.kind).toBe("handled");
+
+    const readDb = new Database(dbFile);
+    try {
+      const row = readDb
+        .prepare("SELECT date FROM sleep WHERE sleep_id = 's-1'")
+        .get() as { date: string };
+      expect(row.date).toBe("2026-04-29");
+
+      // Vacated date: recomputed to NULL, not left stale at 7.5.
+      const oldSummary = readDb
+        .prepare("SELECT sleep_hours FROM daily_summary WHERE user_id = 1 AND date = '2026-04-28'")
+        .get() as { sleep_hours: number | null } | undefined;
+      expect(oldSummary?.sleep_hours ?? null).toBeNull();
+
+      // Destination date: recomputed to reflect the row that moved onto it.
+      // (light+deep+rem)/3600000 = (14.4M + 5.4M + 7.2M) / 3.6M = 7.5h.
+      const newSummary = readDb
+        .prepare("SELECT sleep_hours FROM daily_summary WHERE user_id = 1 AND date = '2026-04-29'")
+        .get() as { sleep_hours: number } | undefined;
+      expect(newSummary?.sleep_hours).toBeCloseTo(7.5, 6);
+    } finally {
+      readDb.close();
+    }
+  });
+
+  it("does not attempt an old-date recompute for a brand-new sleep_id", async () => {
+    seedIntegration(1, "1001");
+    whoopGetMock.mockResolvedValue(
+      sleepUpdatedPayload("s-new", "2026-05-01T23:00:00.000Z", "2026-05-02T07:00:00.000Z"),
+    );
+
+    const outcome = await webhook.handleEvent({
+      type: "sleep.updated",
+      id: "s-new",
+      user_id: 1001,
+    });
+
+    expect(outcome.kind).toBe("handled");
+    const db = new Database(dbFile);
+    try {
+      const row = db
+        .prepare("SELECT date FROM sleep WHERE sleep_id = 's-new'")
+        .get() as { date: string };
+      expect(row.date).toBe("2026-05-02");
+    } finally {
+      db.close();
+    }
+  });
+});

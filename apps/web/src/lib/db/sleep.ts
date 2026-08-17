@@ -51,10 +51,16 @@ const NAP_COLUMNS =
 // a chart series with a duplicate x value, or an arbitrary pick for
 // getLatestSleep/getPreviousSleep. Longest in_bed_ms wins; sleep_id breaks
 // ties, so the choice never depends on SQLite's unspecified row order.
-// KEEP THIS RULE IN SYNC WITH the sleep-dedup subselects in sync.ts's
-// SUMMARY_SELECT_SQL and upsert.ts's SELECT_DAILY_SUMMARY (three call sites,
-// same tie-break).
-const SLEEP_DEDUP_WHERE = `
+//
+// Exported so `summary.ts`'s Coach health-context query (a raw SQL string,
+// not one of this module's own functions) can apply the identical rule
+// instead of hand-duplicating it — without this, a two-sleep date there
+// burns two of the context's row `limit` on one night and hands the model
+// two rows for what every other surface treats as one day. sync.ts's
+// SUMMARY_SELECT_SQL and upsert.ts's SELECT_DAILY_SUMMARY need their own
+// copies (different query shape — a JOIN's derived table, not a WHERE
+// fragment on the base table) — KEEP THOSE IN SYNC with this tie-break.
+export const SLEEP_DEDUP_WHERE = `
   s.sleep_id = (
     SELECT s2.sleep_id FROM sleep s2
     WHERE s2.user_id = s.user_id AND s2.date = s.date AND COALESCE(s2.nap, 0) = 0
@@ -93,6 +99,31 @@ export function getSleepRange(
   const range = dateRangeClause(startDate, endDate);
   return forUser(userId).all<SleepRow>(
     `SELECT ${SLEEP_COLUMNS} FROM sleep s WHERE COALESCE(s.nap, 0) = 0 AND ${range.clause} AND ${SLEEP_DEDUP_WHERE} AND s.user_id = ? ORDER BY s.date ASC`,
+    ...range.params,
+  );
+}
+
+/**
+ * Same range as `getSleepRange` but WITHOUT the one-row-per-date dedup —
+ * every non-nap sleep row in range, including both sides of a legitimate
+ * same-date collision (wake 03:00, sleep again, wake 09:00).
+ *
+ * For a chart or summary, showing one deterministic row per date is
+ * correct. For the Coach's `query_sleep` tool it would be data suppression:
+ * the model is reasoning about what actually happened, and a second sleep
+ * on one date is a real event it should see, not noise to be deduped away
+ * (issue #440 review, WARN 4). Keep this the only caller of the
+ * undeduped shape; anything chart- or summary-facing should use
+ * `getSleepRange` instead.
+ */
+export function getSleepRangeRaw(
+  userId: number,
+  startDate: string,
+  endDate: string,
+): SleepRow[] {
+  const range = dateRangeClause(startDate, endDate);
+  return forUser(userId).all<SleepRow>(
+    `SELECT ${SLEEP_COLUMNS} FROM sleep WHERE COALESCE(nap, 0) = 0 AND ${range.clause} AND user_id = ? ORDER BY date ASC`,
     ...range.params,
   );
 }

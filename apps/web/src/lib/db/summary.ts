@@ -25,6 +25,7 @@ import {
   getLatestSleep,
   getPreviousSleep,
   getSleepTrend,
+  SLEEP_DEDUP_WHERE,
 } from "./sleep";
 import { type WorkoutRow } from "./workouts";
 
@@ -249,8 +250,12 @@ export function getHealthContext(userId: number, days = 30): string {
   }
 
   type FullSleepRow = SleepRow & { disturbances: number | null; respiratory_rate: number | null };
+  // Same one-row-per-date dedup as the sleep.ts trend/range queries (issue
+  // #440 review, WARN 3) — undeduped, a two-sleep date would burn two of
+  // `limit`'s rows on one night and hand the model two rows for what every
+  // other surface treats as a single day.
   const sleep = forUser(userId).all<FullSleepRow>(
-    `SELECT date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms, sleep_need_ms, performance, efficiency, disturbances, respiratory_rate FROM sleep WHERE COALESCE(nap, 0) = 0 AND user_id = ? ORDER BY date DESC LIMIT ${limit}`,
+    `SELECT date, in_bed_ms, light_ms, deep_ms, rem_ms, awake_ms, sleep_need_ms, performance, efficiency, disturbances, respiratory_rate FROM sleep s WHERE COALESCE(s.nap, 0) = 0 AND ${SLEEP_DEDUP_WHERE} AND s.user_id = ? ORDER BY date DESC LIMIT ${limit}`,
   );
 
   if (sleep.length) {

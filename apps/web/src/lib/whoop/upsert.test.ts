@@ -82,9 +82,14 @@ describe("sleepSummaryDate", () => {
     expect(sleepSummaryDate(r, "UTC")).toBe("2026-04-28");
   });
 
-  it("falls back to start when end is missing", () => {
-    const r = { id: "test", start: "2026-04-28T01:55:13.000Z" } as WhoopSleepRecord;
-    expect(sleepSummaryDate(r, "UTC")).toBe("2026-04-28");
+  // Issue #440 review, WARN 2: silently falling back to `start` when `end`
+  // is missing would quietly reintroduce the exact bug this function fixes,
+  // with no signal it happened. `end` is optional only in the TS type —
+  // every SCORED record actually carries it — so a record without one here
+  // means something upstream is badly wrong; fail loud instead.
+  it("throws when end is missing rather than silently falling back to start", () => {
+    const r = { id: "test-no-end", start: "2026-04-28T01:55:13.000Z" } as WhoopSleepRecord;
+    expect(() => sleepSummaryDate(r, "UTC")).toThrow(/test-no-end/);
   });
 });
 

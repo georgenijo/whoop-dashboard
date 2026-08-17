@@ -1,5 +1,5 @@
 import "server-only";
-import { openWrite, type DB } from "@/lib/db/connection";
+import { openWrite, safeQuery, type DB } from "@/lib/db/connection";
 import { MATCH_WINDOW_MS, SQL_WINDOW_MS, sportsCompatible } from "@/lib/healthkit/match";
 
 // KEEP IN SYNC WITH streamlit/whoop/db.py:147-262 (column lists for recovery/cycles/sleep/workouts)
@@ -110,11 +110,23 @@ export function parseDate(iso: string, tz: string): string {
 // already on that day — while the day it actually belongs to got no sleep
 // row at all. `recoverySummaryDate` keys on `created_at` (recovery is
 // created when the sleep ENDS), so wake-day attribution here realigns a
-// night's sleep with its own recovery row (issue #440). Falls back to
-// `r.start` if `r.end` is missing (the field is optional in the Whoop type,
-// though every SCORED record — the only ones callers pass here — has it).
+// night's sleep with its own recovery row (issue #440).
 export function sleepSummaryDate(r: WhoopSleepRecord, tz: string): string {
-  return parseDate(r.end ?? r.start, tz);
+  if (!r.end) {
+    // `end` is optional only in the TS type — every SCORED record (the only
+    // ones any of the four call sites pass here: upsertSleep, persistAll,
+    // syncedDates, the webhook handler) always carries it from the Whoop v2
+    // API. Falling back to `r.start` here would silently reintroduce
+    // exactly the start-day misfiling this function exists to fix, with no
+    // signal it happened — a wrong date is indistinguishable from a right
+    // one after the fact. Fail loud instead (issue #440 review): the sync
+    // transaction rolls back and the sync surfaces an error rather than
+    // writing a systematically wrong date.
+    throw new Error(
+      `sleepSummaryDate: record ${r.id} is missing 'end' (expected on every SCORED sleep)`,
+    );
+  }
+  return parseDate(r.end, tz);
 }
 
 export function workoutSummaryDate(r: WhoopWorkoutRecord, tz: string): string {
@@ -213,6 +225,27 @@ export function upsertSleep(record: WhoopSleepRecord, userId: number, tz: string
   } finally {
     db.close();
   }
+}
+
+/**
+ * The sleep row's CURRENT `date`, read BEFORE an upsert overwrites it.
+ *
+ * `upsertSleep` computes the row's date via `sleepSummaryDate` and
+ * `INSERT OR REPLACE`s over the same `(user_id, sleep_id)` row. If a row
+ * already existed under a DIFFERENT date — e.g. a legacy row still on its
+ * pre-migration start-day date, the first time a `sleep.updated` webhook
+ * touches it after this deploy — that old date's `daily_summary` becomes
+ * stale the moment the upsert moves the row, and needs its own recompute,
+ * not just the new date's (issue #440 review, BLOCK 5). Returns null if no
+ * row exists yet for this sleep_id (first-ever write — nothing to vacate).
+ */
+export function getSleepDate(sleepId: string, userId: number): string | null {
+  return safeQuery((db) => {
+    const row = db
+      .prepare("SELECT date FROM sleep WHERE sleep_id = ? AND user_id = ?")
+      .get(sleepId, userId) as { date: string } | undefined;
+    return row?.date ?? null;
+  });
 }
 
 // KEEP IN SYNC WITH streamlit/whoop/db.py:187-206 (sync_cycles column order)

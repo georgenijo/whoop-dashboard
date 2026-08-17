@@ -73,12 +73,6 @@ export type BedtimeRecoveryResult = {
   intercept: number;
 };
 
-function nextDate(date: string): string {
-  const d = new Date(date + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
-
 export function computeBedtimeRecoveryCorr(
   sleep: SleepRow[],
   recovery: RecoveryRow[],
@@ -92,8 +86,14 @@ export function computeBedtimeRecoveryCorr(
   for (const s of sleep) {
     const bedtime = bedtimeHourFromAnchor(s.start_local);
     if (bedtime == null) continue;
-    const nd = nextDate(s.date);
-    const rec = recoveryByDate.get(nd);
+    // `s.date` is now the WAKE day (issue #440 — sleepSummaryDate keys on
+    // `end`, not `start`), which is exactly the date `recoverySummaryDate`
+    // uses (recovery is created when the sleep ends). No date-shift needed:
+    // this used to be `recoveryByDate.get(nextDate(s.date))` back when
+    // `s.date` was the BED day and recovery landed the day after. Left as
+    // `nextDate` post-fix, this paired every night's bedtime with the
+    // FOLLOWING night's recovery instead of its own.
+    const rec = recoveryByDate.get(s.date);
     if (rec == null) continue;
     valid.push({ date: s.date, bedtime, nextRecovery: rec });
   }

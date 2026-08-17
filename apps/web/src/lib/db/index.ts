@@ -33,6 +33,7 @@ export {
   getPreviousSleep,
   getSleepTrend,
   getSleepRange,
+  getSleepRangeRaw,
   getFullSleepTrend,
   getNaps,
   getRecentNaps,

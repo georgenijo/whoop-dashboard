@@ -12,7 +12,7 @@ vi.mock("@/lib/db", () => ({
   getJournalRange: vi.fn(),
   getNaps: vi.fn(),
   getRecoveryRange: vi.fn(),
-  getSleepRange: vi.fn(),
+  getSleepRangeRaw: vi.fn(),
   getStrainRange: vi.fn(),
   getUserSettings: vi.fn(),
   getWorkoutsRange: vi.fn(),

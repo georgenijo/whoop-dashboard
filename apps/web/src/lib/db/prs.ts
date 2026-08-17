@@ -1,5 +1,6 @@
 import "server-only";
 import { forUser } from "./scoped";
+import { SLEEP_DEDUP_WHERE } from "./sleep";
 
 export type PRValue = { value: number; date: string } | null;
 export type PRStreak = {
@@ -70,9 +71,15 @@ export function getStreaks(userId: number): {
     )
     .map((r) => r.date);
 
+  // Same one-row-per-date dedup as the sleep.ts trend/range queries (issue
+  // #440 review, WARN 6): without it, a two-sleep date counted toward the
+  // streak whenever ANY row on it scored >=85, while every other surface
+  // (charts, daily_summary) reports only the longer sleep's score — a date
+  // could count here on a 10-minute fragment's 90% while the chart shows
+  // the 8-hour sleep's 70%.
   const sleepPerfDates = forUser(userId)
     .all<{ date: string }>(
-      "SELECT date FROM sleep WHERE COALESCE(nap, 0) = 0 AND performance >= 85 AND user_id = ? ORDER BY date ASC",
+      `SELECT date FROM sleep s WHERE COALESCE(s.nap, 0) = 0 AND ${SLEEP_DEDUP_WHERE} AND s.performance >= 85 AND s.user_id = ? ORDER BY s.date ASC`,
     )
     .map((r) => r.date);
 
