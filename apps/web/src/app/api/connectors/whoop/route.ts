@@ -41,7 +41,9 @@ function expiresAtFromIso(iso: string | null): {
  *   - `needs_reconnect`: a row exists but the refresh chain has died —
  *     either expires_at has passed, OR Whoop's token endpoint returned a
  *     definitive credential-rejection (invalid_grant / invalid_token /
- *     401) and the refresh path flipped `needs_reauth=1`. The flag catches
+ *     invalid_request / unclassifiable 401 — see `refreshTokens` in
+ *     `@/lib/whoop/token`; invalid_client is deliberately NOT one of them)
+ *     and the refresh path flipped `needs_reauth=1`. The flag catches
  *     the silent-invalidation case from #263 where Whoop kills the refresh
  *     server-side BEFORE expires_at — clock check alone misses that window.
  *   - `disconnected`: no integrations row for this user.
