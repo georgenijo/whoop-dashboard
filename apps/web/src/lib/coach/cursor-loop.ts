@@ -20,7 +20,7 @@ import { getUserSettings, type ChatMessageInsert } from "@/lib/db";
 import { dbPath } from "@/lib/db/connection";
 import { buildCursorSystemPrompt } from "./prompts";
 import { CursorAgentError, resolveCursorKey } from "./cursor-key";
-import type { DetailState, RunAnthropicOptions, Usage } from "./loop";
+import type { CursorTiming, DetailState, RunAnthropicOptions, Usage } from "./loop";
 import {
   captureToolResponse,
   executeTool,
@@ -415,6 +415,16 @@ type StreamEvent = {
   isError?: boolean;
   result?: unknown;
   error?: unknown;
+  // Present on the terminal `result` event only. Captured verbatim from a
+  // real `cursor-agent -p --output-format stream-json` run (2026-08-17):
+  //   "usage":{"inputTokens":2,"outputTokens":7,"cacheReadTokens":0,"cacheWriteTokens":30876}
+  // camelCase, no third-party guessing — see parseCursorTerminalResult.
+  usage?: {
+    inputTokens?: unknown;
+    outputTokens?: unknown;
+    cacheReadTokens?: unknown;
+    cacheWriteTokens?: unknown;
+  };
   message?: { content?: Array<{ type?: string; text?: string }> };
   tool_call?: {
     // call id + timing live on tool_call directly and are present on BOTH the
@@ -447,6 +457,22 @@ type StreamEvent = {
   };
 };
 
+// Cursor's terminal `result` event usage snapshot (see the StreamEvent.usage
+// doc comment above for the captured evidence this is derived from). Cursor
+// reports ONE cumulative snapshot per subprocess invocation — not per
+// internal model round-trip — so callers increment Usage.calls by 1 per
+// terminal event, not per usage field. There is no "totalTokens" field and
+// no cache/non-cache split beyond read vs. write; cacheWriteTokens maps onto
+// our cache_creation_input_tokens_total (same "wrote a new cache entry"
+// semantics Anthropic's own cache_creation_input_tokens uses — cursor-agent
+// resolved to a Claude-family model in the captured run).
+export type CursorUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+};
+
 export type CursorTerminalResult = {
   subtype: string | null;
   isError: boolean;
@@ -455,6 +481,7 @@ export type CursorTerminalResult = {
   durationMs: number | null;
   apiDurationMs: number | null;
   model: string | null;
+  usage: CursorUsage | null;
 };
 
 function nonNegativeNumber(...values: unknown[]): number | null {
@@ -494,6 +521,16 @@ export function parseCursorTerminalResult(
   const isError = evt.is_error === true || evt.isError === true || subtypeIsError;
   const resultText = stringifyResult(evt.result);
   const errorText = stringifyResult(evt.error) || (isError ? resultText : "");
+  const rawUsage = evt.usage;
+  const usage: CursorUsage | null =
+    rawUsage && typeof rawUsage === "object"
+      ? {
+          inputTokens: nonNegativeNumber(rawUsage.inputTokens) ?? 0,
+          outputTokens: nonNegativeNumber(rawUsage.outputTokens) ?? 0,
+          cacheReadTokens: nonNegativeNumber(rawUsage.cacheReadTokens) ?? 0,
+          cacheWriteTokens: nonNegativeNumber(rawUsage.cacheWriteTokens) ?? 0,
+        }
+      : null;
 
   return {
     subtype,
@@ -503,6 +540,7 @@ export function parseCursorTerminalResult(
     durationMs: nonNegativeNumber(evt.duration_ms, evt.durationMs),
     apiDurationMs: nonNegativeNumber(evt.duration_api_ms, evt.durationApiMs),
     model: typeof evt.model === "string" ? evt.model : null,
+    usage,
   };
 }
 
@@ -594,9 +632,11 @@ export async function runCursorTurn(
     userId,
     model,
     modelParameters = [],
+    threadId,
     turn,
     conversation,
     toolDetails,
+    usage,
     detailState,
     options,
   } = args;
@@ -728,6 +768,11 @@ export async function runCursorTurn(
 
   const visibleText = new CursorVisibleTextAccumulator();
   let toolCalls = 0;
+  // Counts every `started` tool_call event, not just completed ones — this
+  // is the honest "attempted" count for cursor_timing.tool_calls (see
+  // ./loop CursorTiming): a hung tool call that never completes still shows
+  // up here, matching the original #437/#438-era intent (commit 48d4d8b).
+  let toolCallsStarted = 0;
   let timedOut = false;
   let stderr = "";
   let terminalError = "";
@@ -783,6 +828,26 @@ export async function runCursorTurn(
       );
       cursorDetail.timing.spawn_call_ms = Date.now() - spawnStartedMs;
 
+      // Restores the #437/#438-era intent (commit 48d4d8b, never merged):
+      // finalize "wall time observed so far" on EVERY exit path — not only a
+      // clean process close — so a rejected turn (stdio unavailable, spawn
+      // error, a cap-breach mid-stream) still persists what was observed
+      // instead of leaving spawn_to_process_close_ms null. Idempotent: the
+      // first caller wins, matching the original's non-throwing,
+      // called-at-most-once finalizeTiming pattern.
+      let closeTimingFinalized = false;
+      const finalizeCloseTiming = () => {
+        if (closeTimingFinalized) return;
+        closeTimingFinalized = true;
+        const closeElapsedMs = Date.now() - spawnStartedMs;
+        cursorDetail.timing.spawn_to_process_close_ms = closeElapsedMs;
+        const terminalElapsedMs = cursorDetail.timing.spawn_to_terminal_result_ms;
+        cursorDetail.timing.process_close_tail_ms =
+          terminalElapsedMs == null
+            ? null
+            : Math.max(0, closeElapsedMs - terminalElapsedMs);
+      };
+
       let killEscalation: ReturnType<typeof setTimeout> | undefined;
       let terminalCloseTimer: ReturnType<typeof setTimeout> | undefined;
       // Signal the whole process group; fall back to the direct child if the
@@ -829,6 +894,7 @@ export async function runCursorTurn(
         clearTimeout(killTimer);
         terminate();
         options.signal?.removeEventListener("abort", onAbort);
+        finalizeCloseTiming();
         reject(new Error("cursor-agent stdio unavailable"));
         return;
       }
@@ -849,6 +915,7 @@ export async function runCursorTurn(
           clearTimeout(killTimer);
           terminate();
           options.signal?.removeEventListener("abort", onAbort);
+          finalizeCloseTiming();
           reject(err);
         }
       };
@@ -873,6 +940,7 @@ export async function runCursorTurn(
         if (killEscalation) clearTimeout(killEscalation);
         if (terminalCloseTimer) clearTimeout(terminalCloseTimer);
         options.signal?.removeEventListener("abort", onAbort);
+        finalizeCloseTiming();
         reject(err);
       });
       child.on("close", (code) => {
@@ -886,14 +954,7 @@ export async function runCursorTurn(
         if (killEscalation) clearTimeout(killEscalation);
         if (terminalCloseTimer) clearTimeout(terminalCloseTimer);
         options.signal?.removeEventListener("abort", onAbort);
-        const closeElapsedMs = Date.now() - spawnStartedMs;
-        cursorDetail.timing.spawn_to_process_close_ms = closeElapsedMs;
-        const terminalElapsedMs =
-          cursorDetail.timing.spawn_to_terminal_result_ms;
-        cursorDetail.timing.process_close_tail_ms =
-          terminalElapsedMs == null
-            ? null
-            : Math.max(0, closeElapsedMs - terminalElapsedMs);
+        finalizeCloseTiming();
         resolve({ code });
       });
 
@@ -925,6 +986,17 @@ export async function runCursorTurn(
           cursorDetail.timing.cursor_duration_ms = terminal.durationMs;
           cursorDetail.timing.cursor_api_duration_ms = terminal.apiDurationMs;
           if (terminal.model) cursorDetail.resolved_model = terminal.model;
+          // Issue #443 — Cursor DOES report usage on the terminal result
+          // event (see the StreamEvent.usage doc comment); thread it into
+          // the same Usage totals the Anthropic path populates so chat_logs
+          // stops persisting all-zero cost signal for the Cursor provider.
+          if (terminal.usage) {
+            usage.input_tokens_total += terminal.usage.inputTokens;
+            usage.output_tokens_total += terminal.usage.outputTokens;
+            usage.cache_read_input_tokens_total += terminal.usage.cacheReadTokens;
+            usage.cache_creation_input_tokens_total += terminal.usage.cacheWriteTokens;
+            usage.calls += 1;
+          }
           terminalResultText = terminal.resultText;
           terminalError = terminal.isError ? terminal.errorText : "";
           terminalSucceeded = !terminal.isError;
@@ -975,6 +1047,7 @@ export async function runCursorTurn(
             // surface/persist a fake `unknown` tool round trip.
             if (!a?.toolName) return;
             const name = a.toolName;
+            toolCallsStarted += 1;
             // Everything emitted before a real tool boundary is operational
             // commentary. The final visible answer starts fresh after tools.
             visibleText.toolBoundary();
@@ -1164,5 +1237,32 @@ export async function runCursorTurn(
     await rm(ws, { recursive: true, force: true }).catch(() => {});
     cursorDetail.timing.cleanup_ms = Date.now() - cleanupStartedMs;
     cursorDetail.timing.turn_ms = Date.now() - turnStartedMs;
+
+    // ---- cursor_timing (see ./loop CursorTiming) -----------------------
+    // Concise wall-clock summary, persisted under chat_logs.details as a
+    // sibling of the more detailed `cursor.timing` block above. Restores the
+    // #437/#438-era instrumentation from commit 48d4d8b that never merged
+    // (verified absent on main via `grep -r cursor_timing`) — but derives
+    // its numbers from the capture points already maintained above rather
+    // than duplicating them, and additionally benefits from
+    // finalizeCloseTiming now running on EVERY exit path (see above), which
+    // the original never-merged version also targeted ("timeout/abort paths
+    // still record what was observed") but the landed #437/#438 code did
+    // not itself cover (it only finalized on a clean process close).
+    // Assembly is wrapped in try/catch so a timing bug can NEVER fail a
+    // turn — matches the original's non-throwing invariant.
+    try {
+      const timing: CursorTiming = {
+        spawn_to_first_event_ms: cursorDetail.timing.spawn_to_first_event_ms,
+        spawn_to_first_text_ms: cursorDetail.timing.spawn_to_first_assistant_text_ms,
+        spawn_to_first_tool_ms: cursorDetail.timing.spawn_to_first_tool_event_ms,
+        total_ms: cursorDetail.timing.spawn_to_process_close_ms,
+        tool_calls: toolCallsStarted,
+      };
+      detailState.cursorTiming = timing;
+      console.info("[coach] cursor_timing", { thread_id: threadId, ...timing });
+    } catch {
+      /* timing must never fail a turn */
+    }
   }
 }

@@ -104,6 +104,9 @@ export async function runAndPersistCoachTurn(
         persistence_ms: detailState.persistence_ms ?? null,
       },
       ...(detailState.cursor ? { cursor: detailState.cursor } : {}),
+      // Cursor-only: set by runCursorTurn (see ./cursor-loop). Absent for the
+      // Anthropic SDK path.
+      ...(detailState.cursorTiming ? { cursor_timing: detailState.cursorTiming } : {}),
     });
 
   try {

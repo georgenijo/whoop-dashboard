@@ -47,6 +47,12 @@ export type DetailState = {
   iterations: number;
   effort?: string;
   persistence_ms?: number;
+  // Cursor-only concise wall-clock summary; absent for the Anthropic SDK
+  // path. See ./cursor-loop's finalizeCloseTiming + the finally-block
+  // assembly in runCursorTurn for capture points. Persisted under
+  // chat_logs.details.cursor_timing, alongside the more detailed `cursor`
+  // block below.
+  cursorTiming?: CursorTiming;
   cursor?: {
     requested_model: string;
     requested_parameters: Array<{ id: string; value: string }>;
@@ -94,6 +100,19 @@ export type DetailState = {
       turn_ms: number;
     };
   };
+};
+
+// Concise wall-clock summary for a Cursor turn's `cursor-agent` subprocess,
+// all measured in ms from immediately before spawn(). Restores the intent of
+// the #437/#438-era instrumentation from commit 48d4d8b that never merged;
+// see ./cursor-loop for capture points, including finalization on the
+// error/timeout/stdio-unavailable early-exit paths (not only a clean close).
+export type CursorTiming = {
+  spawn_to_first_event_ms: number | null;
+  spawn_to_first_text_ms: number | null;
+  spawn_to_first_tool_ms: number | null;
+  total_ms: number | null;
+  tool_calls: number;
 };
 
 export type CoachStreamHandlers = ToolProgressHandlers & {
