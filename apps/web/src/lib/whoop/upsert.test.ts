@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { parseDate, toLocalIso } from "./upsert";
+import { parseDate, sleepSummaryDate, toLocalIso, type WhoopSleepRecord } from "./upsert";
 
 describe("parseDate", () => {
   it("returns YYYY-MM-DD for a Z-suffixed UTC ISO string under UTC tz", () => {
@@ -53,6 +53,38 @@ describe("parseDate", () => {
 
   it("throws on an invalid IANA tz", () => {
     expect(() => parseDate("2026-05-14T01:52:37Z", "Not/A_Zone")).toThrow();
+  });
+});
+
+// Issue #440: a sleep is filed under the day it ENDED (wake day), not the
+// day it started. Recovery is created when the sleep ends and keys off
+// `created_at`, so wake-day attribution keeps a night's sleep and its
+// recovery row on the same date.
+describe("sleepSummaryDate", () => {
+  function sleepRecord(start: string, end: string): WhoopSleepRecord {
+    return { id: "test", start, end } as WhoopSleepRecord;
+  }
+
+  it("files a midnight-spanning sleep on the wake day, not the start day", () => {
+    // Starts 2026-04-28T23:11 UTC, ends 2026-04-29T08:38 UTC.
+    const r = sleepRecord(
+      "2026-04-28T23:11:23.000Z",
+      "2026-04-29T08:38:56.000Z",
+    );
+    expect(sleepSummaryDate(r, "UTC")).toBe("2026-04-29");
+  });
+
+  it("files a same-day sleep on that day (start and end share a date)", () => {
+    const r = sleepRecord(
+      "2026-04-28T01:55:13.000Z",
+      "2026-04-28T08:42:14.000Z",
+    );
+    expect(sleepSummaryDate(r, "UTC")).toBe("2026-04-28");
+  });
+
+  it("falls back to start when end is missing", () => {
+    const r = { id: "test", start: "2026-04-28T01:55:13.000Z" } as WhoopSleepRecord;
+    expect(sleepSummaryDate(r, "UTC")).toBe("2026-04-28");
   });
 });
 

@@ -104,8 +104,17 @@ export function parseDate(iso: string, tz: string): string {
   }).format(new Date(iso));
 }
 
+// File a sleep under the calendar day it ENDED (the wake day), not the day it
+// started. A sleep beginning 23:11 and ending 08:38 the next morning used to
+// be filed on the day it began, colliding with the early-morning sleep
+// already on that day — while the day it actually belongs to got no sleep
+// row at all. `recoverySummaryDate` keys on `created_at` (recovery is
+// created when the sleep ENDS), so wake-day attribution here realigns a
+// night's sleep with its own recovery row (issue #440). Falls back to
+// `r.start` if `r.end` is missing (the field is optional in the Whoop type,
+// though every SCORED record — the only ones callers pass here — has it).
 export function sleepSummaryDate(r: WhoopSleepRecord, tz: string): string {
-  return parseDate(r.start, tz);
+  return parseDate(r.end ?? r.start, tz);
 }
 
 export function workoutSummaryDate(r: WhoopWorkoutRecord, tz: string): string {
@@ -174,7 +183,7 @@ export function upsertSleep(record: WhoopSleepRecord, userId: number, tz: string
     `).run({
       user_id: userId,
       sleep_id: record.id,
-      date: parseDate(record.start, tz),
+      date: sleepSummaryDate(record, tz),
       in_bed_ms: ss.total_in_bed_time_milli,
       light_ms: ss.total_light_sleep_time_milli,
       deep_ms: ss.total_slow_wave_sleep_time_milli,
@@ -538,7 +547,23 @@ SELECT
     COALESCE(workout_summary.workouts_count, 0) AS workouts_count
 FROM day
 LEFT JOIN recovery ON recovery.date = day.date AND recovery.user_id = ?
-LEFT JOIN sleep ON sleep.date = day.date AND COALESCE(sleep.nap, 0) = 0 AND sleep.user_id = ?
+-- Deterministic one-row-per-date pick (issue #440): wake-day attribution
+-- removes same-day collisions caused by the old start-day filing, but two
+-- sleeps CAN still legitimately end on the same local date (wake 03:00,
+-- sleep again, wake 09:00). Longest in_bed_ms wins; sleep_id breaks ties.
+-- KEEP THIS SUBSELECT IN SYNC WITH sync.ts's SUMMARY_SELECT_SQL and with
+-- db/sleep.ts's SLEEP_DEDUP_WHERE (same tie-break rule, three call sites).
+LEFT JOIN (
+    SELECT s.date, s.light_ms, s.deep_ms, s.rem_ms, s.efficiency, s.performance
+    FROM sleep s
+    WHERE COALESCE(s.nap, 0) = 0 AND s.user_id = ?
+      AND s.sleep_id = (
+        SELECT s2.sleep_id FROM sleep s2
+        WHERE s2.user_id = s.user_id AND s2.date = s.date AND COALESCE(s2.nap, 0) = 0
+        ORDER BY s2.in_bed_ms DESC, s2.sleep_id DESC
+        LIMIT 1
+      )
+) sleep ON sleep.date = day.date
 LEFT JOIN cycles ON cycles.date = day.date AND cycles.user_id = ?
 LEFT JOIN workout_summary ON workout_summary.date = day.date
 `;

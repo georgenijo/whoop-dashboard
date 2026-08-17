@@ -18,6 +18,7 @@ import { getValidAccessToken } from "@/lib/whoop/token";
 import {
   cycleSummaryDate,
   parseDate,
+  recomputeDailySummary,
   recoverySummaryDate,
   sleepSummaryDate,
   toLocalIso,
@@ -87,6 +88,10 @@ export type SyncResult = {
     /** Present only on the single sync where the one-time historical
      *  cycles backfill (issue #415) ran. */
     cycles_backfill?: ReconcileCyclesResult;
+    /** Present only on the single sync where the one-time sleep wake-day
+     *  re-date backfill (issue #440) ran. */
+    sleep_backfill?: SleepWakeDayBackfillResult;
+    sleep_backfill_error?: string;
   };
   error?: string;
   /**
@@ -264,7 +269,23 @@ SELECT
     COALESCE(workout_summary.workouts_count, 0) AS workouts_count
 FROM day
 LEFT JOIN recovery ON recovery.date = day.date AND recovery.user_id = ?
-LEFT JOIN sleep ON sleep.date = day.date AND COALESCE(sleep.nap, 0) = 0 AND sleep.user_id = ?
+-- Deterministic one-row-per-date pick (issue #440): wake-day attribution
+-- removes same-day collisions caused by the old start-day filing, but two
+-- sleeps CAN still legitimately end on the same local date (wake 03:00,
+-- sleep again, wake 09:00). Longest in_bed_ms wins; sleep_id breaks ties.
+-- KEEP THIS SUBSELECT IN SYNC WITH upsert.ts's SELECT_DAILY_SUMMARY and with
+-- db/sleep.ts's SLEEP_DEDUP_WHERE (same tie-break rule, three call sites).
+LEFT JOIN (
+    SELECT s.date, s.light_ms, s.deep_ms, s.rem_ms, s.efficiency, s.performance
+    FROM sleep s
+    WHERE COALESCE(s.nap, 0) = 0 AND s.user_id = ?
+      AND s.sleep_id = (
+        SELECT s2.sleep_id FROM sleep s2
+        WHERE s2.user_id = s.user_id AND s2.date = s.date AND COALESCE(s2.nap, 0) = 0
+        ORDER BY s2.in_bed_ms DESC, s2.sleep_id DESC
+        LIMIT 1
+      )
+) sleep ON sleep.date = day.date
 LEFT JOIN cycles ON cycles.date = day.date AND cycles.user_id = ?
 LEFT JOIN workout_summary ON workout_summary.date = day.date
 `;
@@ -399,7 +420,7 @@ function persistAll(
         sleepStmt.run({
           user_id: userId,
           sleep_id: r.id,
-          date: parseDate(r.start, tz),
+          date: sleepSummaryDate(r, tz),
           in_bed_ms: ss.total_in_bed_time_milli,
           light_ms: ss.total_light_sleep_time_milli,
           deep_ms: ss.total_slow_wave_sleep_time_milli,
@@ -823,6 +844,146 @@ export async function backfillOrphanedCyclesOnce(
   return result;
 }
 
+// ---------------------------------------------------------------------------
+// Sleep wake-day re-date backfill (issue #440)
+//
+// ROOT CAUSE: `sleepSummaryDate` used to key a sleep row on the local day it
+// STARTED. A sleep beginning 23:11 and ending 08:38 the next morning was
+// filed under the day it began — colliding with the early-morning sleep
+// already on that day, while the day it actually belongs to got no sleep
+// row at all. `recoverySummaryDate` keys on `created_at` (recovery is
+// created when the sleep ENDS), so the two halves of one night ended up
+// filed under different dates. `sleepSummaryDate` now keys on `r.end`
+// instead, realigning the two. This backfill re-dates EXISTING rows to
+// match.
+//
+// Unlike the cycles backfill, this needs no Whoop API call: every `sleep`
+// row already carries its own `raw` JSON (100% populated, including all 141
+// legacy rows with NULL `start_local`/`end_local` — verified against prod),
+// so the corrected date is derived locally from `raw.end`.
+// ---------------------------------------------------------------------------
+
+export type SleepWakeDayBackfillResult = {
+  rows_scanned: number;
+  rows_changed: number;
+  /** Rows whose `raw` was missing, unparseable, or lacked `.end` — left
+   *  untouched rather than treated as fatal. */
+  rows_skipped: number;
+  /** Distinct dates recomputed — both the date a changed row LEFT and the
+   *  date it moved TO, since a row leaving date D means D's `daily_summary`
+   *  is stale too, not just the destination. */
+  dates_recomputed: number;
+};
+
+/**
+ * `app_settings` marker for the one-time sleep wake-day re-date backfill,
+ * keyed per user (precedent: `cyclesBackfillSettingKey`). Bump the `v1`
+ * suffix to force a re-run.
+ */
+function sleepWakeDayBackfillSettingKey(userId: number): string {
+  return `sleep_wake_day_v1:user:${userId}`;
+}
+
+/**
+ * One-time per-user re-date of existing `sleep` rows from start-day to
+ * wake-day attribution. Guarded by an `app_settings` marker so it runs
+ * exactly once; returns null when the marker is already present.
+ *
+ * The marker is written even when zero rows change (a user with no
+ * midnight-spanning sleeps) — the point is "ran once", not "changed
+ * something". It's also written when the DB has zero sleep rows at all, so
+ * a fresh install doesn't re-scan an empty table on every sync.
+ *
+ * Rows whose `raw` is missing, unparseable, or lacks `.end` are skipped
+ * (counted, not thrown) rather than failing the whole pass — a handful of
+ * bad rows shouldn't block every other row's correction, and there is no
+ * retry-count state, so a genuinely bad row would just be skipped forever,
+ * which is the correct outcome (there's nothing to re-derive it from).
+ *
+ * The UPDATEs run inside a single transaction (PK is `(user_id, sleep_id)`,
+ * so re-dating can't collide). `daily_summary` recomputes run afterward, one
+ * `recomputeDailySummary` call per touched date — mirrors how the cycles
+ * backfill separates its write phase from downstream summary work.
+ */
+export function backfillSleepWakeDayOnce(
+  userId: number,
+  tz: string,
+): SleepWakeDayBackfillResult | null {
+  const key = sleepWakeDayBackfillSettingKey(userId);
+  if (getSetting(key) !== null) return null;
+
+  const result: SleepWakeDayBackfillResult = {
+    rows_scanned: 0,
+    rows_changed: 0,
+    rows_skipped: 0,
+    dates_recomputed: 0,
+  };
+  const touchedDates = new Set<string>();
+
+  const db = openWrite();
+  if (db) {
+    try {
+      const rows = db
+        .prepare("SELECT sleep_id, date, raw FROM sleep WHERE user_id = ?")
+        .all(userId) as { sleep_id: string; date: string; raw: string | null }[];
+      result.rows_scanned = rows.length;
+
+      const changes: { sleep_id: string; new_date: string; old_date: string }[] = [];
+      for (const row of rows) {
+        let end: unknown;
+        try {
+          end = row.raw ? (JSON.parse(row.raw) as { end?: unknown }).end : undefined;
+        } catch {
+          end = undefined;
+        }
+        if (typeof end !== "string" || end.length === 0) {
+          result.rows_skipped += 1;
+          continue;
+        }
+        let newDate: string;
+        try {
+          newDate = parseDate(end, tz);
+        } catch {
+          result.rows_skipped += 1;
+          continue;
+        }
+        if (newDate !== row.date) {
+          changes.push({ sleep_id: row.sleep_id, new_date: newDate, old_date: row.date });
+        }
+      }
+
+      const update = db.prepare(
+        "UPDATE sleep SET date = ? WHERE user_id = ? AND sleep_id = ?",
+      );
+      db.transaction(() => {
+        for (const c of changes) {
+          update.run(c.new_date, userId, c.sleep_id);
+          touchedDates.add(c.old_date);
+          touchedDates.add(c.new_date);
+        }
+      })();
+      result.rows_changed = changes.length;
+    } finally {
+      db.close();
+    }
+  }
+
+  for (const date of touchedDates) {
+    recomputeDailySummary(date, userId);
+  }
+  result.dates_recomputed = touchedDates.size;
+
+  setSetting(
+    key,
+    JSON.stringify({ completed_at: new Date().toISOString(), ...result }),
+  );
+  log.info(
+    { user_id: userId, ...result },
+    "sleep wake-day backfill complete",
+  );
+  return result;
+}
+
 export async function runWhoopSync(
   opts: {
     /** Owner of the Whoop integration to sync. Required — no fallback. */
@@ -941,6 +1102,19 @@ export async function runWhoopSync(
     }
     details.body_ms = Date.now() - bodyT0;
     details.summary_dates = syncedDates(data, tz).length;
+
+    // Sleep wake-day re-date backfill (issue #440) — best-effort, like the
+    // body upsert above: a failure here must not fail an otherwise-
+    // successful sync. Unlike the cycles backfill this makes no Whoop API
+    // call (pure local re-date from already-synced `raw` JSON), so it's
+    // cheap even the one time it does real work.
+    try {
+      const sleepBackfill = backfillSleepWakeDayOnce(opts.userId, tz);
+      if (sleepBackfill) details.sleep_backfill = sleepBackfill;
+    } catch (err) {
+      details.sleep_backfill_error =
+        err instanceof Error ? err.message : String(err);
+    }
 
     // Cycles reconcile (issue #415) — best-effort, like the body upsert
     // above: a failure here must not fail an otherwise-successful sync.
