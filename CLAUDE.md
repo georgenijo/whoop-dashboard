@@ -220,6 +220,21 @@ What it guarantees, and why each one is there:
   `-wal`/`-shm` sidecars FIRST, or a leftover WAL replays onto the restored file
   and blends two database states). It is **single-step only** — the next deploy
   overwrites `.next.prev`.
+- **On-box mutual-exclusion lock** (`/tmp/whoop-deploy.lock` on opti, a
+  directory) held across the snapshot-through-restart phases, so two deploys
+  started close together can't interleave a `reset --hard`, `npm ci` and
+  `next build` against the same checkout (issue #469). A second `scripts/deploy`
+  fails fast with `another deploy is already running on opti`, naming the
+  holder's pid and start time — it does not hang or queue. If that message
+  appears and the named holder is confirmed dead (crashed box, `kill -9`'d
+  session) but did not self-heal on its own (the lock reaps a dead holder
+  automatically on the next acquisition attempt), clear it by hand:
+  `fleet exec opti 'kill <pid> 2>/dev/null; rm -rf /tmp/whoop-deploy.lock'`.
+  The lock is deliberately left held (not released) if a detached install/build
+  hits its poll ceiling or detects an orphaned holder of its own — the
+  mutating step may still be running, and releasing early would let a second
+  deploy reset the checkout out from under it; the die() message says so and
+  gives the same manual-clear recipe.
 
 Use `fleet exec opti '<command>'` for diagnostics; never address a production
 IP directly. Logs are available with
