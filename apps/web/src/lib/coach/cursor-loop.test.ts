@@ -327,6 +327,23 @@ describe("parseCursorTerminalResult", () => {
       })?.usage,
     ).toBeNull();
   });
+
+  it("requires at least one recognized usage key, so an empty or renamed-field payload does not fabricate a zero-cost reading", () => {
+    expect(
+      parseCursorTerminalResult({ type: "result", subtype: "success", usage: {} })
+        ?.usage,
+    ).toBeNull();
+    // A future cursor-agent build renaming inputTokens/outputTokens (e.g. to
+    // snake_case) must not silently reintroduce issue #443 as a fabricated
+    // "Calls 1 / Input 0 / Output 0" reading.
+    expect(
+      parseCursorTerminalResult({
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 2, output_tokens: 7 },
+      })?.usage,
+    ).toBeNull();
+  });
 });
 
 describe("selectRecentPrefetchTool", () => {
@@ -529,6 +546,9 @@ describe("runCursorTurn Cursor lifecycle details", () => {
         status: "ok",
       },
     ]);
+    // The internal-mcp bookkeeping call has no toolName and must not count;
+    // only the real query_recovery call does.
+    expect(cursor?.attempted_tool_calls).toBe(1);
     expect(cursor?.timing.cursor_duration_ms).toBe(2_100);
     expect(cursor?.timing.cursor_api_duration_ms).toBe(1_900);
     expect(cursor?.timing.spawn_to_system_init_ms).not.toBeNull();
@@ -771,69 +791,13 @@ describe("runCursorTurn usage extraction (issue #443)", () => {
   });
 });
 
-// Recovers the never-merged #437/#438-era `cursor_timing` instrumentation
-// (commit 48d4d8b) against current main's cursor-loop.ts.
-describe("runCursorTurn cursor_timing (recovered from commit 48d4d8b)", () => {
-  it("assembles cursor_timing from observed events on a normal run", async () => {
-    const child = fakeChild();
-    spawnMock.mockReturnValue(child);
-    const detailState: DetailState = { iterations: 0 };
-    const args = baseArgs(detailState);
-
-    const turn = runCursorTurn(args);
-    await waitForSpawn();
-
-    child.stdout.write(
-      `${JSON.stringify({
-        type: "tool_call",
-        subtype: "started",
-        call_id: "call-1",
-        tool_call: {
-          startedAtMs: "50",
-          mcpToolCall: { args: { toolName: "query_recovery", args: {} } },
-        },
-      })}\n`,
-    );
-    child.stdout.write(
-      `${JSON.stringify({
-        type: "tool_call",
-        subtype: "completed",
-        call_id: "call-1",
-        tool_call: {
-          startedAtMs: "50",
-          completedAtMs: "60",
-          mcpToolCall: {
-            result: { success: { isError: false, content: [{ text: { text: "{}" } }] } },
-          },
-        },
-      })}\n`,
-    );
-    child.stdout.write(
-      `${JSON.stringify({
-        type: "assistant",
-        message: { content: [{ type: "text", text: "Done." }] },
-      })}\n`,
-    );
-    child.stdout.write(
-      `${JSON.stringify({ type: "result", subtype: "success", result: "Done." })}\n`,
-    );
-    child.emit("close", 0);
-
-    await turn;
-    expect(detailState.cursorTiming).toBeDefined();
-    expect(detailState.cursorTiming?.tool_calls).toBe(1);
-    expect(detailState.cursorTiming?.spawn_to_first_event_ms).toEqual(expect.any(Number));
-    expect(detailState.cursorTiming?.spawn_to_first_text_ms).toEqual(expect.any(Number));
-    expect(detailState.cursorTiming?.spawn_to_first_tool_ms).toEqual(expect.any(Number));
-    expect(detailState.cursorTiming?.total_ms).toEqual(expect.any(Number));
-  });
-
-  // The property this recovers: timing must be finalized (not left null) on
-  // EVERY exit path, not only a clean process close — including the child
-  // erroring/being unavailable before stdio is ever wired up. The
-  // never-merged original called this out explicitly; the landed #437/#438
-  // code only finalized spawn_to_process_close_ms in the `close` handler.
-  it("finalizes cursor_timing even when child stdio is unavailable before spawn completes", async () => {
+// An early-exit reject (stdio unavailable, a mid-stream tool-call cap
+// breach, or a child `error`) only SIGTERMs the child — the real `close`
+// event can still arrive later. spawn_to_early_exit_ms captures what was
+// observed at reject time without corrupting spawn_to_process_close_ms,
+// which scripts/BENCH.md reads as "the process actually closed".
+describe("runCursorTurn early-exit timing", () => {
+  it("records spawn_to_early_exit_ms (and leaves spawn_to_process_close_ms null) when child stdio is unavailable", async () => {
     const child = fakeChildWithoutStdio();
     spawnMock.mockReturnValue(child);
     const detailState: DetailState = { iterations: 0 };
@@ -843,16 +807,13 @@ describe("runCursorTurn cursor_timing (recovered from commit 48d4d8b)", () => {
       "cursor-agent stdio unavailable",
     );
 
-    expect(detailState.cursorTiming).toBeDefined();
-    expect(detailState.cursorTiming?.total_ms).toEqual(expect.any(Number));
-    expect(detailState.cursorTiming?.tool_calls).toBe(0);
-    // No stream events were ever observed on this path.
-    expect(detailState.cursorTiming?.spawn_to_first_event_ms).toBeNull();
-    expect(detailState.cursorTiming?.spawn_to_first_text_ms).toBeNull();
-    expect(detailState.cursorTiming?.spawn_to_first_tool_ms).toBeNull();
+    expect(detailState.cursor?.timing.spawn_to_early_exit_ms).toEqual(
+      expect.any(Number),
+    );
+    expect(detailState.cursor?.timing.spawn_to_process_close_ms).toBeNull();
   });
 
-  it("finalizes cursor_timing when the child process emits an error", async () => {
+  it("records spawn_to_early_exit_ms when the child process emits an error", async () => {
     const child = fakeChild();
     spawnMock.mockReturnValue(child);
     const detailState: DetailState = { iterations: 0 };
@@ -864,8 +825,73 @@ describe("runCursorTurn cursor_timing (recovered from commit 48d4d8b)", () => {
     child.emit("error", new Error("ENOENT"));
 
     await expect(turn).rejects.toThrow();
-    expect(detailState.cursorTiming).toBeDefined();
-    expect(detailState.cursorTiming?.total_ms).toEqual(expect.any(Number));
-    expect(detailState.cursorTiming?.tool_calls).toBe(0);
+    expect(detailState.cursor?.timing.spawn_to_early_exit_ms).toEqual(
+      expect.any(Number),
+    );
+    expect(detailState.cursor?.timing.spawn_to_process_close_ms).toBeNull();
+  });
+
+  // The scenario the split field exists for: cap breach only SIGTERMs the
+  // child, so `close` genuinely arrives afterward and must still record the
+  // true close time — not be silently discarded by whatever the early-exit
+  // reject captured.
+  it("still records the true spawn_to_process_close_ms when close arrives after a mid-stream cap breach", async () => {
+    const child = fakeChild(5_555);
+    spawnMock.mockReturnValue(child);
+    vi.spyOn(process, "kill").mockReturnValue(true);
+    const detailState: DetailState = { iterations: 0 };
+    const args = baseArgs(detailState);
+
+    const turn = runCursorTurn(args);
+    await waitForSpawn();
+    vi.useFakeTimers();
+
+    // MAX_CURSOR_TOOL_CALLS is 12: emit 13 started+completed pairs so the
+    // cap-breach throw fires mid-stream, well before the process actually
+    // exits.
+    for (let i = 0; i < 13; i += 1) {
+      const callId = `call-${i}`;
+      child.stdout.write(
+        `${JSON.stringify({
+          type: "tool_call",
+          subtype: "started",
+          call_id: callId,
+          tool_call: {
+            startedAtMs: String(i * 10),
+            mcpToolCall: { args: { toolName: "query_recovery", args: {} } },
+          },
+        })}\n`,
+      );
+      child.stdout.write(
+        `${JSON.stringify({
+          type: "tool_call",
+          subtype: "completed",
+          call_id: callId,
+          tool_call: {
+            startedAtMs: String(i * 10),
+            completedAtMs: String(i * 10 + 5),
+            mcpToolCall: {
+              result: { success: { isError: false, content: [{ text: { text: "{}" } }] } },
+            },
+          },
+        })}\n`,
+      );
+    }
+
+    await expect(turn).rejects.toThrow(/exceeded 12 tool calls/);
+
+    const earlyExitMs = detailState.cursor?.timing.spawn_to_early_exit_ms;
+    expect(earlyExitMs).toEqual(expect.any(Number));
+    expect(detailState.cursor?.timing.spawn_to_process_close_ms).toBeNull();
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    child.emit("close", null);
+
+    expect(detailState.cursor?.timing.spawn_to_process_close_ms).toEqual(
+      expect.any(Number),
+    );
+    expect(detailState.cursor?.timing.spawn_to_process_close_ms).toBeGreaterThan(
+      earlyExitMs ?? 0,
+    );
   });
 });
