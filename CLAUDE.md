@@ -183,11 +183,11 @@ Pull requests and pushes to `main` run GitHub Actions CI only. Deploys are
 explicit operator actions from a machine with Fleet access, over `fleet exec`.
 **Use `scripts/deploy`**: it snapshots the database, fetches over HTTPS and
 `git reset --hard`s the checkout to the target ref, runs the Cursor Agent
-launcher canary, reinstalls deps only when the lockfile changed, stages the old
-build as `.next.prev`, builds with Node 20.20.2 **detached**, restarts
-`whoop-web` with `sudo`, and verifies the running `/api/health` sha matches the
-commit it just deployed before checking that the local (`127.0.0.1:8501`) and
-public endpoints return 307.
+launcher canary, reinstalls deps **detached** only when the lockfile changed,
+stages the old build as `.next.prev`, builds with Node 20.20.2 **detached**,
+restarts `whoop-web` with `sudo`, and verifies the running `/api/health` sha
+matches the commit it just deployed before checking that the local
+(`127.0.0.1:8501`) and public endpoints return 307.
 
 ```bash
 scripts/deploy            # deploy origin/main
@@ -204,9 +204,15 @@ What it guarantees, and why each one is there:
   database and a copy straddling a checkpoint can tear it — both exit 0.
   Schema migrations are lazy `ALTER`s in `openWrite()`, so any deploy can
   migrate on the first write after restart.
-- **Detached build.** `setsid` + an exit-code sentinel, polled over fresh
-  connections. A foreground `next build` dies with a dropped connection and
-  leaves an orphan holding the lock.
+- **Detached install and build.** Both use the same `setsid` + exit-code
+  sentinel, polled over fresh connections. A foreground `next build` dies
+  with a dropped connection and leaves an orphan holding the lock; a
+  foreground `npm ci` dies mid-install and leaves `node_modules`
+  half-populated while `whoop-web.service` is still running and lazily
+  `require()`-ing from that tree — it 500s until a retry completes, without
+  anyone having restarted anything (issue #516). The install step is skipped
+  entirely when the lockfile hasn't changed, so the window only opens on
+  deploys that touch `package-lock.json`.
 - **Sha verification.** "The service is up" does not catch a restart that kept
   serving the old bundle; the deployed sha is compared against `/api/health`.
 - **Rollback recipe** printed on success and on any failure after the snapshot,

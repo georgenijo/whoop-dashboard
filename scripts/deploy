@@ -21,8 +21,14 @@
 #   1. SNAPSHOT THE DB FIRST, with SQLite's online-backup API — never `cp`.
 #      Schema migrations are lazy ALTERs in openWrite(), so ANY deploy can
 #      migrate the DB on the first write after restart.
-#   2. BUILD DETACHED. `next build` outlives a dropped connection; a foreground
-#      build under `fleet exec` does not, and the orphan keeps the lock.
+#   2. INSTALL AND BUILD DETACHED. `npm ci` and `next build` outlive a dropped
+#      connection; foreground steps under `fleet exec` do not. A killed build
+#      orphans a process that keeps .next's lock; a killed install leaves
+#      node_modules half-populated while whoop-web.service is still running
+#      and lazily `require()`-ing from that tree, so it 500s until a retry
+#      completes — without anyone having touched the service. Both steps use
+#      the same setsid + exit-code-sentinel + fresh-connection-poll machinery
+#      (see poll_detached_step below).
 #   3. VERIFY THE RUNNING SHA, not just that the service is up. Prod once ran
 #      three commits behind main for a day with the fix for a live coach-timeout
 #      bug merged and undeployed, because nothing reported what was serving.
@@ -77,6 +83,13 @@ BUILD_POLL_INTERVAL=${DEPLOY_BUILD_POLL_INTERVAL:-15}
 BUILD_LOG=/tmp/whoop-deploy-build.log
 BUILD_EXIT=/tmp/whoop-deploy-build.exit
 BUILD_SH=/tmp/whoop-deploy-build.sh
+# Same machinery, for `npm ci`. Ceiling matches the foreground `fleet exec
+# --timeout 900` it replaces.
+INSTALL_POLL_SECONDS=${DEPLOY_INSTALL_POLL_SECONDS:-900}
+INSTALL_POLL_INTERVAL=${DEPLOY_INSTALL_POLL_INTERVAL:-15}
+INSTALL_LOG=/tmp/whoop-deploy-install.log
+INSTALL_EXIT=/tmp/whoop-deploy-install.exit
+INSTALL_SH=/tmp/whoop-deploy-install.sh
 
 REF=origin/main
 CHECK_ONLY=0
@@ -95,6 +108,51 @@ done
 
 say() { printf '\n\033[1m==> %s\033[0m\n' "$*"; }
 die() { printf '\n\033[31mFAILED: %s\033[0m\n' "$*" >&2; exit 1; }
+
+# Shared poller for a detached remote step (npm ci, next build). Both are
+# launched with setsid+nohup so a dropped connection can't kill them, and
+# both signal completion by writing their exit code to a sentinel file —
+# never by polling for an output file the step itself produces early (e.g.
+# next writes .next/BUILD_ID well before prerender finishes; polling for
+# that would restart prod into a broken build).
+#
+# Every poll is a FRESH short-lived `fleet exec`, so a dropped poll costs one
+# interval, not the step. A poll failure (empty $rc from a transient
+# connection error) is therefore never treated as a result — only an actual
+# sentinel value or the ceiling ends the loop, so a hang cannot read as
+# success.
+#
+# $1 label      human-readable name, used in messages only
+# $2 exit_file  sentinel path polled for the step's exit code
+# $3 log_file   step's stdout+stderr log, referenced in failure messages
+# $4 ceiling    seconds to wait before giving up (does not kill the step)
+# $5 interval   seconds between polls
+# $6 lock_check remote shell snippet that echoes "locked" if a stale-lock
+#               orphan is detected in the log; pass "" to skip this check
+# $7 outvar     name of the caller's variable to receive the exit code
+poll_detached_step() {
+  local label=$1 exit_file=$2 log_file=$3 ceiling=$4 interval=$5 lock_check=$6
+  local -n _poll_out=$7
+  local waited=0 rc=""
+  while [ "$waited" -lt "$ceiling" ]; do
+    sleep "$interval"
+    waited=$((waited + interval))
+    rc=$(fleet exec --timeout 60 "$FLEET_NODE" "cat '$exit_file' 2>/dev/null || true" 2>/dev/null \
+      | tr -d '[:space:]') || rc=""
+    if [ -n "$rc" ]; then
+      echo "  $label finished after ${waited}s (exit $rc)"
+      _poll_out=$rc
+      return 0
+    fi
+    if [ -n "$lock_check" ] && fleet exec --timeout 60 "$FLEET_NODE" "$lock_check" 2>/dev/null | grep -q locked; then
+      die "another $label holds the lock — an orphan from a dropped session is still running.
+     Log: fleet exec $FLEET_NODE 'tail -f $log_file'"
+    fi
+    printf '  ... %ss\n' "$waited"
+  done
+  die "$label did not finish in ${ceiling}s — it may STILL BE RUNNING.
+     Watch it:  fleet exec $FLEET_NODE 'tail -f $log_file'"
+}
 
 if [[ ! "$CURSOR_AGENT_BIN" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
   die "DEPLOY_CURSOR_AGENT_BIN must be a safe absolute path"
@@ -115,10 +173,11 @@ fi
 NODE_VERSION_OVERRIDE=${NODE_VERSION_OVERRIDE#v}
 # The numeric tunables land in `[ -gt ]` and in loop arithmetic, where a
 # non-numeric override would either abort mid-deploy or spin forever.
-for _var in PORT BACKUP_KEEP BUILD_POLL_SECONDS BUILD_POLL_INTERVAL; do
+for _var in PORT BACKUP_KEEP BUILD_POLL_SECONDS BUILD_POLL_INTERVAL INSTALL_POLL_SECONDS INSTALL_POLL_INTERVAL; do
   [[ "${!_var}" =~ ^[0-9]+$ ]] || die "$_var must be a non-negative integer, got: ${!_var}"
 done
 [ "$BUILD_POLL_INTERVAL" -gt 0 ] || die "DEPLOY_BUILD_POLL_INTERVAL must be > 0"
+[ "$INSTALL_POLL_INTERVAL" -gt 0 ] || die "DEPLOY_INSTALL_POLL_INTERVAL must be > 0"
 
 command -v fleet >/dev/null 2>&1 || die "fleet CLI is required"
 
@@ -455,8 +514,8 @@ printf '%s\n' "$SNAP_OUT" | grep -v '^##' || true
 BACKUP_PATH=$(printf '%s\n' "$SNAP_OUT" | sed -n 's/^##SNAPSHOT=//p' | tail -1)
 [ -n "$BACKUP_PATH" ] || die "snapshot reported no path — refusing to continue"
 
-# --- 2. sync code + preflight + deps ------------------------------------------
-say "Syncing $TARGET_SHA ($TARGET_FROM) and installing deps on $FLEET_NODE"
+# --- 2. sync code + preflight --------------------------------------------------
+say "Syncing $TARGET_SHA ($TARGET_FROM) on $FLEET_NODE"
 SYNC_OUT=$(fleet exec --timeout 900 "$FLEET_NODE" \
   "bash -s -- '$APP_ROOT' '$NODE_VERSION' '$REPO_URL' '$CURSOR_AGENT_BIN' '$REF' '$TARGET_FULL'" <<'REMOTE_SYNC'
 set -euo pipefail
@@ -513,7 +572,10 @@ node scripts/check-cursor-agent.mjs "$CURSOR_AGENT_BIN" || {
 
 cd apps/web || { echo "apps/web missing under $ROOT" >&2; exit 1; }
 
-echo "--- dependency install (npm ci only if the lockfile changed) ---"
+# Only DECIDE here whether `npm ci` is needed — running it is a separate,
+# detached phase below (step 3) so a dropped connection can't kill it
+# mid-install and leave node_modules half-populated under the live service.
+echo "--- checking dependency install status ---"
 LOCKFILE=package-lock.json
 MARKER=node_modules/.deploy-lockfile-sha
 [ -f "$LOCKFILE" ] || { echo "$LOCKFILE missing" >&2; exit 1; }
@@ -521,27 +583,118 @@ NEED_CI=1
 if [ -d node_modules ] && [ -f "$MARKER" ] \
   && [ "$(shasum -a 256 "$LOCKFILE" | awk '{print $1}')" = "$(cat "$MARKER")" ]; then
   NEED_CI=0
+  echo "lockfile unchanged — will skip npm ci"
 fi
-if [ "$NEED_CI" = "1" ]; then
-  npm ci || { echo "npm ci failed" >&2; exit 1; }
-  mkdir -p node_modules
-  shasum -a 256 "$LOCKFILE" | awk '{print $1}' > "$MARKER"
-else
-  echo "lockfile unchanged — skipping npm ci"
-fi
+echo "##NEED_CI=$NEED_CI"
 REMOTE_SYNC
-) || die "code sync / dependency install failed on $FLEET_NODE — the running service is untouched"
+) || die "code sync failed on $FLEET_NODE — the running service is untouched"
 
 printf '%s\n' "$SYNC_OUT" | grep -v '^##' || true
 EXPECT_SHA=$(printf '%s\n' "$SYNC_OUT" | sed -n 's/^##DEPLOY_SHA=//p' | tail -1)
 [ -n "$EXPECT_SHA" ] || die "could not read the deployed sha from $FLEET_NODE"
 # Both shas are `git rev-parse --short` from the SAME checkout, so they agree
 # unless the reset landed somewhere other than the target that was reported,
-# snapshotted and announced. That must not proceed to a build.
+# snapshotted and announced. That must not proceed to install or build.
 [ "$EXPECT_SHA" = "$TARGET_SHA" ] \
   || die "checkout is at $EXPECT_SHA but $TARGET_SHA ($TARGET_FROM) was the target"
+NEED_CI=$(printf '%s\n' "$SYNC_OUT" | sed -n 's/^##NEED_CI=//p' | tail -1)
+[ -n "$NEED_CI" ] || die "could not read dependency-install status from $FLEET_NODE"
 
-# --- 3. build (detached — MUST survive a dropped connection) ------------------
+# --- 3. dependency install (detached — MUST survive a dropped connection) -----
+# `npm ci` mutates node_modules IN PLACE while whoop-web.service is still up
+# and serving. A foreground install under `fleet exec` that gets killed by a
+# dropped connection leaves node_modules half-populated; the live service can
+# still lazily `require()` from that half-built tree, so it 500s until a
+# retry completes — without anyone having restarted anything (issue #516).
+# Skipped entirely when phase 2 found the lockfile marker still matched.
+#
+# Reuses poll_detached_step, the same machinery the build below uses. No
+# lock-message check (unlike the build's "Another next build process" string,
+# npm has no equivalent reliable marker in its log) — the pgrep guard at
+# launch is the stacking protection here.
+if [ "$NEED_CI" = "1" ]; then
+  say "Installing dependencies (detached; ~10-60s typical)"
+  fleet exec --timeout 120 "$FLEET_NODE" \
+    "bash -s -- '$WEB_DIR' '$NODE_VERSION' '$INSTALL_SH' '$INSTALL_LOG' '$INSTALL_EXIT'" <<'REMOTE_INSTALL_LAUNCH' \
+    || die "could not launch the dependency install on $FLEET_NODE"
+set -euo pipefail
+WEB_DIR=$1
+NODE_VERSION=$2
+INSTALL_SH=$3
+INSTALL_LOG=$4
+INSTALL_EXIT=$5
+# Same reasoning as the build launcher: re-check here (not just in phase 2)
+# because this directory is prepended to the PATH the detached script builds,
+# and a missing dir would silently fall through to the login shell's Node
+# (24.x on opti), compiling better-sqlite3 against the wrong ABI.
+NODE_BIN_DIR="$HOME/.nvm/versions/node/v$NODE_VERSION/bin"
+[ -x "$NODE_BIN_DIR/npm" ] || {
+  echo "Node $NODE_VERSION is missing at $NODE_BIN_DIR — refusing to install with an unpinned PATH" >&2
+  exit 1
+}
+
+# Refuse to stack installs: a second `npm ci` racing the first against the
+# same node_modules is exactly the corruption this phase exists to prevent.
+# Matched on this wrapper's OWN script path, not on 'npm ci' itself — npm's
+# process name on the command line depends on how the nvm shim re-execs it,
+# which this script does not control, while the wrapper path is guaranteed:
+# the detached process's argv is exactly `bash $INSTALL_SH` (setsid/nohup
+# exec into it, they don't linger as a wrapper).
+#
+# The pattern is anchored (^...$) and requires the literal "bash " prefix —
+# a bare `pgrep -af "$INSTALL_SH"` self-matches THIS launcher's own argv,
+# since $INSTALL_SH is passed to it as a plain positional parameter
+# (`bash -s -- ... '$INSTALL_SH' ...`) and would show up in its own `ps`
+# line. That is a different self-match than the tailscaled one below —
+# caught by testing this against a real stub run, not by inspection.
+#
+# Filtered for tailscaled too, for the reason the build guard is: fleet's
+# transport spawns `tailscaled be-child ... --cmd=<the whole command>`, which
+# embeds this script's own source (including the string being grepped for)
+# and would otherwise self-match.
+RUNNING=$(pgrep -af "^bash $INSTALL_SH\$" 2>/dev/null | grep -v tailscaled || true)
+if [ -n "$RUNNING" ]; then
+  echo "a dependency install is already running — refusing to start a second one:" >&2
+  echo "$RUNNING" >&2
+  exit 1
+fi
+
+rm -f "$INSTALL_LOG" "$INSTALL_EXIT" "$INSTALL_SH"
+cat > "$INSTALL_SH" <<INNER
+#!/usr/bin/env bash
+export PATH="$NODE_BIN_DIR:\$PATH"
+cd "$WEB_DIR" || exit 1
+echo "--- npm ci ---"
+npm ci
+rc=\$?
+if [ "\$rc" -eq 0 ]; then
+  # Marker written ONLY on success. A killed or failed install leaves it
+  # stale (or absent), so the next deploy sees NEED_CI=1 again and retries —
+  # the self-heal property #516 already relied on, preserved here.
+  mkdir -p node_modules
+  shasum -a 256 package-lock.json | awk '{print \$1}' > node_modules/.deploy-lockfile-sha
+fi
+echo "\$rc" > "$INSTALL_EXIT"
+INNER
+chmod +x "$INSTALL_SH"
+setsid nohup bash "$INSTALL_SH" > "$INSTALL_LOG" 2>&1 < /dev/null &
+echo "launched (log: $INSTALL_LOG)"
+REMOTE_INSTALL_LAUNCH
+
+  INSTALL_RC=""
+  poll_detached_step "npm ci" "$INSTALL_EXIT" "$INSTALL_LOG" \
+    "$INSTALL_POLL_SECONDS" "$INSTALL_POLL_INTERVAL" "" INSTALL_RC
+  if [ "$INSTALL_RC" != "0" ]; then
+    echo "--- last 30 lines of install log ---"
+    fleet exec --timeout 60 "$FLEET_NODE" "tail -30 '$INSTALL_LOG' || true" || true
+    die "npm ci exited $INSTALL_RC — NOT building or restarting the service.
+     node_modules may be half-populated; the running service is untouched and
+     the next deploy will retry the install (the lockfile marker was not written).
+     Full log: fleet exec $FLEET_NODE 'cat $INSTALL_LOG'"
+  fi
+fi
+
+# --- 4. build (detached — MUST survive a dropped connection) ------------------
 # A foreground `npm run build` under `fleet exec` dies with the connection and
 # leaves an orphan holding .next's lock, so the next attempt fails with
 # "Another next build process". `setsid` puts the build in its own session, so
@@ -611,32 +764,9 @@ setsid nohup bash "$BUILD_SH" > "$BUILD_LOG" 2>&1 < /dev/null &
 echo "launched (log: $BUILD_LOG)"
 REMOTE_BUILD_LAUNCH
 
-waited=0
 BUILD_RC=""
-while [ "$waited" -lt "$BUILD_POLL_SECONDS" ]; do
-  sleep "$BUILD_POLL_INTERVAL"
-  waited=$((waited + BUILD_POLL_INTERVAL))
-  # A failed poll (transient connection error) is not a result — retry. The loop
-  # can only exit on a real sentinel or the ceiling, so this cannot pass as
-  # success.
-  BUILD_RC=$(fleet exec --timeout 60 "$FLEET_NODE" "cat '$BUILD_EXIT' 2>/dev/null || true" 2>/dev/null \
-    | tr -d '[:space:]') || BUILD_RC=""
-  if [ -n "$BUILD_RC" ]; then
-    echo "  build finished after ${waited}s (exit $BUILD_RC)"
-    break
-  fi
-  if fleet exec --timeout 60 "$FLEET_NODE" \
-       "grep -q 'Another next build process' '$BUILD_LOG' 2>/dev/null && echo locked || true" 2>/dev/null \
-     | grep -q locked; then
-    die "another next build holds the lock — an orphan from a dropped session is still running.
-     Inspect: fleet exec $FLEET_NODE 'pgrep -af \"next build\"'"
-  fi
-  printf '  ... %ss\n' "$waited"
-done
-
-[ -n "$BUILD_RC" ] || die "build did not finish in ${BUILD_POLL_SECONDS}s — it may STILL BE RUNNING.
-     Watch it:  fleet exec $FLEET_NODE 'tail -f $BUILD_LOG'
-     The service was not restarted; prod is still serving $CHECKOUT_SHA."
+poll_detached_step "build" "$BUILD_EXIT" "$BUILD_LOG" "$BUILD_POLL_SECONDS" "$BUILD_POLL_INTERVAL" \
+  "grep -q 'Another next build process' '$BUILD_LOG' 2>/dev/null && echo locked || true" BUILD_RC
 if [ "$BUILD_RC" != "0" ]; then
   echo "--- last 30 lines of build log ---"
   fleet exec --timeout 60 "$FLEET_NODE" "tail -30 '$BUILD_LOG' || true" || true
@@ -644,7 +774,7 @@ if [ "$BUILD_RC" != "0" ]; then
      Full log: fleet exec $FLEET_NODE 'cat $BUILD_LOG'"
 fi
 
-# --- 4. restart + verify the running sha --------------------------------------
+# --- 5. restart + verify the running sha --------------------------------------
 # "The service is up" is not verification: a restart that silently kept serving
 # the old bundle also comes up. /api/health reports the sha the build was
 # stamped with, and only to direct on-box callers, so the comparison happens on
