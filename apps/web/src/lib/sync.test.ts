@@ -66,27 +66,11 @@ vi.mock("@/lib/whoop/token", () => ({
 // it (semantic trigger) without coupling to checkAborted call counts. Other
 // tests don't assert on body upsert behavior, so the default no-op is fine.
 const upsertBodyMock = vi.fn();
-// recomputeDailySummary defaults to a passthrough to the real implementation
-// (set in the mock factory below) — the sleep-backfill "recompute failure"
-// tests override it per-test to simulate `recomputeDailySummary` returning
-// false (its own openWrite() swallows errors rather than throwing) without
-// needing to actually break the DB connection.
-type RecomputeFn = (date: string, userId: number) => boolean;
-let actualRecomputeDailySummary: RecomputeFn;
-const recomputeDailySummaryMock = vi.fn<RecomputeFn>((...args) =>
-  actualRecomputeDailySummary(...args),
-);
 vi.mock("@/lib/whoop/upsert", async () => {
   const actual = await vi.importActual<typeof import("@/lib/whoop/upsert")>(
     "@/lib/whoop/upsert",
   );
-  actualRecomputeDailySummary = actual.recomputeDailySummary;
-  return {
-    ...actual,
-    upsertBodyMeasurement: (...args: unknown[]) => upsertBodyMock(...args),
-    recomputeDailySummary: (...args: Parameters<RecomputeFn>) =>
-      recomputeDailySummaryMock(...args),
-  };
+  return { ...actual, upsertBodyMeasurement: (...args: unknown[]) => upsertBodyMock(...args) };
 });
 
 type SyncModule = typeof import("./sync");
@@ -232,8 +216,6 @@ beforeEach(() => {
   whoopGetAllMock.mockReset();
   getValidAccessTokenMock.mockReset();
   upsertBodyMock.mockReset();
-  recomputeDailySummaryMock.mockReset();
-  recomputeDailySummaryMock.mockImplementation((...args) => actualRecomputeDailySummary(...args));
   // Default: token is fresh, no refresh fired.
   getValidAccessTokenMock.mockImplementation(async () => "stub-token");
   clearTables();
@@ -633,6 +615,62 @@ function unscoredCycleRecord(date: string) {
   };
 }
 
+// Issue #440 review, WARN 2: a SCORED sleep record missing `end` makes
+// `sleepSummaryDate` throw. Unguarded, that throw happens inside
+// `persistAll`'s shared `db.transaction`, rolling back recovery, cycles,
+// AND workouts for the whole sync window — not just the one bad sleep
+// record. persistAll must catch it per-record, skip only that record, and
+// surface a count.
+describe("persistAll: a SCORED sleep record missing 'end' is skipped, not fatal (issue #440)", () => {
+  it("skips the bad sleep record but still commits recovery, cycles, and workouts", async () => {
+    const date = "2025-04-12";
+    whoopGetMock.mockImplementation(async () => ({
+      height_meter: 1.8,
+      weight_kilogram: 75,
+      max_heart_rate: 195,
+    }));
+    whoopGetAllMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint === "/v2/cycle") return { records: [cycleRecord(date)], pageCount: 1 };
+      if (endpoint === "/v2/recovery") return { records: [recoveryRecord(date)], pageCount: 1 };
+      if (endpoint === "/v2/activity/sleep") {
+        // SCORED but missing `end` — the malformed record under test.
+        const bad = { ...sleepRecord(date), end: undefined };
+        return { records: [bad], pageCount: 1 };
+      }
+      if (endpoint === "/v2/activity/workout") {
+        return { records: [workoutRecord("w-1", date)], pageCount: 1 };
+      }
+      return { records: [], pageCount: 1 };
+    });
+
+    const result = await syncMod.runWhoopSync({ userId: 1 });
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+    expect(result.partial).toBeUndefined();
+    // The bad sleep record is skipped, not written...
+    expect(result.rows_inserted).toEqual({
+      recovery: 1,
+      cycles: 1,
+      sleep: 0,
+      workouts: 1,
+    });
+    expect(result.details.sleep_missing_end_skipped).toBe(1);
+    // ...but recovery, cycles, and workouts still commit — the whole sync
+    // does NOT roll back over one malformed sleep record.
+    expect(rowCounts()).toEqual({ recovery: 1, cycles: 1, sleep: 0, workouts: 1 });
+  });
+
+  it("reports zero skipped when every sleep record is well-formed", async () => {
+    wireHappyPath();
+
+    const result = await syncMod.runWhoopSync({ userId: 1 });
+
+    expect(result.success).toBe(true);
+    expect(result.details.sleep_missing_end_skipped).toBe(0);
+  });
+});
+
 describe("reconcileCycles (issue #415)", () => {
   beforeEach(() => {
     // The look-back default is env-overridable, so pin it for every test in
@@ -962,6 +1000,37 @@ function seedSleepRow(
   }
 }
 
+/**
+ * Seeds a `sleep` row for a `userId` that has NO matching `users` row —
+ * deliberately, to manufacture a genuine (unmocked) transaction failure.
+ * `daily_summary` and `sleep` both have `user_id INTEGER ... REFERENCES
+ * users(id)`; `openWrite()` turns `foreign_keys = ON`, so an `INSERT OR
+ * REPLACE INTO daily_summary` for this user_id inside the backfill's
+ * transaction throws a real `FOREIGN KEY constraint failed` — no mocking of
+ * `recomputeDailySummary` or the DB layer required. This raw connection
+ * (unlike `openWrite()`) never sets `foreign_keys = ON`, so the seed insert
+ * itself succeeds despite the dangling reference.
+ */
+function seedSleepRowNoUser(
+  userId: number,
+  sleepId: string,
+  date: string,
+  raw: string | null,
+): void {
+  const db = new Database(dbFile);
+  try {
+    // This build's default differs from vanilla SQLite — be explicit rather
+    // than relying on the connection default.
+    db.pragma("foreign_keys = OFF");
+    db.prepare(
+      "INSERT INTO sleep (user_id, sleep_id, date, in_bed_ms, light_ms, deep_ms, rem_ms, nap, raw) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)",
+    ).run(userId, sleepId, date, 28_800_000, 14_400_000, 5_400_000, 7_200_000, raw);
+  } finally {
+    db.close();
+  }
+}
+
 function sleepDateFor(userId: number, sleepId: string): string | null {
   const db = new Database(dbFile);
   try {
@@ -1229,35 +1298,53 @@ describe("sleep wake-day backfill (issue #440)", () => {
     expect(sleepBackfillMarker(1)).toBeNull();
   });
 
-  // Issue #440 review, BLOCK 3: `recomputeDailySummary` returns `false`
-  // rather than throwing on failure (its own `openWrite()` swallows
-  // errors). The boolean must be checked: silently discarding it would let
-  // a transient failure leave a vacated date's `daily_summary` permanently
-  // stale while the marker still gets written.
-  it("withholds the marker and reports the true count when a recompute fails", () => {
-    seedSleepRow(
-      1,
+  // Issue #440 review, second pass, BLOCK: a prior version of this function
+  // ran the re-date UPDATEs in their own transaction and the recomputes
+  // afterward via separate `recomputeDailySummary()` calls. Once the
+  // UPDATE transaction committed, every row satisfied
+  // `date === parseDate(raw.end)`, so a retry after a recompute failure
+  // found `changes` empty and wrote the "complete" marker with
+  // `dates_recomputed: 0` — permanently stale `daily_summary`, falsely
+  // marked done. The fix folds the UPDATEs and the recomputes into ONE
+  // transaction: this test forces a REAL (unmocked) mid-transaction failure
+  // via a dangling `user_id` FK reference and asserts the UPDATE itself
+  // rolled back too, so a retry after fixing the underlying problem sees
+  // the original pre-migration state and genuinely succeeds.
+  it("rolls back the re-date UPDATE too when the recompute half of the transaction fails", () => {
+    const noUserId = 4242; // deliberately has no `users` row — see helper doc.
+    seedSleepRowNoUser(
+      noUserId,
       "sleep-a",
       "2026-04-28",
       JSON.stringify({ id: "sleep-a", end: "2026-04-29T08:38:56.000Z" }),
     );
-    // Simulate the vacated date's recompute failing (e.g. a concurrent
-    // writer holding the write lock) while the destination date's succeeds.
-    recomputeDailySummaryMock.mockImplementation((date: string, userId: number) => {
-      if (date === "2026-04-28") return false;
-      return actualRecomputeDailySummary(date, userId);
-    });
 
-    const result = syncMod.backfillSleepWakeDayOnce(1, "UTC");
+    expect(() => syncMod.backfillSleepWakeDayOnce(noUserId, "UTC")).toThrow(
+      /FOREIGN KEY constraint failed/,
+    );
 
-    // Row re-dating still committed (it's idempotent and safe).
-    expect(result).toMatchObject({ rows_changed: 1 });
-    // Only the destination date's recompute actually succeeded — the count
-    // must reflect that, not touchedDates.size (which would say 2).
-    expect(result?.dates_recomputed).toBe(1);
-    expect(sleepDateFor(1, "sleep-a")).toBe("2026-04-29");
-    // Marker withheld — a future sync gets to retry.
-    expect(sleepBackfillMarker(1)).toBeNull();
+    // Nothing committed — not the daily_summary recompute, and NOT the
+    // sleep row's date UPDATE either. A split-transaction implementation
+    // would have left this at 2026-04-29 (UPDATE committed on its own),
+    // which is exactly what makes a retry blind: this row would already
+    // look "correct" even though the marker was never set.
+    expect(sleepDateFor(noUserId, "sleep-a")).toBe("2026-04-28");
+    expect(sleepBackfillMarker(noUserId)).toBeNull();
+
+    // Fix the underlying problem and retry — a genuine second attempt
+    // against the ORIGINAL pre-migration state, not a no-op.
+    const usersDb = new Database(dbFile);
+    try {
+      usersDb.prepare("INSERT INTO users (id) VALUES (?)").run(noUserId);
+    } finally {
+      usersDb.close();
+    }
+
+    const retry = syncMod.backfillSleepWakeDayOnce(noUserId, "UTC");
+
+    expect(retry).toMatchObject({ rows_changed: 1, dates_recomputed: 2 });
+    expect(sleepDateFor(noUserId, "sleep-a")).toBe("2026-04-29");
+    expect(sleepBackfillMarker(noUserId)).toContain("completed_at");
   });
 });
 
@@ -1276,6 +1363,46 @@ describe("runWhoopSync + sleep backfill wiring (issue #440)", () => {
     const second = await syncMod.runWhoopSync({ userId: 1 });
     expect(second.success).toBe(true);
     expect(second.details.sleep_backfill).toBeUndefined();
+  });
+
+  // Issue #440 review, WARN 1: the ordering fix (backfill runs BEFORE
+  // persistAll) had zero direct coverage — every existing wiring test seeds
+  // its legacy row on a date far outside wireHappyPath's fetch window, so
+  // it passes whether the backfill runs before OR after persistAll. This
+  // pins the actual regression: a legacy sleep_id that the sync's OWN fetch
+  // window also returns.
+  it("recomputes the vacated date for a legacy row whose sleep_id is ALSO in this sync's fetch window", async () => {
+    // wireHappyPath's sleep fixture is sleep_id "sleep-2025-04-12", dated
+    // 2025-04-12 (start and end share that day). Seed a pre-existing row
+    // under the SAME sleep_id but the WRONG (pre-migration) date —
+    // representing a night that had already been corrected by nothing yet.
+    // If persistAll runs first, its INSERT OR REPLACE silently overwrites
+    // both `date` and `raw` to the fetched record's (already-correct)
+    // values BEFORE the backfill ever scans the table — the backfill would
+    // then see `date === parseDate(raw.end)` already true, record zero
+    // changes, and never recompute the date this row vacated.
+    seedSleepRow(
+      1,
+      "sleep-2025-04-12",
+      "2025-04-11",
+      JSON.stringify({ id: "sleep-2025-04-12", end: "2025-04-12T08:00:00.000Z" }),
+    );
+    // Pre-existing daily_summary for the date this row is really parked on
+    // (wrong, pre-migration) — must be recomputed to NULL, not left stale.
+    seedDailySummarySleepHours(1, "2025-04-11", 7.5);
+    wireHappyPath();
+
+    const result = await syncMod.runWhoopSync({ userId: 1 });
+
+    expect(result.success).toBe(true);
+    // Correct ordering: the backfill saw the row BEFORE persistAll touched
+    // it, so it counted as a genuine change.
+    expect(result.details.sleep_backfill).toMatchObject({ rows_changed: 1 });
+    // The actual regression signal: under the wrong ordering this stays
+    // 7.5 forever (persistAll's own recompute only touches 2025-04-12, the
+    // date it just fetched — never 2025-04-11).
+    expect(dailySummarySleepHours(1, "2025-04-11")).toBeNull();
+    expect(sleepDateFor(1, "sleep-2025-04-12")).toBe("2025-04-12");
   });
 
   it("re-dates a pre-existing wrong-date row as part of the sync's first-run backfill", async () => {

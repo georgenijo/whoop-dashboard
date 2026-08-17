@@ -10,9 +10,34 @@ import {
 import type { RecoveryRow } from "@/lib/db/recovery";
 import type { SleepRow } from "@/lib/db/sleep";
 
-function sleep(date: string, startLocal: string, overrides: Partial<SleepRow> = {}): SleepRow {
+function prevDateStr(date: string): string {
+  const d = new Date(date + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function nextDateStr(date: string): string {
+  const d = new Date(date + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * `wakeDate` is the sleep row's `.date` (issue #440: the WAKE day —
+ * `sleepSummaryDate` keys on `end`, not `start`). `bedtimeHour` (0-23)
+ * builds `start_local` on the evening BEFORE `wakeDate`, mirroring a real
+ * midnight-spanning night — so `end_local` is never before `start_local`
+ * on the same calendar day, and `date` always matches the day `end_local`
+ * (and therefore the recovery row keyed on the same wake day) falls on.
+ */
+function sleep(
+  wakeDate: string,
+  bedtimeHour: number,
+  overrides: Partial<SleepRow> = {},
+): SleepRow {
+  const hh = String(bedtimeHour).padStart(2, "0");
   return {
-    date,
+    date: wakeDate,
     in_bed_ms: 8 * 3_600_000,
     light_ms: 4 * 3_600_000,
     deep_ms: 1.5 * 3_600_000,
@@ -29,8 +54,8 @@ function sleep(date: string, startLocal: string, overrides: Partial<SleepRow> = 
     need_from_debt_ms: 0,
     need_from_strain_ms: 0,
     need_from_nap_ms: null,
-    start_local: startLocal,
-    end_local: `${date}T07:00:00`,
+    start_local: `${prevDateStr(wakeDate)}T${hh}:00:00`,
+    end_local: `${wakeDate}T07:00:00`,
     ...overrides,
   };
 }
@@ -82,11 +107,9 @@ describe("computeBedtimeRecoveryCorr", () => {
       "2026-04-28",
     ];
     // Deliberately varying bedtime hour so linearRegression has non-zero
-    // x-variance. start_local hour cycles 21,22,23,20,21 (pre-midnight, so
-    // parseLocalParts' date component equals the sleep's own date — this is
-    // about the RECOVERY lookup, not the bedtime-hour parsing).
+    // x-variance.
     const hours = [21, 22, 23, 20, 21];
-    const sleeps = dates.map((d, i) => sleep(d, `${d}T${String(hours[i]).padStart(2, "0")}:00:00`));
+    const sleeps = dates.map((d, i) => sleep(d, hours[i]));
     // Recovery matching each sleep's OWN date directly.
     const ownDayScores = [60, 65, 55, 70, 62];
     const recoveries = dates.map((d, i) => recovery(d, ownDayScores[i]));
@@ -96,9 +119,7 @@ describe("computeBedtimeRecoveryCorr", () => {
     // point). Values are deliberately implausible (all 1) so a wrong join
     // is easy to detect.
     for (const d of dates) {
-      const after = new Date(d + "T00:00:00Z");
-      after.setUTCDate(after.getUTCDate() + 1);
-      recoveries.push(recovery(after.toISOString().slice(0, 10), 1));
+      recoveries.push(recovery(nextDateStr(d), 1));
     }
 
     const result = computeBedtimeRecoveryCorr(sleeps, recoveries);
@@ -113,25 +134,42 @@ describe("computeBedtimeRecoveryCorr", () => {
     }
   });
 
-  it("drops a sleep when its own date has no matching recovery row", () => {
-    const dates = ["2026-04-24", "2026-04-25", "2026-04-26", "2026-04-27", "2026-04-28"];
-    const sleeps = dates.map((d, i) =>
-      sleep(d, `${d}T${String(20 + (i % 4)).padStart(2, "0")}:00:00`),
-    );
-    // Only 4 of 5 dates have a recovery row — the 5th sleep must be
-    // excluded, not silently matched to some other date.
-    const recoveries = dates.slice(0, 4).map((d) => recovery(d, 60));
+  it("drops a sleep whose own date has no matching recovery row, without silently matching another date", () => {
+    // 6 sleeps so that dropping exactly 1 (the one with no recovery row)
+    // still clears the n>=5 threshold — unlike a 5-sleep/4-recovery setup,
+    // where the result is null whether or not the drop logic is correct,
+    // this can actually fail if the code matches the wrong date instead of
+    // dropping.
+    const dates = [
+      "2026-04-20",
+      "2026-04-21",
+      "2026-04-22",
+      "2026-04-23",
+      "2026-04-24",
+      "2026-04-25",
+    ];
+    const hours = [20, 21, 22, 20, 21, 22];
+    const sleeps = dates.map((d, i) => sleep(d, hours[i]));
+    const missingDate = "2026-04-22";
+    // Varying scores — a regression needs nonzero variance on both axes, or
+    // linearRegression (and therefore computeBedtimeRecoveryCorr) returns
+    // null regardless of whether the drop logic is correct.
+    const scores = [55, 60, 65, 70, 75, 80];
+    const recoveries = dates
+      .map((d, i) => ({ d, score: scores[i] }))
+      .filter(({ d }) => d !== missingDate)
+      .map(({ d, score }) => recovery(d, score));
 
     const result = computeBedtimeRecoveryCorr(sleeps, recoveries);
 
-    // Only 4 valid pairs — below the n>=5 threshold — so the function
-    // returns null rather than a regression built on too little data.
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result!.points).toHaveLength(5);
+    expect(result!.points.map((p) => p.date)).not.toContain(missingDate);
   });
 
   it("returns null with fewer than 5 valid points", () => {
     const dates = ["2026-04-24", "2026-04-25", "2026-04-26"];
-    const sleeps = dates.map((d, i) => sleep(d, `${d}T${20 + i}:00:00`));
+    const sleeps = dates.map((d, i) => sleep(d, 20 + i));
     const recoveries = dates.map((d) => recovery(d, 60));
     expect(computeBedtimeRecoveryCorr(sleeps, recoveries)).toBeNull();
   });
@@ -139,26 +177,34 @@ describe("computeBedtimeRecoveryCorr", () => {
 
 describe("computeBedtimePatterns", () => {
   it("returns null with fewer than 5 valid nights", () => {
-    const sleeps = [sleep("2026-04-24", "2026-04-24T22:00:00")];
+    const sleeps = [sleep("2026-04-24", 22)];
     expect(computeBedtimePatterns(sleeps)).toBeNull();
   });
 
   it("computes weekday/weekend split using dayOfWeek(sleep.date)", () => {
-    // 2026-04-25 is a Saturday, 2026-04-27..30 are Mon-Thu. Each night spans
-    // midnight (bed 22:00, wake 06:00 the next calendar day) so sleepHrs
-    // comes out positive (~8h) rather than being filtered by the <=0 guard.
+    // 2026-04-25 is a Saturday, 2026-04-27..30 are Mon-Thu.
     const dates = ["2026-04-25", "2026-04-27", "2026-04-28", "2026-04-29", "2026-04-30"];
-    const sleeps = dates.map((d) => {
-      const wake = new Date(d + "T00:00:00Z");
-      wake.setUTCDate(wake.getUTCDate() + 1);
-      const wakeDate = wake.toISOString().slice(0, 10);
-      return sleep(d, `${d}T22:00:00`, { end_local: `${wakeDate}T06:00:00` });
-    });
+    const sleeps = dates.map((d) => sleep(d, 22));
 
     const result = computeBedtimePatterns(sleeps);
 
     expect(result).not.toBeNull();
     expect(result!.weekend.n).toBe(1);
     expect(result!.weekday.n).toBe(4);
+  });
+
+  // Issue #440 review, second pass, WARN 4 / bedDate plumbing: the tooltip
+  // now shows the bed-side date (the evening BEFORE the wake day) alongside
+  // the wake day for a midnight-spanning night.
+  it("exposes bedDate as the day BEFORE the wake day for a midnight-spanning night", () => {
+    const dates = ["2026-04-25", "2026-04-27", "2026-04-28", "2026-04-29", "2026-04-30"];
+    const sleeps = dates.map((d) => sleep(d, 22));
+
+    const result = computeBedtimePatterns(sleeps);
+
+    expect(result).not.toBeNull();
+    for (const point of result!.series) {
+      expect(point.bedDate).toBe(prevDateStr(point.date));
+    }
   });
 });

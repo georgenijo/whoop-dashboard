@@ -167,4 +167,27 @@ describe("sleep read selectors — one row per date (issue #440)", () => {
     expect(sleepMod.getLatestSleep(1)).toBeNull();
     expect(sleepMod.getSleepTrend(1, 30)).toHaveLength(0);
   });
+
+  // Issue #440 review, second pass, NIT: getSleepRangeRaw (the Coach's
+  // query_sleep tool) is the deliberate exception to the dedup rule — pin
+  // it against getSleepRange so a future edit can't quietly make them
+  // identical (which would silently reintroduce data suppression in the
+  // Coach tool) or quietly make Raw dedupe too (defeating its purpose).
+  it("getSleepRangeRaw returns BOTH rows on a collision date; getSleepRange returns one", () => {
+    insertSleep([
+      { sleep_id: "short", date: "2026-04-29", in_bed_ms: 10 * 60_000 },
+      { sleep_id: "long", date: "2026-04-29", in_bed_ms: 8 * 3_600_000 },
+    ]);
+
+    const raw = sleepMod.getSleepRangeRaw(1, "2026-04-01", "2026-04-30");
+    const deduped = sleepMod.getSleepRange(1, "2026-04-01", "2026-04-30");
+
+    expect(raw).toHaveLength(2);
+    expect(raw.map((r) => r.in_bed_ms).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([
+      10 * 60_000,
+      8 * 3_600_000,
+    ]);
+    expect(deduped).toHaveLength(1);
+    expect(deduped[0].in_bed_ms).toBe(8 * 3_600_000);
+  });
 });

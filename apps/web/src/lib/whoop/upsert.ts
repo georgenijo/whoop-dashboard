@@ -111,17 +111,25 @@ export function parseDate(iso: string, tz: string): string {
 // row at all. `recoverySummaryDate` keys on `created_at` (recovery is
 // created when the sleep ENDS), so wake-day attribution here realigns a
 // night's sleep with its own recovery row (issue #440).
+// Callers MUST gate on `score_state === "SCORED"` (and a truthy `score`)
+// before calling this — every SCORED record carries `end` from the Whoop v2
+// API, but a PENDING_SCORE record may not. All four call sites do gate:
+// `upsertSleep` and `persistAll`'s sleep loop check before calling;
+// `syncedDates` checks `score_state === "SCORED"` before calling (and still
+// wraps the call in try/catch — see its comment); the webhook handler's
+// `sleep.updated` case checks before calling and treats a not-yet-scored
+// update as a no-op. `persistAll` additionally catches a throw here PER
+// RECORD and skips just that one (issue #440 review, second pass, WARN 2) —
+// this function itself does not swallow anything.
 export function sleepSummaryDate(r: WhoopSleepRecord, tz: string): string {
   if (!r.end) {
-    // `end` is optional only in the TS type — every SCORED record (the only
-    // ones any of the four call sites pass here: upsertSleep, persistAll,
-    // syncedDates, the webhook handler) always carries it from the Whoop v2
-    // API. Falling back to `r.start` here would silently reintroduce
-    // exactly the start-day misfiling this function exists to fix, with no
-    // signal it happened — a wrong date is indistinguishable from a right
-    // one after the fact. Fail loud instead (issue #440 review): the sync
-    // transaction rolls back and the sync surfaces an error rather than
-    // writing a systematically wrong date.
+    // `end` is optional only in the TS type. Falling back to `r.start` here
+    // would silently reintroduce exactly the start-day misfiling this
+    // function exists to fix, with no signal it happened — a wrong date is
+    // indistinguishable from a right one after the fact. Fail loud instead
+    // (issue #440 review) so the caller's per-record skip-and-count (or,
+    // for the webhook handler, the score_state gate) is what decides the
+    // outcome — not a quietly-wrong date.
     throw new Error(
       `sleepSummaryDate: record ${r.id} is missing 'end' (expected on every SCORED sleep)`,
     );

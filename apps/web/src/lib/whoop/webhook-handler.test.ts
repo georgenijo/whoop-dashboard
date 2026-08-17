@@ -268,4 +268,59 @@ describe("handleEvent — sleep.updated re-dates and recomputes both old and new
       db.close();
     }
   });
+
+  // Issue #440 review, second pass, WARN 3: `sleepSummaryDate` throws when
+  // `end` is missing, and it isn't gated on score_state the way the other
+  // three call sites are — a PENDING_SCORE record (no `end` yet) used to
+  // return 200 handled (as a no-op, since upsertSleep itself is a no-op for
+  // non-SCORED records); un-gated, it now throws instead, which the route
+  // maps to a 502 and Whoop retries 5x into a DLQ `failed` row.
+  it("accepts a not-yet-scored (PENDING_SCORE) sleep.updated as a no-op instead of throwing", async () => {
+    seedIntegration(1, "1001");
+    whoopGetMock.mockResolvedValue({
+      id: "s-pending",
+      start: "2026-05-01T23:00:00.000Z",
+      // No `end` yet — the sleep hasn't been scored.
+      score_state: "PENDING_SCORE",
+    });
+
+    const outcome = await webhook.handleEvent({
+      type: "sleep.updated",
+      id: "s-pending",
+      user_id: 1001,
+    });
+
+    expect(outcome.kind).toBe("handled");
+    const db = new Database(dbFile);
+    try {
+      const row = db
+        .prepare("SELECT date FROM sleep WHERE sleep_id = 's-pending'")
+        .get();
+      expect(row).toBeUndefined();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("accepts a SCORED record missing 'end' as a no-op rather than throwing (belt-and-suspenders)", async () => {
+    // Shouldn't happen in practice (every SCORED record carries `end`), but
+    // the gate is on score_state, not on `end` presence — this proves the
+    // gate alone is sufficient even for a malformed SCORED record with a
+    // score payload.
+    seedIntegration(1, "1001");
+    whoopGetMock.mockResolvedValue({
+      id: "s-scored-no-end",
+      start: "2026-05-01T23:00:00.000Z",
+      score_state: "SCORED",
+      score: undefined,
+    });
+
+    const outcome = await webhook.handleEvent({
+      type: "sleep.updated",
+      id: "s-scored-no-end",
+      user_id: 1001,
+    });
+
+    expect(outcome.kind).toBe("handled");
+  });
 });

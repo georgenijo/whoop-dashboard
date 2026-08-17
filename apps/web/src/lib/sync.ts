@@ -18,7 +18,6 @@ import { getValidAccessToken } from "@/lib/whoop/token";
 import {
   cycleSummaryDate,
   parseDate,
-  recomputeDailySummary,
   recoverySummaryDate,
   sleepSummaryDate,
   toLocalIso,
@@ -77,6 +76,14 @@ export type SyncResult = {
     fetch_breakdown: Record<string, number>;
     page_counts: Record<string, number>;
     summary_dates: number;
+    /** SCORED sleep records this sync fetched but could not date (missing
+     *  `end` — `sleepSummaryDate` throws rather than silently misfiling
+     *  them; see its doc comment). Should be 0 in practice — every SCORED
+     *  record carries `end` from the Whoop v2 API — but if it's ever
+     *  nonzero, these records were skipped rather than written under a
+     *  wrong-but-plausible date, and rather than failing the whole sync
+     *  (recovery/cycles/workouts still commit). */
+    sleep_missing_end_skipped: number;
     body_error?: string;
     /** Cycles reconcile (issue #415) outcome. Absent if it threw before
      *  producing a result (see `reconcile_error`), or if the one-time
@@ -309,7 +316,17 @@ function syncedDates(data: FetchedData, tz: string): string[] {
     if (r.score_state === "SCORED") dates.add(cycleSummaryDate(r, tz));
   }
   for (const r of data.sleep) {
-    if (r.score_state === "SCORED") dates.add(sleepSummaryDate(r, tz));
+    if (r.score_state !== "SCORED") continue;
+    // Mirrors persistAll's sleep loop: a SCORED record without `end` throws
+    // from `sleepSummaryDate` (issue #440 review) rather than silently
+    // misfiling it. persistAll already skips-and-counts it; this is purely
+    // about not crashing the (separate, post-commit) `summary_dates` count
+    // over the identical record.
+    try {
+      dates.add(sleepSummaryDate(r, tz));
+    } catch {
+      // already logged/counted by persistAll
+    }
   }
   // Workouts are not gated on score_state in Python (require_scored=False),
   // so we mirror that here.
@@ -327,19 +344,30 @@ function syncedDates(data: FetchedData, tz: string): string[] {
  *
  * Body measurement and the latest_*_date reads run separately *after* this
  * function returns — see `runWhoopSync` for those.
+ *
+ * A SCORED sleep record missing `end` makes `sleepSummaryDate` throw
+ * (issue #440 review) — this loop catches that PER RECORD and skips just
+ * that one, rather than letting it escape into the shared `db.transaction`
+ * and roll back recovery/cycles/workouts too. This should never happen in
+ * practice (every SCORED record carries `end`), but "one malformed sleep
+ * record takes down the whole sync, every sync, until Whoop fixes its API"
+ * is a worse failure mode than skipping the one record and surfacing the
+ * count.
  */
 function persistAll(
   data: FetchedData,
   userId: number,
   signal: AbortSignal | undefined,
   tz: string,
-): SyncCounts {
+): { counts: SyncCounts; sleepMissingEndSkipped: number } {
   const counts: SyncCounts = {
     recovery: 0,
     sleep: 0,
     cycles: 0,
     workouts: 0,
   };
+  let sleepMissingEndSkipped = 0;
+  const skippedSleepRecords: { sleep_id: string; err: string }[] = [];
   const db = openWrite();
   if (!db) throw new Error("DB unavailable (no whoop_data.db at expected path)");
   try {
@@ -415,12 +443,31 @@ function persistAll(
       checkAborted(signal);
       for (const r of data.sleep) {
         if (r.score_state !== "SCORED" || !r.score) continue;
+        let date: string;
+        try {
+          date = sleepSummaryDate(r, tz);
+        } catch (err) {
+          // Should never happen — every SCORED record carries `end` — but
+          // skip just this record rather than rolling back the whole
+          // transaction (recovery/cycles/workouts) for a single bad row.
+          // Logging happens AFTER `persist()` returns below, not here: the
+          // logger persists warn+ events via its own `openWrite()` call
+          // (`server_logs`), and calling that from inside this transaction
+          // deadlocks against the write lock this same transaction already
+          // holds (SQLITE_BUSY).
+          sleepMissingEndSkipped += 1;
+          skippedSleepRecords.push({
+            sleep_id: r.id,
+            err: err instanceof Error ? err.message : String(err),
+          });
+          continue;
+        }
         const ss = r.score.stage_summary;
         const sn = r.score.sleep_needed;
         sleepStmt.run({
           user_id: userId,
           sleep_id: r.id,
-          date: sleepSummaryDate(r, tz),
+          date,
           in_bed_ms: ss.total_in_bed_time_milli,
           light_ms: ss.total_light_sleep_time_milli,
           deep_ms: ss.total_slow_wave_sleep_time_milli,
@@ -490,7 +537,15 @@ function persistAll(
       }
     });
     persist();
-    return counts;
+    // Logged here, after the transaction committed — see the try/catch
+    // above for why logging from inside it deadlocks.
+    for (const skipped of skippedSleepRecords) {
+      log.error(
+        { user_id: userId, ...skipped },
+        "sleep record skipped: missing end",
+      );
+    }
+    return { counts, sleepMissingEndSkipped };
   } finally {
     db.close();
   }
@@ -869,13 +924,13 @@ export type SleepWakeDayBackfillResult = {
   /** Rows whose `raw` was missing, unparseable, or lacked `.end` — left
    *  untouched rather than treated as fatal. */
   rows_skipped: number;
-  /** Distinct dates whose `daily_summary` recompute actually SUCCEEDED —
-   *  both the date a changed row LEFT and the date it moved TO, since a row
-   *  leaving date D means D's `daily_summary` is stale too, not just the
-   *  destination. NOT the same as "dates touched" — `recomputeDailySummary`
-   *  can fail (e.g. a concurrent writer holding the write lock) without
-   *  throwing, so this only counts confirmed successes; see the marker-
-   *  withholding note below. */
+  /** Distinct dates whose `daily_summary` was recomputed — both the date a
+   *  changed row LEFT and the date it moved TO, since a row leaving date D
+   *  means D's `daily_summary` is stale too, not just the destination. The
+   *  re-date UPDATEs and every recompute here share one transaction (see
+   *  the function's doc comment), so this result object is only ever
+   *  returned after a clean commit — there is no "some recomputes failed"
+   *  partial state to report. */
   dates_recomputed: number;
   /** Dates where re-dating left MORE THAN ONE non-nap sleep sharing that
    *  date. Not data loss — the PK is `(user_id, sleep_id)` and nothing is
@@ -930,15 +985,23 @@ function sleepWakeDayBackfillSettingKey(userId: number): string {
  * best-effort post-persist steps (catches it into `sleep_backfill_error`
  * without failing the sync) and will retry on the next one.
  *
- * The UPDATEs run inside a single transaction (PK is `(user_id, sleep_id)`,
- * so re-dating can't collide). `daily_summary` recomputes run afterward, one
- * `recomputeDailySummary` call per touched date — mirrors how the cycles
- * backfill separates its write phase from downstream summary work.
- * `recomputeDailySummary` returns `false` rather than throwing on failure
- * (its own `openWrite()` swallows errors), so the boolean is checked
- * explicitly: if ANY recompute fails, the marker is withheld so the next
- * sync retries rather than declaring victory on a partial pass that left a
- * `daily_summary` row silently stale forever.
+ * The re-date UPDATEs and the `daily_summary` recomputes for every touched
+ * date run inside ONE transaction on ONE connection — nothing commits
+ * unless everything commits. This is load-bearing for retry safety, not
+ * just atomicity theater: once a row's `date` UPDATE commits on its own,
+ * `raw.end` and `date` agree for that row, so a later re-run of this
+ * function (because the marker was withheld) would compute
+ * `newDate === row.date`, never re-flag the row as "changed", and never
+ * rediscover the date it vacated — the idempotent re-date is exactly what
+ * makes a split-transaction retry blind. An earlier version of this
+ * function ran the UPDATEs in their own transaction and the recomputes
+ * afterward via separate `recomputeDailySummary()` calls; a recompute
+ * failure there left the re-date committed, the recompute silently
+ * unattempted-forever, and (worse) the marker still got written on the
+ * NEXT call because the now-idempotent scan found nothing left to do
+ * (issue #440 review, second pass). Folding both into one transaction means
+ * a mid-recompute failure now rolls back the UPDATEs too, so the next call
+ * sees the original pre-migration state and gets a genuine second attempt.
  */
 export function backfillSleepWakeDayOnce(
   userId: number,
@@ -961,7 +1024,6 @@ export function backfillSleepWakeDayOnce(
     dates_recomputed: 0,
     collisions: 0,
   };
-  const changes: { sleep_id: string; new_date: string; old_date: string }[] = [];
 
   try {
     const rows = db
@@ -978,6 +1040,7 @@ export function backfillSleepWakeDayOnce(
     // check below, independent of whether this particular row's date
     // changed.
     const finalDateBySleepId = new Map<string, string>();
+    const changes: { sleep_id: string; new_date: string; old_date: string }[] = [];
     for (const row of rows) {
       let end: unknown;
       try {
@@ -1004,18 +1067,40 @@ export function backfillSleepWakeDayOnce(
       }
     }
 
+    const touchedDates = new Set<string>();
+    for (const c of changes) {
+      touchedDates.add(c.old_date);
+      touchedDates.add(c.new_date);
+    }
+
     const update = db.prepare(
       "UPDATE sleep SET date = ? WHERE user_id = ? AND sleep_id = ?",
     );
-    // No side effects (Set mutation, etc.) inside the transaction body —
-    // `changes` is plain data collected above; derive anything else from it
-    // outside, after the transaction commits.
+    const summarySelect = db.prepare(SUMMARY_SELECT_SQL);
+    const summaryInsert = db.prepare(SUMMARY_INSERT_SQL);
+
+    // Single transaction: every re-date UPDATE and every touched date's
+    // daily_summary recompute, or none of them. See the doc comment above
+    // for why splitting these across transactions/connections makes a
+    // partial failure unrecoverable rather than merely incomplete.
     db.transaction(() => {
       for (const c of changes) {
         update.run(c.new_date, userId, c.sleep_id);
       }
+      for (const date of touchedDates) {
+        const row = summarySelect.get(
+          date,
+          date,
+          userId,
+          userId,
+          userId,
+          userId,
+        ) as Record<string, unknown> | undefined;
+        if (row) summaryInsert.run({ ...row, user_id: userId });
+      }
     })();
     result.rows_changed = changes.length;
+    result.dates_recomputed = touchedDates.size;
 
     // Collision check: dates where re-dating leaves >1 non-nap sleep.
     // Naps are excluded — the read-side dedup selector only applies to
@@ -1040,39 +1125,11 @@ export function backfillSleepWakeDayOnce(
     db.close();
   }
 
-  const touchedDates = new Set<string>();
-  for (const c of changes) {
-    touchedDates.add(c.old_date);
-    touchedDates.add(c.new_date);
-  }
-
-  let allRecomputesOk = true;
-  for (const date of touchedDates) {
-    const ok = recomputeDailySummary(date, userId);
-    if (ok) {
-      result.dates_recomputed += 1;
-    } else {
-      allRecomputesOk = false;
-      log.error(
-        { user_id: userId, date },
-        "sleep wake-day backfill: daily_summary recompute failed",
-      );
-    }
-  }
-
-  if (!allRecomputesOk) {
-    // Do not write the marker — some `daily_summary` rows may still carry
-    // pre-migration values. The row re-dating already committed (it's
-    // idempotent and safe to have applied), but leaving the marker absent
-    // means the NEXT sync retries this function rather than declaring the
-    // migration done on a partial pass.
-    log.warn(
-      { user_id: userId, ...result },
-      "sleep wake-day backfill: one or more daily_summary recomputes failed — marker withheld",
-    );
-    return result;
-  }
-
+  // Only reached if the transaction above committed cleanly — a throw from
+  // inside it (e.g. SQLITE_BUSY on a recompute) propagates past this point
+  // uncaught, so the marker is never written. `runWhoopSync` catches it
+  // into `details.sleep_backfill_error` without failing the sync, and the
+  // next sync gets a clean retry against the still-unmigrated rows.
   setSetting(
     key,
     JSON.stringify({ completed_at: new Date().toISOString(), ...result }),
@@ -1103,6 +1160,7 @@ export async function runWhoopSync(
     fetch_breakdown: {},
     page_counts: {},
     summary_dates: 0,
+    sleep_missing_end_skipped: 0,
   };
   const baseResult: SyncResult = {
     success: false,
@@ -1197,8 +1255,14 @@ export async function runWhoopSync(
 
     opts.onProgress?.({ stage: "upserting" });
     const dbT0 = Date.now();
-    const counts = persistAll(data, opts.userId, opts.signal, tz);
+    const { counts, sleepMissingEndSkipped } = persistAll(
+      data,
+      opts.userId,
+      opts.signal,
+      tz,
+    );
     details.sync_db_ms = Date.now() - dbT0;
+    details.sleep_missing_end_skipped = sleepMissingEndSkipped;
     post = {
       counts,
       fetched: {

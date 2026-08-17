@@ -63,6 +63,7 @@ function makeSuccessSyncResult(overrides: Partial<SyncResult> = {}): SyncResult 
       fetch_breakdown: {},
       page_counts: {},
       summary_dates: 1,
+      sleep_missing_end_skipped: 0,
     },
     ...overrides,
   };
@@ -85,6 +86,7 @@ function makeErrorSyncResult(overrides: Partial<SyncResult> = {}): SyncResult {
       fetch_breakdown: {},
       page_counts: {},
       summary_dates: 0,
+      sleep_missing_end_skipped: 0,
     },
     ...overrides,
   };

@@ -39,16 +39,21 @@ function parseLocalDateTime(s: string | null): Date | null {
   );
 }
 
-/** The calendar date component of a naive local ISO string, straight from
- *  the text — no Date round-trip. Used to label bedtime and wake time with
- *  their OWN calendar day: `r.date` (issue #440) is the wake day, so for a
- *  midnight-spanning night the bed time actually happened the evening
- *  BEFORE `r.date`, and showing just `r.date` above both timestamps would
- *  misleadingly imply the bedtime happened on the wake day too. */
-function localDatePart(s: string | null): string | null {
-  if (!s) return null;
-  const m = s.match(/^(\d{4}-\d{2}-\d{2})T/);
-  return m ? m[1] : null;
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/** The calendar date `d` was constructed with, read back via the same
+ *  local getters `hoursFrom8pm` uses — `parseLocalDateTime` builds `d` from
+ *  the naive local ISO's numeric components directly, so this round-trips
+ *  those exact numbers regardless of the runtime's own timezone. Used to
+ *  label bedtime and wake time with their OWN calendar day: `r.date`
+ *  (issue #440) is the wake day, so for a midnight-spanning night the bed
+ *  time actually happened the evening BEFORE `r.date`, and showing just
+ *  `r.date` above both timestamps would misleadingly imply the bedtime
+ *  happened on the wake day too. */
+function localDatePart(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
 function hoursFrom8pm(d: Date): number {
@@ -134,8 +139,8 @@ export default function BedWakeTimeline({ rows }: Props) {
     if (bed > CHART_HOURS && wake > CHART_HOURS) continue;
     data.push({
       date: r.date,
-      bedDate: localDatePart(r.start_local) ?? r.date,
-      wakeDate: localDatePart(r.end_local) ?? r.date,
+      bedDate: localDatePart(startDt),
+      wakeDate: localDatePart(endDt),
       bed: Math.max(0, Math.min(bed, CHART_HOURS)),
       wake: Math.max(0, Math.min(wake, CHART_HOURS)),
       duration: (endDt.getTime() - startDt.getTime()) / 3_600_000,

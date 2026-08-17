@@ -76,6 +76,17 @@ export async function handleEvent(evt: WhoopWebhookEvent): Promise<HandleEventOu
   switch (evt.type) {
     case "sleep.updated": {
       const r = await whoopGet<WhoopSleepRecord>(`/v2/activity/sleep/${evt.id}`, { userId });
+      // Gate BEFORE touching date logic at all — mirrors upsertSleep's own
+      // guard. Not yet scored (or no score payload) means upsertSleep is a
+      // no-op, so there's nothing to re-date or recompute. This also keeps
+      // `sleepSummaryDate` (which throws when `end` is missing, issue #440)
+      // away from a PENDING_SCORE record that may not carry `end` yet —
+      // un-gated, that throw would turn a webhook we should accept as a
+      // no-op into a 502, and Whoop's 5 retries into a DLQ `failed` row
+      // (issue #440 review, second pass, WARN 3).
+      if (r.score_state !== "SCORED" || !r.score) {
+        return { kind: "handled" };
+      }
       // Read the row's CURRENT date BEFORE the upsert overwrites it — a row
       // already on a different date (e.g. a legacy row still on its
       // pre-migration start-day date, the first time this webhook touches

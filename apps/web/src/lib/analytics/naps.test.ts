@@ -21,6 +21,18 @@ function nap(date: string, overrides: Partial<NapRow> = {}): NapRow {
   };
 }
 
+function prevDateStr(date: string): string {
+  const d = new Date(date + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+// `date` is the WAKE day (issue #440). Default `start_local`/`end_local`
+// mirror a real midnight-spanning night — bed the evening BEFORE `date`,
+// wake on `date` itself — so `end_local` is never before `start_local` on
+// the same calendar day (this function doesn't use either field, but a
+// self-contradictory fixture is bad documentation of the contract these
+// tests establish).
 function sleep(date: string, overrides: Partial<SleepRow> = {}): SleepRow {
   return {
     date,
@@ -40,7 +52,7 @@ function sleep(date: string, overrides: Partial<SleepRow> = {}): SleepRow {
     need_from_debt_ms: 0,
     need_from_strain_ms: 0,
     need_from_nap_ms: null,
-    start_local: `${date}T23:00:00`,
+    start_local: `${prevDateStr(date)}T23:00:00`,
     end_local: `${date}T07:00:00`,
     ...overrides,
   };
