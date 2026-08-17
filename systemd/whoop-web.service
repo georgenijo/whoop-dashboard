@@ -10,7 +10,14 @@ WorkingDirectory=/home/george/Documents/whoop-dashboard/apps/web
 ExecStart=/home/george/.nvm/versions/node/v20.20.2/bin/node node_modules/.bin/next start -p 8501 -H 127.0.0.1
 Restart=always
 RestartSec=5
-MemoryMax=512M
+# Sized for the host, not for the app. 512M was correct on the 956MB Oracle
+# VM; on opti (7806MB) it only preserved the failure mode from #475-A, where
+# the cgroup sat pegged at its ceiling (memory.peak == memory.max, 451
+# reclaim-at-limit stalls) and cursor-agent — which spawns inside this
+# cgroup — was killed by a signal mid-turn. 2G is ~25% of host, still bounds
+# a runaway. This does NOT relax the Cursor LSP containment from #464: the
+# per-turn allowlist shim PATH is what stops `npx` resolving, not this cap.
+MemoryMax=2G
 Environment=NODE_ENV=production
 Environment=PATH=/home/george/.nvm/versions/node/v20.20.2/bin:/usr/bin:/usr/local/bin
 NoNewPrivileges=yes
