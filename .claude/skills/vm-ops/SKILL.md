@@ -44,7 +44,7 @@ redeploying, or touching the retired Oracle archive.
 | Canonical DB | `/home/george/Documents/whoop-dashboard/shared/whoop_data.db` |
 | Hardening | `NoNewPrivileges`, `PrivateTmp`, `ProtectSystem=full` on the unit |
 | Public ingress | shared system `cloudflared.service`, config `/etc/cloudflared/config.yml`, tunnel `opti-murmur` (`dac9359e-51bd-4ad9-8389-dd510127c04e`) — no nginx, no certbot, no public IP |
-| Access control | `coach.georgenijo.com` is gated by Cloudflare Access (george.nijo8@gmail.com) with a path-scoped bypass app for the Whoop webhook; `coach-api.georgenijo.com` stays bearer-only, no Access |
+| Access control | In-app only. `apps/web/src/proxy.ts` `authGate()` 307s page requests to `/signin` and returns JSON 401 for API routes, with `requireAuth()` (Bearer → Cookie → 401) behind it. Exempt prefixes: `/signin`, `/api/auth/`, `/api/whoop/webhook`, `/api/admin/`, `/api/health`. **Cloudflare Access was dropped in Phase B-cleanup (PR #332, 2026-05-12)** — there is no Access app, no service token, and no path-scoped bypass in front of either hostname. Widening the exempt list is a policy change and needs a Decisions Log entry. |
 | Firewall | `ufw` default-deny; tailnet fully trusted; LAN-scoped allows only for Home Assistant / go2rtc (unrelated to whoop-dashboard, but part of the host's posture) |
 
 ## Status and logs
@@ -72,8 +72,9 @@ pipeline (`releases/`/`current` symlink swap, user-level services) was removed
 when production moved here, so the script and the box agree again.
 
 ```bash
-scripts/deploy            # fetch + reset --hard origin/main, build, restart, verify
-scripts/deploy --check    # report deployed sha vs origin/main, change nothing
+scripts/deploy            # deploy origin/main
+scripts/deploy --ref <r>  # deploy a specific ref (resolved on opti)
+scripts/deploy --check    # report drift only (deployed / serving / target)
 ```
 
 `--check` is safe to run at any time: it only updates the checkout's
@@ -81,12 +82,29 @@ scripts/deploy --check    # report deployed sha vs origin/main, change nothing
 prints the deployed sha, `origin/main`, and service state. It does not touch
 the working tree, the service, or the database.
 
-Two limits to know before relying on it:
+A full run guarantees, in order:
 
-- It deploys `origin/main` only. There is no `--ref` flag; passing one exits 2.
-- It does **not** snapshot the database. Rollback is build-level only
-  (`.next.prev`). Take the manual online backup below first if the revision
-  touches schema.
+- **DB snapshot first** — `sqlite3 -readonly ... VACUUM INTO` into
+  `/home/george/whoop-db-backups/` (newest 10 kept), asserted with `PRAGMA
+  quick_check` and a table-count comparison against the live DB. Never `cp`:
+  the DB is WAL mode with a live writer, so a raw copy can restore as an
+  EMPTY database, and a copy straddling a checkpoint can tear it — both
+  exit 0.
+- **Detached `npm ci` and detached `next build`**, each via `setsid` plus an
+  exit-code sentinel polled over fresh connections, so a dropped Fleet
+  connection cannot orphan a build holding the lock or leave `node_modules`
+  half-populated under the running service (#516, #523). The install step is
+  skipped entirely when `package-lock.json` is unchanged.
+- **Sha verification** — the deployed commit is compared against what
+  `/api/health` actually reports. "The service is up" does not catch a
+  restart that kept serving the old bundle.
+- **Rollback recipe printed** on success and on any failure after the
+  snapshot, covering both the build-level rollback (`.next.prev`) and the DB
+  restore. Delete the `-wal`/`-shm` sidecars FIRST when restoring, or a
+  leftover WAL replays onto the restored file and blends two database states.
+
+The build-level rollback is **single-step only** — the next deploy overwrites
+`.next.prev`.
 
 The equivalent manual sequence, if you need to drive it by hand:
 
