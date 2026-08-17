@@ -50,6 +50,15 @@
 #      the operator's local checkout (which is usually a different branch, and
 #      must never influence what prod builds with). Missing or malformed is
 #      FATAL, never a silent fallback; DEPLOY_NODE_VERSION is the escape hatch.
+#   7. SERIALIZE THE WHOLE MUTATING SEQUENCE UNDER ONE ON-BOX LOCK. Two deploys
+#      started close together both reach the sync phase; one `reset --hard`s the
+#      shared checkout to sha A while the other is mid-flight toward sha B, and
+#      the snapshot, the build and the sha check then describe three different
+#      commits (issue #469). Per-phase pgrep guards cannot see this — each one
+#      is individually correct and the COMPOSITION is not. Phases 1-5 therefore
+#      run inside a single flock taken on opti, because opti's working tree is
+#      the contended resource: two operators on two laptops must contend, and a
+#      lock on either laptop would not make them. See acquire_deploy_lock.
 #
 # Usage:
 #   scripts/deploy              # deploy origin/main
