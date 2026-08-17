@@ -3,7 +3,16 @@ import path from "node:path";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import Database from "better-sqlite3";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 
 vi.mock("server-only", () => ({}));
 
@@ -549,6 +558,54 @@ function cycleCount(): number {
   }
 }
 
+function dayStrain(userId: number, date: string): number | null {
+  const db = new Database(dbFile);
+  try {
+    const row = db
+      .prepare(
+        "SELECT day_strain FROM daily_summary WHERE user_id = ? AND date = ?",
+      )
+      .get(userId, date) as { day_strain: number | null } | undefined;
+    return row?.day_strain ?? null;
+  } finally {
+    db.close();
+  }
+}
+
+/** The one-time historical backfill (#415) writes a per-user `app_settings`
+ *  marker. Tests that exercise the routine reconcile pre-set it; tests that
+ *  exercise the backfill itself clear it. */
+function setBackfillMarker(userId: number, done: boolean): void {
+  const db = new Database(dbFile);
+  try {
+    const key = `cycles_backfill_v1:user:${userId}`;
+    if (done) {
+      db.prepare(
+        "INSERT INTO app_settings (key, value) VALUES (?, ?) " +
+          "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      ).run(key, JSON.stringify({ completed_at: "2026-01-01T00:00:00.000Z" }));
+    } else {
+      db.prepare("DELETE FROM app_settings WHERE key = ?").run(key);
+    }
+  } finally {
+    db.close();
+  }
+}
+
+function backfillMarker(userId: number): string | null {
+  const db = new Database(dbFile);
+  try {
+    const row = db
+      .prepare("SELECT value FROM app_settings WHERE key = ?")
+      .get(`cycles_backfill_v1:user:${userId}`) as
+      | { value: string }
+      | undefined;
+    return row?.value ?? null;
+  } finally {
+    db.close();
+  }
+}
+
 function unscoredCycleRecord(date: string) {
   return {
     id: 99,
@@ -559,8 +616,23 @@ function unscoredCycleRecord(date: string) {
 }
 
 describe("reconcileCycles (issue #415)", () => {
+  beforeEach(() => {
+    // The look-back default is env-overridable, so pin it for every test in
+    // this block: an empty value is falsy, so `defaultCyclesReconcileLookbackDays`
+    // falls through to the built-in 30. Without this the suite fails on any
+    // machine with CYCLES_RECONCILE_LOOKBACK_DAYS exported.
+    vi.stubEnv("CYCLES_RECONCILE_LOOKBACK_DAYS", "");
+    // Most tests here exercise the routine bounded reconcile; pretend the
+    // one-time historical backfill already happened.
+    setBackfillMarker(1, true);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("nothing orphaned: makes zero Whoop API calls", async () => {
-    const date = daysAgoDateStr(5);
+    const date = daysAgoDateStr(10);
     seedRecoveryOnly(1, date);
     const db = new Database(dbFile);
     try {
@@ -574,7 +646,7 @@ describe("reconcileCycles (issue #415)", () => {
     const result = await syncMod.reconcileCycles(1, "UTC");
 
     expect(result).toEqual({
-      lookback_days: 21,
+      lookback_days: 30,
       orphans_found: 0,
       healed: 0,
       still_missing: 0,
@@ -583,8 +655,8 @@ describe("reconcileCycles (issue #415)", () => {
     expect(whoopGetAllMock).not.toHaveBeenCalled();
   });
 
-  it("orphan found and now SCORED: heals it with a single bounded fetch", async () => {
-    const date = daysAgoDateStr(5);
+  it("orphan found and now SCORED: heals it and recomputes daily_summary", async () => {
+    const date = daysAgoDateStr(10);
     seedRecoveryOnly(1, date);
     whoopGetAllMock.mockImplementation(async (endpoint: string) => {
       expect(endpoint).toBe("/v2/cycle");
@@ -594,7 +666,7 @@ describe("reconcileCycles (issue #415)", () => {
     const result = await syncMod.reconcileCycles(1, "UTC");
 
     expect(result).toEqual({
-      lookback_days: 21,
+      lookback_days: 30,
       orphans_found: 1,
       healed: 1,
       still_missing: 0,
@@ -602,10 +674,26 @@ describe("reconcileCycles (issue #415)", () => {
     });
     expect(whoopGetAllMock).toHaveBeenCalledTimes(1);
     expect(cycleCount()).toBe(1);
+    // The heal and its daily_summary recompute share one transaction — a
+    // written cycles row must never leave day_strain NULL behind it.
+    expect(dayStrain(1, date)).toBe(12.5);
+  });
+
+  it("reports api_calls as the number of upstream pages, not the number of fetches", async () => {
+    const date = daysAgoDateStr(10);
+    seedRecoveryOnly(1, date);
+    whoopGetAllMock.mockImplementation(async () => ({
+      records: [cycleRecord(date)],
+      pageCount: 5,
+    }));
+
+    const result = await syncMod.reconcileCycles(1, "UTC");
+
+    expect(result.api_calls).toBe(5);
   });
 
   it("orphan still unscored: writes nothing, doesn't throw, and doesn't loop", async () => {
-    const date = daysAgoDateStr(5);
+    const date = daysAgoDateStr(10);
     seedRecoveryOnly(1, date);
     whoopGetAllMock.mockImplementation(async () => ({
       records: [unscoredCycleRecord(date)],
@@ -614,7 +702,7 @@ describe("reconcileCycles (issue #415)", () => {
 
     const first = await syncMod.reconcileCycles(1, "UTC");
     expect(first).toEqual({
-      lookback_days: 21,
+      lookback_days: 30,
       orphans_found: 1,
       healed: 0,
       still_missing: 1,
@@ -638,26 +726,203 @@ describe("reconcileCycles (issue #415)", () => {
     expect(whoopGetAllMock).not.toHaveBeenCalled();
   });
 
-  it("respects a custom lookbackDays — orphan outside the window is ignored", async () => {
-    seedRecoveryOnly(1, daysAgoDateStr(30));
+  it("skipRecentDays excludes dates the caller's own fetch just covered", async () => {
+    // Yesterday's cycle routinely has no score yet — it closes at the next
+    // sleep onset. It is inside every 7-day sync window, so `persistAll` will
+    // write it the moment it scores; reporting it as an orphan and re-fetching
+    // it is a guaranteed-empty round trip that also poisons still_missing.
+    seedRecoveryOnly(1, daysAgoDateStr(1));
+    seedRecoveryOnly(1, daysAgoDateStr(3));
 
-    const result = await syncMod.reconcileCycles(1, "UTC", {
-      lookbackDays: 21,
+    const skipped = await syncMod.reconcileCycles(1, "UTC", {
+      skipRecentDays: 7,
     });
+    expect(skipped.orphans_found).toBe(0);
+    expect(whoopGetAllMock).not.toHaveBeenCalled();
 
-    expect(result.orphans_found).toBe(0);
+    // Same DB state, default skip (today only) — proves the dates are really
+    // there and it's `skipRecentDays` doing the excluding.
+    whoopGetAllMock.mockImplementation(async () => ({
+      records: [],
+      pageCount: 1,
+    }));
+    const notSkipped = await syncMod.reconcileCycles(1, "UTC");
+    expect(notSkipped.orphans_found).toBe(2);
+  });
+
+  it("respects a non-default lookbackDays in both directions", async () => {
+    const date = daysAgoDateStr(45);
+    seedRecoveryOnly(1, date);
+
+    // Outside the 30-day default.
+    const narrow = await syncMod.reconcileCycles(1, "UTC");
+    expect(narrow.lookback_days).toBe(30);
+    expect(narrow.orphans_found).toBe(0);
+    expect(whoopGetAllMock).not.toHaveBeenCalled();
+
+    // Widened past it — the same orphan is now found. This is the assertion
+    // the previous version of this test lacked: it passed `21`, the default,
+    // so it would have passed identically had `opts.lookbackDays` been ignored.
+    whoopGetAllMock.mockImplementation(async () => ({
+      records: [cycleRecord(date)],
+      pageCount: 1,
+    }));
+    const wide = await syncMod.reconcileCycles(1, "UTC", { lookbackDays: 60 });
+    expect(wide.lookback_days).toBe(60);
+    expect(wide.orphans_found).toBe(1);
+    expect(wide.healed).toBe(1);
+  });
+
+  it("reads the default look-back from CYCLES_RECONCILE_LOOKBACK_DAYS", async () => {
+    const date = daysAgoDateStr(45);
+    seedRecoveryOnly(1, date);
+    whoopGetAllMock.mockImplementation(async () => ({
+      records: [cycleRecord(date)],
+      pageCount: 1,
+    }));
+
+    vi.stubEnv("CYCLES_RECONCILE_LOOKBACK_DAYS", "60");
+    const result = await syncMod.reconcileCycles(1, "UTC");
+
+    expect(result.lookback_days).toBe(60);
+    expect(result.orphans_found).toBe(1);
+    expect(result.healed).toBe(1);
+  });
+
+  it("ignores a non-numeric or non-positive CYCLES_RECONCILE_LOOKBACK_DAYS", async () => {
+    for (const bad of ["not-a-number", "0", "-5"]) {
+      vi.stubEnv("CYCLES_RECONCILE_LOOKBACK_DAYS", bad);
+      const result = await syncMod.reconcileCycles(1, "UTC");
+      expect(result.lookback_days).toBe(30);
+    }
+  });
+});
+
+describe("cycles historical backfill (issue #415)", () => {
+  beforeEach(() => {
+    vi.stubEnv("CYCLES_RECONCILE_LOOKBACK_DAYS", "");
+    setBackfillMarker(1, false);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("heals orphans older than the routine look-back, then never runs again", async () => {
+    const date = daysAgoDateStr(120);
+    seedRecoveryOnly(1, date);
+    whoopGetAllMock.mockImplementation(async () => ({
+      records: [cycleRecord(date)],
+      pageCount: 1,
+    }));
+
+    // Well outside the 30-day routine band — the routine pass can't see it.
+    const routine = await syncMod.reconcileCycles(1, "UTC");
+    expect(routine.orphans_found).toBe(0);
+
+    const first = await syncMod.backfillOrphanedCyclesOnce(1, "UTC");
+    expect(first).toEqual({
+      lookback_days: 0,
+      orphans_found: 1,
+      healed: 1,
+      still_missing: 0,
+      api_calls: 1,
+    });
+    expect(cycleCount()).toBe(1);
+    expect(dayStrain(1, date)).toBe(12.5);
+    expect(backfillMarker(1)).toContain("completed_at");
+
+    // Marker present → no scan, no fetch, no result.
+    whoopGetAllMock.mockClear();
+    const second = await syncMod.backfillOrphanedCyclesOnce(1, "UTC");
+    expect(second).toBeNull();
     expect(whoopGetAllMock).not.toHaveBeenCalled();
   });
 
-  it("runWhoopSync wires reconcile results into details.reconcile", async () => {
+  it("marks itself complete even when some orphans are still unscored upstream", async () => {
+    const date = daysAgoDateStr(120);
+    seedRecoveryOnly(1, date);
+    whoopGetAllMock.mockImplementation(async () => ({
+      records: [unscoredCycleRecord(date)],
+      pageCount: 1,
+    }));
+
+    const first = await syncMod.backfillOrphanedCyclesOnce(1, "UTC");
+    expect(first).toMatchObject({ orphans_found: 1, healed: 0, still_missing: 1 });
+    // Dates Whoop has no scored cycle for will never become scored by asking
+    // again every sync — don't re-run the wide scan forever.
+    expect(await syncMod.backfillOrphanedCyclesOnce(1, "UTC")).toBeNull();
+  });
+
+  it("retries on the next sync if the pass threw", async () => {
+    seedRecoveryOnly(1, daysAgoDateStr(120));
+    whoopGetAllMock.mockImplementation(async () => {
+      throw new Error("upstream 503");
+    });
+
+    await expect(
+      syncMod.backfillOrphanedCyclesOnce(1, "UTC"),
+    ).rejects.toThrow("upstream 503");
+    expect(backfillMarker(1)).toBeNull();
+  });
+
+  it("chunks the fetch so no single query exceeds Whoop's range cap", async () => {
+    // Two orphans 200 days apart: one 90-day-capped chunk each, and the ~200
+    // days of healthy history between them is never fetched at all.
+    const older = daysAgoDateStr(260);
+    const newer = daysAgoDateStr(60);
+    seedRecoveryOnly(1, older);
+    seedRecoveryOnly(1, newer);
+    whoopGetAllMock.mockImplementation(async () => ({
+      records: [],
+      pageCount: 1,
+    }));
+
+    const result = await syncMod.backfillOrphanedCyclesOnce(1, "UTC");
+
+    expect(result).toMatchObject({ orphans_found: 2, still_missing: 2 });
+    expect(whoopGetAllMock).toHaveBeenCalledTimes(2);
+    for (const call of whoopGetAllMock.mock.calls) {
+      const { start, end } = call[1] as { start: string; end: string };
+      const spanDays =
+        (Date.parse(end) - Date.parse(start)) / 86_400_000;
+      expect(spanDays).toBeLessThanOrEqual(180);
+    }
+  });
+
+  it("is scoped per user — one user's marker doesn't suppress another's backfill", async () => {
+    const date = daysAgoDateStr(120);
+    seedRecoveryOnly(1, date);
+    seedRecoveryOnly(7, date);
+    whoopGetAllMock.mockImplementation(async () => ({
+      records: [],
+      pageCount: 1,
+    }));
+
+    expect(await syncMod.backfillOrphanedCyclesOnce(1, "UTC")).not.toBeNull();
+    expect(await syncMod.backfillOrphanedCyclesOnce(1, "UTC")).toBeNull();
+    expect(await syncMod.backfillOrphanedCyclesOnce(7, "UTC")).not.toBeNull();
+  });
+});
+
+describe("runWhoopSync + cycles reconcile wiring (issue #415)", () => {
+  beforeEach(() => {
+    vi.stubEnv("CYCLES_RECONCILE_LOOKBACK_DAYS", "");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("wires reconcile results into details.reconcile", async () => {
+    setBackfillMarker(1, true);
     wireHappyPath();
 
     const result = await syncMod.runWhoopSync({ userId: 1 });
 
     expect(result.success).toBe(true);
-    expect(result.details.reconcile).toBeDefined();
     expect(result.details.reconcile).toEqual({
-      lookback_days: 21,
+      lookback_days: 30,
       orphans_found: 0,
       healed: 0,
       still_missing: 0,
@@ -669,6 +934,62 @@ describe("reconcileCycles (issue #415)", () => {
       (c) => c[0] === "/v2/cycle",
     );
     expect(cycleCalls).toHaveLength(1);
+  });
+
+  it("does not re-fetch a date the sync's own window already covered", async () => {
+    // runWhoopSync is fetch -> persistAll -> reconcile. A recovery-only date
+    // inside the fetched window is, by construction, one upstream just
+    // reported as unscored; re-querying the identical range for the identical
+    // answer is a deterministic waste. Before this fix the sync issued two
+    // /v2/cycle calls here, the second a strict subset of the first.
+    setBackfillMarker(1, true);
+    seedRecoveryOnly(1, daysAgoDateStr(3));
+    wireHappyPath();
+
+    const result = await syncMod.runWhoopSync({ userId: 1 });
+
+    expect(result.success).toBe(true);
+    expect(result.details.reconcile?.orphans_found).toBe(0);
+    expect(result.details.reconcile?.still_missing).toBe(0);
+    const cycleCalls = whoopGetAllMock.mock.calls.filter(
+      (c) => c[0] === "/v2/cycle",
+    );
+    expect(cycleCalls).toHaveLength(1);
+  });
+
+  it("runs the one-time backfill on first sync and the routine pass thereafter", async () => {
+    setBackfillMarker(1, false);
+    wireHappyPath();
+
+    const first = await syncMod.runWhoopSync({ userId: 1 });
+    expect(first.details.cycles_backfill).toBeDefined();
+    // Superset of the routine band, so the routine pass is skipped that once.
+    expect(first.details.reconcile).toBeUndefined();
+
+    const second = await syncMod.runWhoopSync({ userId: 1 });
+    expect(second.details.cycles_backfill).toBeUndefined();
+    expect(second.details.reconcile).toBeDefined();
+  });
+
+  it("a reconcile failure never fails an otherwise-successful sync", async () => {
+    setBackfillMarker(1, true);
+    seedRecoveryOnly(1, daysAgoDateStr(20));
+    wireHappyPath();
+    const happy = whoopGetAllMock.getMockImplementation()!;
+    let cycleCalls = 0;
+    whoopGetAllMock.mockImplementation(async (endpoint: string, ...rest: unknown[]) => {
+      if (endpoint === "/v2/cycle" && ++cycleCalls > 1) {
+        throw new Error("upstream 503");
+      }
+      return happy(endpoint, ...rest);
+    });
+
+    const result = await syncMod.runWhoopSync({ userId: 1 });
+
+    expect(result.success).toBe(true);
+    expect(result.partial).toBeUndefined();
+    expect(result.details.reconcile).toBeUndefined();
+    expect(result.details.reconcile_error).toBe("upstream 503");
   });
 });
 
