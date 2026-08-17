@@ -139,4 +139,14 @@ describe("ChatInput image attachments", () => {
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
     expect(screen.getByText("Switching model…")).toBeInTheDocument();
   });
+
+  it("shows live Coach progress with the activity mark", () => {
+    const { container } = renderInput({
+      loading: true,
+      progressLabel: "Querying recovery…",
+    });
+
+    expect(screen.getByRole("status")).toHaveTextContent("Querying recovery…");
+    expect(container.querySelector(".coach-activity-mark.is-active")).not.toBeNull();
+  });
 });

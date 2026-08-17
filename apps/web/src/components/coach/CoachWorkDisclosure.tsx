@@ -5,6 +5,7 @@ import type {
   CoachWorkLog,
 } from "@/lib/coach/work-log-types";
 import { useEffect, useRef, useState } from "react";
+import CoachActivityMark from "./CoachActivityMark";
 import CoachToolCall, { formatWorkDuration } from "./CoachToolCall";
 import { workPhaseLabel } from "./useChatSend";
 
@@ -87,18 +88,33 @@ export default function CoachWorkDisclosure({
       className={`coach-work-disclosure ${workLog.status}`}
     >
       <summary>
-        <span>{disclosureLabel(workLog, elapsedMs)}</span>
+        <CoachActivityMark active={workLog.status === "running"} />
+        <span className="coach-work-summary-label">
+          {disclosureLabel(workLog, elapsedMs)}
+        </span>
         <span className="coach-work-caret" aria-hidden="true" />
       </summary>
       <div className="coach-work-body">
         {workLog.notes.map((note, index) => (
-          <p className="coach-work-note" key={`${index}:${note}`}>
-            {note}
-          </p>
+          <div className="coach-work-trace-row" key={`${index}:${note}`}>
+            <span className="coach-work-step complete" aria-hidden="true">
+              <svg viewBox="0 0 16 16">
+                <path d="m4 8 2.5 2.5L12 5" />
+              </svg>
+            </span>
+            <p className="coach-work-note">{note}</p>
+          </div>
         ))}
-        {phase ? <div className="coach-work-phase">{phase}</div> : null}
+        {phase ? (
+          <div className="coach-work-trace-row is-current">
+            <span className="coach-work-step running" aria-hidden="true" />
+            <div className="coach-work-phase">{phase}</div>
+          </div>
+        ) : null}
         {workLog.tools.length === 0 ? (
-          <div className="coach-work-empty">No tool calls</div>
+          workLog.status === "running" ? null : (
+            <div className="coach-work-empty">No tool calls</div>
+          )
         ) : (
           <div className="coach-tool-list">
             {previous.length > 0 ? (

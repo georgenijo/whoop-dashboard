@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-17: Beautiful UI augments Coach's live states
+
+**Decision:** Adapt Beautiful UI's Thinking, Tool Chips/Task Rows, Streaming Text, and Chat/Prompt Bar interaction grammar onto Coach's existing work log, tool activity, answer stream, and composer. Do not copy demo timelines or expose provider-private chain-of-thought; the trace may show only already-visible commentary, operational phase labels, and bounded tool input/output. Components without a matching live Coach state remain out of scope.
+
+**Rationale:** Coach already owns the underlying SSE, persistence, accessibility, attachments, model controls, and Quiet Instrument layout. Binding visual upgrades to those real contracts improves feedback without creating a second chat architecture, fake progress, hard-coded demo data, or a hidden-reasoning disclosure risk.
+
+**Status:** active
+
+**References:** `apps/web/src/components/coach/CoachWorkDisclosure.tsx`, `apps/web/src/components/coach/CoachToolCall.tsx`, `apps/web/src/components/coach/MessageBubble.tsx`, `apps/web/src/components/coach/ChatInput.tsx`, Beautiful UI component brief artifact `art_20260817T193243Z_efeaf3104f`
+
+---
+
 ## 2026-08-16: CSP ships report-only, and its violations are collected authenticated
 
 **Decision:** Split the app's Content-Security-Policy in two. A small enforcing header (`frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`, plus `upgrade-insecure-requests` in production) ships immediately from `next.config.ts` alongside `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy` and HSTS. The full candidate policy — `default-src 'self'`, nonce-based `script-src 'self'`, `img-src 'self' data: blob:` — ships as `Content-Security-Policy-Report-Only` from `src/proxy.ts`, which is the only place a per-request nonce can be minted. Violations are collected from the `securitypolicyviolation` DOM event and forwarded through the existing authenticated `/api/log/client`, land in `client_logs`, and render on `/logs` under a "Client events" card (`recentClientLogs` in `apps/web/src/lib/db/client-logs.ts`, previously written but never read — added as part of the same PR). No `report-uri`/`report-to` endpoint is added, and `AUTH_EXEMPT_PREFIXES` is unchanged. Flipping the candidate policy to enforcing is a separate, later change that must be justified by the collected reports — with the coverage limits below taken into account, not just an empty-looking report window.
