@@ -206,18 +206,20 @@ export function upsertSleep(record: WhoopSleepRecord, userId: number, tz: string
   }
 }
 
+// KEEP IN SYNC WITH streamlit/whoop/db.py:187-206 (sync_cycles column order)
+const CYCLE_UPSERT_SQL = `
+  INSERT OR REPLACE INTO cycles
+    (user_id, date, strain, kilojoule, avg_hr, max_hr, raw)
+  VALUES
+    (@user_id, @date, @strain, @kilojoule, @avg_hr, @max_hr, @raw)
+`;
+
 export function upsertCycle(record: WhoopCycleRecord, userId: number, tz: string): boolean {
   if (record.score_state !== "SCORED" || !record.score) return false;
   const db = openWrite();
   if (!db) return false;
   try {
-    // KEEP IN SYNC WITH streamlit/whoop/db.py:187-206 (sync_cycles column order)
-    db.prepare(`
-      INSERT OR REPLACE INTO cycles
-        (user_id, date, strain, kilojoule, avg_hr, max_hr, raw)
-      VALUES
-        (@user_id, @date, @strain, @kilojoule, @avg_hr, @max_hr, @raw)
-    `).run({
+    db.prepare(CYCLE_UPSERT_SQL).run({
       user_id: userId,
       date: parseDate(record.start, tz),
       strain: record.score.strain,
@@ -227,6 +229,61 @@ export function upsertCycle(record: WhoopCycleRecord, userId: number, tz: string
       raw: JSON.stringify(record),
     });
     return true;
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Upsert a batch of cycle records AND recompute `daily_summary` for every
+ * date they touch — one connection, one transaction.
+ *
+ * Exists because looping `upsertCycle` + `recomputeDailySummary` per record
+ * opens two write connections per healed date (each paying the lazy-ALTER
+ * migration check called out in issue #505) and, worse, is not atomic: a
+ * throw partway through leaves `cycles.strain` written for some dates while
+ * `daily_summary.day_strain` stays NULL for them, so /overview and /strain
+ * disagree with the cycles table until something else touches the day.
+ * `persistAll` in `sync.ts` already uses the single-transaction shape; the
+ * cycles reconcile (#415) uses this to match it.
+ *
+ * Records that aren't `SCORED` are skipped. Duplicate records for the same
+ * date are LAST-write-wins, matching `persistAll`'s `INSERT OR REPLACE` loop.
+ *
+ * Returns the distinct dates written, in first-seen order.
+ */
+export function upsertCyclesAndRecompute(
+  records: WhoopCycleRecord[],
+  userId: number,
+  tz: string,
+): string[] {
+  const db = openWrite();
+  if (!db) return [];
+  try {
+    const stmt = db.prepare(CYCLE_UPSERT_SQL);
+    return db.transaction(() => {
+      const dates: string[] = [];
+      const seen = new Set<string>();
+      for (const record of records) {
+        if (record.score_state !== "SCORED" || !record.score) continue;
+        const date = parseDate(record.start, tz);
+        stmt.run({
+          user_id: userId,
+          date,
+          strain: record.score.strain,
+          kilojoule: record.score.kilojoule,
+          avg_hr: record.score.average_heart_rate,
+          max_hr: record.score.max_heart_rate,
+          raw: JSON.stringify(record),
+        });
+        if (!seen.has(date)) {
+          seen.add(date);
+          dates.push(date);
+        }
+      }
+      for (const date of dates) _recomputeInDb(db, date, userId);
+      return dates;
+    })();
   } finally {
     db.close();
   }
