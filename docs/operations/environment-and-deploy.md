@@ -131,6 +131,46 @@ curl -fsS https://coach-api.georgenijo.com/api/health
 No production secret or database is copied into GitHub or a release
 directory.
 
+### Concurrent deploys
+
+`scripts/deploy` takes an on-box lock (a directory, `/tmp/whoop-deploy.lock`
+by default, overridable with `DEPLOY_LOCK_DIR`) on opti for the snapshot,
+sync, install, build and restart phases — the resource being protected is
+opti's checkout, not the operator's machine, so two operators on two
+different laptops correctly contend for the same lock (issue #469).
+`scripts/deploy --check` is read-only and never takes it.
+
+A second deploy started while one is already running fails immediately with:
+
+```
+FAILED: another deploy is already running on opti
+   holder pid:  <sentinel pid>
+   started:     <UTC timestamp>
+   ...
+```
+
+This is not a queue — the second invocation exits, it does not wait. Re-run
+it once the first deploy finishes.
+
+If the named holder is confirmed dead (the box crashed mid-deploy, or the
+holder was `kill -9`'d) but the message reappears rather than self-healing,
+clear the lock by hand:
+
+```bash
+fleet exec opti 'kill <pid> 2>/dev/null; rm -rf /tmp/whoop-deploy.lock'
+```
+
+One case deliberately does **not** self-heal automatically and does **not**
+release on exit: if a detached `npm ci` or `next build` hits its poll
+ceiling, or the poller detects an orphaned holder of the build's own
+`.next` lock, `scripts/deploy` leaves the on-box lock HELD rather than
+released, because the mutating step may genuinely still be writing to the
+checkout — releasing would let a second deploy `reset --hard` and `npm ci`
+underneath it. The failure message says the lock was left held and repeats
+the same manual-clear recipe; only run it once you have actually confirmed
+on opti that nothing is still running (`fleet exec opti 'pgrep -af "next
+build|npm ci"'`).
+
 ## Operations
 
 ```bash
