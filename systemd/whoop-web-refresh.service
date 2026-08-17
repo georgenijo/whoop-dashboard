@@ -2,19 +2,22 @@
 Description=Whoop refresh-only keepalive (#273)
 After=network-online.target whoop-web.service
 Wants=network-online.target
-Requires=whoop-web.service
+# After=, not Requires=/Wants=<service>: ordering only. A Requires= on a
+# timer-triggered oneshot would actively START whoop-web every 30 minutes,
+# including while an operator has deliberately stopped it for maintenance.
 
 [Service]
 Type=oneshot
 User=george
-# WHOOP_REFRESH_SECRET is supplied by a root-owned, mode-600 EnvironmentFile
-# at /etc/whoop-web-refresh.env on opti. That file is deliberately NOT
-# checked into this repository — see docs/decisions/DECISIONS.md
-# (2026-08-17) and the PR that introduced this unit for install steps.
-EnvironmentFile=/etc/whoop-web-refresh.env
-# Wrapped in `sh -c` so the shell (not systemd's limited ExecStart word
-# splitting) expands ${WHOOP_REFRESH_SECRET} from the EnvironmentFile above.
-ExecStart=/bin/sh -c 'exec /usr/bin/curl --fail --silent --show-error --max-time 10 -X POST -H "Authorization: Bearer ${WHOOP_REFRESH_SECRET}" http://127.0.0.1:8501/api/whoop/refresh'
+# The Authorization header is read from a root-owned, mode-600 file by curl
+# itself (`-H @file`, curl >=7.55) — NOT expanded into the command line.
+# A secret placed in ExecStart's argv (via `${VAR}` expansion, whether done
+# by systemd natively from an EnvironmentFile or by wrapping in `sh -c`)
+# is world-readable for the life of the process via /proc/<pid>/cmdline and
+# `ps auxww`, 48 times a day. Full install steps, including how this header
+# file and the app's own WHOOP_REFRESH_SECRET stay in sync, are in
+# docs/operations/environment-and-deploy.md — NOT in the decisions log.
+ExecStart=/usr/bin/curl --fail --silent --show-error --max-time 25 -o /dev/null -X POST -H @/etc/whoop-web-refresh.header http://127.0.0.1:8501/api/whoop/refresh
 NoNewPrivileges=yes
 PrivateTmp=true
 ProtectSystem=full

@@ -28,12 +28,21 @@ function makeRequest(
   return new NextRequest(`https://example.test${pathname}`, { headers });
 }
 
+// A request the auth gate let through falls into `NextResponse.next()`,
+// which carries status 200 and an `x-middleware-next: 1` header. A BLOCKED
+// `/api/*` request also has no `Location` header (it's a JSON 401, not a
+// redirect) — so `location` being null does NOT distinguish "let through"
+// from "blocked" for API paths. Assert the actual pass-through signal.
+function expectExempt(res: Response): void {
+  expect(res.status).toBe(200);
+  expect(res.headers.get("x-middleware-next")).toBe("1");
+}
+
 describe("proxy auth gate — exempt prefixes", () => {
   it("lets /api/whoop/webhook through (exact match, canonical form)", async () => {
     const { proxy } = await import("./proxy");
     const res = proxy(makeRequest("/api/whoop/webhook"));
-    // NextResponse.next() returns a response with status 200 and no Location.
-    expect(res.headers.get("location")).toBeNull();
+    expectExempt(res);
   });
 
   it("lets /api/whoop/webhook/ through (trailing-slash variant)", async () => {
@@ -43,31 +52,31 @@ describe("proxy auth gate — exempt prefixes", () => {
     // the exempt check.
     const { proxy } = await import("./proxy");
     const res = proxy(makeRequest("/api/whoop/webhook/"));
-    expect(res.headers.get("location")).toBeNull();
+    expectExempt(res);
   });
 
   it("lets /api/auth/anything through (prefix match)", async () => {
     const { proxy } = await import("./proxy");
     const res = proxy(makeRequest("/api/auth/apple-web/start"));
-    expect(res.headers.get("location")).toBeNull();
+    expectExempt(res);
   });
 
   it("lets /signin through (the destination of the redirect)", async () => {
     const { proxy } = await import("./proxy");
     const res = proxy(makeRequest("/signin"));
-    expect(res.headers.get("location")).toBeNull();
+    expectExempt(res);
   });
 
   it("lets /api/admin/* through (admin uses its own bearer auth)", async () => {
     const { proxy } = await import("./proxy");
     const res = proxy(makeRequest("/api/admin/webhook/replay"));
-    expect(res.headers.get("location")).toBeNull();
+    expectExempt(res);
   });
 
   it("lets /api/whoop/refresh through (exact match — the #273 keepalive, own bearer auth)", async () => {
     const { proxy } = await import("./proxy");
     const res = proxy(makeRequest("/api/whoop/refresh"));
-    expect(res.headers.get("location")).toBeNull();
+    expectExempt(res);
   });
 
   it("does NOT exempt other /api/whoop/* paths — the addition is the exact route, not a prefix", async () => {
@@ -76,6 +85,7 @@ describe("proxy auth gate — exempt prefixes", () => {
     // No cookie/bearer attached to this unauthenticated /api/* request, so
     // the gate must return JSON 401 rather than let it through.
     expect(res.status).toBe(401);
+    expect(res.headers.get("x-middleware-next")).toBeNull();
   });
 
   it("redirects an unauthenticated request for / to /signin (no `from` for root)", async () => {

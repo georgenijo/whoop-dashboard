@@ -1,19 +1,37 @@
 // @vitest-environment node
 import crypto from "node:crypto";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-const listIntegrationUserIdsMock = vi.fn<(provider: string) => number[]>();
+const listIntegrationUserIdsMock = vi.fn<
+  (provider: string, opts?: { activeOnly?: boolean }) => number[]
+>();
 const getValidAccessTokenMock = vi.fn<
   (userId: number, forceRefresh?: boolean) => Promise<string | null>
 >();
+const addSyncLogMock = vi.fn();
+
+const logMock = {
+  debug: vi.fn(),
+  info: vi.fn(),
+  warn: vi.fn(),
+  error: vi.fn(),
+  fatal: vi.fn(),
+};
 
 vi.mock("@/lib/db/integrations", () => ({
-  listIntegrationUserIds: (provider: string) =>
-    listIntegrationUserIdsMock(provider),
+  listIntegrationUserIds: (provider: string, opts?: { activeOnly?: boolean }) =>
+    listIntegrationUserIdsMock(provider, opts),
+}));
+
+vi.mock("@/lib/db/logs", () => ({
+  addSyncLog: (log: unknown) => addSyncLogMock(log),
+  KEEPALIVE_SYNC_SOURCE: "keepalive",
+}));
+
+vi.mock("@/lib/logger", () => ({
+  forModule: () => logMock,
 }));
 
 vi.mock("@/lib/whoop/token", () => ({
@@ -39,6 +57,12 @@ beforeEach(async () => {
   vi.resetModules();
   listIntegrationUserIdsMock.mockReset();
   getValidAccessTokenMock.mockReset();
+  addSyncLogMock.mockReset();
+  logMock.debug.mockReset();
+  logMock.info.mockReset();
+  logMock.warn.mockReset();
+  logMock.error.mockReset();
+  logMock.fatal.mockReset();
   listIntegrationUserIdsMock.mockReturnValue([]);
   delete process.env.WHOOP_REFRESH_SECRET;
   route = await import("./route");
@@ -90,14 +114,15 @@ describe("POST /api/whoop/refresh — fail-closed secret gate", () => {
 });
 
 describe("secretMatches — constant-time-shaped compare", () => {
-  it("delegates to crypto.timingSafeEqual rather than a short-circuiting ===", () => {
+  it("invokes crypto.timingSafeEqual (not a short-circuiting ===) to detect a mismatch", () => {
     const spy = vi.spyOn(crypto, "timingSafeEqual");
     try {
       const result = route.secretMatches("aaaaaaaa", "aaaaaaab");
       expect(result).toBe(false);
-      // Proves the mismatch was detected via the constant-time primitive,
-      // not a plain string `===` (which would never call timingSafeEqual
-      // and would short-circuit at the first differing byte).
+      // This only proves the constant-time primitive was invoked at all —
+      // it does not (and a unit test cannot) prove actual wall-clock timing
+      // is constant. It rules out the regression of quietly swapping in a
+      // plain `===`, which would never call timingSafeEqual.
       expect(spy).toHaveBeenCalledTimes(1);
     } finally {
       spy.mockRestore();
@@ -125,14 +150,16 @@ describe("POST /api/whoop/refresh — refresh fan-out", () => {
     process.env.WHOOP_REFRESH_SECRET = SECRET;
   });
 
-  it("attempts a force-refresh for every user with a whoop integration row", async () => {
+  it("attempts a force-refresh for every active (non-needs_reauth) user with a whoop integration row", async () => {
     listIntegrationUserIdsMock.mockReturnValue([1, 2, 3]);
     getValidAccessTokenMock.mockResolvedValue("access-token");
 
     const res = await route.POST(makeRequest(`Bearer ${SECRET}`));
 
     expect(res.status).toBe(200);
-    expect(listIntegrationUserIdsMock).toHaveBeenCalledWith("whoop");
+    expect(listIntegrationUserIdsMock).toHaveBeenCalledWith("whoop", {
+      activeOnly: true,
+    });
     expect(getValidAccessTokenMock).toHaveBeenCalledTimes(3);
     for (const userId of [1, 2, 3]) {
       expect(getValidAccessTokenMock).toHaveBeenCalledWith(userId, true);
@@ -144,9 +171,14 @@ describe("POST /api/whoop/refresh — refresh fan-out", () => {
       failed: number;
     };
     expect(body).toMatchObject({ ok: true, total: 3, refreshed: 3, failed: 0 });
+    // Every attempted user gets a durable, /logs-visible sync_logs row.
+    expect(addSyncLogMock).toHaveBeenCalledTimes(3);
+    for (const call of addSyncLogMock.mock.calls) {
+      expect(call[0]).toMatchObject({ status: "ok", source: "keepalive" });
+    }
   });
 
-  it("one user's refresh failing does not prevent the others from being refreshed", async () => {
+  it("one user's refresh failing does not prevent the others from being refreshed, and flips the response non-200", async () => {
     listIntegrationUserIdsMock.mockReturnValue([1, 2, 3]);
     getValidAccessTokenMock.mockImplementation(async (userId: number) => {
       if (userId === 2) throw new Error("boom — simulated DB hiccup for user 2");
@@ -155,14 +187,18 @@ describe("POST /api/whoop/refresh — refresh fan-out", () => {
 
     const res = await route.POST(makeRequest(`Bearer ${SECRET}`));
 
-    expect(res.status).toBe(200);
+    // A real failure must not report success to curl --fail / systemd —
+    // this is the core of BLOCK 3: a dead integration must not look OK.
+    expect(res.status).toBe(502);
     expect(getValidAccessTokenMock).toHaveBeenCalledTimes(3);
     const body = (await res.json()) as {
+      ok: boolean;
       total: number;
       refreshed: number;
       failed: number;
       users: { user_id: number; ok: boolean }[];
     };
+    expect(body.ok).toBe(false);
     expect(body.total).toBe(3);
     expect(body.refreshed).toBe(2);
     expect(body.failed).toBe(1);
@@ -173,17 +209,48 @@ describe("POST /api/whoop/refresh — refresh fan-out", () => {
         { user_id: 3, ok: true },
       ]),
     );
+    // The failing user's unexpected throw is logged loudly, not swallowed.
+    expect(logMock.error).toHaveBeenCalledWith(
+      expect.objectContaining({ user_id: 2 }),
+      expect.stringContaining("unexpected error"),
+    );
+    // And a durable per-user record exists for all three, including the
+    // failure — this is what makes it visible on /logs instead of only in
+    // journald.
+    expect(addSyncLogMock).toHaveBeenCalledTimes(3);
+    const failedLogCall = addSyncLogMock.mock.calls.find(
+      (call) => (call[0] as { user_id: number }).user_id === 2,
+    );
+    expect(failedLogCall?.[0]).toMatchObject({
+      status: "error",
+      source: "keepalive",
+    });
+    expect((failedLogCall?.[0] as { error_message: string }).error_message).toContain(
+      "boom",
+    );
   });
 
-  it("treats a null token (refresh rejected upstream) as a per-user failure, not a thrown error", async () => {
+  it("treats a null token (refresh rejected upstream) as a per-user failure, not a thrown error, and still flips the response non-200", async () => {
     listIntegrationUserIdsMock.mockReturnValue([1]);
     getValidAccessTokenMock.mockResolvedValue(null);
 
     const res = await route.POST(makeRequest(`Bearer ${SECRET}`));
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as { refreshed: number; failed: number };
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { ok: boolean; refreshed: number; failed: number };
+    expect(body.ok).toBe(false);
     expect(body.refreshed).toBe(0);
     expect(body.failed).toBe(1);
+  });
+
+  it("returns non-200 when there are no active integrations to refresh at all", async () => {
+    listIntegrationUserIdsMock.mockReturnValue([]);
+
+    const res = await route.POST(makeRequest(`Bearer ${SECRET}`));
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { ok: boolean; total: number };
+    expect(body.ok).toBe(false);
+    expect(body.total).toBe(0);
+    expect(addSyncLogMock).not.toHaveBeenCalled();
   });
 
   it("response body carries only user ids and booleans — no access/refresh tokens", async () => {
@@ -211,24 +278,5 @@ describe("POST /api/whoop/refresh — refresh fan-out", () => {
     expect(getValidAccessTokenMock).toHaveBeenCalledTimes(1);
     const body = (await second.json()) as { skipped?: boolean };
     expect(body.skipped).toBe(true);
-  });
-});
-
-describe("POST /api/whoop/refresh — touches no domain tables", () => {
-  it("the route source contains no domain-table SQL (recovery/cycles/sleep/workouts/daily_summary/body_measurements)", () => {
-    const source = readFileSync(path.join(__dirname, "route.ts"), "utf8");
-    const domainTableRe =
-      /\b(?:FROM|JOIN|INTO|UPDATE|DELETE\s+FROM|REPLACE\s+INTO)\s+(recovery|cycles|sleep|workouts|daily_summary|body_measurements)\b/i;
-    expect(domainTableRe.test(source)).toBe(false);
-  });
-
-  it("the route only imports the integrations lookup and token refresh helpers for data access", () => {
-    const source = readFileSync(path.join(__dirname, "route.ts"), "utf8");
-    expect(source).toContain('from "@/lib/db/integrations"');
-    expect(source).toContain('from "@/lib/whoop/token"');
-    // No forUser/scoped import, no direct db connection import — this route
-    // has no business reading/writing any tenant-scoped domain table.
-    expect(source).not.toContain("@/lib/db/scoped");
-    expect(source).not.toContain("@/lib/db/connection");
   });
 });

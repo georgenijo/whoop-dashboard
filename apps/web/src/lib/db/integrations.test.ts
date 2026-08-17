@@ -364,4 +364,65 @@ describe("integrations + vault", () => {
       needs_reauth: true,
     });
   });
+
+  // Backs the #273 refresh-only keepalive's fan-out (route.ts calls this
+  // with activeOnly: true) — must never hardcode user 1 and must not waste
+  // refresh attempts on tenants already known to need reconnect.
+  describe("listIntegrationUserIds", () => {
+    it("lists every user_id with a row for the provider, ascending", async () => {
+      const { conn, integrations } = await loadModules();
+      const db = conn.openWrite();
+      db!.prepare("INSERT OR IGNORE INTO users (id) VALUES (2)").run();
+      db!.prepare("INSERT OR IGNORE INTO users (id) VALUES (3)").run();
+      db!.close();
+      integrations.upsertIntegration({
+        user_id: 3,
+        provider: "whoop",
+        access_token: "a3",
+        refresh_token: "r3",
+        expires_at: "2026-05-09T00:00:00+00:00",
+      });
+      integrations.upsertIntegration({
+        user_id: 1,
+        provider: "whoop",
+        access_token: "a1",
+        refresh_token: "r1",
+        expires_at: "2026-05-09T00:00:00+00:00",
+      });
+      // User 2 exists but has no whoop integration row — must not appear.
+      expect(integrations.listIntegrationUserIds("whoop")).toEqual([1, 3]);
+    });
+
+    it("activeOnly excludes users already flagged needs_reauth", async () => {
+      const { conn, integrations } = await loadModules();
+      const db = conn.openWrite();
+      db!.prepare("INSERT OR IGNORE INTO users (id) VALUES (2)").run();
+      db!.close();
+      integrations.upsertIntegration({
+        user_id: 1,
+        provider: "whoop",
+        access_token: "a1",
+        refresh_token: "r1",
+        expires_at: "2026-05-09T00:00:00+00:00",
+      });
+      integrations.upsertIntegration({
+        user_id: 2,
+        provider: "whoop",
+        access_token: "a2",
+        refresh_token: "r2",
+        expires_at: "2026-05-09T00:00:00+00:00",
+      });
+      integrations.setIntegrationNeedsReauth(2, "whoop", true);
+
+      expect(integrations.listIntegrationUserIds("whoop")).toEqual([1, 2]);
+      expect(
+        integrations.listIntegrationUserIds("whoop", { activeOnly: true })
+      ).toEqual([1]);
+    });
+
+    it("returns an empty array for a provider with no rows", async () => {
+      const { integrations } = await loadModules();
+      expect(integrations.listIntegrationUserIds("whoop")).toEqual([]);
+    });
+  });
 });

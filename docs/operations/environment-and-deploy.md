@@ -63,6 +63,8 @@ kept out of this repository.
 | `/etc/cloudflared/config.yml` | no | Shared box-level tunnel config (not whoop-dashboard-specific, not in repo) |
 | `systemd/whoop-web.service` | yes | Reference copy of the deployed system unit |
 | `systemd/whoop-cloudflared.service` | yes | Historical — superseded by the shared system `cloudflared.service`; not currently deployed |
+| `systemd/whoop-web-refresh.{service,timer}` | yes | Reference copy of the refresh-only keepalive units (#273) — not installed by `scripts/deploy`, see "Refresh-only keepalive" below |
+| `/etc/whoop-web-refresh.header` | no | Root-owned, mode-600 curl header file (`Authorization: Bearer <secret>`) read by the keepalive unit — kept out of argv, not in repo |
 
 ## Application variables
 
@@ -80,6 +82,7 @@ kept out of this repository.
 | `CURSOR_BACKEND_URL` | Cursor catalog override is needed | Coach settings |
 | `PUBLIC_ORIGIN` | Production redirects are generated | Web auth |
 | `ADMIN_APPLE_SUB` | Admin webhook replay is enabled | Admin authorization |
+| `WHOOP_REFRESH_SECRET` | Refresh-only keepalive timer is enabled (#273) | `POST /api/whoop/refresh` bearer auth — fails closed (404) when unset |
 | `LOG_LEVEL` | Default logging is not wanted | Structured logger |
 | `APPLE_BUNDLE_ID` | Native Sign in with Apple is enabled | iOS identity verification |
 | `APPLE_SERVICES_ID` | Web Sign in with Apple is enabled | Web Apple OAuth |
@@ -170,6 +173,77 @@ underneath it. The failure message says the lock was left held and repeats
 the same manual-clear recipe; only run it once you have actually confirmed
 on opti that nothing is still running (`fleet exec opti 'pgrep -af "next
 build|npm ci"'`).
+
+## Refresh-only keepalive (#273)
+
+`whoop-web-refresh.timer` hits `POST /api/whoop/refresh` every 30 minutes so
+Whoop's ~3h idle refresh-token TTL never lapses between a real
+sync/webhook/Coach action. The route is a shared-secret bearer gate
+(`WHOOP_REFRESH_SECRET`) that fails closed — 404 — when the secret is unset;
+see `docs/decisions/DECISIONS.md` (2026-08-17) for why the route is designed
+this way. The unit files are tracked in
+`systemd/whoop-web-refresh.{service,timer}`; installing and enabling them on
+`opti` is a manual, one-time operator step and is **not** part of
+`scripts/deploy` — a normal deploy does not touch this timer.
+
+**The same secret value must be provisioned in TWO separate places.** The
+Next.js process reads it from its own environment (`WHOOP_REFRESH_SECRET`
+in `apps/web/.env.local`); the systemd timer's curl call reads it from a
+separate root-owned header file. Provisioning only one of the two leaves the
+timer *running* but doing nothing useful — every tick either 404s (app side
+missing) or fails to authenticate (curl side missing) — and, short of
+`systemctl --failed` or reading the journal, nothing surfaces that.
+
+1. Generate a secret. Never commit it, paste it into an issue/PR, or print
+   it in a command log:
+   ```bash
+   openssl rand -base64 32
+   ```
+2. **App side.** Add it to `apps/web/.env.local` (mode 0600, not tracked —
+   see "Configuration locations" above) alongside the other secrets:
+   ```
+   WHOOP_REFRESH_SECRET=<paste-generated-secret>
+   ```
+   Restart the app so it picks it up:
+   ```bash
+   fleet exec opti 'sudo systemctl restart whoop-web'
+   ```
+3. **curl side.** Write the SAME value into a root-owned, mode-600 header
+   file. This is deliberately a file curl reads directly with `-H @file`,
+   not an `EnvironmentFile` expanded into `ExecStart` — either systemd's
+   native `${VAR}` expansion or a `sh -c` wrapper would put the secret into
+   the process's argv, which is world-readable via `/proc/<pid>/cmdline`
+   and `ps auxww` for the life of the call, 48 times a day:
+   ```bash
+   printf 'Authorization: Bearer %s\n' '<paste-same-secret>' \
+     | sudo tee /etc/whoop-web-refresh.header > /dev/null
+   sudo chown root:root /etc/whoop-web-refresh.header
+   sudo chmod 600 /etc/whoop-web-refresh.header
+   ```
+4. Install and enable the unit + timer:
+   ```bash
+   sudo cp systemd/whoop-web-refresh.service systemd/whoop-web-refresh.timer /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now whoop-web-refresh.timer
+   ```
+5. Verify:
+   ```bash
+   sudo systemctl list-timers whoop-web-refresh.timer
+   sudo systemctl start whoop-web-refresh.service   # run one cycle by hand
+   sudo systemctl status whoop-web-refresh.service --no-pager
+   sudo journalctl -u whoop-web-refresh.service -n 20 --no-pager
+   ```
+   A healthy run exits 0. A logged HTTP 404 means step 2 didn't take — the
+   app doesn't have `WHOOP_REFRESH_SECRET`, or `whoop-web` wasn't restarted
+   after setting it. A logged HTTP 401 means step 3 didn't take, or the two
+   secret values don't match. Any other non-2xx (curl `--fail` reports it)
+   means the route ran and at least one tenant's refresh genuinely failed —
+   check `/logs` (Sync History table, rows with `source = keepalive`) for
+   which user and why.
+6. Acceptance from #273: pause the timer for 4h
+   (`sudo systemctl stop whoop-web-refresh.timer`), confirm a manual sync
+   still works via the existing on-demand refresh path, then re-enable it
+   (`sudo systemctl start whoop-web-refresh.timer`).
 
 ## Operations
 

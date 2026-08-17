@@ -225,15 +225,25 @@ export function integrationRowExists(
  * refresh-only keepalive, #273) out across every tenant without guessing at
  * a fixed user_id. Multi-tenant since Phase D; this must never hardcode
  * user 1.
+ *
+ * `activeOnly: true` excludes rows already flagged `needs_reauth = 1`. A
+ * tenant whose grant is already known-dead gains nothing from another
+ * refresh attempt — the flag can only be cleared by the user reconnecting,
+ * not by hammering a doomed refresh_token — so the keepalive route passes
+ * this to avoid 48 guaranteed-to-fail Whoop POSTs/day per dead tenant.
  */
-export function listIntegrationUserIds(provider: string): number[] {
+export function listIntegrationUserIds(
+  provider: string,
+  opts: { activeOnly?: boolean } = {}
+): number[] {
   const db = open();
   if (!db) return [];
   try {
     if (!hasTable(db, "integrations")) return [];
+    const reauthClause = opts.activeOnly ? " AND needs_reauth = 0" : "";
     const rows = db
       .prepare(
-        "SELECT user_id FROM integrations WHERE provider = ? ORDER BY user_id ASC"
+        `SELECT user_id FROM integrations WHERE provider = ?${reauthClause} ORDER BY user_id ASC`
       )
       .all(provider) as { user_id: number }[];
     return rows.map((r) => r.user_id);
