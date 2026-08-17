@@ -20,12 +20,33 @@ const REFRESH_BUFFER_S = 60;
 const WHOOP_PROVIDER = "whoop";
 
 // Definitive "credentials are dead, user must reconnect" error codes from
-// Whoop / RFC 6749 / RFC 6750. Excluded on purpose:
+// the refresh_token grant response, scoped to THIS module because
+// REAUTH_ERROR_CODES is only ever consulted inside `refreshTokens` below
+// (the authorization_code exchange in `@/lib/auth` `exchangeCode` doesn't
+// touch this set — it just throws on !resp.ok). Excluded on purpose:
 //   - invalid_client / unauthorized_client → server-side config bugs (bad
 //     WHOOP_CLIENT_ID/SECRET); reconnecting tokens won't help, so the
 //     banner would mislead.
-//   - invalid_request → our client bug (malformed body, missing param).
-const REAUTH_ERROR_CODES = new Set(["invalid_grant", "invalid_token"]);
+//
+// invalid_request IS included, deliberately, for the refresh grant only.
+// Per #263, a real expired/dead Whoop refresh token and a deliberately
+// bogus one both come back as `400 {"error":"invalid_request"}` with a
+// misleading redirect_uri `error_hint` — Whoop does not distinguish
+// "your token is dead" from "your request is malformed" in the response
+// body for this grant. That would normally make invalid_request unsafe to
+// treat as reauth-worthy (a real client bug could also produce it), but
+// the refresh grant's request body (`grant_type`, `refresh_token`,
+// `client_id`, `client_secret`) is fully static/computed in
+// `refreshTokens` below with no user-supplied input, so in practice a
+// `400 invalid_request` here can only mean the token itself is rejected.
+// Do NOT reuse this set for the authorization_code exchange
+// (`exchangeCode` in `@/lib/auth`) — that grant carries a user-supplied
+// `code` and redirect, so invalid_request there really can be our bug.
+const REAUTH_ERROR_CODES = new Set([
+  "invalid_grant",
+  "invalid_token",
+  "invalid_request",
+]);
 
 /**
  * Per-user in-flight refresh singletons. Keying on user_id (not a single
@@ -115,7 +136,9 @@ async function refreshTokens(
     );
     // Flip flag only on definitive credential-rejection signals so a code
     // bug or upstream config issue doesn't train the user to reconnect.
-    // Allowlist lives at module scope (REAUTH_ERROR_CODES); 401 catches
+    // Allowlist lives at module scope (REAUTH_ERROR_CODES) and is scoped to
+    // THIS function (the refresh_token grant) — see the comment there for
+    // why invalid_request is safe to include here specifically. 401 catches
     // the RFC-canonical token-rejection case when no parsable error code
     // is present. 403 (scope/permission), 5xx, network, parse failure,
     // and unknown error codes → log only.
