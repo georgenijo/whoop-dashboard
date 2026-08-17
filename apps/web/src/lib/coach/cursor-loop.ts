@@ -415,6 +415,14 @@ type StreamEvent = {
   isError?: boolean;
   result?: unknown;
   error?: unknown;
+  // Present on the terminal `result` event only, camelCase unlike
+  // Anthropic's snake_case equivalents — see parseCursorTerminalResult.
+  usage?: {
+    inputTokens?: unknown;
+    outputTokens?: unknown;
+    cacheReadTokens?: unknown;
+    cacheWriteTokens?: unknown;
+  };
   message?: { content?: Array<{ type?: string; text?: string }> };
   tool_call?: {
     // call id + timing live on tool_call directly and are present on BOTH the
@@ -447,6 +455,19 @@ type StreamEvent = {
   };
 };
 
+// Cursor's terminal `result` event usage snapshot. One cumulative snapshot
+// per subprocess invocation (not per internal model round-trip); no
+// "totalTokens" field. cacheWriteTokens maps onto our
+// cache_creation_input_tokens_total (cursor-agent itself subtracts
+// cache-read + cache-write out of inputTokens before emitting, so the four
+// buckets are disjoint — same partition Anthropic uses).
+export type CursorUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+};
+
 export type CursorTerminalResult = {
   subtype: string | null;
   isError: boolean;
@@ -455,6 +476,7 @@ export type CursorTerminalResult = {
   durationMs: number | null;
   apiDurationMs: number | null;
   model: string | null;
+  usage: CursorUsage | null;
 };
 
 function nonNegativeNumber(...values: unknown[]): number | null {
@@ -494,6 +516,30 @@ export function parseCursorTerminalResult(
   const isError = evt.is_error === true || evt.isError === true || subtypeIsError;
   const resultText = stringifyResult(evt.result);
   const errorText = stringifyResult(evt.error) || (isError ? resultText : "");
+  const rawUsage = evt.usage;
+  // Require at least one recognized key before trusting this as a usage
+  // payload. `{}` or a renamed-field object (e.g. a future cursor-agent
+  // build that ships `input_tokens` instead of `inputTokens`) would
+  // otherwise fall through every `?? 0` and still produce a non-null
+  // CursorUsage — persisting `calls: 1` next to four zeros, which reads as
+  // "verified zero-cost turn" on /logs instead of the "no usage data"
+  // signal a null usage (and calls: 0) gives today. That would silently
+  // reintroduce issue #443 in a harder-to-notice form.
+  const hasRecognizedUsageKey =
+    rawUsage != null &&
+    typeof rawUsage === "object" &&
+    ("inputTokens" in rawUsage ||
+      "outputTokens" in rawUsage ||
+      "cacheReadTokens" in rawUsage ||
+      "cacheWriteTokens" in rawUsage);
+  const usage: CursorUsage | null = hasRecognizedUsageKey
+    ? {
+        inputTokens: nonNegativeNumber(rawUsage.inputTokens) ?? 0,
+        outputTokens: nonNegativeNumber(rawUsage.outputTokens) ?? 0,
+        cacheReadTokens: nonNegativeNumber(rawUsage.cacheReadTokens) ?? 0,
+        cacheWriteTokens: nonNegativeNumber(rawUsage.cacheWriteTokens) ?? 0,
+      }
+    : null;
 
   return {
     subtype,
@@ -503,6 +549,7 @@ export function parseCursorTerminalResult(
     durationMs: nonNegativeNumber(evt.duration_ms, evt.durationMs),
     apiDurationMs: nonNegativeNumber(evt.duration_api_ms, evt.durationApiMs),
     model: typeof evt.model === "string" ? evt.model : null,
+    usage,
   };
 }
 
@@ -597,6 +644,7 @@ export async function runCursorTurn(
     turn,
     conversation,
     toolDetails,
+    usage,
     detailState,
     options,
   } = args;
@@ -703,6 +751,12 @@ export async function runCursorTurn(
     }>,
     terminal_subtype: null as string | null,
     terminal_seen: false,
+    // Counts every `started` tool_call event that carries a real MCP tool
+    // name (see the `!a?.toolName` guard below, which excludes internal MCP
+    // bookkeeping calls) — not just completed ones, so a hung tool call that
+    // never finishes still shows up here. May exceed the completed count in
+    // `tool_events`.
+    attempted_tool_calls: 0,
     timing: {
       prompt_build_ms: promptBuildMs,
       workspace_prep_ms: 0,
@@ -716,6 +770,13 @@ export async function runCursorTurn(
       cursor_api_duration_ms: null as number | null,
       spawn_to_process_close_ms: null as number | null,
       process_close_tail_ms: null as number | null,
+      // Set only on an early-exit reject (stdio unavailable, a mid-stream
+      // cap breach, or a child `error`) — the process is only SIGTERM'd at
+      // that point, so `close` (and spawn_to_process_close_ms above) can
+      // still arrive later with the real close time. Kept as a separate
+      // field rather than reusing spawn_to_process_close_ms so that field
+      // keeps meaning "the process actually closed" for scripts/BENCH.md.
+      spawn_to_early_exit_ms: null as number | null,
       cleanup_ms: 0,
       turn_ms: 0,
     },
@@ -783,6 +844,20 @@ export async function runCursorTurn(
       );
       cursorDetail.timing.spawn_call_ms = Date.now() - spawnStartedMs;
 
+      // A reject on an early-exit path (stdio unavailable, a mid-stream cap
+      // breach, or a child `error`) only SIGTERMs the child — the real
+      // `close` event can still arrive later and must still set
+      // spawn_to_process_close_ms itself (see the close handler below).
+      // Capture what was actually observed at reject time into its own
+      // field instead, so it's never confused with "the process closed".
+      // Idempotent: first caller wins.
+      let earlyExitTimingCaptured = false;
+      const captureEarlyExitTiming = () => {
+        if (earlyExitTimingCaptured) return;
+        earlyExitTimingCaptured = true;
+        cursorDetail.timing.spawn_to_early_exit_ms = Date.now() - spawnStartedMs;
+      };
+
       let killEscalation: ReturnType<typeof setTimeout> | undefined;
       let terminalCloseTimer: ReturnType<typeof setTimeout> | undefined;
       // Signal the whole process group; fall back to the direct child if the
@@ -829,6 +904,7 @@ export async function runCursorTurn(
         clearTimeout(killTimer);
         terminate();
         options.signal?.removeEventListener("abort", onAbort);
+        captureEarlyExitTiming();
         reject(new Error("cursor-agent stdio unavailable"));
         return;
       }
@@ -849,6 +925,7 @@ export async function runCursorTurn(
           clearTimeout(killTimer);
           terminate();
           options.signal?.removeEventListener("abort", onAbort);
+          captureEarlyExitTiming();
           reject(err);
         }
       };
@@ -873,6 +950,7 @@ export async function runCursorTurn(
         if (killEscalation) clearTimeout(killEscalation);
         if (terminalCloseTimer) clearTimeout(terminalCloseTimer);
         options.signal?.removeEventListener("abort", onAbort);
+        captureEarlyExitTiming();
         reject(err);
       });
       child.on("close", (code) => {
@@ -888,8 +966,7 @@ export async function runCursorTurn(
         options.signal?.removeEventListener("abort", onAbort);
         const closeElapsedMs = Date.now() - spawnStartedMs;
         cursorDetail.timing.spawn_to_process_close_ms = closeElapsedMs;
-        const terminalElapsedMs =
-          cursorDetail.timing.spawn_to_terminal_result_ms;
+        const terminalElapsedMs = cursorDetail.timing.spawn_to_terminal_result_ms;
         cursorDetail.timing.process_close_tail_ms =
           terminalElapsedMs == null
             ? null
@@ -925,6 +1002,25 @@ export async function runCursorTurn(
           cursorDetail.timing.cursor_duration_ms = terminal.durationMs;
           cursorDetail.timing.cursor_api_duration_ms = terminal.apiDurationMs;
           if (terminal.model) cursorDetail.resolved_model = terminal.model;
+          // Issue #443 — Cursor DOES report usage on the terminal result
+          // event (see the StreamEvent.usage doc comment); thread it into
+          // the same Usage totals the Anthropic path populates so chat_logs
+          // stops persisting all-zero cost signal for the Cursor provider.
+          //
+          // usage.calls means something different per provider: on the
+          // Anthropic path it counts model round-trips (one per tool-use
+          // iteration); here it is 0 (no usage observed) or 1 (one terminal
+          // snapshot per subprocess invocation), regardless of how many
+          // internal tool calls or model round-trips cursor-agent made under
+          // the hood. /logs renders both in a single "Calls" cell — a
+          // six-tool-round-trip Cursor turn still reads "Calls 1".
+          if (terminal.usage) {
+            usage.input_tokens_total += terminal.usage.inputTokens;
+            usage.output_tokens_total += terminal.usage.outputTokens;
+            usage.cache_read_input_tokens_total += terminal.usage.cacheReadTokens;
+            usage.cache_creation_input_tokens_total += terminal.usage.cacheWriteTokens;
+            usage.calls += 1;
+          }
           terminalResultText = terminal.resultText;
           terminalError = terminal.isError ? terminal.errorText : "";
           terminalSucceeded = !terminal.isError;
@@ -975,6 +1071,7 @@ export async function runCursorTurn(
             // surface/persist a fake `unknown` tool round trip.
             if (!a?.toolName) return;
             const name = a.toolName;
+            cursorDetail.attempted_tool_calls += 1;
             // Everything emitted before a real tool boundary is operational
             // commentary. The final visible answer starts fresh after tools.
             visibleText.toolBoundary();

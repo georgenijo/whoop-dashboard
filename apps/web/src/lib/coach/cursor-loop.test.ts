@@ -77,6 +77,26 @@ function fakeChild(pid?: number): FakeChild {
   return child;
 }
 
+type FakeChildWithoutStdio = EventEmitter & {
+  pid: number | undefined;
+  stdout: null;
+  stderr: null;
+  kill: ReturnType<typeof vi.fn>;
+};
+
+// Simulates the "child errors before stdio is available" early-exit: no pid
+// (so terminate()'s killTree no-ops instead of touching a real process) and
+// null stdout/stderr, matching what node_modules `child_process.spawn` can
+// hand back when the underlying fork itself failed.
+function fakeChildWithoutStdio(): FakeChildWithoutStdio {
+  const child = new EventEmitter() as FakeChildWithoutStdio;
+  child.pid = undefined;
+  child.stdout = null;
+  child.stderr = null;
+  child.kill = vi.fn();
+  return child;
+}
+
 function baseArgs(
   detailState: DetailState,
   onTextDelta = vi.fn(),
@@ -224,6 +244,7 @@ describe("parseCursorTerminalResult", () => {
       durationMs: 2_041,
       apiDurationMs: 1_876,
       model: "composer-2.5",
+      usage: null,
     });
   });
 
@@ -245,12 +266,83 @@ describe("parseCursorTerminalResult", () => {
       durationMs: 500,
       apiDurationMs: 450,
       model: null,
+      usage: null,
     });
   });
 
   it("ignores non-terminal and malformed records", () => {
     expect(parseCursorTerminalResult(null)).toBeNull();
     expect(parseCursorTerminalResult({ type: "assistant" })).toBeNull();
+  });
+
+  // Issue #443 — every persisted chat_logs.usage row was all zeros for the
+  // Cursor provider because nothing ever read Cursor's usage field. This
+  // event is the REAL terminal `result` event captured from a live
+  // `cursor-agent -p --output-format stream-json --mode ask --trust "say hi
+  // in exactly two words"` run on 2026-08-17 (see PR body for the full run
+  // log) — not a guessed schema.
+  it("extracts usage from the real captured terminal result event", () => {
+    const captured = {
+      type: "result",
+      subtype: "success",
+      duration_ms: 6498,
+      duration_api_ms: 6498,
+      is_error: false,
+      result: "Hi there!",
+      session_id: "6e7cfc7f-7106-4d07-aeb8-f7fb46f5e8ab",
+      request_id: "706e4f3a-16bb-4119-906b-2b0c84286c3a",
+      usage: {
+        inputTokens: 2,
+        outputTokens: 7,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 30876,
+      },
+    };
+    expect(parseCursorTerminalResult(captured)).toEqual({
+      subtype: "success",
+      isError: false,
+      resultText: "Hi there!",
+      errorText: "",
+      durationMs: 6498,
+      apiDurationMs: 6498,
+      model: null,
+      usage: {
+        inputTokens: 2,
+        outputTokens: 7,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 30876,
+      },
+    });
+  });
+
+  it("treats a missing/malformed usage object as absent rather than guessing zeros", () => {
+    expect(
+      parseCursorTerminalResult({ type: "result", subtype: "success" })?.usage,
+    ).toBeNull();
+    expect(
+      parseCursorTerminalResult({
+        type: "result",
+        subtype: "success",
+        usage: "not an object",
+      })?.usage,
+    ).toBeNull();
+  });
+
+  it("requires at least one recognized usage key, so an empty or renamed-field payload does not fabricate a zero-cost reading", () => {
+    expect(
+      parseCursorTerminalResult({ type: "result", subtype: "success", usage: {} })
+        ?.usage,
+    ).toBeNull();
+    // A future cursor-agent build renaming inputTokens/outputTokens (e.g. to
+    // snake_case) must not silently reintroduce issue #443 as a fabricated
+    // "Calls 1 / Input 0 / Output 0" reading.
+    expect(
+      parseCursorTerminalResult({
+        type: "result",
+        subtype: "success",
+        usage: { input_tokens: 2, output_tokens: 7 },
+      })?.usage,
+    ).toBeNull();
   });
 });
 
@@ -454,6 +546,9 @@ describe("runCursorTurn Cursor lifecycle details", () => {
         status: "ok",
       },
     ]);
+    // The internal-mcp bookkeeping call has no toolName and must not count;
+    // only the real query_recovery call does.
+    expect(cursor?.attempted_tool_calls).toBe(1);
     expect(cursor?.timing.cursor_duration_ms).toBe(2_100);
     expect(cursor?.timing.cursor_api_duration_ms).toBe(1_900);
     expect(cursor?.timing.spawn_to_system_init_ms).not.toBeNull();
@@ -624,5 +719,179 @@ describe("runCursorTurn Cursor lifecycle details", () => {
         JSON.stringify(message.blocks).includes("view_chat_image"),
       ),
     ).toBe(false);
+  });
+});
+
+// Issue #443 — thread Cursor's real terminal-event usage into the shared
+// Usage totals instead of leaving them at all-zero.
+describe("runCursorTurn usage extraction (issue #443)", () => {
+  it("adds the real captured terminal usage event into args.usage", async () => {
+    const child = fakeChild();
+    spawnMock.mockReturnValue(child);
+    const args = baseArgs({ iterations: 0 });
+
+    const turn = runCursorTurn(args);
+    await waitForSpawn();
+
+    child.stdout.write(
+      `${JSON.stringify({
+        type: "assistant",
+        message: { content: [{ type: "text", text: "Hi there!" }] },
+      })}\n`,
+    );
+    child.stdout.write(
+      `${JSON.stringify({
+        type: "result",
+        subtype: "success",
+        result: "Hi there!",
+        duration_ms: 6498,
+        duration_api_ms: 6498,
+        is_error: false,
+        usage: {
+          inputTokens: 2,
+          outputTokens: 7,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 30876,
+        },
+      })}\n`,
+    );
+    child.emit("close", 0);
+
+    await turn;
+    expect(args.usage).toEqual({
+      input_tokens_total: 2,
+      output_tokens_total: 7,
+      cache_creation_input_tokens_total: 30876,
+      cache_read_input_tokens_total: 0,
+      calls: 1,
+    });
+  });
+
+  it("leaves args.usage at zero when the terminal event carries no usage", async () => {
+    const child = fakeChild();
+    spawnMock.mockReturnValue(child);
+    const args = baseArgs({ iterations: 0 });
+
+    const turn = runCursorTurn(args);
+    await waitForSpawn();
+
+    child.stdout.write(
+      `${JSON.stringify({ type: "result", subtype: "success", result: "ok" })}\n`,
+    );
+    child.emit("close", 0);
+
+    await turn;
+    expect(args.usage).toEqual({
+      input_tokens_total: 0,
+      output_tokens_total: 0,
+      cache_creation_input_tokens_total: 0,
+      cache_read_input_tokens_total: 0,
+      calls: 0,
+    });
+  });
+});
+
+// An early-exit reject (stdio unavailable, a mid-stream tool-call cap
+// breach, or a child `error`) only SIGTERMs the child — the real `close`
+// event can still arrive later. spawn_to_early_exit_ms captures what was
+// observed at reject time without corrupting spawn_to_process_close_ms,
+// which scripts/BENCH.md reads as "the process actually closed".
+describe("runCursorTurn early-exit timing", () => {
+  it("records spawn_to_early_exit_ms (and leaves spawn_to_process_close_ms null) when child stdio is unavailable", async () => {
+    const child = fakeChildWithoutStdio();
+    spawnMock.mockReturnValue(child);
+    const detailState: DetailState = { iterations: 0 };
+    const args = baseArgs(detailState);
+
+    await expect(runCursorTurn(args)).rejects.toThrow(
+      "cursor-agent stdio unavailable",
+    );
+
+    expect(detailState.cursor?.timing.spawn_to_early_exit_ms).toEqual(
+      expect.any(Number),
+    );
+    expect(detailState.cursor?.timing.spawn_to_process_close_ms).toBeNull();
+  });
+
+  it("records spawn_to_early_exit_ms when the child process emits an error", async () => {
+    const child = fakeChild();
+    spawnMock.mockReturnValue(child);
+    const detailState: DetailState = { iterations: 0 };
+    const args = baseArgs(detailState);
+
+    const turn = runCursorTurn(args);
+    await waitForSpawn();
+
+    child.emit("error", new Error("ENOENT"));
+
+    await expect(turn).rejects.toThrow();
+    expect(detailState.cursor?.timing.spawn_to_early_exit_ms).toEqual(
+      expect.any(Number),
+    );
+    expect(detailState.cursor?.timing.spawn_to_process_close_ms).toBeNull();
+  });
+
+  // The scenario the split field exists for: cap breach only SIGTERMs the
+  // child, so `close` genuinely arrives afterward and must still record the
+  // true close time — not be silently discarded by whatever the early-exit
+  // reject captured.
+  it("still records the true spawn_to_process_close_ms when close arrives after a mid-stream cap breach", async () => {
+    const child = fakeChild(5_555);
+    spawnMock.mockReturnValue(child);
+    vi.spyOn(process, "kill").mockReturnValue(true);
+    const detailState: DetailState = { iterations: 0 };
+    const args = baseArgs(detailState);
+
+    const turn = runCursorTurn(args);
+    await waitForSpawn();
+    vi.useFakeTimers();
+
+    // MAX_CURSOR_TOOL_CALLS is 12: emit 13 started+completed pairs so the
+    // cap-breach throw fires mid-stream, well before the process actually
+    // exits.
+    for (let i = 0; i < 13; i += 1) {
+      const callId = `call-${i}`;
+      child.stdout.write(
+        `${JSON.stringify({
+          type: "tool_call",
+          subtype: "started",
+          call_id: callId,
+          tool_call: {
+            startedAtMs: String(i * 10),
+            mcpToolCall: { args: { toolName: "query_recovery", args: {} } },
+          },
+        })}\n`,
+      );
+      child.stdout.write(
+        `${JSON.stringify({
+          type: "tool_call",
+          subtype: "completed",
+          call_id: callId,
+          tool_call: {
+            startedAtMs: String(i * 10),
+            completedAtMs: String(i * 10 + 5),
+            mcpToolCall: {
+              result: { success: { isError: false, content: [{ text: { text: "{}" } }] } },
+            },
+          },
+        })}\n`,
+      );
+    }
+
+    await expect(turn).rejects.toThrow(/exceeded 12 tool calls/);
+
+    const earlyExitMs = detailState.cursor?.timing.spawn_to_early_exit_ms;
+    expect(earlyExitMs).toEqual(expect.any(Number));
+    expect(detailState.cursor?.timing.spawn_to_process_close_ms).toBeNull();
+
+    await vi.advanceTimersByTimeAsync(5_000);
+    child.emit("close", null);
+
+    expect(detailState.cursor?.timing.spawn_to_process_close_ms).toEqual(
+      expect.any(Number),
+    );
+    expect(detailState.cursor?.timing.spawn_to_process_close_ms).toBeGreaterThan(
+      earlyExitMs ?? 0,
+    );
   });
 });

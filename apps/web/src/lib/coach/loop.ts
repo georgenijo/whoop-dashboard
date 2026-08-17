@@ -77,6 +77,10 @@ export type DetailState = {
     }>;
     terminal_subtype: string | null;
     terminal_seen: boolean;
+    // Counts every `started` tool_call event with a real MCP tool name — see
+    // ./cursor-loop's `!a?.toolName` guard. May exceed the completed count
+    // in `tool_events` when a call never finishes.
+    attempted_tool_calls: number;
     timing: {
       prompt_build_ms: number;
       workspace_prep_ms: number;
@@ -90,6 +94,11 @@ export type DetailState = {
       cursor_api_duration_ms: number | null;
       spawn_to_process_close_ms: number | null;
       process_close_tail_ms: number | null;
+      // Set only on an early-exit reject (stdio unavailable, a mid-stream
+      // cap breach, or a child `error`) — kept separate from
+      // spawn_to_process_close_ms, which scripts/BENCH.md reads as meaning
+      // the process actually closed.
+      spawn_to_early_exit_ms: number | null;
       cleanup_ms: number;
       turn_ms: number;
     };
