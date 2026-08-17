@@ -515,6 +515,163 @@ describe("runWhoopSync abort handling", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Cycles reconcile (issue #415)
+// ---------------------------------------------------------------------------
+
+function daysAgoDateStr(n: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+function seedRecoveryOnly(userId: number, date: string): void {
+  const db = new Database(dbFile);
+  try {
+    db.prepare("INSERT OR IGNORE INTO users (id) VALUES (?)").run(userId);
+    db.prepare("INSERT INTO recovery (user_id, date) VALUES (?, ?)").run(
+      userId,
+      date,
+    );
+  } finally {
+    db.close();
+  }
+}
+
+function cycleCount(): number {
+  const db = new Database(dbFile);
+  try {
+    return (
+      db.prepare("SELECT COUNT(*) AS c FROM cycles").get() as { c: number }
+    ).c;
+  } finally {
+    db.close();
+  }
+}
+
+function unscoredCycleRecord(date: string) {
+  return {
+    id: 99,
+    start: `${date}T08:30:00.000Z`,
+    end: `${date}T20:00:00.000Z`,
+    score_state: "PENDING_SCORE",
+  };
+}
+
+describe("reconcileCycles (issue #415)", () => {
+  it("nothing orphaned: makes zero Whoop API calls", async () => {
+    const date = daysAgoDateStr(5);
+    seedRecoveryOnly(1, date);
+    const db = new Database(dbFile);
+    try {
+      db.prepare(
+        "INSERT INTO cycles (user_id, date, strain) VALUES (?, ?, ?)",
+      ).run(1, date, 10);
+    } finally {
+      db.close();
+    }
+
+    const result = await syncMod.reconcileCycles(1, "UTC");
+
+    expect(result).toEqual({
+      lookback_days: 21,
+      orphans_found: 0,
+      healed: 0,
+      still_missing: 0,
+      api_calls: 0,
+    });
+    expect(whoopGetAllMock).not.toHaveBeenCalled();
+  });
+
+  it("orphan found and now SCORED: heals it with a single bounded fetch", async () => {
+    const date = daysAgoDateStr(5);
+    seedRecoveryOnly(1, date);
+    whoopGetAllMock.mockImplementation(async (endpoint: string) => {
+      expect(endpoint).toBe("/v2/cycle");
+      return { records: [cycleRecord(date)], pageCount: 1 };
+    });
+
+    const result = await syncMod.reconcileCycles(1, "UTC");
+
+    expect(result).toEqual({
+      lookback_days: 21,
+      orphans_found: 1,
+      healed: 1,
+      still_missing: 0,
+      api_calls: 1,
+    });
+    expect(whoopGetAllMock).toHaveBeenCalledTimes(1);
+    expect(cycleCount()).toBe(1);
+  });
+
+  it("orphan still unscored: writes nothing, doesn't throw, and doesn't loop", async () => {
+    const date = daysAgoDateStr(5);
+    seedRecoveryOnly(1, date);
+    whoopGetAllMock.mockImplementation(async () => ({
+      records: [unscoredCycleRecord(date)],
+      pageCount: 1,
+    }));
+
+    const first = await syncMod.reconcileCycles(1, "UTC");
+    expect(first).toEqual({
+      lookback_days: 21,
+      orphans_found: 1,
+      healed: 0,
+      still_missing: 1,
+      api_calls: 1,
+    });
+    expect(cycleCount()).toBe(0);
+
+    // Calling again re-checks from scratch (no persisted "attempted" state)
+    // and produces the identical, bounded result — no throw, no runaway loop.
+    const second = await syncMod.reconcileCycles(1, "UTC");
+    expect(second).toEqual(first);
+    expect(cycleCount()).toBe(0);
+  });
+
+  it("excludes today's date — the current cycle is expected to be unscored", async () => {
+    seedRecoveryOnly(1, daysAgoDateStr(0));
+
+    const result = await syncMod.reconcileCycles(1, "UTC");
+
+    expect(result.orphans_found).toBe(0);
+    expect(whoopGetAllMock).not.toHaveBeenCalled();
+  });
+
+  it("respects a custom lookbackDays — orphan outside the window is ignored", async () => {
+    seedRecoveryOnly(1, daysAgoDateStr(30));
+
+    const result = await syncMod.reconcileCycles(1, "UTC", {
+      lookbackDays: 21,
+    });
+
+    expect(result.orphans_found).toBe(0);
+    expect(whoopGetAllMock).not.toHaveBeenCalled();
+  });
+
+  it("runWhoopSync wires reconcile results into details.reconcile", async () => {
+    wireHappyPath();
+
+    const result = await syncMod.runWhoopSync({ userId: 1 });
+
+    expect(result.success).toBe(true);
+    expect(result.details.reconcile).toBeDefined();
+    expect(result.details.reconcile).toEqual({
+      lookback_days: 21,
+      orphans_found: 0,
+      healed: 0,
+      still_missing: 0,
+      api_calls: 0,
+    });
+    // The happy-path fixture's recovery+cycle dates match, so reconcile finds
+    // nothing to do — the main sync's own /v2/cycle fetch is the only one.
+    const cycleCalls = whoopGetAllMock.mock.calls.filter(
+      (c) => c[0] === "/v2/cycle",
+    );
+    expect(cycleCalls).toHaveLength(1);
+  });
+});
+
 describe("runWhoopSync userId plumbing", () => {
   it("forwards userId to the pre-warm and to each whoopGetAll/whoopGet call", async () => {
     wireHappyPath();

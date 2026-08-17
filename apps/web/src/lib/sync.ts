@@ -1,5 +1,5 @@
 import "server-only";
-import { openWrite } from "@/lib/db/connection";
+import { open, openWrite } from "@/lib/db/connection";
 import { getUserSettings } from "@/lib/db";
 import {
   getIntegration,
@@ -16,10 +16,12 @@ import { getValidAccessToken } from "@/lib/whoop/token";
 import {
   cycleSummaryDate,
   parseDate,
+  recomputeDailySummary,
   recoverySummaryDate,
   sleepSummaryDate,
   toLocalIso,
   upsertBodyMeasurement,
+  upsertCycle,
   workoutSummaryDate,
   type WhoopBodyMeasurement,
   type WhoopCycleRecord,
@@ -74,6 +76,11 @@ export type SyncResult = {
     page_counts: Record<string, number>;
     summary_dates: number;
     body_error?: string;
+    /** Cycles reconcile (issue #415) outcome — absent if it threw before
+     *  producing a result (see `reconcile_error`). */
+    reconcile?: ReconcileCyclesResult;
+    reconcile_ms?: number;
+    reconcile_error?: string;
   };
   error?: string;
   /**
@@ -493,6 +500,162 @@ function latestDates(userId: number): LatestDates {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Cycles reconcile (issue #415)
+//
+// recovery/sleep/workouts each get a second chance to land after the routine
+// `DEFAULT_DAYS`-window sync moves past their date: Whoop delivers
+// recovery.updated / sleep.updated / workout.updated webhooks whenever the
+// upstream record (re)scores, and `webhook-handler.ts` upserts on receipt.
+// Cycles get NO such webhook — Whoop never sends `cycle.updated`, and
+// `handleEvent` has no case for it. So a cycle that was still `score_state !==
+// "SCORED"` at the one moment its date sat inside a routine sync's window is
+// orphaned forever once that window moves on: recovery for the day lands
+// (via its own webhook or a later routine sync), cycles never do.
+//
+// Confirmed against prod (2026-08-16, user 2): the 7 consecutive orphaned
+// dates 2026-07-12..07-18 line up exactly with a 15-day gap in routine
+// (manual/cron/coach) syncs — 2026-07-11 to 2026-07-26, both logged in
+// `sync_logs` — while `recovery.updated`/`sleep.updated` webhooks kept firing
+// throughout that gap (`sync_logs` has zero `cycle.*` event rows, ever).
+// `fetched_counts.cycles` never diverges from `rows_inserted.cycles` in any
+// logged routine sync, so this is a coverage gap (window never reached the
+// date), not a score_state filter dropping fetched-but-unscored records
+// within a covered window.
+//
+// Fix: on every sync, check locally (one indexed SELECT) for recovery rows
+// with no matching cycle row inside a bounded look-back window. If none,
+// return without touching the Whoop API — a clean sync pays one extra SELECT
+// and nothing else. If some are found, issue ONE bounded `/v2/cycle` fetch
+// spanning the orphaned dates (not one call per date) and upsert whichever
+// come back SCORED. Anything still unscored (or just absent from the
+// response — e.g. no cycle ever existed for that date) is left for the next
+// sync to retry; there is no retry-count state, so this can't loop forever,
+// it just no-ops again next time if nothing has changed upstream.
+// ---------------------------------------------------------------------------
+
+export type ReconcileCyclesResult = {
+  lookback_days: number;
+  orphans_found: number;
+  healed: number;
+  /** Orphan dates that came back not-SCORED (or missing entirely) from the
+   *  reconcile fetch — left for a future sync to retry. */
+  still_missing: number;
+  api_calls: number;
+};
+
+function defaultCyclesReconcileLookbackDays(): number {
+  const raw = process.env.CYCLES_RECONCILE_LOOKBACK_DAYS;
+  const n = raw ? Number(raw) : NaN;
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 21;
+}
+
+/** Pure calendar-date arithmetic on a "YYYY-MM-DD" string — UTC-anchored so
+ * it's independent of the caller's tz (the string itself is already the
+ * user's local date; we're just walking it forward/back by whole days). */
+function shiftDateStr(dateStr: string, deltaDays: number): string {
+  const d = new Date(`${dateStr}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + deltaDays);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Recovery dates in `[today - lookbackDays, today)` for `userId` that have
+ * no matching `cycles` row. Excludes today — the current cycle is normally
+ * still open/unscored, and the acceptance criterion is about non-current
+ * days. Read-only open (no migration, no write lock) — a clean sync's entire
+ * reconcile cost.
+ */
+function findOrphanedCycleDates(
+  userId: number,
+  tz: string,
+  lookbackDays: number,
+): string[] {
+  const db = open();
+  if (!db) return [];
+  try {
+    const today = parseDate(new Date().toISOString(), tz);
+    const start = shiftDateStr(today, -lookbackDays);
+    const rows = db
+      .prepare(
+        `SELECT r.date AS date
+         FROM recovery r
+         WHERE r.user_id = ?
+           AND r.date >= ?
+           AND r.date < ?
+           AND NOT EXISTS (
+             SELECT 1 FROM cycles c
+             WHERE c.user_id = r.user_id AND c.date = r.date
+           )
+         ORDER BY r.date`,
+      )
+      .all(userId, start, today) as { date: string }[];
+    return rows.map((r) => r.date);
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Bounded look-back reconcile for the orphaned-cycle gap. Cheap when there's
+ * nothing to do (one SELECT, zero Whoop calls); when orphans exist, issues a
+ * single `/v2/cycle` fetch spanning their date range and upserts whichever
+ * records come back SCORED and match one of the orphaned dates.
+ */
+export async function reconcileCycles(
+  userId: number,
+  tz: string,
+  opts: { signal?: AbortSignal; lookbackDays?: number } = {},
+): Promise<ReconcileCyclesResult> {
+  const lookbackDays = opts.lookbackDays ?? defaultCyclesReconcileLookbackDays();
+  const result: ReconcileCyclesResult = {
+    lookback_days: lookbackDays,
+    orphans_found: 0,
+    healed: 0,
+    still_missing: 0,
+    api_calls: 0,
+  };
+
+  const orphanDates = findOrphanedCycleDates(userId, tz, lookbackDays);
+  result.orphans_found = orphanDates.length;
+  if (orphanDates.length === 0) return result;
+
+  checkAborted(opts.signal);
+
+  // One bounded fetch spanning the full orphan range, padded a day on each
+  // side so a cycle whose UTC `start` falls just outside the local-date
+  // boundary (tz offset) isn't clipped. Never one call per orphaned date.
+  const minDate = orphanDates[0];
+  const maxDate = orphanDates[orphanDates.length - 1];
+  const start = `${shiftDateStr(minDate, -1)}T00:00:00.000Z`;
+  const end = `${shiftDateStr(maxDate, 1)}T00:00:00.000Z`;
+
+  const { records } = await whoopGetAll<WhoopCycleRecord>(
+    "/v2/cycle",
+    { start, end },
+    { userId, signal: opts.signal },
+  );
+  result.api_calls = 1;
+
+  const orphanSet = new Set(orphanDates);
+  const healedDates: string[] = [];
+  for (const r of records) {
+    if (r.score_state !== "SCORED" || !r.score) continue;
+    const date = cycleSummaryDate(r, tz);
+    if (!orphanSet.has(date)) continue;
+    if (upsertCycle(r, userId, tz)) {
+      orphanSet.delete(date);
+      healedDates.push(date);
+    }
+  }
+  result.healed = healedDates.length;
+  result.still_missing = orphanSet.size;
+  for (const date of healedDates) {
+    recomputeDailySummary(date, userId);
+  }
+  return result;
+}
+
 export async function runWhoopSync(
   opts: {
     /** Owner of the Whoop integration to sync. Required — no fallback. */
@@ -611,6 +774,24 @@ export async function runWhoopSync(
     }
     details.body_ms = Date.now() - bodyT0;
     details.summary_dates = syncedDates(data, tz).length;
+
+    // Cycles reconcile (issue #415) — best-effort, like the body upsert
+    // above: a failure here must not fail an otherwise-successful sync.
+    // Cheap when clean (one SELECT, no API call); see `reconcileCycles` doc
+    // comment for the full rationale. Placed before the checkAborted below
+    // so a mid-reconcile abort still surfaces through the existing
+    // post-commit-abort → `partial: true` path rather than being swallowed
+    // here.
+    const reconcileT0 = Date.now();
+    try {
+      details.reconcile = await reconcileCycles(opts.userId, tz, {
+        signal: opts.signal,
+      });
+    } catch (err) {
+      details.reconcile_error =
+        err instanceof Error ? err.message : String(err);
+    }
+    details.reconcile_ms = Date.now() - reconcileT0;
 
     checkAborted(opts.signal);
 
