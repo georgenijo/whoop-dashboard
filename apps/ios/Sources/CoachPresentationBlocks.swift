@@ -1,6 +1,38 @@
 import Charts
+import CoreTransferable
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
+
+struct CoachSummaryImage: Transferable {
+    let data: Data
+
+    static var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(exportedContentType: .png) { summary in
+            summary.data
+        }
+        .suggestedFileName("coach-summary.png")
+    }
+
+    init(text: String) {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 1200, height: 630))
+        let image = renderer.image { context in
+            UIColor(red: 0.96, green: 0.94, blue: 0.90, alpha: 1).setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 1200, height: 630))
+            let paragraph = NSMutableParagraphStyle()
+            paragraph.lineBreakMode = .byWordWrapping
+            ("Coach summary" as NSString).draw(
+                in: CGRect(x: 72, y: 62, width: 1056, height: 52),
+                withAttributes: [.font: UIFont.systemFont(ofSize: 32, weight: .semibold), .foregroundColor: UIColor.black]
+            )
+            (text as NSString).draw(
+                in: CGRect(x: 72, y: 140, width: 1056, height: 420),
+                withAttributes: [.font: UIFont.systemFont(ofSize: 27), .foregroundColor: UIColor.black, .paragraphStyle: paragraph]
+            )
+        }
+        data = image.pngData() ?? Data()
+    }
+}
 
 enum CoachPresentationBlock: Decodable, Hashable {
     case metricStrip(MetricStrip)
@@ -191,7 +223,12 @@ struct CoachPresentationBlocksView: View {
         .padding(12)
         .background(Theme.Palette.bg2, in: RoundedRectangle(cornerRadius: 10))
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.Palette.borderSubtle))
-        .contextMenu { ShareLink(item: fallback(block)) { Label("Share summary", systemImage: "square.and.arrow.up") }; Button { UIPasteboard.general.string = fallback(block) } label: { Label("Copy summary", systemImage: "doc.on.doc") } }
+        .contextMenu {
+            ShareLink(item: CoachSummaryImage(text: fallback(block)), preview: SharePreview("Coach summary")) {
+                Label("Share summary image", systemImage: "square.and.arrow.up")
+            }
+            Button { UIPasteboard.general.string = fallback(block) } label: { Label("Copy summary", systemImage: "doc.on.doc") }
+        }
     }
 
     private func direction(_ value: String) -> String { value == "up" ? " · ↑" : value == "down" ? " · ↓" : "" }

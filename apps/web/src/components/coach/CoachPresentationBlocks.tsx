@@ -36,6 +36,37 @@ function BlockActions({ block }: { block: CoachPresentationBlock }) {
     window.setTimeout(() => setCopied(false), 1_500);
   }
   async function share() {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1_200;
+    canvas.height = 630;
+    const context = canvas.getContext("2d");
+    if (!context) return copy();
+    context.fillStyle = "#f4f0e8";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = "#171714";
+    context.font = "600 32px system-ui";
+    context.fillText("Coach summary", 72, 88);
+    context.font = "400 27px system-ui";
+    const words = blockText(block).split(/\s+/);
+    const lines: string[] = [];
+    let line = "";
+    for (const word of words) {
+      const candidate = `${line} ${word}`.trim();
+      if (context.measureText(candidate).width > 1_050) {
+        lines.push(line);
+        line = word;
+      } else line = candidate;
+    }
+    if (line) lines.push(line);
+    lines.slice(0, 9).forEach((item, index) => context.fillText(item, 72, 155 + index * 45));
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+    if (blob && navigator.share) {
+      const file = new File([blob], "coach-summary.png", { type: "image/png" });
+      if (!navigator.canShare || navigator.canShare({ files: [file] })) {
+        await navigator.share({ title: "Coach summary", text: blockText(block), files: [file] });
+        return;
+      }
+    }
     if (navigator.share) await navigator.share({ title: "Coach summary", text: blockText(block) });
     else await copy();
   }
@@ -57,6 +88,11 @@ function RichChart({ block }: { block: ChartBlock }) {
     })),
     [block],
   );
+  async function copyTable() {
+    const header = ["Period", ...block.series.map((series) => `${series.label}${series.unit ? ` (${series.unit})` : ""}`), "Note"];
+    const body = rows.map((row) => [row.label, ...block.series.map((series) => row[series.id] ?? ""), row.anomaly ?? ""]);
+    await navigator.clipboard.writeText([header, ...body].map((row) => row.join("\t")).join("\n"));
+  }
   return (
     <section className="coach-inline-chart" aria-label={block.title}>
       <div className="coach-inline-chart-head">
@@ -96,7 +132,7 @@ function RichChart({ block }: { block: ChartBlock }) {
           </table>
         </div>
       )}
-      <BlockActions block={block} />
+      <div className="coach-rich-chart-actions"><button type="button" onClick={copyTable}>Copy table</button><BlockActions block={block} /></div>
     </section>
   );
 }

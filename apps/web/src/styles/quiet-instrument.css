@@ -751,6 +751,8 @@ body:has(.coach-page) .bottom-nav { display: none; }
 .coach-rich-plan ul, .coach-rich-block ol, .coach-rich-block ul { margin-block: var(--s1) 0; padding-left: 1.1rem; }
 .coach-rich-block li small { display: block; color: var(--fg-3); }
 .coach-rich-actions { display: flex; justify-content: flex-end; gap: var(--s1); margin-top: var(--s2); }
+.coach-rich-chart-actions { display: flex; align-items: end; justify-content: space-between; gap: var(--s2); }
+.coach-rich-chart-actions > button { border: 0; background: transparent; color: var(--fg-3); font: 500 0.68rem/1 var(--font-sans); cursor: pointer; padding: var(--s1); }
 .coach-rich-actions button, .coach-rich-block > button, .coach-rich-block a { border: 0; background: transparent; color: var(--fg-3); font: 500 0.68rem/1 var(--font-sans); cursor: pointer; padding: var(--s1); }
 .coach-rich-actions button:hover, .coach-rich-actions button:focus-visible, .coach-rich-block > button:hover, .coach-rich-block a:hover { color: var(--fg-0); }
 .prose-coach.is-streaming::after,
