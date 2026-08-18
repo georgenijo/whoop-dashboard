@@ -251,10 +251,10 @@ describe("runCursorAcpTurn", () => {
           update: {
             sessionUpdate: "tool_call",
             toolCallId: `tool-${index}`,
-            title: "Query recovery",
+            title: "MCP: tool",
             status: "completed",
             rawInput: {},
-            rawOutput: { content: [{ type: "text", text: "[]" }] },
+            rawOutput: { success: true },
           },
         });
       }
@@ -281,6 +281,77 @@ describe("runCursorAcpTurn", () => {
       }),
     ).rejects.toThrow("exceeded 12 tool calls");
     expect(runtime.cancelActiveTurn).toHaveBeenCalledOnce();
+  });
+
+  it("tracks Cursor's generic production MCP event without fabricating history", async () => {
+    runtime.prompt.mockImplementationOnce(async (_text, _signal, onUpdate) => {
+      onUpdate({
+        sessionId: "session-1",
+        update: {
+          sessionUpdate: "tool_call",
+          toolCallId: "generic-mcp-tool",
+          title: "MCP: tool",
+          kind: "other",
+          status: "pending",
+          rawInput: {},
+        },
+      });
+      onUpdate({
+        sessionId: "session-1",
+        update: {
+          sessionUpdate: "tool_call_update",
+          toolCallId: "generic-mcp-tool",
+          status: "completed",
+          rawOutput: { success: true },
+        },
+      });
+      onUpdate({
+        sessionId: "session-1",
+        update: {
+          sessionUpdate: "agent_message_chunk",
+          content: { type: "text", text: "Recovery is 81%." },
+        },
+      });
+      return { stopReason: "end_turn", usage: {} };
+    });
+    const toolDetails: never[] = [];
+    const detailState = { iterations: 0 };
+    const onToolUseStart = vi.fn();
+    const onToolUseEnd = vi.fn();
+
+    const result = await runCursorAcpTurn({
+      userId: 7,
+      threadId: 150,
+      model: "gpt-5.6-luna",
+      turn: { displayText: "Recovery?", modelText: "Recovery?", images: [] },
+      conversation: [],
+      toolDetails,
+      usage: {
+        input_tokens_total: 0,
+        output_tokens_total: 0,
+        cache_creation_input_tokens_total: 0,
+        cache_read_input_tokens_total: 0,
+        calls: 0,
+      },
+      detailState,
+      options: { onToolUseStart, onToolUseEnd },
+    });
+
+    expect(onToolUseStart).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "whoop_tool" }),
+    );
+    expect(onToolUseEnd).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "whoop_tool", status: "ok" }),
+    );
+    expect(toolDetails).toHaveLength(1);
+    expect(result.messages.map((message) => message.role)).toEqual([
+      "user",
+      "assistant",
+    ]);
+    expect(detailState).toMatchObject({
+      iterations: 2,
+      cursor: { attempted_tool_calls: 1 },
+    });
   });
 
   it("closes a started tool event when the prompt stops early", async () => {

@@ -43,6 +43,29 @@ type AcpToolState = {
   completedEmitted: boolean;
 };
 
+const GENERIC_CURSOR_MCP_TOOL_NAME = "whoop_tool";
+
+function trackedToolName(state: AcpToolState): {
+  name: string;
+  canonical: boolean;
+} | null {
+  const canonical =
+    canonicalCoachToolName(state.name) ??
+    canonicalCoachToolName(state.title);
+  if (canonical) return { name: canonical, canonical: true };
+
+  // Cursor Agent 2026.08 currently redacts MCP call metadata from ACP
+  // notifications. Calls from the only configured MCP server arrive as the
+  // literal title `MCP: tool`, empty input, and `{ success: true }` output.
+  // Track that shape so live activity, audit counts, and the tool-call cap do
+  // not silently disappear. Do not persist a fabricated tool_use block into
+  // conversation history because Cursor did not disclose the real tool name.
+  if (state.title.trim().toLowerCase() === "mcp: tool") {
+    return { name: GENERIC_CURSOR_MCP_TOOL_NAME, canonical: false };
+  }
+  return null;
+}
+
 function mergeToolState(
   previous: AcpToolState | undefined,
   update: ToolCall | ToolCallUpdate,
@@ -344,10 +367,9 @@ export async function runCursorAcpTurn(
 
         const finishTool = (state: AcpToolState) => {
           if (state.completedEmitted) return;
-          const name =
-            canonicalCoachToolName(state.name) ??
-            canonicalCoachToolName(state.title);
-          if (!name) return;
+          const tracked = trackedToolName(state);
+          if (!tracked) return;
+          const { name } = tracked;
           state.completedEmitted = true;
           completedToolCalls += 1;
           if (completedToolCalls > MAX_CURSOR_TOOL_CALLS) {
@@ -389,7 +411,7 @@ export async function runCursorAcpTurn(
             ...(isError ? { error: resultText.slice(0, 200) } : {}),
             response: captureToolResponse(unwrapped.value),
           });
-          if (name !== "view_chat_image") {
+          if (tracked.canonical && name !== "view_chat_image") {
             messages.push({
               role: "assistant",
               content: "",
@@ -420,10 +442,9 @@ export async function runCursorAcpTurn(
         const updateTool = (update: ToolCall | ToolCallUpdate) => {
           const state = mergeToolState(tools.get(update.toolCallId), update);
           tools.set(state.id, state);
-          const name =
-            canonicalCoachToolName(state.name) ??
-            canonicalCoachToolName(state.title);
-          if (name && !state.startedEmitted) {
+          const tracked = trackedToolName(state);
+          if (tracked && !state.startedEmitted) {
+            const { name } = tracked;
             state.startedEmitted = true;
             visibleText.toolBoundary();
             pendingAssistant = null;

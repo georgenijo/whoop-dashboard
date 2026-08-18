@@ -4,6 +4,7 @@ import ToolResponseBlock from "@/components/logs/ToolResponseBlock";
 import type { CoachToolActivity } from "@/lib/coach/work-log-types";
 
 const TOOL_LABELS: Record<string, { active: string; complete: string }> = {
+  whoop_tool: { active: "Querying Whoop", complete: "Queried Whoop" },
   query_recovery: { active: "Querying recovery", complete: "Queried recovery" },
   query_sleep: { active: "Querying sleep", complete: "Queried sleep" },
   query_strain: { active: "Querying strain", complete: "Queried strain" },

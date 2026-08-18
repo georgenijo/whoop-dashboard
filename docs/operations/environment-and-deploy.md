@@ -127,12 +127,14 @@ workflow. The flag controls settings validation and execution together, so the
 model picker never accepts a model from one transport and executes it through
 another. Rollback is the inverse environment change; it requires no DB change.
 
-Run the ACP canary from the app environment before enabling the flag. It opens
-an isolated ACP session with `mcpServers: []`, so it verifies the authenticated
-runtime catalog without starting the Whoop MCP server or spending a model turn:
+Run the ACP canary from the app environment before enabling the flag. Resolve
+the same server-side per-user BYOK credential that Coach will use; do not test
+only the optional shared `CURSOR_API_KEY` fallback. The canary opens an isolated
+ACP session with `mcpServers: []`, so it verifies the authenticated runtime
+catalog without starting the Whoop MCP server or spending a model turn:
 
 ```bash
-fleet exec opti 'cd /home/george/Documents/whoop-dashboard && ~/.nvm/versions/node/v20.20.2/bin/node --env-file=apps/web/.env.local scripts/check-cursor-acp.mjs /home/george/.local/bin/cursor-agent gpt-5.6-luna'
+fleet exec opti 'cd /home/george/Documents/whoop-dashboard/apps/web && ~/.nvm/versions/node/v20.20.2/bin/node --env-file=.env.local --conditions=react-server --import tsx scripts/check-cursor-acp-user.ts 2 /home/george/.local/bin/cursor-agent gpt-5.6-luna'
 ```
 
 ```bash
