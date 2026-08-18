@@ -99,7 +99,6 @@ export default function CoachModelPicker({
   const menuId = useId();
   const controlRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const lastCustomizedModelPrefRef = useRef<string | null>(null);
   const customizationBackRef = useRef<HTMLButtonElement>(null);
   const restoreCustomizationFocusRef = useRef(false);
@@ -264,9 +263,7 @@ export default function CoachModelPicker({
           button.dataset.modelPref === lastCustomizedModelPrefRef.current,
       );
       target?.focus();
-      return;
     }
-    searchInputRef.current?.focus();
   }, [customizingModelPref, open]);
 
   useEffect(() => {
@@ -717,7 +714,6 @@ export default function CoachModelPicker({
                 <label className="coach-model-search">
                   <Search size={14} strokeWidth={1.8} aria-hidden />
                   <input
-                    ref={searchInputRef}
                     type="search"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
