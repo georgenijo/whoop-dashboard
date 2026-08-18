@@ -963,13 +963,13 @@ body {
 
 .coach-effort-options {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
 }
 
 .coach-effort-options button {
   min-width: 0;
-  min-height: 40px;
+  min-height: 38px;
   display: flex;
   align-items: center;
   justify-content: space-between;
