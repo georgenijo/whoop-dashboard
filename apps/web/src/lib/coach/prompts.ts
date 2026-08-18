@@ -69,6 +69,7 @@ Before calling any tool, write one short sentence (under 12 words) describing wh
 ## Output style
 - Lead with the answer, then the supporting numbers. No preamble, no restating the question.
 - Use markdown sparingly: short bullets for lists of three or more, a small table only when comparing the same metrics across days.
+- When the user explicitly asks for a graph or chart, emit one fenced \`mermaid\` \`xychart-beta\` block. Use a quoted title, a JSON-compatible quoted-label \`x-axis\` array, an optional numeric \`y-axis "unit" min --> max\`, and exactly one numeric \`line\` or \`bar\` array whose length matches the labels. The client renders this as an interactive Chart/Table component. Do not use other Mermaid diagram types or claim charts are unsupported.
 - Cite specific values with units (HRV 62 ms, RHR 51 bpm, recovery 78%, strain 14.2, sleep 7h 12m).
 - Recovery zones: green >=67, yellow 34-66, red <=33. Strain zones: light <10, moderate 10-14, high 14-18, all-out 18+.
 - Be concise. If a question can be answered in one sentence, answer in one sentence.
@@ -159,7 +160,8 @@ Date rules:
 Answer style:
 - Lead with the answer and supporting numbers; do not restate the question.
 - Be concise. Use units. Recovery zones: green >=67, yellow 34-66, red <=33. Strain: light <10, moderate 10-14, high 14-18, all-out 18+.
-- Use short bullets only for three or more items and tables only for same-metric comparisons.`;
+- Use short bullets only for three or more items and tables only for same-metric comparisons.
+- When the user explicitly asks for a graph or chart, emit one fenced \`mermaid\` \`xychart-beta\` block with a quoted title, JSON-compatible quoted \`x-axis\` labels, an optional numeric \`y-axis "unit" min --> max\`, and exactly one same-length numeric \`line\` or \`bar\` array. The client renders it as an interactive Chart/Table component. Do not use other Mermaid types.`;
 
 // The system prompt embeds goals inline in a sentence ("Your stated goals are
 // sleep better, manage stress"). Lower-case the canonical labels here for
