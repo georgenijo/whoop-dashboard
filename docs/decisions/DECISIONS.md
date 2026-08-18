@@ -6,6 +6,30 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-18: Coach model choice does not remove core tools
+
+**Decision:** Every selectable Coach model receives the same product-owned tool surface, including guarded Whoop sync. Cursor-backed models expose `trigger_whoop_sync` through the existing per-turn MCP server; the shared `executeTool` path continues to enforce tenant scoping, the one-sync-per-turn cap, and the sync cooldown.
+
+**Rationale:** Model selection is a quality and latency choice, not a capability mode. Omitting sync only from Cursor-backed models caused a selected GPT model to tell the user that sync was unavailable even though the Coach product and system prompt promised it.
+
+**Status:** active
+
+**References:** `apps/web/src/coach-mcp/tool-policy.ts`, `apps/web/src/coach-mcp/server.ts`, `apps/web/src/lib/coach/tools.ts`
+
+---
+
+## 2026-08-18: Model selection uses one compact searchable panel
+
+**Decision:** Keep model search, selection, and model-specific reasoning controls inside a single compact picker. Model rows use a conventional right-facing drill-in affordance, reasoning replaces the list within the same panel, and a left-facing back control returns to the filtered model list.
+
+**Rationale:** The prior desktop interaction opened a second panel to the left while leaving the parent list visible on the right, reversing normal navigation direction and consuming excessive space. A single-panel flow preserves context and scales better as the live Cursor catalog grows.
+
+**Status:** active
+
+**References:** `apps/web/src/components/coach/CoachModelPicker.tsx`, `apps/web/src/app/globals.css`
+
+---
+
 ## 2026-08-17: Refresh-only keepalive authenticates via fail-closed shared-secret bearer, exempted by exact path
 
 **Decision:** `POST /api/whoop/refresh` (#273) force-refreshes every active (not already `needs_reauth`) user's Whoop token via the existing `getValidAccessToken(userId, true)` path on a 30-minute systemd timer, and is gated by a shared-secret `Authorization: Bearer <secret>` compared with `crypto.timingSafeEqual` (length-guarded so mismatched lengths can't throw). The secret lives in `WHOOP_REFRESH_SECRET`; when unset or empty the route returns 404 and does nothing. This fails closed the same way the `ADMIN_APPLE_SUB` admin gate does (unconfigured → no access), but the concrete HTTP shape is deliberately different, not copied: `ADMIN_APPLE_SUB` requires a signed-in session first, then returns 500 (unconfigured) or 403 (wrong admin); this route has no session at all — a systemd timer holds only the bearer secret — so it returns 404 when the secret is unconfigured and 401 for a missing/wrong bearer against a configured secret. The exact path `/api/whoop/refresh` (not a broader `/api/whoop/` prefix, which would also expose the webhook-adjacent surface) is added to `AUTH_EXEMPT_PREFIXES` in `apps/web/src/proxy.ts` so the timer can reach it without a session cookie. No loopback/source-IP check was added. A run with any per-user failure (or nothing active to refresh) returns HTTP 502, not 200, so `curl --fail` — and therefore the systemd unit — actually fails when the keepalive isn't doing its job; each attempt also writes a `sync_logs` row (`source = "keepalive"`) so a failure is visible on `/logs`, not just in journald. The systemd unit reads the bearer value from a `root:george`-owned, mode-640 header file via `curl -H @file`, never from an expanded `${VAR}` in `ExecStart` — the latter lands the secret in the process's argv, which is readable via `/proc/<pid>/cmdline` for the life of the call. Mode 640 (not 600) is deliberate: the unit runs as `User=george`, not root, so the file has to stay group-readable by that account or every invocation fails closed forever with no signal beyond a failed systemd unit — root-only ownership was an internal inconsistency caught in review and corrected before merge.

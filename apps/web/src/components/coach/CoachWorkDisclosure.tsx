@@ -107,7 +107,7 @@ export default function CoachWorkDisclosure({
         ))}
         {phase ? (
           <div className="coach-work-trace-row is-current">
-            <span className="coach-work-step running" aria-hidden="true" />
+            <span className="coach-work-step current" aria-hidden="true" />
             <div className="coach-work-phase">{phase}</div>
           </div>
         ) : null}

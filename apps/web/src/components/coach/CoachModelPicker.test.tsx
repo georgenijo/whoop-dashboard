@@ -152,6 +152,27 @@ describe("CoachModelPicker", () => {
     expect(onSavingChange).toHaveBeenLastCalledWith(false);
   });
 
+  it("filters the model catalog from the search field", async () => {
+    fetchMock.mockResolvedValue(catalogResponse());
+    renderPicker();
+
+    openPicker();
+    const search = screen.getByRole("searchbox", { name: "Search models" });
+    fireEvent.change(search, { target: { value: "gpt" } });
+
+    expect(
+      await screen.findByRole("button", { name: "Select GPT-5.5 High" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Select Claude Sonnet 4.6" }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: "nothing here" } });
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "No models match “nothing here”",
+    );
+  });
+
   it("restores the previous model and surfaces an inline save error", async () => {
     fetchMock
       .mockResolvedValueOnce(catalogResponse())
@@ -370,7 +391,7 @@ describe("CoachModelPicker", () => {
     );
   });
 
-  it("shows models first and keeps reasoning in a model submenu", () => {
+  it("shows models first and replaces them with compact reasoning controls", () => {
     fetchMock.mockResolvedValue(catalogResponse());
     renderPicker();
 
@@ -388,6 +409,14 @@ describe("CoachModelPicker", () => {
     );
 
     expect(
+      screen.queryByRole("region", { name: "Choose a model" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("region", {
+        name: "Claude Sonnet 4.6 customization",
+      }),
+    ).toBeVisible();
+    expect(
       screen.getByRole("radiogroup", { name: "Thinking effort" }),
     ).toBeVisible();
     expect(
@@ -395,7 +424,7 @@ describe("CoachModelPicker", () => {
     ).toBeVisible();
   });
 
-  it("uses inverted submenu directions and restores focus when going back", () => {
+  it("uses conventional drill-in directions and restores focus when going back", () => {
     fetchMock.mockResolvedValue(catalogResponse());
     renderPicker();
 
@@ -403,19 +432,27 @@ describe("CoachModelPicker", () => {
     const customize = screen.getByRole("button", {
       name: "Customize Claude Sonnet 4.6",
     });
-    expect(customize.querySelector(".lucide-chevron-left")).not.toBeNull();
+    expect(customize.querySelector(".lucide-chevron-right")).not.toBeNull();
 
     fireEvent.click(customize);
     const back = screen.getByRole("button", { name: "Back to models" });
-    expect(back.querySelector(".lucide-chevron-right")).not.toBeNull();
+    expect(back.querySelector(".lucide-chevron-left")).not.toBeNull();
+    expect(document.querySelectorAll(".coach-model-menu")).toHaveLength(1);
     expect(back).toHaveFocus();
 
     fireEvent.click(back);
-    expect(customize).toHaveFocus();
+    const restoredCustomize = screen.getByRole("button", {
+      name: "Customize Claude Sonnet 4.6",
+    });
+    expect(restoredCustomize).toHaveFocus();
 
-    fireEvent.click(customize);
+    fireEvent.click(restoredCustomize);
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(customize).toHaveFocus();
+    expect(
+      screen.getByRole("button", {
+        name: "Customize Claude Sonnet 4.6",
+      }),
+    ).toHaveFocus();
     expect(
       screen.queryByRole("region", {
         name: "Claude Sonnet 4.6 customization",

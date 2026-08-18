@@ -758,10 +758,12 @@ body:has(.coach-page) .bottom-nav { display: none; }
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.coach-work-step.running {
-  border: 1.5px solid var(--rule);
-  border-top-color: var(--fg-2);
-  animation: coach-work-spin 720ms linear infinite;
+.coach-work-step.current::after {
+  content: "";
+  width: 4px;
+  height: 4px;
+  border-radius: var(--r-full);
+  background: var(--fg-3);
 }
 .coach-work-note {
   max-width: none;
@@ -941,10 +943,6 @@ body:has(.coach-page) .bottom-nav { display: none; }
   to { background-position: -40% 0; }
 }
 
-@keyframes coach-work-spin {
-  to { transform: rotate(360deg); }
-}
-
 @keyframes coach-streaming-cursor {
   0%, 45% { opacity: 1; }
   46%, 100% { opacity: 0.2; }
@@ -953,7 +951,6 @@ body:has(.coach-page) .bottom-nav { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .coach-activity-mark.is-active > span,
   .coach-work-disclosure.running .coach-work-summary-label,
-  .coach-work-step.running,
   .coach-tool-call.running .coach-tool-state,
   .prose-coach.is-streaming::after,
   .prose-coach.is-streaming > :last-child::after {

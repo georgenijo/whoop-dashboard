@@ -106,6 +106,16 @@ describe("CoachWorkDisclosure", () => {
     expect(container.querySelector(".coach-tool-state")).not.toBeNull();
   });
 
+  it("uses one animated activity mark and a static current-phase marker", () => {
+    const { container } = render(
+      <CoachWorkDisclosure workLog={log("running")} startedAt={Date.now()} />,
+    );
+
+    expect(container.querySelector(".coach-activity-mark.is-active")).not.toBeNull();
+    expect(container.querySelector(".coach-work-step.current")).not.toBeNull();
+    expect(container.querySelector(".coach-work-step.running")).toBeNull();
+  });
+
   it("reports no tools for a direct reply", () => {
     render(<CoachWorkDisclosure workLog={log("complete")} />);
     expect(screen.getByText("No tool calls")).toBeInTheDocument();

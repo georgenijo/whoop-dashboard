@@ -1,4 +1,4 @@
-// Stdio MCP server that exposes the coach's read tools to the Cursor Composer
+// Stdio MCP server that exposes Coach tools to the Cursor Composer
 // provider. Spawned as a subprocess BY cursor-agent (see cursor-loop.ts), one
 // process per coach turn. It reuses the app's real `executeTool` / `TOOLS`, so
 // tool output shapes and `forUser(userId)` scoping are identical to the
@@ -22,30 +22,18 @@ import {
   type ToolTurnState,
 } from "@/lib/coach/tools";
 import { viewChatImage } from "./chat-image-tool";
+import { COACH_MCP_TOOL_NAMES, isCoachMcpToolName } from "./tool-policy";
 
 // Tools surfaced to Composer. CROSS-PROVIDER NOTE (issue #421): prod runs the
 // Cursor (Composer) coach, not Anthropic, so a tool registered ONLY in the
 // Anthropic `TOOLS` array would be dead on prod — it MUST also be listed here.
 //
-// `trigger_whoop_sync` stays omitted (network + sync-cooldown semantics don't
-// belong in a `--mode ask` turn — the manual Sync button / Anthropic coach
-// cover it). `save_workout_plan` IS exposed despite being a write: the Plans
-// feature is the point, and the cli.json `permissions.allow: ["Mcp(whoop:*)"]`
-// already permits our MCP tools (the `--mode ask` read-only restriction applies
-// to Cursor's BUILT-IN Shell/Write/WebFetch tools, not to allowlisted MCP
-// tools). All writes still go through the same user-scoped executeTool path.
-const EXPOSED_TOOL_NAMES = new Set([
-  "query_recovery",
-  "query_sleep",
-  "query_strain",
-  "query_workouts",
-  "query_naps",
-  "query_journal",
-  "query_daily_snapshot",
-  "query_workout_plans",
-  "save_workout_plan",
-  "view_chat_image",
-]);
+// `trigger_whoop_sync` and `save_workout_plan` are exposed despite being
+// writes: both are core Coach features, and their existing executeTool paths
+// enforce user scoping, per-turn limits/deduplication, and sync cooldowns. The
+// cli.json `permissions.allow: ["Mcp(whoop:*)"]` permits only our MCP surface;
+// `--mode ask` plus the explicit deny list still block Cursor's built-in
+// Shell/Write/WebFetch tools.
 
 const USER_ID = Number(process.env.COACH_MCP_USER_ID);
 const ATTACHMENT_MANIFEST = process.env.COACH_MCP_ATTACHMENT_MANIFEST ?? "";
@@ -86,7 +74,7 @@ function listTools() {
     name: string;
     description: string;
     inputSchema: unknown;
-  }> = TOOLS.filter((t) => EXPOSED_TOOL_NAMES.has(t.name)).map((t) => ({
+  }> = TOOLS.filter((t) => COACH_MCP_TOOL_NAMES.has(t.name)).map((t) => ({
     name: t.name,
     description: t.description,
     inputSchema: t.input_schema,
@@ -113,7 +101,7 @@ function listTools() {
 async function callTool(id: JsonRpcId, params: unknown) {
   const p = (params ?? {}) as { name?: string; arguments?: unknown };
   const name = p.name;
-  if (!name || !EXPOSED_TOOL_NAMES.has(name)) {
+  if (!isCoachMcpToolName(name)) {
     return replyError(id, -32601, `Unknown or unavailable tool: ${name}`);
   }
   try {
