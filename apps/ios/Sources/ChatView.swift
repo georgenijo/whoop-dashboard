@@ -15,7 +15,7 @@ struct ChatView: View {
     @State private var sendError: String?
     @State private var didLoadInitial = false
     @State private var streamingAssistant: StreamingAssistant?
-    @State private var activeTools: [ToolChip] = []
+    @State private var activeTools: [LiveToolActivity] = []
     @State private var recoveryStatus: RecoveryStatus?
     @State private var showAbandonRecoveryConfirmation = false
     @State private var photoPickerItems: [PhotosPickerItem] = []
@@ -32,12 +32,6 @@ struct ChatView: View {
     struct StreamingAssistant {
         let id: UUID
         var text: String
-    }
-
-    struct ToolChip: Identifiable, Hashable {
-        let id = UUID()
-        let name: String
-        var stage: String?
     }
 
     enum RecoveryStatus: Equatable {
@@ -64,9 +58,6 @@ struct ChatView: View {
     var body: some View {
         VStack(spacing: 0) {
             messagesList
-            if !activeTools.isEmpty {
-                toolChipsBar
-            }
             if let recoveryStatus {
                 recoveryBar(recoveryStatus)
             }
@@ -159,30 +150,6 @@ struct ChatView: View {
         .background(Theme.Palette.ai.opacity(0.06))
     }
 
-    private var toolChipsBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                ForEach(activeTools) { chip in
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(Theme.Palette.recovery)
-                            .frame(width: 5, height: 5)
-                            .shadow(color: Theme.Palette.recovery.opacity(0.7), radius: 3)
-                        Text(chip.stage.map { "\(chip.name) · \($0)" } ?? chip.name)
-                            .font(Theme.FontStyle.mono(10))
-                            .foregroundStyle(Theme.Palette.fg2)
-                    }
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 3)
-                    .background(Theme.Palette.ai.opacity(0.07), in: Capsule())
-                    .overlay(Capsule().strokeBorder(Theme.Palette.ai.opacity(0.18), lineWidth: 1))
-                }
-            }
-            .padding(.horizontal, Theme.Spacing.md)
-            .padding(.vertical, 6)
-        }
-    }
-
     private func sendErrorBanner(_ text: String) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
@@ -240,6 +207,7 @@ struct ChatView: View {
                         ForEach(rows) { row in
                             MessageBubble(
                                 row: row,
+                                activeTools: activeTools,
                                 api: api,
                                 cache: attachmentCache,
                                 onAttachmentTap: { selectedAttachment = $0 }
@@ -333,70 +301,55 @@ struct ChatView: View {
                 }
             }
 
-            HStack {
-                CoachModelPicker(disabled: isSending)
-                Spacer()
-            }
-
-            HStack(spacing: 8) {
-                PhotosPicker(
-                    selection: $photoPickerItems,
-                    maxSelectionCount: max(1, 3 - pendingImages.count),
-                    matching: .images
-                ) {
-                    Image(systemName: "photo.on.rectangle.angled")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(Theme.Palette.fg1)
-                        .frame(width: 36, height: 36)
-                        .background(Color.black.opacity(0.4), in: Circle())
-                        .overlay(
-                            Circle().strokeBorder(
-                                Theme.Palette.borderDefault,
-                                lineWidth: 1
-                            )
-                        )
-                }
-                .disabled(isSending || isPreparingImages || pendingImages.count >= 3)
-                .accessibilityLabel("Choose photos")
-                .accessibilityValue("\(pendingImages.count) of 3 selected")
+            VStack(alignment: .leading, spacing: 8) {
+                TextField("Ask about recovery, sleep, strain…", text: $input, axis: .vertical)
+                    .font(Theme.FontStyle.sans(13))
+                    .foregroundStyle(Theme.Palette.fg0)
+                    .lineLimit(1...5)
+                    .disabled(isSending)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 2)
+                    .padding(.vertical, 4)
 
                 HStack(spacing: 8) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Theme.Palette.fg3)
-                    TextField("Ask your data…", text: $input, axis: .vertical)
-                        .font(Theme.FontStyle.sans(13))
-                        .foregroundStyle(Theme.Palette.fg0)
-                        .lineLimit(1...5)
-                        .disabled(isSending)
-                        .textFieldStyle(.plain)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background(Color.black.opacity(0.4), in: Capsule())
-                .overlay(Capsule().strokeBorder(Theme.Palette.borderDefault, lineWidth: 1))
+                    PhotosPicker(
+                        selection: $photoPickerItems,
+                        maxSelectionCount: max(1, 3 - pendingImages.count),
+                        matching: .images
+                    ) {
+                        Image(systemName: "paperclip")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Theme.Palette.fg2)
+                            .frame(width: 32, height: 32)
+                    }
+                    .disabled(isSending || isPreparingImages || pendingImages.count >= 3)
+                    .accessibilityLabel("Choose photos")
+                    .accessibilityValue("\(pendingImages.count) of 3 selected")
 
-                Button {
-                    Task { await send() }
-                } label: {
-                    Text("Send")
-                        .font(Theme.FontStyle.sans(11.5, weight: .semibold))
-                        .foregroundStyle(Color.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 9)
-                        .background(
-                            LinearGradient(
-                                colors: [Color(hex: "#8b6fff"), Color(hex: "#6a4dff")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            in: Capsule()
-                        )
-                        .shadow(color: Theme.Palette.ai.opacity(0.45), radius: 8, y: 3)
-                        .opacity(canSend ? 1 : 0.4)
+                    Spacer(minLength: 4)
+
+                    CoachModelPicker(disabled: isSending)
+
+                    Button {
+                        Task { await send() }
+                    } label: {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(Theme.Palette.bg0)
+                            .frame(width: 32, height: 32)
+                            .background(Theme.Palette.fg0, in: RoundedRectangle(cornerRadius: 7))
+                            .opacity(canSend ? 1 : 0.35)
+                    }
+                    .disabled(!canSend)
+                    .accessibilityLabel("Send message")
                 }
-                .disabled(!canSend)
             }
+            .padding(10)
+            .background(Theme.Palette.bg1, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .strokeBorder(Theme.Palette.borderDefault, lineWidth: 1)
+            )
         }
         .padding(.horizontal, Theme.Spacing.md)
         .padding(.vertical, 10)
@@ -562,13 +515,13 @@ struct ChatView: View {
                     appendStreamingDelta(delta)
 
                 case .toolUseStart(let name):
-                    activeTools.append(ToolChip(name: name, stage: nil))
+                    activeTools.append(LiveToolActivity(name: name, stage: nil))
 
                 case .toolProgress(let tool, let stage, _):
                     if let idx = activeTools.lastIndex(where: { $0.name == tool }) {
                         activeTools[idx].stage = stage
                     } else {
-                        activeTools.append(ToolChip(name: tool, stage: stage))
+                        activeTools.append(LiveToolActivity(name: tool, stage: stage))
                     }
 
                 case .toolUseEnd(let name, _, _, _, _):
@@ -740,12 +693,12 @@ struct ChatView: View {
         } else {
             let assistant = StreamingAssistant(id: UUID(), text: delta)
             streamingAssistant = assistant
-            rows.removeAll { if case .typing = $0 { return true }; return false }
             rows.append(.streaming(id: assistant.id, content: assistant.text))
         }
     }
 
     private func commitAssistant(reply: String) {
+        rows.removeAll { if case .typing = $0 { return true }; return false }
         if let assistant = streamingAssistant,
             let idx = rows.firstIndex(where: { row in
                 if case .streaming(let id, _) = row { return id == assistant.id }
@@ -838,6 +791,7 @@ struct ChatView: View {
 
 private struct MessageBubble: View {
     let row: ChatView.ChatRow
+    let activeTools: [LiveToolActivity]
     let api: APIClient
     let cache: ChatAttachmentCache
     let onAttachmentTap: (ChatAttachment) -> Void
@@ -850,6 +804,7 @@ private struct MessageBubble: View {
                 content: message.content,
                 attachments: message.attachments,
                 pendingAttachments: [],
+                workLog: message.workLog,
                 dimmed: false
             )
         case .optimistic(_, let content, let attachments):
@@ -858,6 +813,7 @@ private struct MessageBubble: View {
                 content: content,
                 attachments: [],
                 pendingAttachments: attachments,
+                workLog: nil,
                 dimmed: true
             )
         case .streaming(_, let content):
@@ -866,18 +822,11 @@ private struct MessageBubble: View {
                 content: content,
                 attachments: [],
                 pendingAttachments: [],
+                workLog: nil,
                 dimmed: false
             )
         case .typing:
-            HStack(spacing: 8) {
-                ThinkingDots()
-                Text("thinking…")
-                    .font(Theme.FontStyle.sans(11))
-                    .foregroundStyle(Theme.Palette.fg3)
-                Spacer()
-            }
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            LiveCoachWorkView(tools: activeTools)
         }
     }
 
@@ -887,6 +836,7 @@ private struct MessageBubble: View {
         content: String,
         attachments: [ChatAttachment],
         pendingAttachments: [PendingChatImage],
+        workLog: CoachWorkLog?,
         dimmed: Bool
     ) -> some View {
         HStack {
@@ -895,10 +845,11 @@ private struct MessageBubble: View {
                 role: role,
                 content: content,
                 attachments: attachments,
-                pendingAttachments: pendingAttachments
+                pendingAttachments: pendingAttachments,
+                workLog: workLog
             )
-                .padding(.horizontal, 14)
-                .padding(.vertical, 11)
+                .padding(.horizontal, role == .user ? 14 : 0)
+                .padding(.vertical, role == .user ? 11 : 0)
                 .background(bubbleBackground(role: role, dimmed: dimmed))
                 .overlay(bubbleBorder(role: role))
                 .foregroundStyle(role == .user ? Theme.Palette.fg0 : Theme.Palette.fg1)
@@ -914,11 +865,17 @@ private struct MessageBubble: View {
         role: ChatMessage.Role,
         content: String,
         attachments: [ChatAttachment],
-        pendingAttachments: [PendingChatImage]
+        pendingAttachments: [PendingChatImage],
+        workLog: CoachWorkLog?
     ) -> some View {
         if role == .assistant {
-            MarkdownView(content: content)
-                .font(Theme.FontStyle.sans(13))
+            VStack(alignment: .leading, spacing: 10) {
+                if let workLog {
+                    CoachWorkLogView(workLog: workLog)
+                }
+                MarkdownView(content: content)
+                    .font(Theme.FontStyle.sans(13))
+            }
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 if !attachments.isEmpty {
@@ -973,17 +930,14 @@ private struct MessageBubble: View {
             if role == .user {
                 Color.white.opacity(dimmed ? 0.04 : 0.06)
             } else {
-                Theme.Palette.ai.opacity(0.08)
+                Color.clear
             }
         }
     }
 
     private func bubbleBorder(role: ChatMessage.Role) -> some View {
         bubbleShape(role: role)
-            .strokeBorder(
-                role == .user ? Theme.Palette.borderDefault : Theme.Palette.ai.opacity(0.22),
-                lineWidth: 1
-            )
+            .strokeBorder(role == .user ? Theme.Palette.borderDefault : .clear, lineWidth: 1)
     }
 
     private func bubbleShape(role: ChatMessage.Role) -> UnevenRoundedRectangle {
@@ -1064,29 +1018,6 @@ private struct ChatAttachmentViewer: View {
                 }
             }
         }
-    }
-}
-
-private struct ThinkingDots: View {
-    @State private var animating = false
-
-    var body: some View {
-        HStack(spacing: 3) {
-            ForEach(0..<3, id: \.self) { i in
-                Circle()
-                    .fill(Theme.Palette.ai)
-                    .frame(width: 5, height: 5)
-                    .opacity(animating ? 1 : 0.3)
-                    .offset(y: animating ? -2 : 0)
-                    .animation(
-                        .easeInOut(duration: 0.6)
-                            .repeatForever()
-                            .delay(Double(i) * 0.18),
-                        value: animating
-                    )
-            }
-        }
-        .onAppear { animating = true }
     }
 }
 
