@@ -6,6 +6,10 @@ import {
   type CursorModelParameterSelection,
   type CursorModelVariant,
 } from "./cursor-model-params";
+import { cursorTransport } from "./cursor-transport";
+import { cursorModelsFromAcp } from "./cursor-acp-models";
+import { CursorAgentError } from "./cursor-errors";
+import type { CursorAcpRuntime } from "./cursor-acp-runtime";
 
 export type { CursorModelOption } from "./cursor-model-params";
 
@@ -48,7 +52,9 @@ function toOption(model: CursorApiModel): CursorModelOption | null {
   };
 }
 
-function toParameterSelections(value: unknown): CursorModelParameterSelection[] {
+function toParameterSelections(
+  value: unknown,
+): CursorModelParameterSelection[] {
   if (!Array.isArray(value)) return [];
   const selections: CursorModelParameterSelection[] = [];
   const seen = new Set<string>();
@@ -90,26 +96,33 @@ function toParameters(value: unknown): CursorModelParameterDefinition[] {
       continue;
     }
     const parameterValues = values.flatMap((rawValue) => {
-      if (!rawValue || typeof rawValue !== "object" || Array.isArray(rawValue)) {
+      if (
+        !rawValue ||
+        typeof rawValue !== "object" ||
+        Array.isArray(rawValue)
+      ) {
         return [];
       }
-      const { value: parameterValue, displayName: valueDisplayName } = rawValue as {
-        value?: unknown;
-        displayName?: unknown;
-      };
+      const { value: parameterValue, displayName: valueDisplayName } =
+        rawValue as {
+          value?: unknown;
+          displayName?: unknown;
+        };
       if (
         typeof parameterValue !== "string" ||
         !isSafeCursorParameterToken(parameterValue)
       ) {
         return [];
       }
-      return [{
-        value: parameterValue,
-        display_name:
-          typeof valueDisplayName === "string"
-            ? valueDisplayName.trim() || null
-            : null,
-      }];
+      return [
+        {
+          value: parameterValue,
+          display_name:
+            typeof valueDisplayName === "string"
+              ? valueDisplayName.trim() || null
+              : null,
+        },
+      ];
     });
     if (parameterValues.length === 0) continue;
     seen.add(id);
@@ -134,13 +147,15 @@ function toVariants(value: unknown): CursorModelVariant[] {
       isDefault?: unknown;
     };
     if (typeof displayName !== "string" || !displayName.trim()) return [];
-    return [{
-      params: toParameterSelections(params),
-      display_name: displayName.trim(),
-      description:
-        typeof description === "string" ? description.trim() || null : null,
-      is_default: isDefault === true,
-    }];
+    return [
+      {
+        params: toParameterSelections(params),
+        display_name: displayName.trim(),
+        description:
+          typeof description === "string" ? description.trim() || null : null,
+        is_default: isDefault === true,
+      },
+    ];
   });
 }
 
@@ -150,7 +165,7 @@ function toVariants(value: unknown): CursorModelVariant[] {
  * its Node 22-only runtime dependency; production currently runs Node 20.
  * Never cache this response across users or key origins.
  */
-export async function listCursorModelsForKey(
+async function listCursorModelsForKeyLegacy(
   apiKey: string,
 ): Promise<CursorModelOption[]> {
   let response: Response;
@@ -206,4 +221,74 @@ export async function listCursorModelsForKey(
     options.push(option);
   }
   return options;
+}
+
+const ACP_CATALOG_TTL_MS = 60_000;
+const acpCatalogCache = new Map<
+  string,
+  { expiresAt: number; models: CursorModelOption[] }
+>();
+
+async function listCursorModelsForKeyAcp(
+  apiKey: string,
+  userId: number,
+): Promise<CursorModelOption[]> {
+  const [runtimeModule, registryModule] = await Promise.all([
+    import("./cursor-acp-runtime"),
+    import("./cursor-acp-registry"),
+  ]);
+  const { cursorCredentialFingerprint, cursorPromptFingerprint } =
+    registryModule;
+  const credentialFingerprint = cursorCredentialFingerprint(apiKey);
+  const cacheKey = [
+    String(userId),
+    credentialFingerprint,
+    process.env.COACH_CURSOR_AGENT_BIN || "cursor-agent",
+    process.env.CURSOR_BACKEND_URL ?? "",
+  ].join(":");
+  const cached = acpCatalogCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.models;
+
+  let runtime: CursorAcpRuntime | null = null;
+  try {
+    runtime = await runtimeModule.CursorAcpRuntime.start({
+      userId,
+      key: apiKey,
+      keyOrigin: "env",
+      credentialFingerprint,
+      promptFingerprint: cursorPromptFingerprint("catalog-probe"),
+      withMcp: false,
+    });
+    const response = await runtime.listAvailableModels();
+    if (!response || !Array.isArray(response.models)) {
+      throw new Error("Cursor ACP returned an invalid model catalog");
+    }
+    const models = cursorModelsFromAcp(response);
+    acpCatalogCache.set(cacheKey, {
+      expiresAt: Date.now() + ACP_CATALOG_TTL_MS,
+      models,
+    });
+    return models;
+  } catch (error) {
+    if (error instanceof CursorAgentError && error.reason === "auth") {
+      throw new CursorModelCatalogError("invalid_key", error.message);
+    }
+    throw new CursorModelCatalogError(
+      "unavailable",
+      error instanceof Error
+        ? error.message
+        : "Cursor ACP model discovery failed",
+    );
+  } finally {
+    await runtime?.dispose();
+  }
+}
+
+export async function listCursorModelsForKey(
+  apiKey: string,
+  userId = 1,
+): Promise<CursorModelOption[]> {
+  return cursorTransport() === "acp"
+    ? listCursorModelsForKeyAcp(apiKey, userId)
+    : listCursorModelsForKeyLegacy(apiKey);
 }

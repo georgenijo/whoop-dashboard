@@ -18,11 +18,10 @@
 import {
   TOOLS,
   executeTool,
-  newToolTurnState,
-  type ToolTurnState,
 } from "@/lib/coach/tools";
 import { viewChatImage } from "./chat-image-tool";
 import { COACH_MCP_TOOL_NAMES, isCoachMcpToolName } from "./tool-policy";
+import { CoachMcpTurnState } from "./turn-state";
 
 // Tools surfaced to Composer. CROSS-PROVIDER NOTE (issue #421): prod runs the
 // Cursor (Composer) coach, not Anthropic, so a tool registered ONLY in the
@@ -37,20 +36,9 @@ import { COACH_MCP_TOOL_NAMES, isCoachMcpToolName } from "./tool-policy";
 
 const USER_ID = Number(process.env.COACH_MCP_USER_ID);
 const ATTACHMENT_MANIFEST = process.env.COACH_MCP_ATTACHMENT_MANIFEST ?? "";
+const TURN_EPOCH_PATH = process.env.COACH_MCP_TURN_EPOCH_PATH ?? "";
 
-// LOAD-BEARING INVARIANT: one MCP process == one coach turn. cursor-loop.ts
-// spawns a FRESH server process per coach turn and tears it down at the end,
-// with userId pinned via COACH_MCP_USER_ID. Because the process lifetime IS the
-// turn lifetime, a single module-level ToolTurnState shared across every tool
-// call in this process is correct: it gives save_workout_plan its within-turn
-// dedup (savedPlanHashes) and bounds syncAttempts to this one turn / one user.
-//
-// If a future change daemonizes or reuses this server across turns (or across
-// users), this becomes a cross-turn / cross-user STATE-LEAK bug — savedPlanHashes
-// and syncAttempts would persist into later turns. In that world, move the state
-// per-request (thread a fresh newToolTurnState() through each tools/call handler)
-// instead of holding it at module scope.
-const TURN_STATE: ToolTurnState = newToolTurnState();
+const TURN_STATE = new CoachMcpTurnState(TURN_EPOCH_PATH);
 
 function log(msg: string, extra?: unknown) {
   process.stderr.write(
@@ -105,6 +93,7 @@ async function callTool(id: JsonRpcId, params: unknown) {
     return replyError(id, -32601, `Unknown or unavailable tool: ${name}`);
   }
   try {
+    const turnState = await TURN_STATE.current();
     if (name === "view_chat_image") {
       const image = await viewChatImage(p.arguments, ATTACHMENT_MANIFEST);
       reply(id, {
@@ -115,7 +104,7 @@ async function callTool(id: JsonRpcId, params: unknown) {
     }
     const result = await executeTool(name, p.arguments ?? {}, {
       userId: USER_ID,
-      turnState: TURN_STATE,
+      turnState,
     });
     reply(id, {
       content: [{ type: "text", text: JSON.stringify(result) }],

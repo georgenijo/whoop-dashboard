@@ -18,6 +18,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-18: Coach uses native provider transports behind one runtime contract
+
+**Decision:** Keep Coach authentication, streaming, work logs, and persistence behind a provider-neutral runner, while each provider uses its strongest native transport. Cursor moves to persistent `cursor-agent acp` sessions, and the authenticated ACP runtime becomes authoritative for both model discovery and execution; Anthropic keeps its existing SDK loop. The private Whoop MCP server remains the contained tool bridge and resets its write guards through a server-controlled epoch on every turn.
+
+**Rationale:** Thread 150 accepted GPT-5.6 Luna from Cursor's account API but the separately spawned print-mode CLI rejected the bracket-encoded selection before its first event. One authoritative runtime removes that split-brain catalog, while a common internal contract avoids forcing Anthropic or future Codex integrations through ACP when their native SDK or app-server transport is a better fit. ACP session persistence also removes per-turn agent startup without widening Cursor's filesystem, shell, or web permissions.
+
+**Status:** active
+
+**References:** #537, `apps/web/src/lib/coach/provider-runner.ts`, `apps/web/src/lib/coach/cursor-acp-runtime.ts`, `apps/web/src/lib/coach/cursor-acp-registry.ts`, `apps/web/src/coach-mcp/turn-state.ts`
+
+---
+
 ## 2026-08-18: Coach model choice does not remove core tools
 
 **Decision:** Every selectable Coach model receives the same product-owned tool surface, including guarded Whoop sync. Cursor-backed models expose `trigger_whoop_sync` through the existing per-turn MCP server; the shared `executeTool` path continues to enforce tenant scoping, the one-sync-per-turn cap, and the sync cooldown.
@@ -182,7 +194,7 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 **Rationale:** Cursor models do not share one universal effort enum: the catalog supplies each account's allowed parameter IDs, values, variants, and defaults, while the current CLI accepts parameterized selections such as `gpt-5.5[effort=high]`. Persisting raw validated values avoids lossy mappings between `max`, `xhigh`, `extra-high`, boolean thinking, and fixed-effort models while preserving the production Node 20 and MCP-containment constraints.
 
-**Status:** active
+**Status:** superseded by 2026-08-18 Coach native provider transports decision
 
 **References:** `apps/web/src/lib/coach/cursor-model-params.ts`, `apps/web/src/lib/coach/cursor-models.ts`, `apps/web/src/lib/coach/cursor-loop.ts`, `apps/ios/Sources/CoachModelSelection.swift`
 

@@ -79,7 +79,10 @@ kept out of this repository.
 | `ANTHROPIC_API_KEY` | Shared Anthropic fallback is wanted | Coach |
 | `CURSOR_API_KEY` | Shared Cursor fallback is wanted | Coach |
 | `COACH_CURSOR_AGENT_BIN` | Cursor models are enabled | Absolute Cursor Agent launcher path |
-| `CURSOR_BACKEND_URL` | Cursor catalog override is needed | Coach settings |
+| `COACH_CURSOR_TRANSPORT` | Cursor ACP rollout is enabled | `legacy` (default) or `acp`; controls both model discovery and turns |
+| `COACH_CURSOR_ACP_IDLE_TTL_MS` | ACP session idle lifetime needs tuning | Default 600000 (10 minutes) |
+| `COACH_CURSOR_ACP_MAX_SESSIONS` | ACP process capacity needs tuning | Default 4 live sessions |
+| `CURSOR_BACKEND_URL` | Cursor endpoint override is needed | Coach model discovery and turns |
 | `PUBLIC_ORIGIN` | Production redirects are generated | Web auth |
 | `ADMIN_APPLE_SUB` | Admin webhook replay is enabled | Admin authorization |
 | `WHOOP_REFRESH_SECRET` | Refresh-only keepalive timer is enabled (#273) | `POST /api/whoop/refresh` bearer auth — fails closed (404) when unset |
@@ -116,6 +119,21 @@ tool aborts the deploy while the existing service remains running. The canary
 checks the standardized launcher path (overridable with
 `DEPLOY_CURSOR_AGENT_BIN`); it does not load or validate application variables
 or provider credentials from `.env.local`.
+
+Cursor ACP is feature-gated. Leave `COACH_CURSOR_TRANSPORT=legacy` through the
+first deploy, run the authenticated no-MCP catalog canary described by the
+release/PR, then set it to `acp` and restart through the normal deployment
+workflow. The flag controls settings validation and execution together, so the
+model picker never accepts a model from one transport and executes it through
+another. Rollback is the inverse environment change; it requires no DB change.
+
+Run the ACP canary from the app environment before enabling the flag. It opens
+an isolated ACP session with `mcpServers: []`, so it verifies the authenticated
+runtime catalog without starting the Whoop MCP server or spending a model turn:
+
+```bash
+fleet exec opti 'cd /home/george/Documents/whoop-dashboard && ~/.nvm/versions/node/v20.20.2/bin/node --env-file=apps/web/.env.local scripts/check-cursor-acp.mjs /home/george/.local/bin/cursor-agent gpt-5.6-luna'
+```
 
 ```bash
 scripts/deploy --check

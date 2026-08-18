@@ -1,4 +1,9 @@
 import "server-only";
+import type { ToolTurnState } from "./tool-turn-state";
+export {
+  newToolTurnState,
+  type ToolTurnState,
+} from "./tool-turn-state";
 import type { Tool, ToolResultBlockParam, ToolUseBlock } from "@anthropic-ai/sdk/resources/messages";
 import {
   addSyncLog,
@@ -433,15 +438,6 @@ function formatLocalIso(utcIso: string | null, tz: string): string | null {
  *     a model re-submitting an identical plan in the same turn gets the
  *     existing id back with `{ deduped: true }` instead of a duplicate row.
  */
-export type ToolTurnState = {
-  syncAttempts: number;
-  savedPlanHashes: Map<string, number>;
-};
-
-export function newToolTurnState(): ToolTurnState {
-  return { syncAttempts: 0, savedPlanHashes: new Map() };
-}
-
 /**
  * Result shape returned by the `trigger_whoop_sync` tool. Either the full
  * `SyncResult` from `runWhoopSync`, a cooldown-skipped marker, or a

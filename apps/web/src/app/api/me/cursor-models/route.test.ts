@@ -86,7 +86,7 @@ describe("GET /api/me/cursor-models", () => {
       ],
     });
     expect(resolveCursorKeyMock).toHaveBeenCalledWith(7);
-    expect(listCursorModelsForKeyMock).toHaveBeenCalledWith("key_personal");
+    expect(listCursorModelsForKeyMock).toHaveBeenCalledWith("key_personal", 7);
   });
 
   it("returns a non-error empty state when Cursor is not configured", async () => {
