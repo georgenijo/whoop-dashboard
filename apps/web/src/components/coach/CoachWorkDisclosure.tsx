@@ -105,12 +105,7 @@ export default function CoachWorkDisclosure({
             <p className="coach-work-note">{note}</p>
           </div>
         ))}
-        {phase ? (
-          <div className="coach-work-trace-row is-current">
-            <span className="coach-work-step current" aria-hidden="true" />
-            <div className="coach-work-phase">{phase}</div>
-          </div>
-        ) : null}
+        {phase ? <div className="coach-work-phase">{phase}</div> : null}
         {workLog.tools.length === 0 ? (
           workLog.status === "running" ? null : (
             <div className="coach-work-empty">No tool calls</div>
