@@ -725,6 +725,9 @@ body:has(.coach-page) .bottom-nav { display: none; }
   width: var(--stroke);
   background: var(--rule);
 }
+.coach-work-body:not(:has(.coach-work-trace-row, .coach-tool-call))::before {
+  display: none;
+}
 .coach-work-trace-row {
   position: relative;
   display: grid;
@@ -758,13 +761,6 @@ body:has(.coach-page) .bottom-nav { display: none; }
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.coach-work-step.current::after {
-  content: "";
-  width: 4px;
-  height: 4px;
-  border-radius: var(--r-full);
-  background: var(--fg-3);
-}
 .coach-work-note {
   max-width: none;
   margin: -1px 0 0;
@@ -774,7 +770,7 @@ body:has(.coach-page) .bottom-nav { display: none; }
 }
 .coach-work-phase,
 .coach-work-empty { color: var(--fg-3); font-size: var(--t-xs); }
-.coach-work-phase { margin-top: -1px; line-height: 1.5; }
+.coach-work-phase { line-height: 1.5; }
 .coach-work-empty { margin: 0 0 var(--s2); }
 
 /* Tool calls are rows in the same flow, not stacked cards. */
