@@ -73,12 +73,6 @@ export type BedtimeRecoveryResult = {
   intercept: number;
 };
 
-function nextDate(date: string): string {
-  const d = new Date(date + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
-
 export function computeBedtimeRecoveryCorr(
   sleep: SleepRow[],
   recovery: RecoveryRow[],
@@ -88,14 +82,20 @@ export function computeBedtimeRecoveryCorr(
     if (r.recovery_score != null) recoveryByDate.set(r.date, r.recovery_score);
   }
 
-  const valid: { date: string; bedtime: number; nextRecovery: number }[] = [];
+  const valid: { date: string; bedtime: number; sameNightRecovery: number }[] = [];
   for (const s of sleep) {
     const bedtime = bedtimeHourFromAnchor(s.start_local);
     if (bedtime == null) continue;
-    const nd = nextDate(s.date);
-    const rec = recoveryByDate.get(nd);
+    // `s.date` is now the WAKE day (issue #440 — sleepSummaryDate keys on
+    // `end`, not `start`), which is exactly the date `recoverySummaryDate`
+    // uses (recovery is created when the sleep ends). No date-shift needed:
+    // this used to be `recoveryByDate.get(nextDate(s.date))` back when
+    // `s.date` was the BED day and recovery landed the day after. Left as
+    // `nextDate` post-fix, this paired every night's bedtime with the
+    // FOLLOWING night's recovery instead of its own.
+    const rec = recoveryByDate.get(s.date);
     if (rec == null) continue;
-    valid.push({ date: s.date, bedtime, nextRecovery: rec });
+    valid.push({ date: s.date, bedtime, sameNightRecovery: rec });
   }
 
   if (valid.length < 5) return null;
@@ -105,7 +105,7 @@ export function computeBedtimeRecoveryCorr(
   const points: BedtimeRecoveryPoint[] = valid.map((v) => ({
     date: v.date,
     bt_dev_min: (v.bedtime - meanBedtime) * 60,
-    recovery: v.nextRecovery,
+    recovery: v.sameNightRecovery,
   }));
 
   const reg = linearRegression(points.map((p) => ({ x: p.bt_dev_min, y: p.recovery })));
@@ -125,7 +125,18 @@ export type BedtimePatternsResult = {
   social_jet_lag_min: number;
   weekday: { avgBedtimeHour: number; avgWakeHour: number; avgSleepHrs: number; n: number };
   weekend: { avgBedtimeHour: number; avgWakeHour: number; avgSleepHrs: number; n: number };
-  series: { date: string; bedtimeHour: number; rolling7: number | null }[];
+  series: {
+    /** Wake day — matches `sleep.date` (issue #440), drives the x-axis
+     *  position and the weekday/weekend split. */
+    date: string;
+    /** Calendar date of the bedtime clock time itself — may be the day
+     *  BEFORE `date` for a midnight-spanning night. Exists so a tooltip can
+     *  show a clock time next to the day it actually happened on, instead
+     *  of implying it happened on the wake day. */
+    bedDate: string;
+    bedtimeHour: number;
+    rolling7: number | null;
+  }[];
 };
 
 function dayOfWeek(date: string): number {
@@ -143,6 +154,7 @@ function stddev(values: number[]): number {
 export function computeBedtimePatterns(sleep: SleepRow[]): BedtimePatternsResult | null {
   const valid: {
     date: string;
+    bedDate: string;
     bedtime: number;
     wake: number;
     sleepHrs: number;
@@ -169,6 +181,7 @@ export function computeBedtimePatterns(sleep: SleepRow[]): BedtimePatternsResult
     const dow = dayOfWeek(s.date);
     valid.push({
       date: s.date,
+      bedDate: startParts.date,
       bedtime,
       wake,
       sleepHrs,
@@ -221,6 +234,7 @@ export function computeBedtimePatterns(sleep: SleepRow[]): BedtimePatternsResult
     }
     return {
       date: v.date,
+      bedDate: v.bedDate,
       bedtimeHour: v.bedtime,
       rolling7: count > 0 ? sum / count : null,
     };

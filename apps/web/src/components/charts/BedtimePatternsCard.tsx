@@ -24,6 +24,10 @@ function formatLongDate(date: string): string {
   return new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
+function formatShortDate(date: string): string {
+  return new Date(date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 function clockFromAnchor(hoursFromAnchor: number, anchor: number): string {
   const h24 = (anchor + hoursFromAnchor) % 24;
   const hh = Math.floor(h24);
@@ -42,7 +46,7 @@ function clockFromHour(h24: number): string {
   return `${h12}:${mm.toString().padStart(2, "0")}${period}`;
 }
 
-type SeriesPoint = { date: string; bedtimeHour: number; rolling7: number | null };
+type SeriesPoint = { date: string; bedDate: string; bedtimeHour: number; rolling7: number | null };
 
 function PatternsTooltip({
   active,
@@ -53,6 +57,14 @@ function PatternsTooltip({
 }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
+  // `date` (the x-axis position, wake day) and `bedDate` (the calendar day
+  // the clock time below actually happened) differ for a midnight-spanning
+  // night — showing just `date` above an actual clock time would imply the
+  // bedtime happened on the wake morning instead of the evening before.
+  const dateLabel =
+    d.bedDate === d.date
+      ? formatLongDate(d.date)
+      : `${formatShortDate(d.bedDate)} → ${formatShortDate(d.date)}`;
   return (
     <div
       style={{
@@ -64,7 +76,7 @@ function PatternsTooltip({
         fontSize: 11,
       }}
     >
-      <div style={{ color: "var(--fg-3)", marginBottom: 2 }}>{formatLongDate(d.date)}</div>
+      <div style={{ color: "var(--fg-3)", marginBottom: 2 }}>{dateLabel}</div>
       <div style={{ color: "var(--fg-1)" }}>
         bedtime {clockFromAnchor(d.bedtimeHour, BEDTIME_ANCHOR_HOUR)}
       </div>

@@ -173,6 +173,33 @@ describe("sync_logs — tenant scoping", () => {
     logs.addSyncLog(syncLog(1, "2026-05-05T00:00:00Z", "error"));
     expect(logs.getLastSuccessfulSyncAt(1)).toBeNull();
   });
+
+  it("getLastSuccessfulSyncAt ignores keepalive (#273) rows, so the 30-min token-refresh ping can't mask a stale real sync", async () => {
+    const logs = await bootstrap();
+    // A real sync happened once, a while ago...
+    const realSyncedAt = "2026-05-01T00:00:00.000Z";
+    logs.addSyncLog(syncLog(1, realSyncedAt));
+    // ...then only the refresh-only keepalive has run since, repeatedly.
+    // Without the source exclusion, each of these would look like a fresh
+    // "successful sync" and permanently wedge the /api/sync cooldown gate —
+    // a real sync would never be allowed to run again.
+    logs.addSyncLog({
+      ...syncLog(1, "2026-05-10T00:00:00.000Z"),
+      recovery_count: null,
+      sleep_count: null,
+      workouts_count: null,
+      source: "keepalive",
+    });
+    logs.addSyncLog({
+      ...syncLog(1, "2026-05-15T00:00:00.000Z"),
+      recovery_count: null,
+      sleep_count: null,
+      workouts_count: null,
+      source: "keepalive",
+    });
+
+    expect(logs.getLastSuccessfulSyncAt(1)?.toISOString()).toBe(realSyncedAt);
+  });
 });
 
 function routeLog(userId: number | null, startedAt: string, route: string) {

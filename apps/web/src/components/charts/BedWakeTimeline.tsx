@@ -39,6 +39,23 @@ function parseLocalDateTime(s: string | null): Date | null {
   );
 }
 
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/** The calendar date `d` was constructed with, read back via the same
+ *  local getters `hoursFrom8pm` uses — `parseLocalDateTime` builds `d` from
+ *  the naive local ISO's numeric components directly, so this round-trips
+ *  those exact numbers regardless of the runtime's own timezone. Used to
+ *  label bedtime and wake time with their OWN calendar day: `r.date`
+ *  (issue #440) is the wake day, so for a midnight-spanning night the bed
+ *  time actually happened the evening BEFORE `r.date`, and showing just
+ *  `r.date` above both timestamps would misleadingly imply the bedtime
+ *  happened on the wake day too. */
+function localDatePart(d: Date): string {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+
 function hoursFrom8pm(d: Date): number {
   const h = d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
   return ((h - 20 + 24) % 24);
@@ -63,6 +80,12 @@ function formatLongDate(date: string): string {
 
 type Datum = {
   date: string;
+  /** Calendar date of the bed timestamp — may be the day BEFORE `date` for
+   *  a midnight-spanning night. */
+  bedDate: string;
+  /** Calendar date of the wake timestamp — equals `date` (issue #440: rows
+   *  are now filed under their wake day). */
+  wakeDate: string;
   bed: number;
   wake: number;
   duration: number;
@@ -73,6 +96,13 @@ type Datum = {
 function TimelineTooltip({ active, payload }: { active?: boolean; payload?: { payload: Datum }[] }) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
+  // Same-day sleep (no midnight span): one date label is unambiguous. A
+  // midnight-spanning night shows both days so the bed time isn't
+  // misattributed to the wake day it's labeled by on the y-axis.
+  const dateLabel =
+    d.bedDate === d.wakeDate
+      ? formatLongDate(d.bedDate)
+      : `${formatShortDate(d.bedDate)} → ${formatShortDate(d.wakeDate)}`;
   return (
     <div
       style={{
@@ -84,7 +114,7 @@ function TimelineTooltip({ active, payload }: { active?: boolean; payload?: { pa
         fontSize: 11,
       }}
     >
-      <div style={{ color: "var(--fg-3)", marginBottom: 2 }}>{formatLongDate(d.date)}</div>
+      <div style={{ color: "var(--fg-3)", marginBottom: 2 }}>{dateLabel}</div>
       <div style={{ color: "var(--fg-1)" }}>
         {d.bedClock} → {d.wakeClock}
         <span style={{ color: "var(--fg-3)", marginLeft: 6 }}>· {d.duration.toFixed(1)}h</span>
@@ -109,6 +139,8 @@ export default function BedWakeTimeline({ rows }: Props) {
     if (bed > CHART_HOURS && wake > CHART_HOURS) continue;
     data.push({
       date: r.date,
+      bedDate: localDatePart(startDt),
+      wakeDate: localDatePart(endDt),
       bed: Math.max(0, Math.min(bed, CHART_HOURS)),
       wake: Math.max(0, Math.min(wake, CHART_HOURS)),
       duration: (endDt.getTime() - startDt.getTime()) / 3_600_000,

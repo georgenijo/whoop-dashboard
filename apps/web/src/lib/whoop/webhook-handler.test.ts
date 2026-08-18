@@ -152,3 +152,175 @@ describe("handleEvent — Phase D webhook user mapping", () => {
     expect(whoopGetMock).not.toHaveBeenCalled();
   });
 });
+
+function sleepUpdatedPayload(id: string, start: string, end: string) {
+  return {
+    id,
+    start,
+    end,
+    timezone_offset: "+00:00",
+    nap: false,
+    score_state: "SCORED",
+    score: {
+      sleep_performance_percentage: 90,
+      sleep_efficiency_percentage: 92,
+      sleep_consistency_percentage: 80,
+      respiratory_rate: 14.5,
+      stage_summary: {
+        total_in_bed_time_milli: 28_800_000,
+        total_light_sleep_time_milli: 14_400_000,
+        total_slow_wave_sleep_time_milli: 5_400_000,
+        total_rem_sleep_time_milli: 7_200_000,
+        total_awake_time_milli: 1_800_000,
+        disturbance_count: 3,
+        sleep_cycle_count: 5,
+      },
+      sleep_needed: {
+        baseline_milli: 28_800_000,
+        need_from_sleep_debt_milli: 0,
+        need_from_recent_strain_milli: 0,
+        need_from_recent_nap_milli: 0,
+      },
+    },
+  };
+}
+
+// Issue #440 review, BLOCK 5: `upsertSleep` computes the new date via
+// `sleepSummaryDate` and `INSERT OR REPLACE`s over the same
+// `(user_id, sleep_id)` row. If the row already existed under a DIFFERENT
+// date (e.g. a legacy row still on its pre-migration start-day date, the
+// first time this webhook touches it post-deploy), that vacated date's
+// `daily_summary` is now stale and needs its own recompute — not just the
+// destination's.
+describe("handleEvent — sleep.updated re-dates and recomputes both old and new dates (issue #440)", () => {
+  it("recomputes both the vacated (old) date and the destination date when a sleep moves", async () => {
+    seedIntegration(1, "1001");
+    const db = new Database(dbFile);
+    try {
+      // Pre-existing row filed on the OLD (pre-migration) date.
+      db.prepare(
+        "INSERT INTO sleep (user_id, sleep_id, date, in_bed_ms, light_ms, deep_ms, rem_ms, nap) " +
+          "VALUES (1, 's-1', '2026-04-28', 28800000, 14400000, 5400000, 7200000, 0)",
+      ).run();
+      db.prepare(
+        "INSERT INTO daily_summary (user_id, date, sleep_hours) VALUES (1, '2026-04-28', 7.5)",
+      ).run();
+    } finally {
+      db.close();
+    }
+
+    whoopGetMock.mockResolvedValue(
+      sleepUpdatedPayload("s-1", "2026-04-28T23:11:23.000Z", "2026-04-29T08:38:56.000Z"),
+    );
+
+    const outcome = await webhook.handleEvent({
+      type: "sleep.updated",
+      id: "s-1",
+      user_id: 1001,
+    });
+
+    expect(outcome.kind).toBe("handled");
+
+    const readDb = new Database(dbFile);
+    try {
+      const row = readDb
+        .prepare("SELECT date FROM sleep WHERE sleep_id = 's-1'")
+        .get() as { date: string };
+      expect(row.date).toBe("2026-04-29");
+
+      // Vacated date: recomputed to NULL, not left stale at 7.5.
+      const oldSummary = readDb
+        .prepare("SELECT sleep_hours FROM daily_summary WHERE user_id = 1 AND date = '2026-04-28'")
+        .get() as { sleep_hours: number | null } | undefined;
+      expect(oldSummary?.sleep_hours ?? null).toBeNull();
+
+      // Destination date: recomputed to reflect the row that moved onto it.
+      // (light+deep+rem)/3600000 = (14.4M + 5.4M + 7.2M) / 3.6M = 7.5h.
+      const newSummary = readDb
+        .prepare("SELECT sleep_hours FROM daily_summary WHERE user_id = 1 AND date = '2026-04-29'")
+        .get() as { sleep_hours: number } | undefined;
+      expect(newSummary?.sleep_hours).toBeCloseTo(7.5, 6);
+    } finally {
+      readDb.close();
+    }
+  });
+
+  it("does not attempt an old-date recompute for a brand-new sleep_id", async () => {
+    seedIntegration(1, "1001");
+    whoopGetMock.mockResolvedValue(
+      sleepUpdatedPayload("s-new", "2026-05-01T23:00:00.000Z", "2026-05-02T07:00:00.000Z"),
+    );
+
+    const outcome = await webhook.handleEvent({
+      type: "sleep.updated",
+      id: "s-new",
+      user_id: 1001,
+    });
+
+    expect(outcome.kind).toBe("handled");
+    const db = new Database(dbFile);
+    try {
+      const row = db
+        .prepare("SELECT date FROM sleep WHERE sleep_id = 's-new'")
+        .get() as { date: string };
+      expect(row.date).toBe("2026-05-02");
+    } finally {
+      db.close();
+    }
+  });
+
+  // Issue #440 review, second pass, WARN 3: `sleepSummaryDate` throws when
+  // `end` is missing, and it isn't gated on score_state the way the other
+  // three call sites are — a PENDING_SCORE record (no `end` yet) used to
+  // return 200 handled (as a no-op, since upsertSleep itself is a no-op for
+  // non-SCORED records); un-gated, it now throws instead, which the route
+  // maps to a 502 and Whoop retries 5x into a DLQ `failed` row.
+  it("accepts a not-yet-scored (PENDING_SCORE) sleep.updated as a no-op instead of throwing", async () => {
+    seedIntegration(1, "1001");
+    whoopGetMock.mockResolvedValue({
+      id: "s-pending",
+      start: "2026-05-01T23:00:00.000Z",
+      // No `end` yet — the sleep hasn't been scored.
+      score_state: "PENDING_SCORE",
+    });
+
+    const outcome = await webhook.handleEvent({
+      type: "sleep.updated",
+      id: "s-pending",
+      user_id: 1001,
+    });
+
+    expect(outcome.kind).toBe("handled");
+    const db = new Database(dbFile);
+    try {
+      const row = db
+        .prepare("SELECT date FROM sleep WHERE sleep_id = 's-pending'")
+        .get();
+      expect(row).toBeUndefined();
+    } finally {
+      db.close();
+    }
+  });
+
+  it("accepts a SCORED record missing 'end' as a no-op rather than throwing (belt-and-suspenders)", async () => {
+    // Shouldn't happen in practice (every SCORED record carries `end`), but
+    // the gate is on score_state, not on `end` presence — this proves the
+    // gate alone is sufficient even for a malformed SCORED record with a
+    // score payload.
+    seedIntegration(1, "1001");
+    whoopGetMock.mockResolvedValue({
+      id: "s-scored-no-end",
+      start: "2026-05-01T23:00:00.000Z",
+      score_state: "SCORED",
+      score: undefined,
+    });
+
+    const outcome = await webhook.handleEvent({
+      type: "sleep.updated",
+      id: "s-scored-no-end",
+      user_id: 1001,
+    });
+
+    expect(outcome.kind).toBe("handled");
+  });
+});

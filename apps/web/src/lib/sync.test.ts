@@ -615,6 +615,62 @@ function unscoredCycleRecord(date: string) {
   };
 }
 
+// Issue #440 review, WARN 2: a SCORED sleep record missing `end` makes
+// `sleepSummaryDate` throw. Unguarded, that throw happens inside
+// `persistAll`'s shared `db.transaction`, rolling back recovery, cycles,
+// AND workouts for the whole sync window — not just the one bad sleep
+// record. persistAll must catch it per-record, skip only that record, and
+// surface a count.
+describe("persistAll: a SCORED sleep record missing 'end' is skipped, not fatal (issue #440)", () => {
+  it("skips the bad sleep record but still commits recovery, cycles, and workouts", async () => {
+    const date = "2025-04-12";
+    whoopGetMock.mockImplementation(async () => ({
+      height_meter: 1.8,
+      weight_kilogram: 75,
+      max_heart_rate: 195,
+    }));
+    whoopGetAllMock.mockImplementation(async (endpoint: string) => {
+      if (endpoint === "/v2/cycle") return { records: [cycleRecord(date)], pageCount: 1 };
+      if (endpoint === "/v2/recovery") return { records: [recoveryRecord(date)], pageCount: 1 };
+      if (endpoint === "/v2/activity/sleep") {
+        // SCORED but missing `end` — the malformed record under test.
+        const bad = { ...sleepRecord(date), end: undefined };
+        return { records: [bad], pageCount: 1 };
+      }
+      if (endpoint === "/v2/activity/workout") {
+        return { records: [workoutRecord("w-1", date)], pageCount: 1 };
+      }
+      return { records: [], pageCount: 1 };
+    });
+
+    const result = await syncMod.runWhoopSync({ userId: 1 });
+
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+    expect(result.partial).toBeUndefined();
+    // The bad sleep record is skipped, not written...
+    expect(result.rows_inserted).toEqual({
+      recovery: 1,
+      cycles: 1,
+      sleep: 0,
+      workouts: 1,
+    });
+    expect(result.details.sleep_missing_end_skipped).toBe(1);
+    // ...but recovery, cycles, and workouts still commit — the whole sync
+    // does NOT roll back over one malformed sleep record.
+    expect(rowCounts()).toEqual({ recovery: 1, cycles: 1, sleep: 0, workouts: 1 });
+  });
+
+  it("reports zero skipped when every sleep record is well-formed", async () => {
+    wireHappyPath();
+
+    const result = await syncMod.runWhoopSync({ userId: 1 });
+
+    expect(result.success).toBe(true);
+    expect(result.details.sleep_missing_end_skipped).toBe(0);
+  });
+});
+
 describe("reconcileCycles (issue #415)", () => {
   beforeEach(() => {
     // The look-back default is env-overridable, so pin it for every test in
@@ -902,6 +958,482 @@ describe("cycles historical backfill (issue #415)", () => {
     expect(await syncMod.backfillOrphanedCyclesOnce(1, "UTC")).not.toBeNull();
     expect(await syncMod.backfillOrphanedCyclesOnce(1, "UTC")).toBeNull();
     expect(await syncMod.backfillOrphanedCyclesOnce(7, "UTC")).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sleep wake-day re-date backfill (issue #440)
+// ---------------------------------------------------------------------------
+
+function seedSleepRow(
+  userId: number,
+  sleepId: string,
+  date: string,
+  raw: string | null,
+  opts: {
+    inBedMs?: number;
+    lightMs?: number;
+    deepMs?: number;
+    remMs?: number;
+    nap?: number;
+  } = {},
+): void {
+  const db = new Database(dbFile);
+  try {
+    db.prepare("INSERT OR IGNORE INTO users (id) VALUES (?)").run(userId);
+    db.prepare(
+      "INSERT INTO sleep (user_id, sleep_id, date, in_bed_ms, light_ms, deep_ms, rem_ms, nap, raw) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ).run(
+      userId,
+      sleepId,
+      date,
+      opts.inBedMs ?? 28_800_000,
+      opts.lightMs ?? 14_400_000,
+      opts.deepMs ?? 5_400_000,
+      opts.remMs ?? 7_200_000,
+      opts.nap ?? 0,
+      raw,
+    );
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Seeds a `sleep` row for a `userId` that has NO matching `users` row —
+ * deliberately, to manufacture a genuine (unmocked) transaction failure.
+ * `daily_summary` and `sleep` both have `user_id INTEGER ... REFERENCES
+ * users(id)`; `openWrite()` turns `foreign_keys = ON`, so an `INSERT OR
+ * REPLACE INTO daily_summary` for this user_id inside the backfill's
+ * transaction throws a real `FOREIGN KEY constraint failed` — no mocking of
+ * `recomputeDailySummary` or the DB layer required. This raw connection
+ * (unlike `openWrite()`) never sets `foreign_keys = ON`, so the seed insert
+ * itself succeeds despite the dangling reference.
+ */
+function seedSleepRowNoUser(
+  userId: number,
+  sleepId: string,
+  date: string,
+  raw: string | null,
+): void {
+  const db = new Database(dbFile);
+  try {
+    // This build's default differs from vanilla SQLite — be explicit rather
+    // than relying on the connection default.
+    db.pragma("foreign_keys = OFF");
+    db.prepare(
+      "INSERT INTO sleep (user_id, sleep_id, date, in_bed_ms, light_ms, deep_ms, rem_ms, nap, raw) " +
+        "VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)",
+    ).run(userId, sleepId, date, 28_800_000, 14_400_000, 5_400_000, 7_200_000, raw);
+  } finally {
+    db.close();
+  }
+}
+
+function sleepDateFor(userId: number, sleepId: string): string | null {
+  const db = new Database(dbFile);
+  try {
+    const row = db
+      .prepare("SELECT date FROM sleep WHERE user_id = ? AND sleep_id = ?")
+      .get(userId, sleepId) as { date: string } | undefined;
+    return row?.date ?? null;
+  } finally {
+    db.close();
+  }
+}
+
+function seedDailySummarySleepHours(
+  userId: number,
+  date: string,
+  sleepHours: number | null,
+): void {
+  const db = new Database(dbFile);
+  try {
+    db.prepare("INSERT OR IGNORE INTO users (id) VALUES (?)").run(userId);
+    db.prepare(
+      "INSERT INTO daily_summary (user_id, date, sleep_hours) VALUES (?, ?, ?) " +
+        "ON CONFLICT(user_id, date) DO UPDATE SET sleep_hours = excluded.sleep_hours",
+    ).run(userId, date, sleepHours);
+  } finally {
+    db.close();
+  }
+}
+
+function dailySummarySleepHours(userId: number, date: string): number | null {
+  const db = new Database(dbFile);
+  try {
+    const row = db
+      .prepare("SELECT sleep_hours FROM daily_summary WHERE user_id = ? AND date = ?")
+      .get(userId, date) as { sleep_hours: number | null } | undefined;
+    return row?.sleep_hours ?? null;
+  } finally {
+    db.close();
+  }
+}
+
+function sleepBackfillMarker(userId: number): string | null {
+  const db = new Database(dbFile);
+  try {
+    const row = db
+      .prepare("SELECT value FROM app_settings WHERE key = ?")
+      .get(`sleep_wake_day_v1:user:${userId}`) as { value: string } | undefined;
+    return row?.value ?? null;
+  } finally {
+    db.close();
+  }
+}
+
+function clearSleepBackfillMarkers(): void {
+  const db = new Database(dbFile);
+  try {
+    db.prepare("DELETE FROM app_settings WHERE key LIKE 'sleep_wake_day_v1:%'").run();
+  } finally {
+    db.close();
+  }
+}
+
+describe("sleep wake-day backfill (issue #440)", () => {
+  beforeEach(() => {
+    // `beforeEach` at the top of the file clears the domain tables but not
+    // `app_settings` — without this, a marker set by an earlier test in this
+    // suite would make every subsequent `backfillSleepWakeDayOnce` call here
+    // (and in the wiring describe block below) a no-op.
+    clearSleepBackfillMarkers();
+  });
+
+  it("re-dates rows whose raw.end lands on a different day than the stored date", () => {
+    // Started 23:11 on the 28th, ended 08:38 on the 29th — pre-fix data
+    // filed it on the 28th (start day).
+    seedSleepRow(
+      1,
+      "sleep-a",
+      "2026-04-28",
+      JSON.stringify({ id: "sleep-a", start: "2026-04-28T23:11:23.000Z", end: "2026-04-29T08:38:56.000Z" }),
+    );
+    // Already correctly dated — start and end share a calendar day.
+    seedSleepRow(
+      1,
+      "sleep-b",
+      "2026-04-28",
+      JSON.stringify({ id: "sleep-b", start: "2026-04-28T01:55:13.000Z", end: "2026-04-28T08:42:14.000Z" }),
+    );
+
+    const result = syncMod.backfillSleepWakeDayOnce(1, "UTC");
+
+    expect(result).toMatchObject({ rows_scanned: 2, rows_changed: 1, rows_skipped: 0 });
+    expect(sleepDateFor(1, "sleep-a")).toBe("2026-04-29");
+    expect(sleepDateFor(1, "sleep-b")).toBe("2026-04-28");
+    expect(sleepBackfillMarker(1)).toContain("completed_at");
+  });
+
+  it("is idempotent — the second run is a no-op because the marker is set", () => {
+    seedSleepRow(
+      1,
+      "sleep-a",
+      "2026-04-28",
+      JSON.stringify({ id: "sleep-a", end: "2026-04-29T08:38:56.000Z" }),
+    );
+
+    const first = syncMod.backfillSleepWakeDayOnce(1, "UTC");
+    expect(first?.rows_changed).toBe(1);
+    expect(sleepDateFor(1, "sleep-a")).toBe("2026-04-29");
+
+    // Marker present → no scan, and re-dating is not attempted again even if
+    // (hypothetically) something re-wrote the wrong date back.
+    const second = syncMod.backfillSleepWakeDayOnce(1, "UTC");
+    expect(second).toBeNull();
+    expect(sleepDateFor(1, "sleep-a")).toBe("2026-04-29");
+  });
+
+  it("sets the marker even when zero sleep rows exist (safe on a fresh DB)", () => {
+    const result = syncMod.backfillSleepWakeDayOnce(1, "UTC");
+    expect(result).toEqual({
+      rows_scanned: 0,
+      rows_changed: 0,
+      rows_skipped: 0,
+      dates_recomputed: 0,
+      collisions: 0,
+    });
+    expect(sleepBackfillMarker(1)).toContain("completed_at");
+  });
+
+  it("skips a row with unparseable raw instead of throwing, and still processes the rest", () => {
+    seedSleepRow(1, "sleep-bad", "2026-04-28", "not json at all");
+    seedSleepRow(
+      1,
+      "sleep-good",
+      "2026-04-28",
+      JSON.stringify({ id: "sleep-good", end: "2026-04-29T08:38:56.000Z" }),
+    );
+
+    const result = syncMod.backfillSleepWakeDayOnce(1, "UTC");
+
+    expect(result).toMatchObject({ rows_scanned: 2, rows_changed: 1, rows_skipped: 1 });
+    expect(sleepDateFor(1, "sleep-bad")).toBe("2026-04-28"); // untouched
+    expect(sleepDateFor(1, "sleep-good")).toBe("2026-04-29");
+  });
+
+  it("skips a row whose raw is present but lacks .end", () => {
+    seedSleepRow(1, "sleep-no-end", "2026-04-28", JSON.stringify({ id: "sleep-no-end" }));
+
+    const result = syncMod.backfillSleepWakeDayOnce(1, "UTC");
+
+    expect(result).toMatchObject({ rows_scanned: 1, rows_changed: 0, rows_skipped: 1 });
+    expect(sleepDateFor(1, "sleep-no-end")).toBe("2026-04-28");
+  });
+
+  it("skips a row with NULL raw", () => {
+    seedSleepRow(1, "sleep-null-raw", "2026-04-28", null);
+
+    const result = syncMod.backfillSleepWakeDayOnce(1, "UTC");
+
+    expect(result).toMatchObject({ rows_scanned: 1, rows_changed: 0, rows_skipped: 1 });
+  });
+
+  it("recomputes daily_summary for both the vacated and the destination date", () => {
+    const wrongDate = "2026-04-28";
+    const rightDate = "2026-04-29";
+    // (light+deep+rem)/3600000 = (14.4M + 5.4M + 7.2M) / 3.6M = 7.5h.
+    seedSleepRow(
+      1,
+      "sleep-a",
+      wrongDate,
+      JSON.stringify({ id: "sleep-a", end: `${rightDate}T08:38:56.000Z` }),
+      { lightMs: 14_400_000, deepMs: 5_400_000, remMs: 7_200_000 },
+    );
+    // Pre-fix daily_summary state: the wrong date carries this sleep's hours.
+    seedDailySummarySleepHours(1, wrongDate, 7.5);
+
+    const result = syncMod.backfillSleepWakeDayOnce(1, "UTC");
+
+    expect(result).toMatchObject({ rows_changed: 1, dates_recomputed: 2 });
+    // Vacated date: no sleep row matches it anymore — recomputed to NULL,
+    // not left stale at 7.5.
+    expect(dailySummarySleepHours(1, wrongDate)).toBeNull();
+    // Destination date: recomputed to reflect the row that moved onto it.
+    expect(dailySummarySleepHours(1, rightDate)).toBe(7.5);
+  });
+
+  it("is scoped per user — one user's marker doesn't suppress another's backfill", () => {
+    seedSleepRow(
+      1,
+      "sleep-a",
+      "2026-04-28",
+      JSON.stringify({ id: "sleep-a", end: "2026-04-29T08:38:56.000Z" }),
+    );
+    seedSleepRow(
+      7,
+      "sleep-b",
+      "2026-04-28",
+      JSON.stringify({ id: "sleep-b", end: "2026-04-29T08:38:56.000Z" }),
+    );
+
+    expect(syncMod.backfillSleepWakeDayOnce(1, "UTC")).not.toBeNull();
+    expect(syncMod.backfillSleepWakeDayOnce(1, "UTC")).toBeNull();
+    expect(syncMod.backfillSleepWakeDayOnce(7, "UTC")).not.toBeNull();
+  });
+
+  // Issue #440 review, WARN 1: prod pre-measurement said 0 collisions, but a
+  // one-shot irreversible migration of a dataset with no other backup must
+  // count and log the real post-migration number rather than trust that.
+  it("counts a collision when re-dating leaves two non-nap sleeps on the same date", () => {
+    // A legitimate double-sleep night: wake ~03:00, sleep again, wake
+    // ~09:00 — both re-date onto 2026-04-29.
+    seedSleepRow(
+      1,
+      "sleep-a",
+      "2026-04-28",
+      JSON.stringify({ id: "sleep-a", end: "2026-04-29T03:00:00.000Z" }),
+    );
+    seedSleepRow(
+      1,
+      "sleep-b",
+      "2026-04-28",
+      JSON.stringify({ id: "sleep-b", end: "2026-04-29T09:00:00.000Z" }),
+    );
+
+    const result = syncMod.backfillSleepWakeDayOnce(1, "UTC");
+
+    expect(result).toMatchObject({ rows_changed: 2, collisions: 1 });
+    // Not data loss — both rows still exist under their own sleep_id.
+    expect(sleepDateFor(1, "sleep-a")).toBe("2026-04-29");
+    expect(sleepDateFor(1, "sleep-b")).toBe("2026-04-29");
+  });
+
+  it("does not count a nap sharing a date with a re-dated night sleep as a collision", () => {
+    seedSleepRow(
+      1,
+      "sleep-night",
+      "2026-04-28",
+      JSON.stringify({ id: "sleep-night", end: "2026-04-29T08:38:56.000Z" }),
+    );
+    seedSleepRow(
+      1,
+      "nap-1",
+      "2026-04-29",
+      JSON.stringify({ id: "nap-1", end: "2026-04-29T15:00:00.000Z" }),
+      { nap: 1 },
+    );
+
+    const result = syncMod.backfillSleepWakeDayOnce(1, "UTC");
+
+    expect(result?.collisions).toBe(0);
+  });
+
+  // Issue #440 review, BLOCK 4: a one-shot migration must fail CLOSED —
+  // never mark itself complete having scanned zero rows just because the DB
+  // was momentarily unavailable.
+  it("fails closed: throws and writes no marker when the DB is unavailable", () => {
+    vi.stubEnv("WHOOP_DB_PATH", "/nonexistent/dir/whoop-missing.db");
+    try {
+      expect(() => syncMod.backfillSleepWakeDayOnce(1, "UTC")).toThrow(
+        /DB unavailable/,
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    // The real DB (restored above) was never touched by the branch above,
+    // so its marker is still absent — confirming no marker leaked through.
+    expect(sleepBackfillMarker(1)).toBeNull();
+  });
+
+  // Issue #440 review, second pass, BLOCK: a prior version of this function
+  // ran the re-date UPDATEs in their own transaction and the recomputes
+  // afterward via separate `recomputeDailySummary()` calls. Once the
+  // UPDATE transaction committed, every row satisfied
+  // `date === parseDate(raw.end)`, so a retry after a recompute failure
+  // found `changes` empty and wrote the "complete" marker with
+  // `dates_recomputed: 0` — permanently stale `daily_summary`, falsely
+  // marked done. The fix folds the UPDATEs and the recomputes into ONE
+  // transaction: this test forces a REAL (unmocked) mid-transaction failure
+  // via a dangling `user_id` FK reference and asserts the UPDATE itself
+  // rolled back too, so a retry after fixing the underlying problem sees
+  // the original pre-migration state and genuinely succeeds.
+  it("rolls back the re-date UPDATE too when the recompute half of the transaction fails", () => {
+    const noUserId = 4242; // deliberately has no `users` row — see helper doc.
+    seedSleepRowNoUser(
+      noUserId,
+      "sleep-a",
+      "2026-04-28",
+      JSON.stringify({ id: "sleep-a", end: "2026-04-29T08:38:56.000Z" }),
+    );
+
+    expect(() => syncMod.backfillSleepWakeDayOnce(noUserId, "UTC")).toThrow(
+      /FOREIGN KEY constraint failed/,
+    );
+
+    // Nothing committed — not the daily_summary recompute, and NOT the
+    // sleep row's date UPDATE either. A split-transaction implementation
+    // would have left this at 2026-04-29 (UPDATE committed on its own),
+    // which is exactly what makes a retry blind: this row would already
+    // look "correct" even though the marker was never set.
+    expect(sleepDateFor(noUserId, "sleep-a")).toBe("2026-04-28");
+    expect(sleepBackfillMarker(noUserId)).toBeNull();
+
+    // Fix the underlying problem and retry — a genuine second attempt
+    // against the ORIGINAL pre-migration state, not a no-op.
+    const usersDb = new Database(dbFile);
+    try {
+      usersDb.prepare("INSERT INTO users (id) VALUES (?)").run(noUserId);
+    } finally {
+      usersDb.close();
+    }
+
+    const retry = syncMod.backfillSleepWakeDayOnce(noUserId, "UTC");
+
+    expect(retry).toMatchObject({ rows_changed: 1, dates_recomputed: 2 });
+    expect(sleepDateFor(noUserId, "sleep-a")).toBe("2026-04-29");
+    expect(sleepBackfillMarker(noUserId)).toContain("completed_at");
+  });
+});
+
+describe("runWhoopSync + sleep backfill wiring (issue #440)", () => {
+  beforeEach(() => {
+    clearSleepBackfillMarkers();
+  });
+
+  it("runs the one-time backfill on first sync and is absent on the next", async () => {
+    wireHappyPath();
+
+    const first = await syncMod.runWhoopSync({ userId: 1 });
+    expect(first.success).toBe(true);
+    expect(first.details.sleep_backfill).toBeDefined();
+
+    const second = await syncMod.runWhoopSync({ userId: 1 });
+    expect(second.success).toBe(true);
+    expect(second.details.sleep_backfill).toBeUndefined();
+  });
+
+  // Issue #440 review, WARN 1: the ordering fix (backfill runs BEFORE
+  // persistAll) had zero direct coverage — every existing wiring test seeds
+  // its legacy row on a date far outside wireHappyPath's fetch window, so
+  // it passes whether the backfill runs before OR after persistAll. This
+  // pins the actual regression: a legacy sleep_id that the sync's OWN fetch
+  // window also returns.
+  it("recomputes the vacated date for a legacy row whose sleep_id is ALSO in this sync's fetch window", async () => {
+    // wireHappyPath's sleep fixture is sleep_id "sleep-2025-04-12", dated
+    // 2025-04-12 (start and end share that day). Seed a pre-existing row
+    // under the SAME sleep_id but the WRONG (pre-migration) date —
+    // representing a night that had already been corrected by nothing yet.
+    // If persistAll runs first, its INSERT OR REPLACE silently overwrites
+    // both `date` and `raw` to the fetched record's (already-correct)
+    // values BEFORE the backfill ever scans the table — the backfill would
+    // then see `date === parseDate(raw.end)` already true, record zero
+    // changes, and never recompute the date this row vacated.
+    seedSleepRow(
+      1,
+      "sleep-2025-04-12",
+      "2025-04-11",
+      JSON.stringify({ id: "sleep-2025-04-12", end: "2025-04-12T08:00:00.000Z" }),
+    );
+    // Pre-existing daily_summary for the date this row is really parked on
+    // (wrong, pre-migration) — must be recomputed to NULL, not left stale.
+    seedDailySummarySleepHours(1, "2025-04-11", 7.5);
+    wireHappyPath();
+
+    const result = await syncMod.runWhoopSync({ userId: 1 });
+
+    expect(result.success).toBe(true);
+    // Correct ordering: the backfill saw the row BEFORE persistAll touched
+    // it, so it counted as a genuine change.
+    expect(result.details.sleep_backfill).toMatchObject({ rows_changed: 1 });
+    // The actual regression signal: under the wrong ordering this stays
+    // 7.5 forever (persistAll's own recompute only touches 2025-04-12, the
+    // date it just fetched — never 2025-04-11).
+    expect(dailySummarySleepHours(1, "2025-04-11")).toBeNull();
+    expect(sleepDateFor(1, "sleep-2025-04-12")).toBe("2025-04-12");
+  });
+
+  it("re-dates a pre-existing wrong-date row as part of the sync's first-run backfill", async () => {
+    // A row already in the DB from before the fix shipped, filed under its
+    // start day. The sync's own fetch (wireHappyPath) writes an unrelated
+    // 2025-04-12 sleep; the backfill's job is this pre-existing row.
+    seedSleepRow(
+      1,
+      "sleep-legacy",
+      "2026-04-28",
+      JSON.stringify({ id: "sleep-legacy", end: "2026-04-29T08:38:56.000Z" }),
+    );
+    wireHappyPath();
+
+    const result = await syncMod.runWhoopSync({ userId: 1 });
+
+    expect(result.success).toBe(true);
+    expect(result.details.sleep_backfill_error).toBeUndefined();
+    expect(result.details.sleep_backfill).toMatchObject({ rows_changed: 1 });
+    expect(sleepDateFor(1, "sleep-legacy")).toBe("2026-04-29");
+  });
+
+  it("a row with unparseable raw is skipped, not fatal to the sync", async () => {
+    seedSleepRow(1, "sleep-bad", "2026-04-28", "{not valid json");
+    wireHappyPath();
+
+    const result = await syncMod.runWhoopSync({ userId: 1 });
+
+    expect(result.success).toBe(true);
+    expect(result.details.sleep_backfill_error).toBeUndefined();
+    expect(result.details.sleep_backfill?.rows_skipped).toBeGreaterThanOrEqual(1);
   });
 });
 

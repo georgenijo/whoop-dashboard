@@ -160,7 +160,7 @@ Adding a third-party script, font, image host, or `fetch` target means widening 
 - Naps excluded at query time (`WHERE nap = 0`), not at sync — naps still land in DB
 - Whoop API base: `https://api.prod.whoop.com/developer`
 - Required env: `WHOOP_CLIENT_ID`, `WHOOP_CLIENT_SECRET`, `ANTHROPIC_API_KEY`
-- Optional env: `WHOOP_REDIRECT_URI`, `WHOOP_DB_PATH`, `WHOOP_TOKENS_PATH`, `CYCLES_RECONCILE_LOOKBACK_DAYS` (default 30 — look-back for the per-sync orphaned-cycles reconcile in `sync.ts`; historical orphans are handled by the one-time `app_settings`-guarded backfill instead, so this rarely needs changing)
+- Optional env: `WHOOP_REDIRECT_URI`, `WHOOP_DB_PATH`, `WHOOP_TOKENS_PATH`, `CYCLES_RECONCILE_LOOKBACK_DAYS` (default 30 — look-back for the per-sync orphaned-cycles reconcile in `sync.ts`; historical orphans are handled by the one-time `app_settings`-guarded backfill instead, so this rarely needs changing), `WHOOP_REFRESH_SECRET` (bearer secret for `POST /api/whoop/refresh`, the background refresh-only keepalive on a 30-min systemd timer, #273 — route fails closed with 404 when unset)
 - Optional push env (iOS only, all five required for push to work): `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, `APNS_PRIVATE_KEY`, `APNS_ENVIRONMENT`. Set `ENABLE_PUSH_DEBUG=1` to expose `/api/devices/test-push` in production.
 - Use Anthropic SDK, not raw HTTP. Default model: `claude-sonnet-4-6` for chat, `claude-haiku-4-5` for titles.
 
@@ -220,6 +220,21 @@ What it guarantees, and why each one is there:
   `-wal`/`-shm` sidecars FIRST, or a leftover WAL replays onto the restored file
   and blends two database states). It is **single-step only** — the next deploy
   overwrites `.next.prev`.
+- **On-box mutual-exclusion lock** (`/tmp/whoop-deploy.lock` on opti, a
+  directory) held across the snapshot-through-restart phases, so two deploys
+  started close together can't interleave a `reset --hard`, `npm ci` and
+  `next build` against the same checkout (issue #469). A second `scripts/deploy`
+  fails fast with `another deploy is already running on opti`, naming the
+  holder's pid and start time — it does not hang or queue. If that message
+  appears and the named holder is confirmed dead (crashed box, `kill -9`'d
+  session) but did not self-heal on its own (the lock reaps a dead holder
+  automatically on the next acquisition attempt), clear it by hand:
+  `fleet exec opti 'kill <pid> 2>/dev/null; rm -rf /tmp/whoop-deploy.lock'`.
+  The lock is deliberately left held (not released) if a detached install/build
+  hits its poll ceiling or detects an orphaned holder of its own — the
+  mutating step may still be running, and releasing early would let a second
+  deploy reset the checkout out from under it; the die() message says so and
+  gives the same manual-clear recipe.
 
 Use `fleet exec opti '<command>'` for diagnostics; never address a production
 IP directly. Logs are available with
