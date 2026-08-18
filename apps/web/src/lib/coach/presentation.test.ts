@@ -30,10 +30,17 @@ describe("Coach presentation contract", () => {
     expect(result.presentationBlocks).toEqual([metric]);
   });
 
-  it("fails closed and preserves visible content for malformed proposals", () => {
+  it("fails closed, discards malformed metadata, and preserves Markdown", () => {
     const reply = "Answer\n```coach-blocks\nnot json\n```";
     expect(extractCoachPresentation(reply)).toEqual({
-      reply,
+      reply: "Answer",
+      presentationBlocks: [],
+    });
+  });
+
+  it("uses safe prose when a malformed proposal has no Markdown sibling", () => {
+    expect(extractCoachPresentation("```coach-blocks\n{}\n```")).toEqual({
+      reply: "_Structured summary unavailable._",
       presentationBlocks: [],
     });
   });

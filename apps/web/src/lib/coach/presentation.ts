@@ -279,7 +279,9 @@ export function extractCoachPresentation(reply: string): {
 } {
   const proposals: unknown[] = [];
   let malformed = false;
+  let sawFence = false;
   for (const match of reply.matchAll(BLOCK_FENCE)) {
+    sawFence = true;
     try {
       const parsed = JSON.parse(match[1]);
       if (!Array.isArray(parsed)) malformed = true;
@@ -288,11 +290,18 @@ export function extractCoachPresentation(reply: string): {
       malformed = true;
     }
   }
-  if (malformed || proposals.length === 0) return { reply, presentationBlocks: [] };
+  if (!sawFence) return { reply, presentationBlocks: [] };
+  const markdown = reply.replace(BLOCK_FENCE, "").replace(/\n{3,}/g, "\n\n").trim();
+  const fallbackReply = markdown || "_Structured summary unavailable._";
+  if (malformed || proposals.length === 0) {
+    return { reply: fallbackReply, presentationBlocks: [] };
+  }
   const presentationBlocks = parseCoachPresentationBlocks(proposals);
-  if (presentationBlocks.length === 0) return { reply, presentationBlocks: [] };
+  if (presentationBlocks.length === 0) {
+    return { reply: fallbackReply, presentationBlocks: [] };
+  }
   return {
-    reply: reply.replace(BLOCK_FENCE, "").replace(/\n{3,}/g, "\n\n").trim(),
+    reply: fallbackReply,
     presentationBlocks,
   };
 }
