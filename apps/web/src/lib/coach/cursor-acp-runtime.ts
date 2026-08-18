@@ -379,15 +379,11 @@ export class CursorAcpRuntime {
       diagnostics.agentName = initializeResult.agentInfo?.name ?? null;
       diagnostics.agentVersion = initializeResult.agentInfo?.version ?? null;
 
-      const authenticateStarted = Date.now();
-      await Promise.race([
-        context.request(methods.agent.authenticate, {
-          methodId: "cursor_login",
-        }),
-        spawnFailure,
-        startupFailure,
-      ]);
-      diagnostics.timing.authenticateMs = Date.now() - authenticateStarted;
+      // Cursor advertises `cursor_login`, but that method is an interactive
+      // browser-login flow. Coach authenticates this subprocess with the
+      // server-resolved CURSOR_API_KEY above; invoking cursor_login would
+      // bypass BYOK and fail on the headless production host.
+      diagnostics.timing.authenticateMs = 0;
 
       const sessionStarted = Date.now();
       const session = await Promise.race([

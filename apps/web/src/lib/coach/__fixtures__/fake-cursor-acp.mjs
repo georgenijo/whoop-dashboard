@@ -145,6 +145,13 @@ async function handle(message) {
       });
       return;
     case "authenticate":
+      send({
+        jsonrpc: "2.0",
+        id,
+        error: { code: -32003, message: "Interactive auth must not be called" },
+      });
+      return;
+    case "session/new":
       if (scenario === "auth-error") {
         send({
           jsonrpc: "2.0",
@@ -153,9 +160,6 @@ async function handle(message) {
         });
         return;
       }
-      result(id, {});
-      return;
-    case "session/new":
       result(id, {
         sessionId: "session-1",
         modes: {

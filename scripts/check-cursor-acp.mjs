@@ -144,7 +144,8 @@ try {
       _meta: { parameterizedModelPicker: true },
     },
   });
-  await request("authenticate", { methodId: "cursor_login" });
+  // CURSOR_API_KEY is the non-interactive credential. The advertised
+  // cursor_login method launches a browser and must not run on production.
   const session = await request("session/new", {
     cwd: workspace,
     mcpServers: [],
