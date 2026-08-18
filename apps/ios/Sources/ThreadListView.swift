@@ -52,7 +52,7 @@ struct ThreadListView: View {
                 emptyState
             } else {
                 ScrollView {
-                    VStack(spacing: 10) {
+                    LazyVStack(spacing: 0) {
                         ForEach(threads) { thread in
                             NavigationLink {
                                 ChatView(threadId: thread.id, initialTitle: thread.title)
@@ -62,7 +62,7 @@ struct ThreadListView: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    .padding(Theme.Spacing.md)
+                    .padding(.horizontal, Theme.Spacing.md)
                 }
                 .scrollContentBackground(.hidden)
             }
@@ -71,15 +71,10 @@ struct ThreadListView: View {
 
     private var emptyState: some View {
         VStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(Theme.Palette.ai.opacity(0.12))
-                    .frame(width: 80, height: 80)
-                Image(systemName: "sparkles")
-                    .font(.system(size: 32, weight: .light))
-                    .foregroundStyle(Theme.Palette.ai)
-                    .shadow(color: Theme.Palette.ai.opacity(0.6), radius: 12)
-            }
+            Text("COACH")
+                .font(Theme.FontStyle.mono(10, weight: .semibold))
+                .tracking(1.4)
+                .foregroundStyle(Theme.Palette.fg3)
             Text("No threads yet")
                 .font(Theme.FontStyle.sans(16, weight: .semibold))
                 .foregroundStyle(Theme.Palette.fg0)
@@ -126,10 +121,15 @@ private struct ThreadRow: View {
                 Text(preview)
                     .font(Theme.FontStyle.sans(12))
                     .foregroundStyle(Theme.Palette.fg2)
-                    .lineLimit(2)
+                    .lineLimit(1)
             }
         }
-        .glassCard(padding: Theme.Spacing.md)
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Theme.Palette.borderSubtle)
+                .frame(height: 1)
+        }
     }
 }
 
