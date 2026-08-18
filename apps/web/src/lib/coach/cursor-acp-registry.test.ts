@@ -5,6 +5,14 @@ import { CursorAcpSessionRegistry } from "./cursor-acp-registry";
 
 vi.mock("server-only", () => ({}));
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 function fakeRuntime() {
   const runtime = {
     healthy: true,
@@ -150,8 +158,8 @@ describe("CursorAcpSessionRegistry", () => {
       60_000,
       4,
     );
-    const bothStarted = Promise.withResolvers<void>();
-    const release = Promise.withResolvers<void>();
+    const bothStarted = deferred<void>();
+    const release = deferred<void>();
     let active = 0;
     let maximumActive = 0;
     const operation = async () => {
@@ -198,7 +206,7 @@ describe("CursorAcpSessionRegistry", () => {
       1,
     );
     let releaseFirst: (() => void) | undefined;
-    const firstStarted = Promise.withResolvers<void>();
+    const firstStarted = deferred<void>();
     const first = registry.run(input({ threadId: 1 }), async () => {
       firstStarted.resolve();
       await new Promise<void>((resolve) => {
