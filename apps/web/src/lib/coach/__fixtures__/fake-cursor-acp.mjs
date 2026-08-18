@@ -17,6 +17,12 @@ if (scenario === "startup-error") {
   );
   process.exit(1);
 }
+if (scenario === "startup-split-secret") {
+  process.stderr.write("FIRST key_");
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  process.stderr.write("test TAIL diagnostic");
+  process.exit(1);
+}
 
 function configOptions() {
   return [
@@ -167,6 +173,15 @@ async function handle(message) {
       return;
     case "session/set_config_option": {
       const { configId, value } = params;
+      if (scenario === "config-hang" && configId === "model") return;
+      if (scenario === "config-error" && configId === "reasoning") {
+        send({
+          jsonrpc: "2.0",
+          id,
+          error: { code: -32002, message: "Configuration failed" },
+        });
+        return;
+      }
       if (configId === "model") model = value;
       if (configId === "reasoning") reasoning = value;
       if (configId === "context") contextWindow = value;
@@ -175,6 +190,7 @@ async function handle(message) {
       return;
     }
     case "cursor/list_available_models":
+      if (scenario === "catalog-hang") return;
       result(id, {
         models: [
           {

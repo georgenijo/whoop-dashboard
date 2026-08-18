@@ -1,16 +1,15 @@
 // @vitest-environment node
 import { spawnSync } from "node:child_process";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
+const here = path.dirname(fileURLToPath(import.meta.url));
 const canary = path.resolve(
-  process.cwd(),
-  "../../scripts/check-cursor-acp.mjs",
+  here,
+  "../../../../../scripts/check-cursor-acp.mjs",
 );
-const fakeAgent = path.resolve(
-  process.cwd(),
-  "src/lib/coach/__fixtures__/fake-cursor-acp.mjs",
-);
+const fakeAgent = path.resolve(here, "__fixtures__/fake-cursor-acp.mjs");
 
 describe("Cursor ACP authenticated canary", () => {
   it("checks the no-MCP runtime catalog and target model", () => {

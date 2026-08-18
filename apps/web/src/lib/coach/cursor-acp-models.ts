@@ -91,14 +91,17 @@ export function cursorModelsFromAcp(
       return parameter ? [parameter] : [];
     });
     const defaults = configOptions.flatMap((option) => {
-      if (!parameterFromConfig(option)) return [];
+      if (
+        !parameterFromConfig(option) ||
+        option.currentValue === null ||
+        option.currentValue === undefined
+      ) {
+        return [];
+      }
       return [
         {
           id: option.id,
-          value:
-            option.type === "boolean"
-              ? String(option.currentValue)
-              : option.currentValue,
+          value: String(option.currentValue),
         },
       ];
     });

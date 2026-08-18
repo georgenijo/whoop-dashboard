@@ -61,6 +61,7 @@ const runtime = vi.hoisted(() => ({
   },
   prepareTurn: vi.fn(async () => {}),
   applyModel: vi.fn(async () => {}),
+  cancelActiveTurn: vi.fn(async () => {}),
   usageDelta: vi.fn(() => ({
     totalTokens: 15,
     inputTokens: 10,
@@ -74,7 +75,6 @@ const runtime = vi.hoisted(() => ({
       update: {
         sessionUpdate: "tool_call",
         toolCallId: "tool-1",
-        name: "mcp__whoop__query_recovery",
         title: "Query recovery",
         status: "in_progress",
         rawInput: { start_date: "2026-08-18", end_date: "2026-08-18" },
@@ -121,6 +121,7 @@ describe("runCursorAcpTurn", () => {
     runtime.hasPrompted = false;
     runtime.prepareTurn.mockClear();
     runtime.applyModel.mockClear();
+    runtime.cancelActiveTurn.mockClear();
     runtime.prompt.mockClear();
   });
 
@@ -191,5 +192,135 @@ describe("runCursorAcpTurn", () => {
         acp: { session_id: "session-1" },
       },
     });
+  });
+
+  it("rejects a provider refusal", async () => {
+    runtime.prompt.mockResolvedValueOnce({ stopReason: "refusal", usage: {} });
+
+    await expect(
+      runCursorAcpTurn({
+        userId: 7,
+        threadId: 150,
+        model: "gpt-5.6-luna",
+        turn: { displayText: "No", modelText: "No", images: [] },
+        conversation: [],
+        toolDetails: [],
+        usage: {
+          input_tokens_total: 0,
+          output_tokens_total: 0,
+          cache_creation_input_tokens_total: 0,
+          cache_read_input_tokens_total: 0,
+          calls: 0,
+        },
+        detailState: { iterations: 0 },
+        options: {},
+      }),
+    ).rejects.toThrow("Cursor refused the request");
+  });
+
+  it("honors an already-aborted turn before invoking the runtime", async () => {
+    const signal = AbortSignal.abort(new Error("already aborted"));
+
+    await expect(
+      runCursorAcpTurn({
+        userId: 7,
+        threadId: 150,
+        model: "gpt-5.6-luna",
+        turn: { displayText: "Stop", modelText: "Stop", images: [] },
+        conversation: [],
+        toolDetails: [],
+        usage: {
+          input_tokens_total: 0,
+          output_tokens_total: 0,
+          cache_creation_input_tokens_total: 0,
+          cache_read_input_tokens_total: 0,
+          calls: 0,
+        },
+        detailState: { iterations: 0 },
+        options: { signal },
+      }),
+    ).rejects.toThrow("already aborted");
+    expect(runtime.prompt).not.toHaveBeenCalled();
+  });
+
+  it("cancels and fails on a thirteenth tool completion", async () => {
+    runtime.prompt.mockImplementationOnce(async (_text, _signal, onUpdate) => {
+      for (let index = 0; index < 13; index += 1) {
+        onUpdate({
+          sessionId: "session-1",
+          update: {
+            sessionUpdate: "tool_call",
+            toolCallId: `tool-${index}`,
+            title: "Query recovery",
+            status: "completed",
+            rawInput: {},
+            rawOutput: { content: [{ type: "text", text: "[]" }] },
+          },
+        });
+      }
+      return { stopReason: "end_turn", usage: {} };
+    });
+
+    await expect(
+      runCursorAcpTurn({
+        userId: 7,
+        threadId: 150,
+        model: "gpt-5.6-luna",
+        turn: { displayText: "Tools", modelText: "Tools", images: [] },
+        conversation: [],
+        toolDetails: [],
+        usage: {
+          input_tokens_total: 0,
+          output_tokens_total: 0,
+          cache_creation_input_tokens_total: 0,
+          cache_read_input_tokens_total: 0,
+          calls: 0,
+        },
+        detailState: { iterations: 0 },
+        options: {},
+      }),
+    ).rejects.toThrow("exceeded 12 tool calls");
+    expect(runtime.cancelActiveTurn).toHaveBeenCalledOnce();
+  });
+
+  it("closes a started tool event when the prompt stops early", async () => {
+    runtime.prompt.mockImplementationOnce(async (_text, _signal, onUpdate) => {
+      onUpdate({
+        sessionId: "session-1",
+        update: {
+          sessionUpdate: "tool_call",
+          toolCallId: "pending-tool",
+          title: "Query recovery",
+          status: "in_progress",
+          rawInput: {},
+        },
+      });
+      return { stopReason: "max_tokens", usage: {} };
+    });
+    const onToolUseEnd = vi.fn();
+    const toolDetails: never[] = [];
+
+    await runCursorAcpTurn({
+      userId: 7,
+      threadId: 150,
+      model: "gpt-5.6-luna",
+      turn: { displayText: "Tools", modelText: "Tools", images: [] },
+      conversation: [],
+      toolDetails,
+      usage: {
+        input_tokens_total: 0,
+        output_tokens_total: 0,
+        cache_creation_input_tokens_total: 0,
+        cache_read_input_tokens_total: 0,
+        calls: 0,
+      },
+      detailState: { iterations: 0 },
+      options: { onToolUseEnd },
+    });
+
+    expect(onToolUseEnd).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "pending-tool", status: "error" }),
+    );
+    expect(toolDetails).toHaveLength(1);
   });
 });

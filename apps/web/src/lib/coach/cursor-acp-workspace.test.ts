@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -59,5 +59,17 @@ describe("createCursorAcpWorkspace", () => {
     });
     expect(dependencies.dbPath).toHaveBeenCalledOnce();
     expect(dependencies.resolveMcpServerArgs).toHaveBeenCalledWith(true);
+  });
+
+  it("removes the temporary tree when project deregistration fails", async () => {
+    dependencies.removeCursorProjectRegistration.mockRejectedValueOnce(
+      new Error("deregistration failed"),
+    );
+    const workspace = await createCursorAcpWorkspace(7, false);
+
+    await expect(workspace.dispose()).rejects.toThrow("deregistration failed");
+    await expect(access(workspace.root)).rejects.toMatchObject({
+      code: "ENOENT",
+    });
   });
 });

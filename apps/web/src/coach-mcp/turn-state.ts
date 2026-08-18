@@ -12,10 +12,25 @@ import {
 export class CoachMcpTurnState {
   private epoch: string | null = null;
   private state: ToolTurnState = newToolTurnState();
+  private refreshTail = Promise.resolve();
 
   constructor(private readonly epochPath: string) {}
 
   async current(): Promise<ToolTurnState> {
+    const previous = this.refreshTail;
+    let release: (() => void) | undefined;
+    this.refreshTail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await this.currentUnlocked();
+    } finally {
+      release?.();
+    }
+  }
+
+  private async currentUnlocked(): Promise<ToolTurnState> {
     if (!this.epochPath) return this.state;
 
     const nextEpoch = (await readFile(this.epochPath, "utf8")).trim();

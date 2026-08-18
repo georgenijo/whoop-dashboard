@@ -35,32 +35,44 @@ import { COACH_MCP_TOOL_NAMES } from "@/coach-mcp/tool-policy";
 
 const CURSOR_ACP_WALL_MS = 120_000;
 const CURSOR_ACP_STARTUP_MS = 30_000;
+const CURSOR_ACP_REQUEST_MS = 15_000;
 const CURSOR_ACP_CANCEL_GRACE_MS = 5_000;
 const STDERR_EDGE_CHARS = 2_000;
 
 class BoundedStderr {
   private prefix = "";
   private tail = "";
+  private totalChars = 0;
 
   constructor(private readonly secret: string) {}
 
   append(chunk: string): void {
-    const withoutSecret = this.secret
-      ? chunk.replaceAll(this.secret, "[redacted]")
-      : chunk;
-    const safeChunk = withoutSecret.replace(
-      /Bearer\s+\S+/gi,
-      "Bearer [redacted]",
-    );
-    if (this.prefix.length < STDERR_EDGE_CHARS) {
-      this.prefix += safeChunk.slice(0, STDERR_EDGE_CHARS - this.prefix.length);
+    const guardChars = Math.max(16, this.secret.length - 1);
+    const retainedChars = STDERR_EDGE_CHARS + guardChars;
+    this.totalChars += chunk.length;
+    if (this.prefix.length < retainedChars) {
+      this.prefix += chunk.slice(0, retainedChars - this.prefix.length);
     }
-    this.tail = `${this.tail}${safeChunk}`.slice(-STDERR_EDGE_CHARS);
+    this.tail = `${this.tail}${chunk}`.slice(-retainedChars);
   }
 
   summary(): string {
-    const prefix = this.prefix.trim();
-    const tail = this.tail.trim();
+    const guardChars = Math.max(16, this.secret.length - 1);
+    const truncated = this.totalChars > this.prefix.length;
+    const prefixRaw = truncated
+      ? this.prefix.slice(0, Math.max(0, this.prefix.length - guardChars))
+      : this.prefix;
+    const tailRaw = truncated ? this.tail.slice(guardChars) : this.tail;
+    const redact = (value: string) => {
+      const withoutSecret = this.secret
+        ? value.replaceAll(this.secret, "[redacted]")
+        : value;
+      return withoutSecret
+        .replace(/Bearer\s+\S+/gi, "Bearer [redacted]")
+        .trim();
+    };
+    const prefix = redact(prefixRaw);
+    const tail = redact(tailRaw);
     if (!prefix) return tail;
     if (!tail || prefix.endsWith(tail)) return prefix;
     return `${prefix}\n…\n${tail}`;
@@ -71,13 +83,16 @@ export function canonicalCoachToolName(
   value: string | null | undefined,
 ): string | null {
   if (!value) return null;
-  const normalized = value.toLowerCase();
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
   for (const tool of COACH_MCP_TOOL_NAMES) {
     const candidate = tool.toLowerCase();
     if (
       [
         candidate,
-        `whoop-${candidate}`,
+        `whoop_${candidate}`,
         `whoop:${candidate}`,
         `whoop__${candidate}`,
         `mcp__whoop__${candidate}`,
@@ -93,8 +108,8 @@ export function cursorAcpPermissionResponse(
   request: RequestPermissionRequest,
 ): RequestPermissionResponse {
   const allowed =
-    canonicalCoachToolName(request.toolCall.name ?? request.toolCall.title) !==
-    null;
+    (canonicalCoachToolName(request.toolCall.name) ??
+      canonicalCoachToolName(request.toolCall.title)) !== null;
   const preferred = allowed
     ? (request.options.find((option) => option.kind === "allow_once") ??
       request.options.find((option) => option.kind === "allow_always"))
@@ -206,10 +221,13 @@ export class CursorAcpRuntime {
   private readonly session: ActiveSession;
   private readonly initializeResult: InitializeResponse;
   private readonly stderr: BoundedStderr;
+  private readonly requestTimeoutMs: number;
   private disposed = false;
   private disposePromise: Promise<void> | null = null;
   private configOptions: SessionConfigOption[];
   private usageSnapshot: AcpUsage | null = null;
+  private activeCancel:
+    ((reason: unknown, wasCancellation?: boolean) => void) | null = null;
 
   private constructor(input: {
     child: ChildProcessWithoutNullStreams;
@@ -222,6 +240,7 @@ export class CursorAcpRuntime {
     promptFingerprint: string;
     diagnostics: CursorAcpRuntimeDiagnostics;
     stderr: BoundedStderr;
+    requestTimeoutMs: number;
   }) {
     this.child = input.child;
     this.connection = input.connection;
@@ -233,6 +252,7 @@ export class CursorAcpRuntime {
     this.promptFingerprint = input.promptFingerprint;
     this.diagnostics = input.diagnostics;
     this.stderr = input.stderr;
+    this.requestTimeoutMs = input.requestTimeoutMs;
     this.configOptions = [
       ...(input.session.newSessionResponse.configOptions ?? []),
     ];
@@ -248,6 +268,7 @@ export class CursorAcpRuntime {
     agentBin?: string;
     agentArgs?: string[];
     agentEnv?: Record<string, string | undefined>;
+    requestTimeoutMs?: number;
   }): Promise<CursorAcpRuntime> {
     const workspace = await createCursorAcpWorkspace(
       input.userId,
@@ -408,6 +429,7 @@ export class CursorAcpRuntime {
         promptFingerprint: input.promptFingerprint,
         diagnostics,
         stderr,
+        requestTimeoutMs: input.requestTimeoutMs ?? CURSOR_ACP_REQUEST_MS,
       });
     } catch (error) {
       if (startupTimer) clearTimeout(startupTimer);
@@ -442,10 +464,34 @@ export class CursorAcpRuntime {
     );
   }
 
+  private async requestWithTimeout<T>(
+    request: Promise<T>,
+    message: string,
+  ): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        request,
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(
+            () => reject(new CursorAgentError("timeout", message)),
+            this.requestTimeoutMs,
+          );
+          timer.unref?.();
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   async listAvailableModels(): Promise<CursorAcpAvailableModelsResponse> {
-    return this.context.request<CursorAcpAvailableModelsResponse>(
-      "cursor/list_available_models",
-      {},
+    return this.requestWithTimeout(
+      this.context.request<CursorAcpAvailableModelsResponse>(
+        "cursor/list_available_models",
+        {},
+      ),
+      "Cursor ACP model discovery timed out",
     );
   }
 
@@ -472,55 +518,75 @@ export class CursorAcpRuntime {
         `Cursor model is not available in the active ACP runtime: ${model}`,
       );
     }
-    const modelResponse = await this.context.request(
-      methods.agent.session.setConfigOption,
-      {
-        sessionId: this.session.sessionId,
-        configId: modelOption.id,
-        value: model,
-      },
-    );
-    this.configOptions = [...modelResponse.configOptions];
-
-    const applied: CursorModelParameterSelection[] = [];
-    for (const selection of parameters) {
-      const option = findCursorAcpConfigOption(this.configOptions, selection);
-      if (!option) {
-        throw new CursorAgentError(
-          "agent",
-          `Cursor model parameter is unavailable: ${selection.id}`,
-        );
-      }
-      const value = cursorAcpConfigValue(option, selection.value);
-      if (value === null) {
-        throw new CursorAgentError(
-          "agent",
-          `Cursor model parameter value is unavailable: ${selection.id}=${selection.value}`,
-        );
-      }
-      const response = await this.context.request(
-        methods.agent.session.setConfigOption,
-        typeof value === "boolean"
-          ? {
-              sessionId: this.session.sessionId,
-              configId: option.id,
-              type: "boolean",
-              value,
-            }
-          : {
-              sessionId: this.session.sessionId,
-              configId: option.id,
-              value,
-            },
+    try {
+      const modelResponse = await this.requestWithTimeout(
+        this.context.request(methods.agent.session.setConfigOption, {
+          sessionId: this.session.sessionId,
+          configId: modelOption.id,
+          value: model,
+        }),
+        "Cursor ACP model configuration timed out",
       );
-      this.configOptions = [...response.configOptions];
-      applied.push({ id: option.id, value: String(value) });
+      this.configOptions = [...modelResponse.configOptions];
+
+      const applied: CursorModelParameterSelection[] = [];
+      for (const selection of parameters) {
+        const option = findCursorAcpConfigOption(this.configOptions, selection);
+        if (!option) {
+          throw new CursorAgentError(
+            "agent",
+            `Cursor model parameter is unavailable: ${selection.id}`,
+          );
+        }
+        const value = cursorAcpConfigValue(option, selection.value);
+        if (value === null) {
+          throw new CursorAgentError(
+            "agent",
+            `Cursor model parameter value is unavailable: ${selection.id}=${selection.value}`,
+          );
+        }
+        const response = await this.requestWithTimeout(
+          this.context.request(
+            methods.agent.session.setConfigOption,
+            typeof value === "boolean"
+              ? {
+                  sessionId: this.session.sessionId,
+                  configId: option.id,
+                  type: "boolean",
+                  value,
+                }
+              : {
+                  sessionId: this.session.sessionId,
+                  configId: option.id,
+                  value,
+                },
+          ),
+          "Cursor ACP model configuration timed out",
+        );
+        this.configOptions = [...response.configOptions];
+        applied.push({ id: option.id, value: String(value) });
+      }
+      const resolvedModel = findCursorAcpModelOption(this.configOptions);
+      this.diagnostics.resolvedModel =
+        resolvedModel?.type === "select" ? resolvedModel.currentValue : model;
+      this.diagnostics.appliedParameters = applied;
+      this.diagnostics.timing.modelConfigMs = Date.now() - started;
+    } catch (error) {
+      await this.dispose();
+      throw error;
     }
-    const resolvedModel = findCursorAcpModelOption(this.configOptions);
-    this.diagnostics.resolvedModel =
-      resolvedModel?.type === "select" ? resolvedModel.currentValue : model;
-    this.diagnostics.appliedParameters = applied;
-    this.diagnostics.timing.modelConfigMs = Date.now() - started;
+  }
+
+  async cancelActiveTurn(reason: unknown): Promise<void> {
+    if (this.activeCancel) {
+      this.activeCancel(reason);
+      return;
+    }
+    await this.context
+      .notify(methods.agent.session.cancel, {
+        sessionId: this.session.sessionId,
+      })
+      .catch(() => {});
   }
 
   async prepareTurn(
@@ -591,6 +657,7 @@ export class CursorAcpRuntime {
         cancelEscalation.unref?.();
       }
     };
+    this.activeCancel = cancel;
     const onAbort = () =>
       cancel(signal?.reason ?? new Error("Coach turn aborted"));
     signal?.addEventListener("abort", onAbort, { once: true });
@@ -601,7 +668,9 @@ export class CursorAcpRuntime {
     wallTimer.unref?.();
 
     try {
-      void this.session.prompt(text);
+      const promptFailure = new Promise<never>((_resolve, reject) => {
+        void this.session.prompt(text).catch(reject);
+      });
       const consume = async (): Promise<PromptResponse> => {
         for (;;) {
           const message = await this.session.nextUpdate();
@@ -612,7 +681,7 @@ export class CursorAcpRuntime {
           onUpdate(message.notification);
         }
       };
-      const response = await Promise.race([consume(), forced]);
+      const response = await Promise.race([consume(), forced, promptFailure]);
       if (timedOut) {
         await this.dispose();
         throw new CursorAgentError("timeout", "Cursor coach timed out");
@@ -627,6 +696,7 @@ export class CursorAcpRuntime {
       } else if (!timedOut) {
         cancel(error, false);
         await this.dispose();
+        if (error instanceof CursorAgentError) throw error;
         throw new CursorAgentError(
           "agent",
           `Cursor ACP prompt failed: ${
@@ -640,6 +710,7 @@ export class CursorAcpRuntime {
     } finally {
       clearTimeout(wallTimer);
       if (cancelEscalation) clearTimeout(cancelEscalation);
+      this.activeCancel = null;
       signal?.removeEventListener("abort", onAbort);
     }
   }

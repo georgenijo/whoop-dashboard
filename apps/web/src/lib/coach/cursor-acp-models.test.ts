@@ -85,4 +85,23 @@ describe("Cursor ACP model normalization", () => {
     expect(cursorAcpConfigValue(configOptions[1], "true")).toBe(true);
     expect(cursorAcpConfigValue(configOptions[1], "yes")).toBeNull();
   });
+
+  it("omits missing current values from default selections", () => {
+    const models = cursorModelsFromAcp({
+      models: [
+        {
+          value: "model",
+          name: "Model",
+          configOptions: [
+            {
+              ...configOptions[0],
+              currentValue: null,
+            } as unknown as (typeof configOptions)[number],
+          ],
+        },
+      ],
+    });
+
+    expect(models[0]?.variants).toEqual([]);
+  });
 });

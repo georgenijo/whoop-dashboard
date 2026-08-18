@@ -39,9 +39,17 @@ let nextId = 1;
 let stderr = "";
 const pending = new Map();
 
-child.on("error", (error) => {
+function rejectPending(error) {
   for (const request of pending.values()) request.reject(error);
   pending.clear();
+}
+
+child.on("error", rejectPending);
+child.stdin.on("error", rejectPending);
+child.on("close", (code, signal) => {
+  rejectPending(
+    new Error(`cursor-agent exited (code=${code}, signal=${signal})`),
+  );
 });
 
 child.stderr.setEncoding("utf8");

@@ -29,6 +29,7 @@ afterEach(() => {
 
 describe("runCursorProviderTurn", () => {
   it("keeps the legacy path as the rollout default", async () => {
+    vi.stubEnv("COACH_CURSOR_TRANSPORT", "legacy");
     const result = await runCursorProviderTurn({} as never);
     expect(result.reply).toBe("legacy");
     expect(legacy).toHaveBeenCalledOnce();

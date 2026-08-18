@@ -26,6 +26,7 @@ import {
   cursorPromptFingerprint,
 } from "./cursor-acp-registry";
 import { canonicalCoachToolName } from "./cursor-acp-runtime";
+import { CursorAgentError } from "./cursor-errors";
 
 const MAX_CURSOR_TOOL_CALLS = 12;
 const MAX_CURSOR_HISTORY_ROWS = 30;
@@ -339,17 +340,23 @@ export async function runCursorAcpTurn(
         );
         cursorDetail.timing.prompt_build_ms = Date.now() - promptStartedAt;
         cursorDetail.prompt_chars = prompt.length;
+        let toolCapError: CursorAgentError | null = null;
 
         const finishTool = (state: AcpToolState) => {
           if (state.completedEmitted) return;
-          const name = canonicalCoachToolName(state.name ?? state.title);
+          const name =
+            canonicalCoachToolName(state.name) ??
+            canonicalCoachToolName(state.title);
           if (!name) return;
           state.completedEmitted = true;
           completedToolCalls += 1;
           if (completedToolCalls > MAX_CURSOR_TOOL_CALLS) {
-            throw new Error(
+            toolCapError ??= new CursorAgentError(
+              "agent",
               `Cursor turn exceeded ${MAX_CURSOR_TOOL_CALLS} tool calls`,
             );
+            state.status = "failed";
+            void runtime.cancelActiveTurn(toolCapError);
           }
           const durationMs = Math.max(0, Date.now() - state.startedAt);
           const unwrapped = unwrapToolOutput(state.output);
@@ -413,7 +420,9 @@ export async function runCursorAcpTurn(
         const updateTool = (update: ToolCall | ToolCallUpdate) => {
           const state = mergeToolState(tools.get(update.toolCallId), update);
           tools.set(state.id, state);
-          const name = canonicalCoachToolName(state.name ?? state.title);
+          const name =
+            canonicalCoachToolName(state.name) ??
+            canonicalCoachToolName(state.title);
           if (name && !state.startedEmitted) {
             state.startedEmitted = true;
             visibleText.toolBoundary();
@@ -443,46 +452,57 @@ export async function runCursorAcpTurn(
           }
         };
 
-        const response = await runtime.prompt(
-          prompt,
-          options.signal,
-          (notification: SessionNotification) => {
-            const update = notification.update;
-            eventCounts[update.sessionUpdate] =
-              (eventCounts[update.sessionUpdate] ?? 0) + 1;
-            switch (update.sessionUpdate) {
-              case "agent_message_chunk":
-                if (update.content.type === "text") {
-                  const delta = visibleText.append(update.content.text);
-                  if (delta) {
-                    if (!pendingAssistant) {
-                      pendingAssistant = {
-                        role: "assistant",
-                        content: "",
-                        blocks: [],
-                      };
-                      messages.push(pendingAssistant);
+        let response: Awaited<ReturnType<typeof runtime.prompt>>;
+        try {
+          response = await runtime.prompt(
+            prompt,
+            options.signal,
+            (notification: SessionNotification) => {
+              const update = notification.update;
+              eventCounts[update.sessionUpdate] =
+                (eventCounts[update.sessionUpdate] ?? 0) + 1;
+              switch (update.sessionUpdate) {
+                case "agent_message_chunk":
+                  if (update.content.type === "text") {
+                    const delta = visibleText.append(update.content.text);
+                    if (delta) {
+                      if (!pendingAssistant) {
+                        pendingAssistant = {
+                          role: "assistant",
+                          content: "",
+                          blocks: [],
+                        };
+                        messages.push(pendingAssistant);
+                      }
+                      pendingAssistant.content = `${pendingAssistant.content}${delta}`;
+                      pendingAssistant.blocks = [
+                        { type: "text", text: pendingAssistant.content },
+                      ];
+                      options.onTextDelta?.(delta);
                     }
-                    pendingAssistant.content = `${pendingAssistant.content}${delta}`;
-                    pendingAssistant.blocks = [
-                      { type: "text", text: pendingAssistant.content },
-                    ];
-                    options.onTextDelta?.(delta);
                   }
-                }
-                break;
-              case "agent_thought_chunk":
-                visibleText.segmentBoundary();
-                break;
-              case "tool_call":
-              case "tool_call_update":
-                updateTool(update);
-                break;
-              default:
-                break;
-            }
-          },
-        );
+                  break;
+                case "agent_thought_chunk":
+                  visibleText.segmentBoundary();
+                  break;
+                case "tool_call":
+                case "tool_call_update":
+                  updateTool(update);
+                  break;
+                default:
+                  break;
+              }
+            },
+          );
+        } catch (error) {
+          if (toolCapError) throw toolCapError;
+          throw error;
+        }
+        for (const state of [...tools.values()]) {
+          state.status = "failed";
+          finishTool(state);
+          tools.delete(state.id);
+        }
         const usageDelta = runtime.usageDelta(response.usage);
         if (usageDelta) {
           usage.input_tokens_total += usageDelta.inputTokens;
@@ -493,6 +513,7 @@ export async function runCursorAcpTurn(
             usageDelta.cachedWriteTokens ?? 0;
           usage.calls += 1;
         }
+        if (toolCapError) throw toolCapError;
         const reply = visibleText.value().trim();
         if (response.stopReason !== "refusal") {
           if (pendingAssistant) {

@@ -180,6 +180,33 @@ describe("CursorAcpSessionRegistry", () => {
     await registry.disposeAll();
   });
 
+  it("does not block another user behind a slow session startup", async () => {
+    const firstStart = deferred<CursorAcpRuntime>();
+    const firstFactoryCalled = deferred<void>();
+    const secondRuntime = fakeRuntime();
+    const factory = vi.fn(async ({ userId }: { userId: number }) => {
+      if (userId === 1) {
+        firstFactoryCalled.resolve();
+        return firstStart.promise;
+      }
+      return secondRuntime;
+    });
+    const registry = new CursorAcpSessionRegistry(factory, 60_000, 4);
+
+    const first = registry.run(
+      input({ userId: 1, threadId: 1 }),
+      async () => {},
+    );
+    await firstFactoryCalled.promise;
+    await registry.run(input({ userId: 2, threadId: 2 }), async (runtime) =>
+      expect(runtime).toBe(secondRuntime),
+    );
+
+    firstStart.resolve(fakeRuntime());
+    await first;
+    await registry.disposeAll();
+  });
+
   it("evicts the least recently used idle session at capacity", async () => {
     const runtimes = [fakeRuntime(), fakeRuntime(), fakeRuntime()];
     const factory = vi
@@ -237,5 +264,31 @@ describe("CursorAcpSessionRegistry", () => {
     await vi.waitFor(() => expect(registry.size()).toBe(0), { timeout: 250 });
 
     expect(runtime.dispose).toHaveBeenCalledOnce();
+  });
+
+  it("drains and disposes a runtime that finishes starting during shutdown", async () => {
+    const start = deferred<CursorAcpRuntime>();
+    const factoryCalled = deferred<void>();
+    const runtime = fakeRuntime();
+    const registry = new CursorAcpSessionRegistry(
+      vi.fn(async () => {
+        factoryCalled.resolve();
+        return start.promise;
+      }),
+      60_000,
+      4,
+    );
+    const run = registry.run(input(), async () => {});
+    await factoryCalled.promise;
+
+    const shutdown = registry.disposeAll();
+    start.resolve(runtime);
+    await shutdown;
+
+    await expect(run).rejects.toThrow("shutting down");
+    expect(runtime.dispose).toHaveBeenCalledOnce();
+    await expect(registry.run(input(), async () => {})).rejects.toThrow(
+      "shutting down",
+    );
   });
 });

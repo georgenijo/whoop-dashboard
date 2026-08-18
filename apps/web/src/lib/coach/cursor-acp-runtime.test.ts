@@ -18,7 +18,7 @@ afterEach(async () => {
   await Promise.all(runtimes.splice(0).map((runtime) => runtime.dispose()));
 });
 
-async function start(scenario = "normal") {
+async function start(scenario = "normal", requestTimeoutMs?: number) {
   const runtime = await CursorAcpRuntime.start({
     userId: 7,
     key: "key_test",
@@ -29,6 +29,7 @@ async function start(scenario = "normal") {
     agentBin: process.execPath,
     agentArgs: [fixture],
     agentEnv: { FAKE_CURSOR_ACP_SCENARIO: scenario },
+    requestTimeoutMs,
   });
   runtimes.push(runtime);
   return runtime;
@@ -110,6 +111,13 @@ describe("CursorAcpRuntime", () => {
     expect(
       cursorAcpPermissionResponse({
         sessionId: "s",
+        toolCall: { toolCallId: "t", title: "Query recovery" },
+        options,
+      }).outcome,
+    ).toEqual({ outcome: "selected", optionId: "allow" });
+    expect(
+      cursorAcpPermissionResponse({
+        sessionId: "s",
         toolCall: { toolCallId: "t", name: "Shell" },
         options,
       }).outcome,
@@ -127,38 +135,85 @@ describe("CursorAcpRuntime", () => {
   });
 
   it("retains redacted stderr prefix and tail when startup fails", async () => {
-    await expect(
-      CursorAcpRuntime.start({
-        userId: 7,
-        key: "key_test",
-        keyOrigin: "user",
-        credentialFingerprint: "credential",
-        promptFingerprint: "prompt",
-        withMcp: false,
-        agentBin: process.execPath,
-        agentArgs: [fixture],
-        agentEnv: { FAKE_CURSOR_ACP_SCENARIO: "startup-error" },
-      }),
-    ).rejects.toMatchObject({
+    const error = await CursorAcpRuntime.start({
+      userId: 7,
+      key: "key_test",
+      keyOrigin: "user",
+      credentialFingerprint: "credential",
+      promptFingerprint: "prompt",
+      withMcp: false,
+      agentBin: process.execPath,
+      agentArgs: [fixture],
+      agentEnv: { FAKE_CURSOR_ACP_SCENARIO: "startup-error" },
+    }).then(
+      () => {
+        throw new Error("Cursor ACP startup unexpectedly resolved");
+      },
+      (reason: unknown) => reason,
+    );
+
+    expect(error).toMatchObject({
       message: expect.stringMatching(/FIRST[\s\S]*TAIL diagnostic/),
     });
-    try {
-      await CursorAcpRuntime.start({
-        userId: 7,
-        key: "key_test",
-        keyOrigin: "user",
-        credentialFingerprint: "credential",
-        promptFingerprint: "prompt",
-        withMcp: false,
-        agentBin: process.execPath,
-        agentArgs: [fixture],
-        agentEnv: { FAKE_CURSOR_ACP_SCENARIO: "startup-error" },
-      });
-    } catch (error) {
-      expect(
-        error instanceof Error ? error.message : String(error),
-      ).not.toContain("key_test");
-    }
+    expect(
+      error instanceof Error ? error.message : String(error),
+    ).not.toContain("key_test");
+  });
+
+  it("redacts credentials split across stderr chunks", async () => {
+    const error = await CursorAcpRuntime.start({
+      userId: 7,
+      key: "key_test",
+      keyOrigin: "user",
+      credentialFingerprint: "credential",
+      promptFingerprint: "prompt",
+      withMcp: false,
+      agentBin: process.execPath,
+      agentArgs: [fixture],
+      agentEnv: { FAKE_CURSOR_ACP_SCENARIO: "startup-split-secret" },
+    }).then(
+      () => {
+        throw new Error("Cursor ACP startup unexpectedly resolved");
+      },
+      (reason: unknown) => reason,
+    );
+
+    expect(
+      error instanceof Error ? error.message : String(error),
+    ).not.toContain("key_test");
+  });
+
+  it("retires a session when model configuration fails after selection", async () => {
+    const runtime = await start("config-error");
+    await expect(
+      runtime.applyModel("gpt-5.6-luna", [{ id: "reasoning", value: "high" }]),
+    ).rejects.toBeDefined();
+    expect(runtime.isHealthy()).toBe(false);
+  });
+
+  it("retires a session when a later model parameter is unavailable", async () => {
+    const runtime = await start();
+    await expect(
+      runtime.applyModel("gpt-5.6-luna", [
+        { id: "reasoning", value: "high" },
+        { id: "missing", value: "value" },
+      ]),
+    ).rejects.toThrow("parameter is unavailable");
+    expect(runtime.isHealthy()).toBe(false);
+  });
+
+  it("bounds catalog and model-configuration requests", async () => {
+    const catalogRuntime = await start("catalog-hang", 20);
+    await expect(catalogRuntime.listAvailableModels()).rejects.toMatchObject({
+      reason: "timeout",
+    });
+    await catalogRuntime.dispose();
+
+    const configRuntime = await start("config-hang", 20);
+    await expect(
+      configRuntime.applyModel("gpt-5.6-luna", []),
+    ).rejects.toMatchObject({ reason: "timeout" });
+    expect(configRuntime.isHealthy()).toBe(false);
   });
 
   it("fails promptly when the configured agent binary cannot spawn", async () => {

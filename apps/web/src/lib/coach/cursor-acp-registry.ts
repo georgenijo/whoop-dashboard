@@ -44,6 +44,7 @@ export class CursorAcpSessionRegistry {
   private readonly starting = new Map<string, Promise<CursorAcpRuntime>>();
   private readonly threadTails = new Map<string, Promise<void>>();
   private lifecycleTail = Promise.resolve();
+  private closed = false;
 
   constructor(
     private readonly factory: (
@@ -83,7 +84,7 @@ export class CursorAcpSessionRegistry {
   }
 
   private async enforceCapacity(exceptKey: string): Promise<void> {
-    while (this.entries.size >= this.maxSessions) {
+    while (this.entries.size + this.starting.size >= this.maxSessions) {
       const candidate = [...this.entries.values()]
         .filter((entry) => entry.baseKey !== exceptKey && entry.busy === 0)
         .sort((a, b) => a.lastUsedAt - b.lastUsedAt)[0];
@@ -97,7 +98,28 @@ export class CursorAcpSessionRegistry {
     }
   }
 
-  private async getOrCreateLocked(
+  private async withLifecycleLock<T>(operation: () => Promise<T>): Promise<T> {
+    const previous = this.lifecycleTail;
+    let release: (() => void) | undefined;
+    this.lifecycleTail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release?.();
+    }
+  }
+
+  private closedError(): CursorAgentError {
+    return new CursorAgentError(
+      "agent",
+      "Cursor coach session registry is shutting down",
+    );
+  }
+
+  private async getOrCreate(
     input: RuntimeFactoryInput & {
       threadId: number;
       historyFingerprint: string;
@@ -105,30 +127,53 @@ export class CursorAcpSessionRegistry {
   ): Promise<RegistryEntry> {
     const baseKey = `${input.userId}:${input.threadId}`;
     const signature = `${baseKey}:${input.credentialFingerprint}:${input.promptFingerprint}`;
-    const existing = this.entries.get(baseKey);
-    if (
-      existing &&
-      existing.signature === signature &&
-      existing.runtime.isHealthy() &&
-      (!existing.runtime.hasPrompted ||
-        existing.runtime.historyFingerprint === input.historyFingerprint)
-    ) {
-      existing.lastUsedAt = Date.now();
-      this.scheduleIdle(existing);
-      return existing;
-    }
-    if (existing) await this.evict(baseKey, existing.runtime);
+    const reservation = await this.withLifecycleLock(async () => {
+      if (this.closed) throw this.closedError();
+      const existing = this.entries.get(baseKey);
+      if (
+        existing &&
+        existing.signature === signature &&
+        existing.runtime.isHealthy() &&
+        (!existing.runtime.hasPrompted ||
+          existing.runtime.historyFingerprint === input.historyFingerprint)
+      ) {
+        existing.lastUsedAt = Date.now();
+        this.scheduleIdle(existing);
+        return { entry: existing, start: null };
+      }
+      if (existing) await this.evict(baseKey, existing.runtime);
 
-    let start = this.starting.get(signature);
-    if (!start) {
-      start = (async () => {
+      let start = this.starting.get(signature);
+      if (!start) {
         await this.enforceCapacity(baseKey);
-        return this.factory(input);
-      })();
-      this.starting.set(signature, start);
-    }
+        start = this.factory(input);
+        this.starting.set(signature, start);
+      }
+      return { entry: null, start };
+    });
+    if (reservation.entry) return reservation.entry;
+
+    const start = reservation.start;
+    if (!start) throw this.closedError();
+    let runtime: CursorAcpRuntime;
     try {
-      const runtime = await start;
+      runtime = await start;
+    } catch (error) {
+      await this.withLifecycleLock(async () => {
+        if (this.starting.get(signature) === start) {
+          this.starting.delete(signature);
+        }
+      });
+      throw error;
+    }
+
+    return this.withLifecycleLock(async () => {
+      if (this.starting.get(signature) === start) {
+        this.starting.delete(signature);
+      }
+      if (this.closed) {
+        throw this.closedError();
+      }
       const ready = this.entries.get(baseKey);
       if (ready && ready.signature === signature && ready.runtime === runtime) {
         return ready;
@@ -143,29 +188,7 @@ export class CursorAcpSessionRegistry {
       this.entries.set(baseKey, entry);
       this.scheduleIdle(entry);
       return entry;
-    } finally {
-      if (this.starting.get(signature) === start)
-        this.starting.delete(signature);
-    }
-  }
-
-  private async getOrCreate(
-    input: RuntimeFactoryInput & {
-      threadId: number;
-      historyFingerprint: string;
-    },
-  ): Promise<RegistryEntry> {
-    const previous = this.lifecycleTail;
-    let release: (() => void) | undefined;
-    this.lifecycleTail = new Promise<void>((resolve) => {
-      release = resolve;
     });
-    await previous;
-    try {
-      return await this.getOrCreateLocked(input);
-    } finally {
-      release?.();
-    }
   }
 
   async run<T>(
@@ -175,6 +198,7 @@ export class CursorAcpSessionRegistry {
     },
     operation: (runtime: CursorAcpRuntime) => Promise<T>,
   ): Promise<T> {
+    if (this.closed) throw this.closedError();
     const baseKey = `${input.userId}:${input.threadId}`;
     const previous = this.threadTails.get(baseKey) ?? Promise.resolve();
     let release: (() => void) | undefined;
@@ -207,15 +231,24 @@ export class CursorAcpSessionRegistry {
   }
 
   async disposeAll(): Promise<void> {
-    const entries = [...this.entries.values()];
-    this.entries.clear();
-    this.threadTails.clear();
-    await Promise.all(
-      entries.map(async (entry) => {
+    const snapshot = await this.withLifecycleLock(async () => {
+      this.closed = true;
+      const entries = [...this.entries.values()];
+      const starts = [...this.starting.values()];
+      this.entries.clear();
+      this.starting.clear();
+      this.threadTails.clear();
+      for (const entry of entries) {
         if (entry.idleTimer) clearTimeout(entry.idleTimer);
-        await entry.runtime.dispose();
-      }),
-    );
+      }
+      return { entries, starts };
+    });
+    const started = await Promise.allSettled(snapshot.starts);
+    const runtimes = new Set(snapshot.entries.map((entry) => entry.runtime));
+    for (const result of started) {
+      if (result.status === "fulfilled") runtimes.add(result.value);
+    }
+    await Promise.all([...runtimes].map((runtime) => runtime.dispose()));
   }
 
   size(): number {

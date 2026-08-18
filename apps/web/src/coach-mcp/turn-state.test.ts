@@ -47,4 +47,21 @@ describe("CoachMcpTurnState", () => {
       "epoch is missing or invalid",
     );
   });
+
+  it("single-flights concurrent refreshes at a new turn boundary", async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "coach-turn-state-"));
+    dirs.push(dir);
+    const epochPath = path.join(dir, "epoch");
+    await writeFile(epochPath, "turn-1");
+    const manager = new CoachMcpTurnState(epochPath);
+    await manager.current();
+    await writeFile(epochPath, "turn-2");
+
+    const [first, second] = await Promise.all([
+      manager.current(),
+      manager.current(),
+    ]);
+
+    expect(first).toBe(second);
+  });
 });

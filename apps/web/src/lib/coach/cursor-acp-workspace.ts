@@ -95,8 +95,11 @@ export async function createCursorAcpWorkspace(
       mcpServer,
       prepareTurn,
       dispose: async () => {
-        await removeCursorProjectRegistration(root);
-        await rm(root, { recursive: true, force: true });
+        try {
+          await removeCursorProjectRegistration(root);
+        } finally {
+          await rm(root, { recursive: true, force: true });
+        }
       },
     };
   } catch (error) {
