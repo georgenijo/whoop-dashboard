@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-18: Coach presentation contracts stay portable across web and iOS
+
+**Decision:** Treat persisted work logs and the bounded Mermaid `xychart-beta` grammar as cross-client Coach presentation contracts. Web renders charts with Recharts and iOS renders the same message content with Swift Charts; both provide a table alternative, reject malformed/unsupported charts without executing model-authored code, and present the same compact work/tool hierarchy without timeline connectors or duplicate activity animations.
+
+**Rationale:** Coach conversations are shared across web and iOS, so presentation metadata must survive client changes and historical messages should upgrade without provider-specific regeneration. Native renderers preserve platform accessibility and interaction while one bounded data grammar avoids arbitrary HTML, JavaScript, or embedded web content.
+
+**Status:** active
+
+**References:** PR #544, `apps/web/src/lib/coach/visualization.ts`, `apps/ios/Sources/CoachInlineChartView.swift`, `apps/ios/Sources/CoachWorkLogView.swift`
+
+---
+
 ## 2026-08-18: Coach uses native provider transports behind one runtime contract
 
 **Decision:** Keep Coach authentication, streaming, work logs, and persistence behind a provider-neutral runner, while each provider uses its strongest native transport. Cursor moves to persistent `cursor-agent acp` sessions, and the authenticated ACP runtime becomes authoritative for both model discovery and execution; Anthropic keeps its existing SDK loop. The private Whoop MCP server remains the contained tool bridge and resets its write guards through a server-controlled epoch on every turn.

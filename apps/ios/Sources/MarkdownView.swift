@@ -55,6 +55,9 @@ struct MarkdownView: View {
                 .padding(8)
                 .background(Color.black.opacity(0.08))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
+
+        case .chart(let chart):
+            CoachInlineChartView(chart: chart)
         }
     }
 
@@ -85,6 +88,7 @@ enum MarkdownBlock: Hashable {
     case bulletList([String])
     case orderedList([String])
     case codeBlock(language: String?, code: String)
+    case chart(CoachChartSpec)
 
     static func parse(_ source: String) -> [MarkdownBlock] {
         let lines = source.components(separatedBy: "\n")
@@ -123,7 +127,13 @@ enum MarkdownBlock: Hashable {
         for raw in lines {
             if inFence {
                 if raw.trimmingCharacters(in: .whitespaces).hasPrefix("```") {
-                    blocks.append(.codeBlock(language: fenceLang, code: fenceLines.joined(separator: "\n")))
+                    let code = fenceLines.joined(separator: "\n")
+                    if fenceLang?.lowercased() == "mermaid",
+                       let chart = CoachChartSpec.parseMermaid(code) {
+                        blocks.append(.chart(chart))
+                    } else {
+                        blocks.append(.codeBlock(language: fenceLang, code: code))
+                    }
                     inFence = false
                     fenceLang = nil
                     fenceLines = []

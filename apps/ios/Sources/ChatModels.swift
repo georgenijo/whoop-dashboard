@@ -29,6 +29,7 @@ struct ChatMessage: Decodable, Identifiable, Hashable {
     let content: String
     let createdAt: Date
     let attachments: [ChatAttachment]
+    let workLog: CoachWorkLog?
 
     enum Role: String, Decodable, Hashable {
         case user
@@ -38,6 +39,7 @@ struct ChatMessage: Decodable, Identifiable, Hashable {
     enum CodingKeys: String, CodingKey {
         case id, role, content, attachments
         case createdAt = "created_at"
+        case workLog = "work_log"
     }
 
     init(
@@ -45,13 +47,15 @@ struct ChatMessage: Decodable, Identifiable, Hashable {
         role: Role,
         content: String,
         createdAt: Date,
-        attachments: [ChatAttachment] = []
+        attachments: [ChatAttachment] = [],
+        workLog: CoachWorkLog? = nil
     ) {
         self.id = id
         self.role = role
         self.content = content
         self.createdAt = createdAt
         self.attachments = attachments
+        self.workLog = workLog
     }
 
     init(from decoder: Decoder) throws {
@@ -64,7 +68,64 @@ struct ChatMessage: Decodable, Identifiable, Hashable {
             [ChatAttachment].self,
             forKey: .attachments
         ) ?? []
+        // Historical or future work-log versions must not make the entire
+        // conversation fail to load. The web client follows the same
+        // fail-closed behavior for malformed activity metadata.
+        do {
+            workLog = try container.decodeIfPresent(CoachWorkLog.self, forKey: .workLog)
+        } catch {
+            workLog = nil
+        }
     }
+}
+
+struct CoachWorkLog: Decodable, Hashable {
+    let version: Int
+    let status: Status
+    let durationMs: Int?
+    let notes: [String]
+    let tools: [CoachToolActivity]
+
+    enum Status: String, Decodable, Hashable {
+        case running
+        case complete
+        case error
+        case aborted
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case version, status, notes, tools
+        case durationMs = "duration_ms"
+    }
+}
+
+struct CoachToolActivity: Decodable, Identifiable, Hashable {
+    let id: String
+    let name: String
+    let state: State
+    let status: String?
+    let durationMs: Int?
+    let rows: Int?
+    let stage: String?
+    let stageMessage: String?
+    let error: String?
+
+    enum State: String, Decodable, Hashable {
+        case running
+        case complete
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, state, status, rows, stage, error
+        case durationMs = "duration_ms"
+        case stageMessage = "stage_message"
+    }
+}
+
+struct LiveToolActivity: Identifiable, Hashable {
+    let id = UUID()
+    let name: String
+    var stage: String?
 }
 
 struct ChatAttachment: Decodable, Identifiable, Hashable {
