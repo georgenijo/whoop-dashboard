@@ -30,6 +30,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-18: Coach runs Cursor through per-user ACP sessions
+
+**Decision:** Production uses `COACH_CURSOR_TRANSPORT=acp` for Cursor model discovery and Coach turns. Each runtime receives the server-resolved per-user BYOK credential non-interactively, keeps session state isolated by user, thread, credential, and prompt fingerprints, and connects only the product-owned Whoop MCP server. Cursor Agent 2026.08's metadata-redacted `MCP: tool` notifications are tracked as `whoop_tool` for live activity, audit counts, and the tool-call cap without fabricating an exact tool name in conversation history.
+
+**Rationale:** The live production canary returned 35 account-authorized models, and an end-to-end GPT-5.6 Luna turn resolved Luna and completed two Whoop MCP calls. The deprecated one-shot CLI path caused model-selection drift and provider refusals; machine-global interactive Cursor login would also violate BYOK isolation. Treating the generic MCP notification as invisible would make successful calls disappear from the UI and logs and bypass the 12-call safety cap.
+
+**Status:** active
+
+**References:** #537, PR #543, PR #546, PR #547, `apps/web/src/lib/coach/cursor-acp-runtime.ts`, `apps/web/src/lib/coach/cursor-acp-turn.ts`, `docs/operations/environment-and-deploy.md`
+
+---
+
 ## 2026-08-18: Coach model choice does not remove core tools
 
 **Decision:** Every selectable Coach model receives the same product-owned tool surface, including guarded Whoop sync. Cursor-backed models expose `trigger_whoop_sync` through the existing per-turn MCP server; the shared `executeTool` path continues to enforce tenant scoping, the one-sync-per-turn cap, and the sync cooldown.
