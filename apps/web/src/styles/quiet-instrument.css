@@ -556,36 +556,47 @@ body:has(.coach-page) .bottom-nav { display: none; }
 .coach-sidebar-profile .status { color: var(--fg-3); font-family: var(--font-num); font-size: 9px; }
 
 .coach-chat {
+  position: relative;
   background: var(--bg);
   border: 0;
   border-radius: 0;
 }
 .coach-topbar {
-  position: static;
-  align-items: baseline;
-  padding: var(--s5) var(--s6) var(--s4);
-  background: var(--bg);
-  border-bottom: var(--stroke) solid var(--rule-soft);
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 4;
+  align-items: center;
+  min-height: 48px;
+  padding: 0 var(--s6);
+  background: linear-gradient(to bottom, var(--bg) 72%, transparent);
+  border-bottom: 0;
   backdrop-filter: none;
 }
+.coach-title-block {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
 .coach-title-block h1 {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
   color: var(--fg);
-  font-size: var(--t-lg);
-  font-weight: 550;
-  letter-spacing: -0.012em;
+  font-size: var(--t-sm);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .coach-kicker,
 .coach-subtitle {
-  color: var(--fg-3);
-  font-family: var(--font-num);
-  font-size: var(--t-xs);
+  display: none;
 }
-.coach-kicker { margin-bottom: var(--s1); letter-spacing: 0.1em; }
 /* The thread reads left-to-right at the pane's own width. A centred measure
    left two dead gutters and made the transcript feel indented from nothing. */
 .coach-messages {
   gap: 0;
-  padding: calc(var(--s5) * var(--dm)) var(--s6) var(--s5);
+  padding: calc(48px + var(--s5) * var(--dm)) var(--s6) var(--s5);
 }
 .coach-message-row {
   display: block;
@@ -727,18 +738,6 @@ body:has(.coach-page) .bottom-nav { display: none; }
   margin: 0;
   padding: 0 0 var(--s3) 22px;
   border-left: 0;
-}
-.coach-work-body::before {
-  content: "";
-  position: absolute;
-  top: 1px;
-  bottom: var(--s3);
-  left: 7px;
-  width: var(--stroke);
-  background: var(--rule);
-}
-.coach-work-body:not(:has(.coach-work-trace-row, .coach-tool-call))::before {
-  display: none;
 }
 .coach-work-trace-row {
   position: relative;
@@ -967,7 +966,6 @@ body:has(.coach-page) .bottom-nav { display: none; }
   justify-content: flex-end;
   gap: var(--s2);
 }
-.coach-composer-status .coach-activity-mark { color: var(--fg-3); }
 .coach-model-trigger { border: 0; border-radius: var(--r-md); color: var(--fg-2); }
 .coach-model-trigger:hover:not(:disabled),
 .coach-model-trigger[aria-expanded="true"] { color: var(--fg); background: var(--bg-lift); border-color: transparent; }
@@ -1012,8 +1010,8 @@ body:has(.coach-page) .bottom-nav { display: none; }
   .coach-shell { grid-template-columns: 1fr; }
   .coach-sidebar { display: none; }
   .coach-mobile-threads { display: flex; }
-  .coach-topbar { padding: var(--s4); }
-  .coach-messages { padding: var(--s5) var(--s4); }
+  .coach-topbar { padding: 0 var(--s4); }
+  .coach-messages { padding: calc(48px + var(--s5)) var(--s4) var(--s5); }
   .coach-composer { padding: var(--s3) var(--s4) var(--s4); }
   .coach-tool-call > summary { align-items: flex-start; flex-wrap: wrap; }
   .coach-tool-meta {
