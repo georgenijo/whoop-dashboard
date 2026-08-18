@@ -6,13 +6,25 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-18: Coach persists validated typed presentation blocks
+
+**Decision:** Assistant messages may persist a versioned `presentation_blocks` array containing only app-owned `metric_strip`, `comparison`, `chart`, `action_plan`, `data_freshness`, `workout_plan`, and `evidence` schemas. Providers propose blocks through fenced JSON, but the server validates all versions, types, numeric values, text lengths, and collection caps before stripping the proposal from Markdown; any invalid payload is discarded and downgraded to safe prose. Web and iOS render the same semantics natively and retain bounded `xychart-beta` as a historical compatibility path.
+
+**Rationale:** A separate validated metadata column keeps the contract provider-neutral, preserves tool/model conversation blocks, lets historical Markdown load unchanged, and prevents model-authored HTML, JavaScript, React, SwiftUI, or arbitrary Mermaid from becoming executable UI. Native renderers can provide platform accessibility, table/copy views, guarded actions, and summary-image sharing without coupling persistence to either client.
+
+**Status:** active
+
+**References:** #555, PR #556, `apps/web/src/lib/coach/presentation.ts`, `apps/ios/Sources/CoachPresentationBlocks.swift`
+
+---
+
 ## 2026-08-18: Coach presentation contracts stay portable across web and iOS
 
 **Decision:** Treat persisted work logs and the bounded Mermaid `xychart-beta` grammar as cross-client Coach presentation contracts. Web renders charts with Recharts and iOS renders the same message content with Swift Charts; both provide a table alternative, reject malformed/unsupported charts without executing model-authored code, and present the same compact work/tool hierarchy without timeline connectors or duplicate activity animations.
 
 **Rationale:** Coach conversations are shared across web and iOS, so presentation metadata must survive client changes and historical messages should upgrade without provider-specific regeneration. Native renderers preserve platform accessibility and interaction while one bounded data grammar avoids arbitrary HTML, JavaScript, or embedded web content.
 
-**Status:** active
+**Status:** superseded by 2026-08-18 typed presentation-block decision
 
 **References:** PR #544, `apps/web/src/lib/coach/visualization.ts`, `apps/ios/Sources/CoachInlineChartView.swift`, `apps/ios/Sources/CoachWorkLogView.swift`
 
