@@ -3,7 +3,8 @@ import XCTest
 
 final class CoachRichResponseTests: XCTestCase {
     func testDecodesTypedBlocksFromDoneEvent() throws {
-        let payload = Data(#"{
+        let payload = Data("""
+        {
           "reply":"Strong recovery.",
           "presentation_blocks":[{
             "version":1,
@@ -18,7 +19,8 @@ final class CoachRichResponseTests: XCTestCase {
               "tone":"positive"
             }]
           }]
-        }"#.utf8)
+        }
+        """.utf8)
 
         let done = try JSONDecoder().decode(SSEDone.self, from: payload)
         XCTAssertEqual(done.reply, "Strong recovery.")
@@ -30,7 +32,8 @@ final class CoachRichResponseTests: XCTestCase {
     }
 
     func testUnknownVersionFailsClosedWithoutLosingReply() throws {
-        let payload = Data(#"{
+        let payload = Data("""
+        {
           "reply":"Historical answer stays visible.",
           "presentation_blocks":[{
             "version":2,
@@ -38,7 +41,8 @@ final class CoachRichResponseTests: XCTestCase {
             "fallback":"Fallback.",
             "metrics":[]
           }]
-        }"#.utf8)
+        }
+        """.utf8)
 
         let done = try JSONDecoder().decode(SSEDone.self, from: payload)
         XCTAssertEqual(done.reply, "Historical answer stays visible.")
@@ -46,14 +50,16 @@ final class CoachRichResponseTests: XCTestCase {
     }
 
     func testMalformedBlockFailsClosedOnHistoricalMessage() throws {
-        let payload = Data(#"{
+        let payload = Data("""
+        {
           "id":1,
           "role":"assistant",
           "content":"Markdown fallback.",
           "created_at":"2026-08-18T12:00:00Z",
           "attachments":[],
           "presentation_blocks":[{"version":1,"type":"chart"}]
-        }"#.utf8)
+        }
+        """.utf8)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let message = try decoder.decode(ChatMessage.self, from: payload)
