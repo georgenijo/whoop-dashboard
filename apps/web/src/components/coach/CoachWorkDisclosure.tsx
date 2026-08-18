@@ -81,6 +81,7 @@ export default function CoachWorkDisclosure({
 
   const { previous, visible } = partitionTools(workLog.tools);
   const phase = workPhaseLabel(workLog, hasVisibleText);
+  const hasActivity = workLog.notes.length > 0 || workLog.tools.length > 0;
 
   return (
     <details
@@ -92,6 +93,9 @@ export default function CoachWorkDisclosure({
         <span className="coach-work-summary-label">
           {disclosureLabel(workLog, elapsedMs)}
         </span>
+        {phase && !hasActivity ? (
+          <span className="coach-work-summary-phase">{phase}</span>
+        ) : null}
         <span className="coach-work-caret" aria-hidden="true" />
       </summary>
       <div className="coach-work-body">
@@ -105,7 +109,9 @@ export default function CoachWorkDisclosure({
             <p className="coach-work-note">{note}</p>
           </div>
         ))}
-        {phase ? <div className="coach-work-phase">{phase}</div> : null}
+        {phase && hasActivity ? (
+          <div className="coach-work-phase">{phase}</div>
+        ) : null}
         {workLog.tools.length === 0 ? (
           workLog.status === "running" ? null : (
             <div className="coach-work-empty">No tool calls</div>

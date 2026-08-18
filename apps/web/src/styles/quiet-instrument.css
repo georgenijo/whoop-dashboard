@@ -668,6 +668,18 @@ body:has(.coach-page) .bottom-nav { display: none; }
   font-weight: 450;
 }
 .coach-work-summary-label { min-width: 0; }
+.coach-work-summary-phase {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--fg-3);
+  font-size: var(--t-xs);
+  white-space: nowrap;
+}
+.coach-work-summary-phase::before {
+  content: "·";
+  opacity: 0.55;
+}
 .coach-work-disclosure.running .coach-work-summary-label {
   color: transparent;
   background-image: linear-gradient(

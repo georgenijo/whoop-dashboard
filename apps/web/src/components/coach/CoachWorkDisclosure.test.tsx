@@ -108,11 +108,15 @@ describe("CoachWorkDisclosure", () => {
 
   it("uses one animated activity mark without a dangling phase marker", () => {
     const { container } = render(
-      <CoachWorkDisclosure workLog={log("running")} startedAt={Date.now()} />,
+      <CoachWorkDisclosure
+        workLog={{ ...log("running"), notes: [] }}
+        startedAt={Date.now()}
+      />,
     );
 
     expect(container.querySelector(".coach-activity-mark.is-active")).not.toBeNull();
-    expect(screen.getByText("Thinking…")).toHaveClass("coach-work-phase");
+    expect(screen.getByText("Thinking…")).toHaveClass("coach-work-summary-phase");
+    expect(screen.getByText("Thinking…").closest("summary")).not.toBeNull();
     expect(container.querySelector(".coach-work-step.current")).toBeNull();
   });
 
