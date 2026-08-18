@@ -30,6 +30,7 @@ struct ChatMessage: Decodable, Identifiable, Hashable {
     let createdAt: Date
     let attachments: [ChatAttachment]
     let workLog: CoachWorkLog?
+    let presentationBlocks: [CoachPresentationBlock]
 
     enum Role: String, Decodable, Hashable {
         case user
@@ -40,6 +41,7 @@ struct ChatMessage: Decodable, Identifiable, Hashable {
         case id, role, content, attachments
         case createdAt = "created_at"
         case workLog = "work_log"
+        case presentationBlocks = "presentation_blocks"
     }
 
     init(
@@ -48,7 +50,8 @@ struct ChatMessage: Decodable, Identifiable, Hashable {
         content: String,
         createdAt: Date,
         attachments: [ChatAttachment] = [],
-        workLog: CoachWorkLog? = nil
+        workLog: CoachWorkLog? = nil,
+        presentationBlocks: [CoachPresentationBlock] = []
     ) {
         self.id = id
         self.role = role
@@ -56,6 +59,7 @@ struct ChatMessage: Decodable, Identifiable, Hashable {
         self.createdAt = createdAt
         self.attachments = attachments
         self.workLog = workLog
+        self.presentationBlocks = presentationBlocks
     }
 
     init(from decoder: Decoder) throws {
@@ -75,6 +79,11 @@ struct ChatMessage: Decodable, Identifiable, Hashable {
             workLog = try container.decodeIfPresent(CoachWorkLog.self, forKey: .workLog)
         } catch {
             workLog = nil
+        }
+        do {
+            presentationBlocks = try container.decodeIfPresent([CoachPresentationBlock].self, forKey: .presentationBlocks) ?? []
+        } catch {
+            presentationBlocks = []
         }
     }
 }
@@ -169,7 +178,7 @@ enum ChatStreamEvent {
     case toolUseStart(name: String)
     case toolUseEnd(name: String, status: String, rows: Int?, durationMs: Int, error: String?)
     case toolProgress(tool: String, stage: String, message: String?)
-    case done(reply: String)
+    case done(reply: String, presentationBlocks: [CoachPresentationBlock])
     case error(kind: String, message: String, origin: String?)
 }
 
@@ -202,6 +211,25 @@ struct SSEToolProgress: Decodable {
 
 struct SSEDone: Decodable {
     let reply: String
+    let presentationBlocks: [CoachPresentationBlock]
+
+    enum CodingKeys: String, CodingKey {
+        case reply
+        case presentationBlocks = "presentation_blocks"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        reply = try container.decode(String.self, forKey: .reply)
+        do {
+            presentationBlocks = try container.decodeIfPresent(
+                [CoachPresentationBlock].self,
+                forKey: .presentationBlocks
+            ) ?? []
+        } catch {
+            presentationBlocks = []
+        }
+    }
 }
 
 struct SSEError: Decodable {

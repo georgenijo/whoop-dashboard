@@ -330,7 +330,7 @@ export async function POST(req: Request) {
 
     if (!wantsStream(req)) {
       try {
-        const { reply, workLog } = await runAndPersistCoachTurn(
+        const { reply, workLog, presentationBlocks } = await runAndPersistCoachTurn(
           user.id,
           thread,
           turn,
@@ -349,6 +349,7 @@ export async function POST(req: Request) {
           thread_id: thread.id,
           reply,
           work_log: workLog,
+          presentation_blocks: presentationBlocks,
         });
       } catch (err) {
         const classified = classifyChatError(err);
@@ -423,7 +424,7 @@ export async function POST(req: Request) {
         }, HEARTBEAT_CHECK_MS);
 
         try {
-          const { reply, workLog } = await runAndPersistCoachTurn(
+          const { reply, workLog, presentationBlocks } = await runAndPersistCoachTurn(
             user.id,
             thread,
             turn,
@@ -471,7 +472,11 @@ export async function POST(req: Request) {
             persistDeterministicTitle(thread.id, titleSeed);
             enableTitleRefinement();
           }
-          send("done", { reply, work_log: workLog });
+          send("done", {
+            reply,
+            work_log: workLog,
+            presentation_blocks: presentationBlocks,
+          });
           close();
           return;
         } catch (err) {

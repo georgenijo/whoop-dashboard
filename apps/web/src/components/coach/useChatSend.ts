@@ -7,6 +7,10 @@ import {
   type CoachWorkLog,
 } from "@/lib/coach/work-log-types";
 import {
+  parseCoachPresentationBlocks,
+  type CoachPresentationBlock,
+} from "@/lib/coach/presentation";
+import {
   useCallback,
   useEffect,
   useRef,
@@ -49,6 +53,7 @@ export type ChatMessage = {
   created_at: string;
   status?: ChatMessageStatus;
   work_log?: CoachWorkLog | null;
+  presentation_blocks?: CoachPresentationBlock[];
   attachments: ChatAttachment[];
 };
 
@@ -59,6 +64,7 @@ export type ComposerMessage = {
   status?: ChatMessageStatus;
   workLog?: CoachWorkLog | null;
   workStartedAt?: number;
+  presentationBlocks?: CoachPresentationBlock[];
   attachments?: ComposerAttachment[];
 };
 
@@ -104,7 +110,11 @@ type StreamHandlers = {
   startTool: (event: ToolStartEvent) => void;
   endTool: (event: ToolEndEvent) => void;
   progressTool: (event: ToolProgressEvent) => void;
-  done: (reply: string, workLog: CoachWorkLog | null) => void;
+  done: (
+    reply: string,
+    workLog: CoachWorkLog | null,
+    presentationBlocks: CoachPresentationBlock[],
+  ) => void;
   badApiKey?: (event: { origin: string }) => void;
 };
 
@@ -242,11 +252,13 @@ function finishAssistant(
   index: number,
   reply: string,
   authoritativeWorkLog: CoachWorkLog | null,
+  presentationBlocks: CoachPresentationBlock[],
 ) {
   updateAssistantMessage(setMessages, index, (message) => ({
     ...message,
     content: reply,
     streaming: false,
+    presentationBlocks,
     workLog: authoritativeWorkLog ?? {
       ...activeWorkLog(message),
       status: "complete",
@@ -293,13 +305,17 @@ function isAbortError(error: unknown): boolean {
 }
 
 function toComposerMessages(messages: ChatMessage[]): ComposerMessage[] {
-  return messages.map((message) => ({
-    role: message.role,
-    content: message.content,
-    status: message.status,
-    workLog: message.work_log ?? null,
-    attachments: message.attachments,
-  }));
+  return messages.map((message) => {
+    const presentationBlocks = parseCoachPresentationBlocks(message.presentation_blocks);
+    return {
+      role: message.role,
+      content: message.content,
+      status: message.status,
+      workLog: message.work_log ?? null,
+      ...(presentationBlocks.length > 0 ? { presentationBlocks } : {}),
+      attachments: message.attachments,
+    };
+  });
 }
 
 function withoutPendingTurn(messages: ComposerMessage[]): ComposerMessage[] {
@@ -487,6 +503,7 @@ async function readChatStream(
       handlers.done(
         typeof payload.reply === "string" ? payload.reply : "",
         parseCoachWorkLog(payload.work_log),
+        parseCoachPresentationBlocks(payload.presentation_blocks),
       );
     } else if (event === "error") {
       if (payload.kind === "bad_api_key") {
@@ -616,8 +633,14 @@ async function sendChatMessage(params: SendParams) {
         endAssistantTool(params.setMessages, assistantIndex, event),
       progressTool: (event) =>
         progressAssistantTool(params.setMessages, assistantIndex, event),
-      done: (reply, workLog) =>
-        finishAssistant(params.setMessages, assistantIndex, reply, workLog),
+      done: (reply, workLog, presentationBlocks) =>
+        finishAssistant(
+          params.setMessages,
+          assistantIndex,
+          reply,
+          workLog,
+          presentationBlocks,
+        ),
       badApiKey: () => {
         badApiKey = true;
         params.setBadApiKey?.(true);

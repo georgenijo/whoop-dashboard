@@ -730,6 +730,31 @@ body:has(.coach-page) .bottom-nav { display: none; }
   font-family: var(--font-num);
 }
 .prose-coach .coach-inline-chart-table tbody tr:last-child td { border-bottom: 0; }
+
+.coach-rich-blocks { display: grid; gap: var(--s3); margin-top: var(--s3); }
+.coach-rich-block,
+.coach-rich-blocks > .coach-inline-chart { border: 1px solid var(--rule-soft); border-radius: var(--r2); background: var(--bg-lift); padding: var(--s3); }
+.coach-rich-block h3 { margin: 0 0 var(--s2); color: var(--fg-1); font: 600 0.84rem/1.3 var(--font-sans); }
+.coach-rich-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); gap: var(--s2); }
+.coach-rich-metric { display: grid; gap: 2px; border-left: 2px solid var(--rule); padding-left: var(--s2); }
+.coach-rich-metric.tone-positive { border-color: var(--state-good); }
+.coach-rich-metric.tone-warning { border-color: var(--state-warn); }
+.coach-rich-metric.tone-negative { border-color: var(--state-bad); }
+.coach-rich-metric span, .coach-rich-comparison span, .coach-rich-freshness span { color: var(--fg-3); font-size: 0.7rem; }
+.coach-rich-metric strong, .coach-rich-comparison strong { color: var(--fg-0); font: 600 1rem/1.2 var(--font-mono); }
+.coach-rich-metric small, .coach-rich-comparison small, .coach-rich-freshness small { color: var(--fg-3); font-size: 0.66rem; }
+.coach-rich-comparison { display: grid; gap: var(--s2); }
+.coach-rich-comparison > div, .coach-rich-freshness { display: grid; grid-template-columns: minmax(90px, 1fr) auto; gap: 2px var(--s3); align-items: baseline; padding-block: var(--s1); border-bottom: 1px solid var(--rule-soft); }
+.coach-rich-comparison small, .coach-rich-freshness small { grid-column: 1 / -1; }
+.coach-rich-plan { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--s3); }
+.coach-rich-plan h4 { text-transform: capitalize; margin: 0; color: var(--fg-2); font-size: 0.74rem; }
+.coach-rich-plan ul, .coach-rich-block ol, .coach-rich-block ul { margin-block: var(--s1) 0; padding-left: 1.1rem; }
+.coach-rich-block li small { display: block; color: var(--fg-3); }
+.coach-rich-actions { display: flex; justify-content: flex-end; gap: var(--s1); margin-top: var(--s2); }
+.coach-rich-chart-actions { display: flex; align-items: end; justify-content: space-between; gap: var(--s2); }
+.coach-rich-chart-actions > button { border: 0; background: transparent; color: var(--fg-3); font: 500 0.68rem/1 var(--font-sans); cursor: pointer; padding: var(--s1); }
+.coach-rich-actions button, .coach-rich-block > button, .coach-rich-block a { border: 0; background: transparent; color: var(--fg-3); font: 500 0.68rem/1 var(--font-sans); cursor: pointer; padding: var(--s1); }
+.coach-rich-actions button:hover, .coach-rich-actions button:focus-visible, .coach-rich-block > button:hover, .coach-rich-block a:hover { color: var(--fg-0); }
 .prose-coach.is-streaming::after,
 .prose-coach.is-streaming > :last-child::after {
   content: "";

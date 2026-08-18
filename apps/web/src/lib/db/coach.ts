@@ -16,6 +16,10 @@ import {
   parseCoachWorkLog,
   type CoachWorkLog,
 } from "@/lib/coach/work-log-types";
+import {
+  parseCoachPresentationBlocks,
+  type CoachPresentationBlock,
+} from "@/lib/coach/presentation";
 
 // Cap the conversation history sent to the model to keep input-token cost bounded.
 // Only applies to model-input fetches (getChatThreadConversation / getChatConversation).
@@ -48,6 +52,7 @@ export type ChatMessage = {
   status: ChatMessageStatus;
   attachments: ChatAttachment[];
   work_log: CoachWorkLog | null;
+  presentation_blocks: CoachPresentationBlock[];
 };
 
 export type ChatMessageInsert = {
@@ -56,6 +61,7 @@ export type ChatMessageInsert = {
   blocks?: unknown;
   attachments?: ChatAttachmentInsert[];
   work_log?: CoachWorkLog;
+  presentation_blocks?: CoachPresentationBlock[];
 };
 
 type AttachmentRow = {
@@ -332,7 +338,7 @@ export function getChatThreadMessages(userId: number, threadId: number): ChatMes
       const visibleMessage = visibleChatMessageClause("chat_messages");
       const rows = db
         .prepare(
-          `SELECT id, role, content, created_at, status, work_log FROM chat_messages WHERE thread_id = ? AND ${visibleMessage} ORDER BY id ASC`
+          `SELECT id, role, content, created_at, status, work_log, presentation_blocks FROM chat_messages WHERE thread_id = ? AND ${visibleMessage} ORDER BY id ASC`
         )
         .all(threadId) as {
           id: number;
@@ -341,6 +347,7 @@ export function getChatThreadMessages(userId: number, threadId: number): ChatMes
           created_at: string;
           status: string | null;
           work_log: string | null;
+          presentation_blocks: string | null;
         }[];
       const attachmentMap = new Map<number, ChatAttachment[]>();
       for (const attachment of attachmentRows(db, rows.map((row) => row.id))) {
@@ -356,6 +363,13 @@ export function getChatThreadMessages(userId: number, threadId: number): ChatMes
         status: row.status === "aborted" ? "aborted" : "complete",
         attachments: attachmentMap.get(row.id) ?? [],
         work_log: parseCoachWorkLog(row.work_log),
+        presentation_blocks: (() => {
+          try {
+            return parseCoachPresentationBlocks(JSON.parse(row.presentation_blocks ?? "[]"));
+          } catch {
+            return [];
+          }
+        })(),
       }));
     }) ?? []
   );
@@ -493,7 +507,7 @@ export function addChatMessages(
   if (!db) return;
   try {
     const insert = db.prepare(
-      "INSERT INTO chat_messages (thread_id, role, content, blocks, work_log, created_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO chat_messages (thread_id, role, content, blocks, work_log, presentation_blocks, created_at, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
     );
     const threadOwner = db.prepare(
       "SELECT user_id FROM chat_threads WHERE id = ? LIMIT 1"
@@ -528,6 +542,7 @@ export function addChatMessages(
           message.content,
           message.blocks === undefined ? null : JSON.stringify(message.blocks),
           message.work_log === undefined ? null : JSON.stringify(message.work_log),
+          message.presentation_blocks === undefined ? null : JSON.stringify(message.presentation_blocks),
           new Date().toISOString(),
           idx === lastAssistantIdx ? "aborted" : "complete"
         );

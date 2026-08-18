@@ -5,6 +5,7 @@ import { parseCoachVisualizations } from "@/lib/coach/visualization";
 import { useMemo, useSyncExternalStore } from "react";
 import CoachInlineChart from "./CoachInlineChart";
 import CoachWorkDisclosure from "./CoachWorkDisclosure";
+import CoachPresentationBlocks from "./CoachPresentationBlocks";
 import type {
   ComposerAttachment,
   ComposerMessage,
@@ -98,6 +99,9 @@ export default function MessageBubble({ msg, onAttachmentClick }: Props) {
             ) : null}
             {msg.content ? (
               <div className="coach-user-message-text">{msg.content}</div>
+            ) : null}
+            {!msg.streaming ? (
+              <CoachPresentationBlocks blocks={msg.presentationBlocks ?? []} />
             ) : null}
           </>
         ) : (

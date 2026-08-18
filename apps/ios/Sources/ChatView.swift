@@ -529,7 +529,7 @@ struct ChatView: View {
                         activeTools.remove(at: idx)
                     }
 
-                case .done(let reply):
+                case .done(let reply, _):
                     sawDone = true
                     activeTools = []
                     commitAssistant(reply: reply)
@@ -805,6 +805,7 @@ private struct MessageBubble: View {
                 attachments: message.attachments,
                 pendingAttachments: [],
                 workLog: message.workLog,
+                presentationBlocks: message.presentationBlocks,
                 dimmed: false
             )
         case .optimistic(_, let content, let attachments):
@@ -814,6 +815,7 @@ private struct MessageBubble: View {
                 attachments: [],
                 pendingAttachments: attachments,
                 workLog: nil,
+                presentationBlocks: [],
                 dimmed: true
             )
         case .streaming(_, let content):
@@ -823,6 +825,7 @@ private struct MessageBubble: View {
                 attachments: [],
                 pendingAttachments: [],
                 workLog: nil,
+                presentationBlocks: [],
                 dimmed: false
             )
         case .typing:
@@ -837,6 +840,7 @@ private struct MessageBubble: View {
         attachments: [ChatAttachment],
         pendingAttachments: [PendingChatImage],
         workLog: CoachWorkLog?,
+        presentationBlocks: [CoachPresentationBlock],
         dimmed: Bool
     ) -> some View {
         HStack {
@@ -846,7 +850,8 @@ private struct MessageBubble: View {
                 content: content,
                 attachments: attachments,
                 pendingAttachments: pendingAttachments,
-                workLog: workLog
+                workLog: workLog,
+                presentationBlocks: presentationBlocks
             )
                 .padding(.horizontal, role == .user ? 14 : 0)
                 .padding(.vertical, role == .user ? 11 : 0)
@@ -866,7 +871,8 @@ private struct MessageBubble: View {
         content: String,
         attachments: [ChatAttachment],
         pendingAttachments: [PendingChatImage],
-        workLog: CoachWorkLog?
+        workLog: CoachWorkLog?,
+        presentationBlocks: [CoachPresentationBlock]
     ) -> some View {
         if role == .assistant {
             VStack(alignment: .leading, spacing: 10) {
@@ -875,6 +881,7 @@ private struct MessageBubble: View {
                 }
                 MarkdownView(content: content)
                     .font(Theme.FontStyle.sans(13))
+                CoachPresentationBlocksView(blocks: presentationBlocks)
             }
         } else {
             VStack(alignment: .leading, spacing: 8) {
