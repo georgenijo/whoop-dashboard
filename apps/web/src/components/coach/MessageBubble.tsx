@@ -104,14 +104,25 @@ export default function MessageBubble({ msg, onAttachmentClick }: Props) {
             {msg.content ? (
               html !== null ? (
                 <div
-                  className="prose-coach"
+                  className={`prose-coach ${msg.streaming ? "is-streaming" : ""}`}
+                  aria-busy={msg.streaming || undefined}
                   dangerouslySetInnerHTML={{ __html: html }}
                 />
               ) : (
-                <div className="prose-coach coach-markdown-fallback">
+                <div
+                  className={`prose-coach coach-markdown-fallback ${
+                    msg.streaming ? "is-streaming" : ""
+                  }`}
+                  aria-busy={msg.streaming || undefined}
+                >
                   {msg.content}
                 </div>
               )
+            ) : null}
+            {msg.streaming && msg.content ? (
+              <span className="sr-only" role="status">
+                Coach is writing
+              </span>
             ) : null}
             {isAborted ? (
               <span className="coach-message-stopped">(stopped)</span>

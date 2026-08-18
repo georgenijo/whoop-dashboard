@@ -96,11 +96,14 @@ describe("CoachWorkDisclosure", () => {
       tool("four"),
       { ...tool("running", "running"), name: "query_sleep" },
     ];
-    render(<CoachWorkDisclosure workLog={log("running", tools)} />);
+    const { container } = render(
+      <CoachWorkDisclosure workLog={log("running", tools)} />,
+    );
 
     expect(screen.getByText("+1 previous tool calls")).toBeInTheDocument();
     expect(screen.getByText("Running query sleep…")).toBeInTheDocument();
-    expect(screen.getByText("Queried sleep")).toBeInTheDocument();
+    expect(screen.getByText("Querying sleep")).toBeInTheDocument();
+    expect(container.querySelector(".coach-tool-state")).not.toBeNull();
   });
 
   it("reports no tools for a direct reply", () => {

@@ -1,4 +1,4 @@
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it } from "vitest";
@@ -39,6 +39,21 @@ describe("MessageBubble browser render", () => {
     expect(html).toContain("<li>HRV up</li>");
     expect(html).toContain('href="https://example.com"');
     expect(html).not.toContain("coach-markdown-fallback");
+  });
+
+  it("marks an in-flight answer as streaming without altering its text", () => {
+    const { container } = render(
+      <MessageBubble
+        msg={{ role: "assistant", content: "Recovery is rising", streaming: true }}
+      />,
+    );
+
+    expect(container.querySelector(".prose-coach.is-streaming")).toHaveAttribute(
+      "aria-busy",
+      "true",
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Coach is writing");
+    expect(container).toHaveTextContent("Recovery is rising");
   });
 
   it("strips the standard XSS vectors from streamed assistant content", () => {

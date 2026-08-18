@@ -3,24 +3,34 @@
 import ToolResponseBlock from "@/components/logs/ToolResponseBlock";
 import type { CoachToolActivity } from "@/lib/coach/work-log-types";
 
-const TOOL_LABELS: Record<string, string> = {
-  query_recovery: "Queried recovery",
-  query_sleep: "Queried sleep",
-  query_strain: "Queried strain",
-  query_workouts: "Queried workouts",
-  query_naps: "Queried naps",
-  query_journal: "Queried journal",
-  query_daily_snapshot: "Queried daily snapshot",
-  query_workout_plans: "Queried workout plans",
-  save_workout_plan: "Saved workout plan",
-  trigger_whoop_sync: "Synced Whoop",
+const TOOL_LABELS: Record<string, { active: string; complete: string }> = {
+  query_recovery: { active: "Querying recovery", complete: "Queried recovery" },
+  query_sleep: { active: "Querying sleep", complete: "Queried sleep" },
+  query_strain: { active: "Querying strain", complete: "Queried strain" },
+  query_workouts: { active: "Querying workouts", complete: "Queried workouts" },
+  query_naps: { active: "Querying naps", complete: "Queried naps" },
+  query_journal: { active: "Querying journal", complete: "Queried journal" },
+  query_daily_snapshot: {
+    active: "Querying daily snapshot",
+    complete: "Queried daily snapshot",
+  },
+  query_workout_plans: {
+    active: "Querying workout plans",
+    complete: "Queried workout plans",
+  },
+  save_workout_plan: {
+    active: "Saving workout plan",
+    complete: "Saved workout plan",
+  },
+  trigger_whoop_sync: { active: "Syncing Whoop", complete: "Synced Whoop" },
 };
 
-export function coachToolLabel(name: string): string {
+export function coachToolLabel(name: string, running = false): string {
+  const known = TOOL_LABELS[name];
+  if (known) return running ? known.active : known.complete;
   return (
-    TOOL_LABELS[name] ??
     name
-      .replace(/^query_/, "Queried ")
+      .replace(/^query_/, running ? "Querying " : "Queried ")
       .replaceAll("_", " ")
       .replace(/^\w/, (character) => character.toUpperCase())
   );
@@ -49,18 +59,34 @@ export default function CoachToolCall({ tool }: { tool: CoachToolActivity }) {
   const running = tool.state === "running";
   const failed = tool.status === "error";
   const metadata = [
-    formatWorkDuration(tool.duration_ms),
-    tool.rows == null ? "" : `${tool.rows} row${tool.rows === 1 ? "" : "s"}`,
     tool.stage_message ?? tool.stage?.replaceAll("_", " "),
+    tool.rows == null ? "" : `${tool.rows} row${tool.rows === 1 ? "" : "s"}`,
+    formatWorkDuration(tool.duration_ms),
   ].filter(Boolean);
 
   return (
     <details className={`coach-tool-call ${running ? "running" : failed ? "error" : "complete"}`}>
       <summary>
-        <span className="coach-tool-state" aria-hidden="true" />
-        <span className="coach-tool-label">{coachToolLabel(tool.name)}</span>
+        <span className="coach-tool-state" aria-hidden="true">
+          {!running ? (
+            <svg viewBox="0 0 16 16">
+              {failed ? (
+                <path d="m5 5 6 6m0-6-6 6" />
+              ) : (
+                <path d="m4 8 2.5 2.5L12 5" />
+              )}
+            </svg>
+          ) : null}
+        </span>
+        <span className="coach-tool-label">{coachToolLabel(tool.name, running)}</span>
         {metadata.length > 0 ? (
-          <span className="coach-tool-meta">{metadata.join(" · ")}</span>
+          <span className="coach-tool-meta">
+            {metadata.map((item) => (
+              <span className="coach-tool-meta-chip" key={item}>
+                {item}
+              </span>
+            ))}
+          </span>
         ) : null}
       </summary>
       <div className="coach-tool-detail">

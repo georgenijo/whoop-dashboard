@@ -11,6 +11,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import CoachActivityMark from "./CoachActivityMark";
 import type { PendingChatImage } from "./useChatSend";
 
 type Props = {
@@ -83,6 +84,13 @@ export default function ChatInput({
   };
 
   const atLimit = pendingImages.length >= 3;
+  const statusLabel = modelChanging
+    ? "Switching model…"
+    : preparingImages
+      ? "Preparing images…"
+      : loading
+        ? progressLabel ?? "Thinking…"
+        : null;
 
   return (
     <div
@@ -201,7 +209,19 @@ export default function ChatInput({
               aria-label="Send message"
               data-track="coach:send"
             >
-              ↑
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 19V5M5 12l7-7 7 7" />
+              </svg>
             </button>
           </div>
         </div>
@@ -212,14 +232,15 @@ export default function ChatInput({
             ? "3 image limit reached"
             : "Enter to send · Shift+Enter for newline"}
         </span>
-        <span>
-          {modelChanging
-            ? "Switching model…"
-            : preparingImages
-            ? "Preparing images…"
-            : loading
-              ? progressLabel ?? "Thinking..."
-              : " "}
+        <span className="coach-composer-status" role="status" aria-live="polite">
+          {statusLabel ? (
+            <>
+              <CoachActivityMark active />
+              <span>{statusLabel}</span>
+            </>
+          ) : (
+            " "
+          )}
         </span>
       </div>
     </div>
