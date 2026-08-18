@@ -58,11 +58,10 @@ function prettyJson(value: unknown): string {
 export default function CoachToolCall({ tool }: { tool: CoachToolActivity }) {
   const running = tool.state === "running";
   const failed = tool.status === "error";
-  const metadata = [
-    tool.stage_message ?? tool.stage?.replaceAll("_", " "),
-    tool.rows == null ? "" : `${tool.rows} row${tool.rows === 1 ? "" : "s"}`,
-    formatWorkDuration(tool.duration_ms),
-  ].filter(Boolean);
+  const duration = formatWorkDuration(tool.duration_ms);
+  const rowCount =
+    tool.rows == null ? "" : `${tool.rows} row${tool.rows === 1 ? "" : "s"}`;
+  const stage = tool.stage_message ?? tool.stage?.replaceAll("_", " ");
 
   return (
     <details className={`coach-tool-call ${running ? "running" : failed ? "error" : "complete"}`}>
@@ -79,37 +78,35 @@ export default function CoachToolCall({ tool }: { tool: CoachToolActivity }) {
           ) : null}
         </span>
         <span className="coach-tool-label">{coachToolLabel(tool.name, running)}</span>
-        {metadata.length > 0 ? (
+        {rowCount || stage || duration ? (
           <span className="coach-tool-meta">
-            {metadata.map((item) => (
-              <span className="coach-tool-meta-chip" key={item}>
-                {item}
-              </span>
-            ))}
+            {rowCount ? <span>{rowCount}</span> : null}
+            {stage ? <span>{stage}</span> : null}
+            {duration ? <span className="coach-tool-duration">{duration}</span> : null}
           </span>
         ) : null}
       </summary>
       <div className="coach-tool-detail">
-        <div className="coach-work-field">
+        <div className="coach-work-field coach-work-field-compact">
           <span>Tool</span>
           <code>{tool.name}</code>
         </div>
-        <div className="coach-work-field">
-          <span>Input</span>
-          <pre>{prettyJson(tool.input)}</pre>
-        </div>
-        <div className="coach-work-field">
+        <div className="coach-work-field coach-work-field-compact">
           <span>Status</span>
           <code>{running ? "running" : tool.status ?? "complete"}</code>
         </div>
+        <div className="coach-work-field coach-work-field-wide">
+          <span>Input</span>
+          <pre>{prettyJson(tool.input)}</pre>
+        </div>
         {tool.error ? (
-          <div className="coach-work-field error">
+          <div className="coach-work-field coach-work-field-wide error">
             <span>Error</span>
             <pre>{tool.error}</pre>
           </div>
         ) : null}
         {!running ? (
-          <div className="coach-work-field">
+          <div className="coach-work-field coach-work-field-wide">
             <span>Result</span>
             <div className="coach-tool-response">
               <ToolResponseBlock toolName={tool.name} response={tool.response} />
