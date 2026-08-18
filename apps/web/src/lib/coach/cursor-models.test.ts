@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
@@ -11,9 +11,12 @@ import {
 const fetchMock = vi.fn();
 
 beforeEach(() => {
+  vi.stubEnv("COACH_CURSOR_TRANSPORT", "legacy");
   fetchMock.mockReset();
   vi.stubGlobal("fetch", fetchMock);
 });
+
+afterEach(() => vi.unstubAllEnvs());
 
 describe("listCursorModelsForKey", () => {
   it("returns a display-safe, deduplicated account catalog", async () => {
@@ -122,7 +125,9 @@ describe("listCursorModelsForKey", () => {
       reason: "unavailable",
     } satisfies Partial<CursorModelCatalogError>);
 
-    fetchMock.mockResolvedValue(new Response("upstream error", { status: 503 }));
+    fetchMock.mockResolvedValue(
+      new Response("upstream error", { status: 503 }),
+    );
     await expect(listCursorModelsForKey("key_secret")).rejects.toMatchObject({
       reason: "unavailable",
     });

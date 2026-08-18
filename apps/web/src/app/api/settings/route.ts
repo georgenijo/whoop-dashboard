@@ -161,7 +161,7 @@ export async function POST(req: Request) {
 
         try {
           const { key } = resolveCursorKey(user.id);
-          const models = await listCursorModelsForKey(key);
+          const models = await listCursorModelsForKey(key, user.id);
           if (!models.some((model) => model.id === cursorModel)) {
             return Response.json(
               { error: "Cursor model is not available for this account" },
@@ -212,7 +212,7 @@ export async function POST(req: Request) {
 
       try {
         const { key } = resolveCursorKey(user.id);
-        const models = await listCursorModelsForKey(key);
+        const models = await listCursorModelsForKey(key, user.id);
         const model = models.find((candidate) => candidate.id === update.model_id);
         if (!model) {
           return Response.json(

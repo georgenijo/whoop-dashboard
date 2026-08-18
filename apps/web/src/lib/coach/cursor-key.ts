@@ -5,33 +5,19 @@ import {
   CursorModelCatalogError,
   listCursorModelsForKey,
 } from "./cursor-models";
+import { MissingCursorKeyError, type CursorKeyOrigin } from "./cursor-errors";
+export {
+  CursorAgentError,
+  MissingCursorKeyError,
+  type CursorFailureReason,
+  type CursorKeyOrigin,
+} from "./cursor-errors";
 
-export type CursorKeyOrigin = "user" | "env";
 export type ResolvedCursorKey = {
   key: string;
   origin: CursorKeyOrigin;
 };
 export type CursorKeyProbeResult = "ok" | "invalid_key" | "probe_failed";
-
-export class MissingCursorKeyError extends Error {
-  constructor() {
-    super("No Cursor API key configured");
-    this.name = "MissingCursorKeyError";
-  }
-}
-
-export type CursorFailureReason = "auth" | "timeout" | "agent";
-
-export class CursorAgentError extends Error {
-  constructor(
-    public readonly reason: CursorFailureReason,
-    message: string,
-    public readonly origin?: CursorKeyOrigin,
-  ) {
-    super(message);
-    this.name = "CursorAgentError";
-  }
-}
 
 /** Resolve a user's Cursor key. Personal BYOK wins; the server key is fallback. */
 export function resolveCursorKey(userId: number): ResolvedCursorKey {

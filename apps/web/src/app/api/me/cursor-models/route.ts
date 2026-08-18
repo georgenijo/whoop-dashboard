@@ -25,7 +25,7 @@ export async function GET(req: Request) {
     }
 
     try {
-      const models = await listCursorModelsForKey(key);
+      const models = await listCursorModelsForKey(key, user.id);
       return Response.json({ status: "ready", models });
     } catch (error) {
       if (error instanceof CursorModelCatalogError) {

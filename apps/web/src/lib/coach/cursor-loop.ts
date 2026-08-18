@@ -84,7 +84,9 @@ function isViewChatImageTool(name: string): boolean {
 // as two separate projects. Slugging only the raw path leaves the
 // `private-var-folders-...` twin behind, so the leak survives on dev machines.
 // On Linux /tmp is not a symlink and both spellings collapse to one slug.
-async function removeCursorProjectRegistration(workspace: string): Promise<void> {
+export async function removeCursorProjectRegistration(
+  workspace: string,
+): Promise<void> {
   try {
     const home = process.env.HOME || homedir();
     if (!home) return;
@@ -110,7 +112,7 @@ async function removeCursorProjectRegistration(workspace: string): Promise<void>
 // Where the cursor-agent binary lives. The systemd service's PATH may not
 // include ~/.local/bin, so production sets COACH_CURSOR_AGENT_BIN to the
 // absolute path. Falls back to PATH lookup for local dev.
-const CURSOR_AGENT_BIN =
+export const CURSOR_AGENT_BIN =
   process.env.COACH_CURSOR_AGENT_BIN || "cursor-agent";
 
 /**
@@ -186,10 +188,10 @@ export async function prepareCursorShimBin(
 
 // App root (apps/web) — anchors the MCP server path and node_modules so the
 // MCP subprocess (spawned from a throwaway cwd) can resolve tsx + tsconfig.
-const APP_ROOT = process.env.COACH_APP_ROOT || process.cwd();
+export const CURSOR_APP_ROOT = process.env.COACH_APP_ROOT || process.cwd();
 const MCP_SERVER_PATH =
   process.env.COACH_MCP_SERVER_PATH ||
-  path.join(APP_ROOT, "src", "coach-mcp", "server.ts");
+  path.join(CURSOR_APP_ROOT, "src", "coach-mcp", "server.ts");
 
 // Precompiled artifact from `npm run build:mcp` (esbuild, see package.json) —
 // eliminates the per-turn tsx transpile of server.ts. Used in production after
@@ -200,7 +202,7 @@ const MCP_SERVER_PATH =
 // conditional-export resolution still happens at module-load time either way.
 const COMPILED_MCP_SERVER_PATH =
   process.env.COACH_MCP_COMPILED_PATH ||
-  path.join(APP_ROOT, "dist", "coach-mcp", "server.mjs");
+  path.join(CURSOR_APP_ROOT, "dist", "coach-mcp", "server.mjs");
 
 // Under `next dev` a stale dist/ left over from an earlier `npm run build`
 // would silently shadow edits to src/coach-mcp (and everything it bundles),
@@ -213,7 +215,15 @@ function preferCompiledMcpServer(): boolean {
   return process.env.NODE_ENV === "production";
 }
 
-function resolveMcpServerArgs(): string[] {
+export function resolveMcpServerArgs(requireCompiled = false): string[] {
+  if (requireCompiled) {
+    if (!existsSync(COMPILED_MCP_SERVER_PATH)) {
+      throw new Error(
+        "Cursor ACP requires the compiled Coach MCP server; run npm run build:mcp",
+      );
+    }
+    return ["--conditions=react-server", COMPILED_MCP_SERVER_PATH];
+  }
   if (preferCompiledMcpServer()) {
     return ["--conditions=react-server", COMPILED_MCP_SERVER_PATH];
   }
@@ -287,7 +297,7 @@ function truncateTranscript(transcript: string): string {
   return out;
 }
 
-type PreloadedContext = {
+export type CursorPreloadedContext = {
   toolName:
     | "query_recovery"
     | "query_sleep"
@@ -300,7 +310,7 @@ type PreloadedContext = {
 
 export function selectRecentPrefetchTool(
   newUserText: string,
-): PreloadedContext["toolName"] | null {
+): CursorPreloadedContext["toolName"] | null {
   if (
     !RECENT_REFERENCE_PATTERN.test(newUserText) ||
     PLAN_INTENT_PATTERN.test(newUserText)
@@ -345,10 +355,10 @@ function previousIsoDate(isoDate: string): string {
   return date.toISOString().slice(0, 10);
 }
 
-async function preloadRecentContext(
+export async function preloadRecentContext(
   userId: number,
   newUserText: string,
-): Promise<PreloadedContext | null> {
+): Promise<CursorPreloadedContext | null> {
   const toolName = selectRecentPrefetchTool(newUserText);
   if (!toolName) return null;
   const today = new Intl.DateTimeFormat("en-CA", {
@@ -366,22 +376,21 @@ async function preloadRecentContext(
   return { toolName, dateRange, data };
 }
 
-function buildPrompt(
+export function buildCursorPrompt(
   userId: number,
   turn: CoachUserTurn,
   conversation: CoachConversationMessage[],
   activeIds: ReadonlySet<string>,
-  preloadedContext: PreloadedContext | null,
+  preloadedContext: CursorPreloadedContext | null,
+  includeBootstrap = true,
+  bootstrapPrompt?: string,
 ): string {
   // Issue #498 — the user's Settings "Instructions" apply on the Cursor path
   // too, appended additively (see buildCursorSystemPrompt). One settings read
   // now serves both goals and instructions.
-  const userSettings = getUserSettings(userId);
-  const system = buildCursorSystemPrompt(
-    new Date(),
-    userSettings?.coach_goals ?? null,
-    userSettings?.system_prompt ?? null,
-  );
+  const system = includeBootstrap
+    ? (bootstrapPrompt ?? cursorSystemPromptForUser(userId))
+    : "";
   const transcript = truncateTranscript(
     flattenCursorConversation(conversation, activeIds),
   );
@@ -394,9 +403,20 @@ function buildPrompt(
     preloadedContext
       ? `\n\n## Preloaded authoritative Whoop data\nThe server already ran ${preloadedContext.toolName} for ${preloadedContext.dateRange.start_date} through ${preloadedContext.dateRange.end_date} immediately before this turn. Treat this exactly like successful tool output. Do NOT call that query again for the covered dates unless the user explicitly asks you to refresh.\n${JSON.stringify(preloadedContext.data)}`
       : "",
-    transcript ? `\n\n## Conversation so far\n${transcript}` : "",
+    includeBootstrap && transcript
+      ? `\n\n## Conversation so far\n${transcript}`
+      : "",
     `\n\n## Current request\n${[...currentImageMarkers, turn.modelText].join("\n")}`,
   ].join("");
+}
+
+export function cursorSystemPromptForUser(userId: number): string {
+  const userSettings = getUserSettings(userId);
+  return buildCursorSystemPrompt(
+    new Date(),
+    userSettings?.coach_goals ?? null,
+    userSettings?.system_prompt ?? null,
+  );
 }
 
 // ---- stream-json parsing ---------------------------------------------------
@@ -559,7 +579,7 @@ function eventCountKey(evt: StreamEvent): string {
   return subtype ? `${type}:${subtype}` : type;
 }
 
-function countRows(parsed: unknown): number | null {
+export function countCursorRows(parsed: unknown): number | null {
   if (Array.isArray(parsed)) return parsed.length;
   if (parsed && typeof parsed === "object") {
     const rows = (parsed as { rows?: unknown }).rows;
@@ -607,7 +627,7 @@ async function makeWorkspace(userId: number, images: CoachImage[]): Promise<stri
             // launch the one approved MCP subprocess.
             command: process.execPath,
             args: resolveMcpServerArgs(),
-            cwd: APP_ROOT,
+            cwd: CURSOR_APP_ROOT,
             // PATH included explicitly so `node` resolves even if a future
             // cursor-agent treats `env` as a replacement rather than a merge.
             env: {
@@ -615,7 +635,7 @@ async function makeWorkspace(userId: number, images: CoachImage[]): Promise<stri
               COACH_MCP_USER_ID: String(userId),
               COACH_MCP_ATTACHMENT_MANIFEST: manifestPath,
               WHOOP_DB_PATH: dbPath(),
-              NODE_PATH: path.join(APP_ROOT, "node_modules"),
+              NODE_PATH: path.join(CURSOR_APP_ROOT, "node_modules"),
             },
           },
         },
@@ -680,7 +700,7 @@ export async function runCursorTurn(
     });
   }
   const prefetchStartedMs = Date.now();
-  let preloadedContext: PreloadedContext | null = null;
+  let preloadedContext: CursorPreloadedContext | null = null;
   let prefetchError: string | null = null;
   try {
     preloadedContext = await preloadRecentContext(userId, turn.modelText);
@@ -692,7 +712,7 @@ export async function runCursorTurn(
   const prefetchMs = Date.now() - prefetchStartedMs;
   if (selectedPrefetchTool) {
     const prefetchRows =
-      preloadedContext == null ? null : countRows(preloadedContext.data);
+      preloadedContext == null ? null : countCursorRows(preloadedContext.data);
     const prefetchResponse = prefetchError
       ? { error: prefetchError }
       : captureToolResponse(preloadedContext?.data);
@@ -718,7 +738,7 @@ export async function runCursorTurn(
   }
   const imageContext = selectActiveImageContext(conversation, turn);
   const promptStartedMs = Date.now();
-  const prompt = buildPrompt(
+  const prompt = buildCursorPrompt(
     userId,
     turn,
     conversation,
@@ -1160,7 +1180,7 @@ export async function runCursorTurn(
             } catch {
               /* keep raw string */
             }
-            const rows = rejected ? null : countRows(parsed);
+            const rows = rejected ? null : countCursorRows(parsed);
             toolDetails.push({
               id: callId,
               name,

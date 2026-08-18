@@ -48,6 +48,20 @@ export type DetailState = {
   effort?: string;
   persistence_ms?: number;
   cursor?: {
+    transport?: "legacy" | "acp";
+    acp?: {
+      protocol_version: number | null;
+      agent_name: string | null;
+      agent_version: string | null;
+      session_id: string | null;
+      applied_parameters: Array<{ id: string; value: string }>;
+      process: {
+        exit_code: number | null;
+        signal: NodeJS.Signals | null;
+        cancelled: boolean;
+        timed_out: boolean;
+      };
+    };
     requested_model: string;
     requested_parameters: Array<{ id: string; value: string }>;
     resolved_model: string | null;

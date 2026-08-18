@@ -12,14 +12,13 @@ import {
   type DetailState,
   type RunAnthropicOptions,
   type Usage,
-  runAnthropicSdk,
   textFromContent,
 } from "./loop";
 import { TITLE_MODEL, TITLE_SYSTEM_PROMPT } from "./prompts";
 import { deriveTitleFromText } from "./title";
 import { type ToolDetail, chatLogToolSummaries } from "./tools";
 import { resolveCoachProvider } from "./provider";
-import { runCursorTurn } from "./cursor-loop";
+import { runCoachProviderTurn } from "./provider-runner";
 import { CoachWorkLogCollector } from "./work-log";
 import type { CoachWorkLog } from "./work-log-types";
 import { forModule } from "@/lib/logger";
@@ -107,34 +106,20 @@ export async function runAndPersistCoachTurn(
     });
 
   try {
-    const result =
-      selection.provider === "cursor"
-        ? await runCursorTurn({
-            userId,
-            model: selection.model,
-            modelParameters: selection.parameters ?? [],
-            threadId: thread.id,
-            turn,
-            conversation,
-            toolDetails,
-            usage,
-            detailState,
-            options: providerOptions,
-            accumulator,
-          })
-        : await runAnthropicSdk(
-            userId,
-            thread.id,
-            turn,
-            conversation,
-            toolDetails,
-            usage,
-            detailState,
-            apiKey,
-            apiKeyOrigin,
-            providerOptions,
-            accumulator
-          );
+    const result = await runCoachProviderTurn({
+      userId,
+      threadId: thread.id,
+      selection,
+      turn,
+      conversation,
+      anthropicApiKey: apiKey,
+      anthropicApiKeyOrigin: apiKeyOrigin,
+      toolDetails,
+      usage,
+      detailState,
+      options: providerOptions,
+      accumulator,
+    });
     detailState.iterations = result.iterations;
     const durationMs = Date.now() - startMs;
     const workLog = workLogCollector.complete(durationMs, toolDetails);
