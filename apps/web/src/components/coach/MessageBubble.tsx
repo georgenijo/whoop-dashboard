@@ -1,7 +1,9 @@
 "use client";
 
 import { renderMarkdownToSafeHtml } from "@/lib/render-markdown";
+import { parseCoachVisualizations } from "@/lib/coach/visualization";
 import { useMemo, useSyncExternalStore } from "react";
+import CoachInlineChart from "./CoachInlineChart";
 import CoachWorkDisclosure from "./CoachWorkDisclosure";
 import type {
   ComposerAttachment,
@@ -41,6 +43,16 @@ export default function MessageBubble({ msg, onAttachmentClick }: Props) {
     if (isUser || !isBrowser) return null;
     return renderMarkdownToSafeHtml(msg.content);
   }, [isBrowser, isUser, msg.content]);
+  const contentSegments = useMemo(
+    () =>
+      isUser || !isBrowser
+        ? [{ type: "markdown" as const, content: msg.content }]
+        : parseCoachVisualizations(msg.content),
+    [isBrowser, isUser, msg.content],
+  );
+  const hasInlineChart = contentSegments.some(
+    (segment) => segment.type === "chart",
+  );
 
   // Don't render empty aborted assistant bubbles (race between abort + tool flush).
   if (isAborted && msg.content === "") return null;
@@ -102,7 +114,33 @@ export default function MessageBubble({ msg, onAttachmentClick }: Props) {
                 sanitizer that failed closed degrades to text instead of
                 blanking the message. */}
             {msg.content ? (
-              html !== null ? (
+              hasInlineChart ? (
+                <div
+                  className={`prose-coach ${msg.streaming ? "is-streaming" : ""}`}
+                  aria-busy={msg.streaming || undefined}
+                >
+                  {contentSegments.map((segment, index) =>
+                    segment.type === "chart" ? (
+                      <CoachInlineChart
+                        chart={segment.chart}
+                        key={`chart:${index}:${segment.chart.title}`}
+                      />
+                    ) : (
+                      <div
+                        className="coach-markdown-segment"
+                        // Every fragment passes through the same sanitizer as a
+                        // normal assistant message. Chart extraction never
+                        // turns model-authored markup into executable content.
+                        dangerouslySetInnerHTML={{
+                          __html:
+                            renderMarkdownToSafeHtml(segment.content) ?? "",
+                        }}
+                        key={`markdown:${index}`}
+                      />
+                    ),
+                  )}
+                </div>
+              ) : html !== null ? (
                 <div
                   className={`prose-coach ${msg.streaming ? "is-streaming" : ""}`}
                   aria-busy={msg.streaming || undefined}

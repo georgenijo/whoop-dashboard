@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it } from "vitest";
@@ -39,6 +39,35 @@ describe("MessageBubble browser render", () => {
     expect(html).toContain("<li>HRV up</li>");
     expect(html).toContain('href="https://example.com"');
     expect(html).not.toContain("coach-markdown-fallback");
+  });
+
+  it("renders a safe Mermaid xychart with a table alternative", () => {
+    const content = `**HRV trend**\n\n\`\`\`mermaid
+xychart-beta
+  title "Morning HRV"
+  x-axis ["Aug 15","Aug 16","Aug 17"]
+  y-axis "ms" 25 --> 55
+  line [38,40,50]
+\`\`\``;
+    const { container } = render(
+      <MessageBubble msg={{ role: "assistant", content, status: "complete" }} />,
+    );
+
+    expect(screen.getByRole("region", { name: "Morning HRV" })).toBeVisible();
+    expect(screen.getByRole("img", { name: "Morning HRV chart" })).toBeVisible();
+    expect(container).not.toHaveTextContent("xychart-beta");
+
+    fireEvent.click(screen.getByRole("button", { name: "Table" }));
+    expect(screen.getByRole("table", { name: "Morning HRV" })).toBeVisible();
+    expect(screen.getByRole("cell", { name: "50 ms" })).toBeVisible();
+  });
+
+  it("keeps unsupported Mermaid as sanitized code", () => {
+    const html = browserHtml("```mermaid\nflowchart LR\nA --> B\n```");
+
+    expect(html).toContain("language-mermaid");
+    expect(html).toContain("flowchart LR");
+    expect(html).not.toContain("coach-inline-chart");
   });
 
   it("marks an in-flight answer as streaming without altering its text", () => {
