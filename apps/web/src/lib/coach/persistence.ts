@@ -26,6 +26,10 @@ import type {
   CoachConversationMessage,
   CoachUserTurn,
 } from "./image-types";
+import {
+  extractCoachPresentation,
+  type CoachPresentationBlock,
+} from "./presentation";
 
 const log = forModule("coach.persistence");
 
@@ -63,7 +67,7 @@ export async function runAndPersistCoachTurn(
   apiKeyOrigin: ApiKeyOrigin,
   options: RunAnthropicOptions = {},
   handle?: CoachTurnHandle
-): Promise<{ reply: string; workLog: CoachWorkLog }> {
+): Promise<{ reply: string; workLog: CoachWorkLog; presentationBlocks: CoachPresentationBlock[] }> {
   const startedAt = new Date().toISOString();
   const startMs = Date.now();
   const promptPreview = turn.displayText
@@ -123,10 +127,13 @@ export async function runAndPersistCoachTurn(
     detailState.iterations = result.iterations;
     const durationMs = Date.now() - startMs;
     const workLog = workLogCollector.complete(durationMs, toolDetails);
+    const presentation = extractCoachPresentation(result.reply);
     for (let index = result.messages.length - 1; index >= 0; index -= 1) {
       const message = result.messages[index];
       if (message?.role === "assistant" && message.content === result.reply) {
+        message.content = presentation.reply;
         message.work_log = workLog;
+        message.presentation_blocks = presentation.presentationBlocks;
         break;
       }
     }
@@ -148,7 +155,11 @@ export async function runAndPersistCoachTurn(
       details: buildDetails(),
       thread_id: thread.id,
     });
-    return { reply: result.reply, workLog };
+    return {
+      reply: presentation.reply,
+      workLog,
+      presentationBlocks: presentation.presentationBlocks,
+    };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     addChatLog({

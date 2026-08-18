@@ -229,7 +229,7 @@ struct ChatService {
             return .toolProgress(tool: d.tool, stage: d.stage, message: d.message)
         case "done":
             let d = try decoder.decode(SSEDone.self, from: payload)
-            return .done(reply: d.reply)
+            return .done(reply: d.reply, presentationBlocks: d.presentationBlocks)
         case "error":
             let d = try decoder.decode(SSEError.self, from: payload)
             return .error(kind: d.kind, message: d.message, origin: d.origin)
