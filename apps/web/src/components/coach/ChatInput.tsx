@@ -11,7 +11,6 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import CoachActivityMark from "./CoachActivityMark";
 import type { PendingChatImage } from "./useChatSend";
 
 type Props = {
@@ -233,14 +232,7 @@ export default function ChatInput({
             : "Enter to send · Shift+Enter for newline"}
         </span>
         <span className="coach-composer-status" role="status" aria-live="polite">
-          {statusLabel ? (
-            <>
-              <CoachActivityMark active />
-              <span>{statusLabel}</span>
-            </>
-          ) : (
-            " "
-          )}
+          {statusLabel ? <span>{statusLabel}</span> : " "}
         </span>
       </div>
     </div>
