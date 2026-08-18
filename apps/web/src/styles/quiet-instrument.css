@@ -669,7 +669,7 @@ body:has(.coach-page) .bottom-nav { display: none; }
 .coach-work-disclosure[open] > summary .coach-work-caret { transform: rotate(45deg); }
 .coach-work-body {
   margin: 0;
-  padding: 0 0 var(--s3);
+  padding: 0 0 var(--s3) var(--s1);
   border-left: 0;
 }
 .coach-work-note {
@@ -683,19 +683,33 @@ body:has(.coach-page) .bottom-nav { display: none; }
 .coach-work-empty { margin: 0 0 var(--s2); color: var(--fg-3); font-size: var(--t-xs); }
 
 /* Tool calls are rows in the same flow, not stacked cards. */
-.coach-tool-list { gap: 0; }
+.coach-tool-list {
+  position: relative;
+  gap: 0;
+}
 .coach-tool-call,
 .coach-previous-tools {
   background: transparent;
   border: 0;
   border-radius: 0;
 }
-.coach-tool-call > summary,
+.coach-tool-call > summary {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto 6px;
+  align-items: center;
+  column-gap: var(--s2);
+  min-height: 28px;
+  padding: 2px 0;
+  color: var(--fg-3);
+  font-size: var(--t-sm);
+  font-weight: 450;
+}
 .coach-previous-tools > summary {
   display: flex;
   align-items: center;
   gap: var(--s2);
-  padding: var(--s1) 0;
+  min-height: 28px;
+  padding: 2px 0;
   color: var(--fg-3);
   font-size: var(--t-sm);
   font-weight: 450;
@@ -706,34 +720,101 @@ body:has(.coach-page) .bottom-nav { display: none; }
   flex: 0 0 auto;
   width: 6px;
   height: 6px;
-  margin-left: auto;
+  margin-left: var(--s1);
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
   opacity: 0.5;
   transform: rotate(-45deg);
   transition: transform var(--dur) var(--ease);
 }
+.coach-tool-call > summary::after { grid-column: 4; }
 .coach-tool-call[open] > summary::after,
 .coach-previous-tools[open] > summary::after { transform: rotate(45deg); }
 /* No state dot on this row — pad it so its label sits on the same left edge
    as the tool rows underneath. */
-.coach-previous-tools > summary { padding-left: calc(5px + var(--s2)); }
+.coach-previous-tools > summary { padding-left: 0; }
 .coach-tool-call > summary:hover,
 .coach-previous-tools > summary:hover { color: var(--fg); }
 .coach-tool-call > summary:hover .coach-tool-label { color: var(--fg); }
-.coach-tool-label { color: var(--fg-2); font-weight: 450; }
+.coach-tool-label {
+  min-width: 0;
+  color: var(--fg-2);
+  font-weight: 450;
+  line-height: 1.35;
+}
 .coach-tool-meta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s2);
   margin-left: var(--s2);
   color: var(--fg-3);
   font-family: var(--font-num);
   font-size: var(--t-xs);
-  text-align: left;
+  line-height: 1;
+  white-space: nowrap;
 }
-.coach-tool-state { width: 5px; height: 5px; background: var(--fg-3); opacity: 0.45; box-shadow: none; }
+.coach-tool-duration { font-variant-numeric: tabular-nums; }
+.coach-tool-state {
+  position: relative;
+  z-index: 1;
+  width: 14px;
+  height: 14px;
+  border: var(--stroke) solid var(--rule);
+  border-radius: 50%;
+  background: var(--bg);
+  opacity: 1;
+  box-shadow: none;
+}
+.coach-tool-call.complete .coach-tool-state {
+  border-color: color-mix(in oklch, var(--ok) 58%, var(--rule));
+  background: var(--bg);
+}
+.coach-tool-call.complete .coach-tool-state::after {
+  content: "";
+  position: absolute;
+  width: 5px;
+  height: 3px;
+  left: 3px;
+  top: 3px;
+  border-left: 1.5px solid var(--ok);
+  border-bottom: 1.5px solid var(--ok);
+  transform: rotate(-45deg);
+}
 .coach-tool-call.running .coach-tool-state { background: var(--warn); opacity: 1; box-shadow: none; }
 .coach-tool-call.error .coach-tool-state { background: var(--bad); opacity: 1; }
-.coach-tool-detail { padding: var(--s2) 0 var(--s3) var(--s4); }
+.coach-tool-detail {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s3) var(--s5);
+  margin: var(--s1) 0 var(--s2) 22px;
+  padding: var(--s3);
+  border: var(--stroke) solid var(--rule-soft);
+  border-radius: var(--r-md);
+  background: var(--bg-sunk);
+}
+.coach-tool-detail .coach-work-field-compact {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--s2);
+}
+.coach-tool-detail .coach-work-field-compact > span { margin: 0; }
+.coach-tool-detail .coach-work-field-wide { grid-column: 1 / -1; }
+.coach-tool-detail .coach-work-field pre {
+  padding: var(--s2);
+  border: var(--stroke) solid var(--rule-soft);
+  background: var(--bg);
+}
 .coach-previous-tools > .coach-tool-list { padding: 0 0 0 var(--s4); }
+
+@media (max-width: 640px) {
+  .coach-tool-call > summary { grid-template-columns: 14px minmax(0, 1fr) auto 6px; }
+  .coach-tool-meta { gap: var(--s1); margin-left: 0; }
+  .coach-tool-meta > span:not(.coach-tool-duration) { display: none; }
+  .coach-tool-detail { grid-template-columns: 1fr; margin-left: 0; }
+  .coach-tool-detail .coach-work-field-wide { grid-column: 1; }
+}
 .coach-empty { width: min(100%, 70ch); margin: 0 auto; }
 .coach-empty-mark { color: var(--fg-3); font-family: var(--font-num); font-size: var(--t-xs); font-weight: 500; }
 .coach-empty-title { color: var(--fg); font-size: var(--t-lg); font-weight: 550; }
