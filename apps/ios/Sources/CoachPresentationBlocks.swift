@@ -8,7 +8,7 @@ enum CoachPresentationBlock: Decodable, Hashable {
     case chart(ChartBlock)
     case actionPlan(ActionPlan)
     case dataFreshness(DataFreshness)
-    case workoutPlan(WorkoutPlan)
+    case workoutPlan(CoachWorkoutPlanBlock)
     case evidence(Evidence)
 
     private enum Keys: String, CodingKey { case version, type }
@@ -24,7 +24,7 @@ enum CoachPresentationBlock: Decodable, Hashable {
         case "chart": self = .chart(try ChartBlock(from: decoder))
         case "action_plan": self = .actionPlan(try ActionPlan(from: decoder))
         case "data_freshness": self = .dataFreshness(try DataFreshness(from: decoder))
-        case "workout_plan": self = .workoutPlan(try WorkoutPlan(from: decoder))
+        case "workout_plan": self = .workoutPlan(try CoachWorkoutPlanBlock(from: decoder))
         case "evidence": self = .evidence(try Evidence(from: decoder))
         default: throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "Unknown presentation type")
         }
@@ -97,7 +97,7 @@ struct DataFreshness: Decodable, Hashable {
     enum CodingKeys: String, CodingKey { case fallback, sources; case syncAvailable = "sync_available" }
 }
 
-struct WorkoutPlan: Decodable, Hashable {
+struct CoachWorkoutPlanBlock: Decodable, Hashable {
     let fallback: String
     let title: String
     let date: String?
