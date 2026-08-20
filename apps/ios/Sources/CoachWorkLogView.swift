@@ -32,8 +32,11 @@ struct CoachWorkLogView: View {
                 Text(summary)
                     .font(Theme.FontStyle.sans(11.5, weight: .medium))
                     .foregroundStyle(Theme.Palette.fg2)
+                Spacer(minLength: 0)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .tint(Theme.Palette.fg3)
         .padding(.bottom, 8)
         .overlay(alignment: .bottom) {
@@ -84,6 +87,7 @@ struct LiveCoachWorkView: View {
                 Text("Thinking…")
                     .font(Theme.FontStyle.sans(11.5))
                     .foregroundStyle(Theme.Palette.fg3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 6)
             } else {
                 VStack(alignment: .leading, spacing: 7) {
@@ -108,8 +112,11 @@ struct LiveCoachWorkView: View {
                 Text("Working")
                     .font(Theme.FontStyle.sans(11.5, weight: .medium))
                     .foregroundStyle(Theme.Palette.fg2)
+                Spacer(minLength: 0)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .tint(Theme.Palette.fg3)
         .padding(.vertical, 4)
     }

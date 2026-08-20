@@ -23,6 +23,7 @@ struct ChatView: View {
     @State private var isPreparingImages = false
     @State private var selectedAttachment: ChatAttachment?
     @State private var attachmentCache = ChatAttachmentCache()
+    @FocusState private var isComposerFocused: Bool
 
     init(threadId: Int?, initialTitle: String?) {
         self.initialTitle = initialTitle
@@ -199,7 +200,11 @@ struct ChatView: View {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if rows.isEmpty {
-            emptyAsk
+            ScrollView {
+                emptyAsk
+                    .containerRelativeFrame(.vertical)
+            }
+            .scrollDismissesKeyboard(.interactively)
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
@@ -219,6 +224,7 @@ struct ChatView: View {
                     .padding(.vertical, Theme.Spacing.lg)
                 }
                 .scrollContentBackground(.hidden)
+                .scrollDismissesKeyboard(.interactively)
                 .onChange(of: rows.last?.id) { _, newLastId in
                     if let newLastId {
                         withAnimation { proxy.scrollTo(newLastId, anchor: .bottom) }
@@ -250,45 +256,60 @@ struct ChatView: View {
     }
 
     private var composer: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 6) {
             if !pendingImages.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(pendingImages) { image in
-                            ZStack(alignment: .topTrailing) {
-                                if let thumbnail = image.image {
-                                    Image(uiImage: thumbnail)
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fill)
-                                        .frame(width: 66, height: 66)
-                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                VStack(alignment: .leading, spacing: 5) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 7) {
+                            ForEach(pendingImages) { image in
+                                ZStack(alignment: .topTrailing) {
+                                    if let thumbnail = image.image {
+                                        Image(uiImage: thumbnail)
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fill)
+                                            .frame(width: 54, height: 54)
+                                            .clipShape(RoundedRectangle(cornerRadius: 9))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 9)
+                                                    .strokeBorder(Theme.Palette.borderDefault)
+                                            )
+                                    }
+                                    Button {
+                                        removePendingImage(image.id)
+                                    } label: {
+                                        ZStack {
+                                            Circle()
+                                                .fill(Color.black.opacity(0.82))
+                                                .frame(width: 18, height: 18)
+                                                .overlay(
+                                                    Circle()
+                                                        .strokeBorder(Color.white.opacity(0.25))
+                                                )
+                                            Image(systemName: "xmark")
+                                                .font(.system(size: 8, weight: .bold))
+                                                .foregroundStyle(Color.white)
+                                        }
+                                        .frame(width: 44, height: 44)
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .offset(x: 13, y: -13)
+                                    .disabled(isSending)
+                                    .accessibilityLabel("Remove selected image")
                                 }
-                                Button {
-                                    removePendingImage(image.id)
-                                } label: {
-                                    Image(systemName: "xmark")
-                                        .font(.system(size: 9, weight: .bold))
-                                        .foregroundStyle(Color.white)
-                                        .frame(width: 20, height: 20)
-                                        .background(Color.black.opacity(0.78), in: Circle())
-                                }
-                                .offset(x: 5, y: -5)
-                                .disabled(isSending)
-                                .accessibilityLabel("Remove selected image")
+                                .padding(.top, 13)
+                                .padding(.trailing, 13)
                             }
-                            .padding(.top, 5)
-                            .padding(.trailing, 5)
                         }
                     }
-                }
-                Text(
-                    "Images are stored with this thread and sent to your selected Coach provider."
-                )
-                .font(Theme.FontStyle.sans(10.5))
-                .foregroundStyle(Theme.Palette.fg3)
-                Text("Image analysis can be wrong and isn’t a medical diagnosis.")
-                    .font(Theme.FontStyle.sans(10.5))
+                    Label(
+                        "Image analysis isn’t a medical diagnosis.",
+                        systemImage: "cross.case"
+                    )
+                    .font(Theme.FontStyle.sans(9.5))
                     .foregroundStyle(Theme.Palette.fg3)
+                }
+                .padding(.horizontal, 2)
             }
 
             if isPreparingImages {
@@ -308,8 +329,9 @@ struct ChatView: View {
                     .lineLimit(1...5)
                     .disabled(isSending)
                     .textFieldStyle(.plain)
+                    .focused($isComposerFocused)
                     .padding(.horizontal, 2)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 2)
 
                 HStack(spacing: 8) {
                     PhotosPicker(
@@ -321,6 +343,8 @@ struct ChatView: View {
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(Theme.Palette.fg2)
                             .frame(width: 32, height: 32)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                     }
                     .disabled(isSending || isPreparingImages || pendingImages.count >= 3)
                     .accessibilityLabel("Choose photos")
@@ -338,13 +362,16 @@ struct ChatView: View {
                             .foregroundStyle(Theme.Palette.bg0)
                             .frame(width: 32, height: 32)
                             .background(Theme.Palette.fg0, in: RoundedRectangle(cornerRadius: 7))
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                             .opacity(canSend ? 1 : 0.35)
                     }
                     .disabled(!canSend)
                     .accessibilityLabel("Send message")
                 }
             }
-            .padding(10)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 8)
             .background(Theme.Palette.bg1, in: RoundedRectangle(cornerRadius: 12))
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
@@ -352,7 +379,8 @@ struct ChatView: View {
             )
         }
         .padding(.horizontal, Theme.Spacing.md)
-        .padding(.vertical, 10)
+        .padding(.top, 7)
+        .padding(.bottom, isComposerFocused ? 6 : 8)
     }
 
     private var canSend: Bool {
@@ -843,26 +871,91 @@ private struct MessageBubble: View {
         presentationBlocks: [CoachPresentationBlock],
         dimmed: Bool
     ) -> some View {
-        HStack {
-            if role == .user { Spacer(minLength: 40) }
-            bubbleContent(
-                role: role,
-                content: content,
-                attachments: attachments,
-                pendingAttachments: pendingAttachments,
-                workLog: workLog,
-                presentationBlocks: presentationBlocks
-            )
-                .padding(.horizontal, role == .user ? 14 : 0)
-                .padding(.vertical, role == .user ? 11 : 0)
-                .background(bubbleBackground(role: role, dimmed: dimmed))
-                .overlay(bubbleBorder(role: role))
-                .foregroundStyle(role == .user ? Theme.Palette.fg0 : Theme.Palette.fg1)
-                .clipShape(bubbleShape(role: role))
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: role == .user ? .trailing : .leading)
-            if role == .assistant { Spacer(minLength: 40) }
+        Group {
+            if role == .user {
+                userMessage(
+                    content: content,
+                    attachments: attachments,
+                    pendingAttachments: pendingAttachments,
+                    dimmed: dimmed
+                )
+            } else {
+                bubbleContent(
+                    role: role,
+                    content: content,
+                    attachments: attachments,
+                    pendingAttachments: pendingAttachments,
+                    workLog: workLog,
+                    presentationBlocks: presentationBlocks
+                )
+                    .foregroundStyle(Theme.Palette.fg1)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
+    }
+
+    private func userMessage(
+        content: String,
+        attachments: [ChatAttachment],
+        pendingAttachments: [PendingChatImage],
+        dimmed: Bool
+    ) -> some View {
+        VStack(alignment: .trailing, spacing: 7) {
+            if !attachments.isEmpty || !pendingAttachments.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(attachments) { attachment in
+                        Button {
+                            onAttachmentTap(attachment)
+                        } label: {
+                            ChatAttachmentImage(
+                                attachment: attachment,
+                                api: api,
+                                cache: cache,
+                                contentMode: .fill
+                            )
+                            .frame(width: 76, height: 76)
+                            .background(Color.black.opacity(0.2))
+                            .clipShape(RoundedRectangle(cornerRadius: 11))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 11)
+                                    .strokeBorder(Theme.Palette.borderDefault)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Open attached image")
+                    }
+                    ForEach(pendingAttachments) { attachment in
+                        if let image = attachment.image {
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 76, height: 76)
+                                .clipShape(RoundedRectangle(cornerRadius: 11))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 11)
+                                        .strokeBorder(Theme.Palette.borderDefault)
+                                )
+                                .accessibilityLabel("Pending attached image")
+                        }
+                    }
+                }
+                .opacity(dimmed ? 0.72 : 1)
+            }
+            if !content.isEmpty {
+                Text(content)
+                    .font(Theme.FontStyle.sans(13))
+                    .foregroundStyle(Theme.Palette.fg0)
+                    .textSelection(.enabled)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .background(Color.white.opacity(dimmed ? 0.04 : 0.06))
+                    .overlay(bubbleBorder(role: .user))
+                    .clipShape(bubbleShape(role: .user))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
     @ViewBuilder
