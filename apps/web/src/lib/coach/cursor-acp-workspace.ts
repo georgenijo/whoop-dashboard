@@ -14,11 +14,13 @@ import {
   resolveMcpServerArgs,
   shimBinDirFor,
 } from "./cursor-loop";
+import { CursorMcpAuditChannel } from "./cursor-mcp-audit";
 
 export type CursorAcpWorkspace = {
   root: string;
   shimBin: string;
   mcpServer: McpServer | null;
+  auditChannel: CursorMcpAuditChannel;
   prepareTurn: (images: CoachImage[]) => Promise<string>;
   dispose: () => Promise<void>;
 };
@@ -39,6 +41,8 @@ export async function createCursorAcpWorkspace(
     const attachmentDir = path.join(root, "attachments");
     const manifestPath = path.join(root, "attachment-manifest.json");
     const epochPath = path.join(root, ".coach-turn-epoch");
+    const auditPath = path.join(root, ".coach-mcp-audit.ndjson");
+    const auditRuntimeId = randomUUID();
     await mkdir(dotCursor, { recursive: true, mode: 0o700 });
     await mkdir(attachmentDir, { recursive: true, mode: 0o700 });
     const shimBin = await prepareCursorShimBin(root, process.env.PATH);
@@ -53,6 +57,7 @@ export async function createCursorAcpWorkspace(
       { mode: 0o600 },
     );
     await atomicWrite(manifestPath, "{}");
+    await atomicWrite(auditPath, "");
     await atomicWrite(epochPath, randomUUID());
 
     const prepareTurn = async (images: CoachImage[]): Promise<string> => {
@@ -66,6 +71,7 @@ export async function createCursorAcpWorkspace(
       }
       const epoch = randomUUID();
       await atomicWrite(manifestPath, JSON.stringify(manifest));
+      await atomicWrite(auditPath, "");
       await atomicWrite(epochPath, epoch);
       return epoch;
     };
@@ -77,6 +83,8 @@ export async function createCursorAcpWorkspace(
         COACH_MCP_USER_ID: String(userId),
         COACH_MCP_ATTACHMENT_MANIFEST: manifestPath,
         COACH_MCP_TURN_EPOCH_PATH: epochPath,
+        COACH_MCP_AUDIT_PATH: auditPath,
+        COACH_MCP_AUDIT_RUNTIME_ID: auditRuntimeId,
         WHOOP_DB_PATH: dbPath(),
         NODE_PATH: path.join(CURSOR_APP_ROOT, "node_modules"),
         TSX_TSCONFIG_PATH: path.join(CURSOR_APP_ROOT, "tsconfig.json"),
@@ -93,6 +101,7 @@ export async function createCursorAcpWorkspace(
       root,
       shimBin,
       mcpServer,
+      auditChannel: new CursorMcpAuditChannel(auditPath, auditRuntimeId),
       prepareTurn,
       dispose: async () => {
         try {

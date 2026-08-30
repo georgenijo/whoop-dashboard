@@ -5,6 +5,11 @@ import type {
   ToolCall,
   ToolCallUpdate,
 } from "@agentclientprotocol/sdk";
+import type {
+  CoachMcpAuditEndEvent,
+  CoachMcpAuditEvent,
+  CoachMcpAuditStartEvent,
+} from "@/coach-mcp/audit-events";
 import type { ChatMessageInsert } from "@/lib/db";
 import { createHash } from "node:crypto";
 import {
@@ -41,6 +46,7 @@ type AcpToolState = {
   startedAt: number;
   startedEmitted: boolean;
   completedEmitted: boolean;
+  historyIndex: number;
 };
 
 const GENERIC_CURSOR_MCP_TOOL_NAME = "whoop_tool";
@@ -81,6 +87,7 @@ function mergeToolState(
     startedAt: previous?.startedAt ?? Date.now(),
     startedEmitted: previous?.startedEmitted ?? false,
     completedEmitted: previous?.completedEmitted ?? false,
+    historyIndex: previous?.historyIndex ?? 0,
   };
 }
 
@@ -270,6 +277,10 @@ export async function runCursorAcpTurn(
   let pendingAssistant: ChatMessageInsert | null = null;
   const tools = new Map<string, AcpToolState>();
   let completedToolCalls = 0;
+  let providerFallbackStarts = 0;
+  let exactAuditStarts = 0;
+  let exactAuditCompletions = 0;
+  let auditError: string | null = null;
   const eventCounts: Record<string, number> = {};
   const toolEvents: Array<{
     name: string;
@@ -296,6 +307,12 @@ export async function runCursorAcpTurn(
         error: prefetchError,
       },
       event_counts: eventCounts,
+      mcp_audit: {
+        status: "idle",
+        exact_starts: 0,
+        exact_completions: 0,
+        error: null,
+      },
       tool_events: toolEvents,
       terminal_subtype: null,
       terminal_seen: false,
@@ -348,7 +365,7 @@ export async function runCursorAcpTurn(
     async (runtime) => {
       try {
         const workspaceStartedAt = Date.now();
-        await runtime.prepareTurn(imageContext.images);
+        const turnEpoch = await runtime.prepareTurn(imageContext.images);
         cursorDetail.timing.workspace_prep_ms = Date.now() - workspaceStartedAt;
         await runtime.applyModel(model, modelParameters);
         const promptStartedAt = Date.now();
@@ -364,22 +381,82 @@ export async function runCursorAcpTurn(
         cursorDetail.timing.prompt_build_ms = Date.now() - promptStartedAt;
         cursorDetail.prompt_chars = prompt.length;
         let toolCapError: CursorAgentError | null = null;
+        const exactTools = new Map<string, CoachMcpAuditStartEvent>();
+        let fallbackHistoryOffset = 0;
 
-        const finishTool = (state: AcpToolState) => {
+        const enforceToolCap = (attempted: number) => {
+          if (attempted <= MAX_CURSOR_TOOL_CALLS || toolCapError) return;
+          toolCapError = new CursorAgentError(
+            "agent",
+            `Cursor turn exceeded ${MAX_CURSOR_TOOL_CALLS} tool calls`,
+          );
+          void runtime.cancelActiveTurn(toolCapError);
+        };
+
+        const emitToolStart = (id: string, name: string, input: unknown) => {
+          toolEvents.push({
+            name,
+            phase: "started",
+            at_ms: Date.now() - turnStartedAt,
+          });
+          if (name === "view_chat_image") {
+            options.onToolProgress?.({
+              id,
+              tool: name,
+              stage: "reviewing",
+              message: "Reviewing image…",
+            });
+          }
+          options.onToolUseStart?.({ id, name, input });
+        };
+
+        const appendToolHistory = (
+          id: string,
+          name: string,
+          input: unknown,
+          resultText: string,
+          isError: boolean,
+          insertAt?: number,
+        ) => {
+          if (
+            name === "view_chat_image" ||
+            name === GENERIC_CURSOR_MCP_TOOL_NAME
+          ) {
+            return;
+          }
+          const historyMessages: ChatMessageInsert[] = [
+            {
+              role: "assistant",
+              content: "",
+              blocks: [{ type: "tool_use", id, name, input: input ?? {} }],
+            },
+            {
+              role: "user",
+              content: "[tool_result]",
+              blocks: [
+                {
+                  type: "tool_result",
+                  tool_use_id: id,
+                  content: resultText,
+                  ...(isError ? { is_error: true } : {}),
+                },
+              ],
+            },
+          ];
+          if (insertAt === undefined) {
+            messages.push(...historyMessages);
+          } else {
+            messages.splice(insertAt, 0, ...historyMessages);
+          }
+        };
+
+        const finishFallbackTool = (state: AcpToolState) => {
           if (state.completedEmitted) return;
           const tracked = trackedToolName(state);
           if (!tracked) return;
           const { name } = tracked;
           state.completedEmitted = true;
           completedToolCalls += 1;
-          if (completedToolCalls > MAX_CURSOR_TOOL_CALLS) {
-            toolCapError ??= new CursorAgentError(
-              "agent",
-              `Cursor turn exceeded ${MAX_CURSOR_TOOL_CALLS} tool calls`,
-            );
-            state.status = "failed";
-            void runtime.cancelActiveTurn(toolCapError);
-          }
           const durationMs = Math.max(0, Date.now() - state.startedAt);
           const unwrapped = unwrapToolOutput(state.output);
           const isError = state.status === "failed" || unwrapped.isError;
@@ -411,67 +488,94 @@ export async function runCursorAcpTurn(
             ...(isError ? { error: resultText.slice(0, 200) } : {}),
             response: captureToolResponse(unwrapped.value),
           });
-          if (tracked.canonical && name !== "view_chat_image") {
-            messages.push({
-              role: "assistant",
-              content: "",
-              blocks: [
-                {
-                  type: "tool_use",
-                  id: state.id,
-                  name,
-                  input: state.input ?? {},
-                },
-              ],
-            });
-            messages.push({
-              role: "user",
-              content: "[tool_result]",
-              blocks: [
-                {
-                  type: "tool_result",
-                  tool_use_id: state.id,
-                  content: resultText,
-                  ...(isError ? { is_error: true } : {}),
-                },
-              ],
-            });
+          if (tracked.canonical) {
+            appendToolHistory(
+              state.id,
+              name,
+              state.input,
+              resultText,
+              isError,
+              state.historyIndex + fallbackHistoryOffset,
+            );
+            fallbackHistoryOffset += 2;
           }
         };
 
         const updateTool = (update: ToolCall | ToolCallUpdate) => {
-          const state = mergeToolState(tools.get(update.toolCallId), update);
+          const previous = tools.get(update.toolCallId);
+          const state = mergeToolState(previous, update);
+          if (!previous) state.historyIndex = messages.length;
           tools.set(state.id, state);
           const tracked = trackedToolName(state);
           if (tracked && !state.startedEmitted) {
-            const { name } = tracked;
             state.startedEmitted = true;
             visibleText.toolBoundary();
             pendingAssistant = null;
-            toolEvents.push({
-              name,
-              phase: "started",
-              at_ms: Date.now() - turnStartedAt,
-            });
-            if (name === "view_chat_image") {
-              options.onToolProgress?.({
-                id: state.id,
-                tool: name,
-                stage: "reviewing",
-                message: "Reviewing image…",
-              });
-            }
-            options.onToolUseStart?.({
-              id: state.id,
-              name,
-              input: redactToolPayload(state.input),
-            });
-          }
-          if (state.status === "completed" || state.status === "failed") {
-            finishTool(state);
-            tools.delete(state.id);
+            providerFallbackStarts += 1;
+            enforceToolCap(providerFallbackStarts);
           }
         };
+
+        const finishExactTool = (
+          start: CoachMcpAuditStartEvent,
+          end: CoachMcpAuditEndEvent,
+        ) => {
+          exactAuditCompletions += 1;
+          completedToolCalls += 1;
+          toolEvents.push({
+            name: start.tool_name,
+            phase: "completed",
+            at_ms: Date.now() - turnStartedAt,
+            duration_ms: end.duration_ms,
+            status: end.status,
+          });
+          toolDetails.push({
+            id: start.call_id,
+            name: start.tool_name,
+            input: start.input,
+            duration_ms: end.duration_ms,
+            rows: end.rows,
+            status: end.status,
+            ...(end.error ? { error: end.error } : {}),
+            ...(end.response === undefined ? {} : { response: end.response }),
+          });
+          options.onToolUseEnd?.({
+            id: start.call_id,
+            name: start.tool_name,
+            duration_ms: end.duration_ms,
+            rows: end.rows,
+            status: end.status,
+            ...(end.error ? { error: end.error } : {}),
+            ...(end.response === undefined ? {} : { response: end.response }),
+          });
+        };
+
+        const handleAuditEvent = (event: CoachMcpAuditEvent) => {
+          eventCounts[`mcp_audit_${event.phase}`] =
+            (eventCounts[`mcp_audit_${event.phase}`] ?? 0) + 1;
+          if (event.phase === "start") {
+            exactAuditStarts += 1;
+            exactTools.set(event.call_id, event);
+            enforceToolCap(exactAuditStarts);
+            emitToolStart(event.call_id, event.tool_name, event.input);
+            return;
+          }
+          const start = exactTools.get(event.call_id);
+          if (!start) {
+            auditError ??= "Coach MCP audit completion had no matching start";
+            return;
+          }
+          exactTools.delete(event.call_id);
+          finishExactTool(start, event);
+        };
+
+        const auditListener = runtime.listenForMcpAudit(
+          turnEpoch,
+          handleAuditEvent,
+          (error) => {
+            auditError ??= error.message.slice(0, 500);
+          },
+        );
 
         let response: Awaited<ReturnType<typeof runtime.prompt>>;
         try {
@@ -518,12 +622,52 @@ export async function runCursorAcpTurn(
         } catch (error) {
           if (toolCapError) throw toolCapError;
           throw error;
+        } finally {
+          await auditListener.drainAndStop();
         }
-        for (const state of [...tools.values()]) {
-          state.status = "failed";
-          finishTool(state);
-          tools.delete(state.id);
+        if (exactAuditStarts === 0) {
+          if (providerFallbackStarts > 0) {
+            auditError ??= "No exact Coach MCP audit events were received";
+          }
+          for (const state of [...tools.values()]) {
+            const tracked = trackedToolName(state);
+            if (!tracked) continue;
+            emitToolStart(
+              state.id,
+              tracked.name,
+              redactToolPayload(state.input),
+            );
+            if (state.status !== "completed" && state.status !== "failed") {
+              state.status = "failed";
+            }
+            finishFallbackTool(state);
+          }
+        } else {
+          for (const start of exactTools.values()) {
+            finishExactTool(start, {
+              ...start,
+              phase: "end",
+              at_ms: Date.now(),
+              duration_ms: Math.max(0, Date.now() - start.at_ms),
+              rows: null,
+              status: "error",
+              error: "Tool audit ended before completion",
+              response: { error: "Tool audit ended before completion" },
+            });
+          }
+          exactTools.clear();
         }
+        cursorDetail.mcp_audit = {
+          status:
+            exactAuditStarts > 0 && !auditError
+              ? "healthy"
+              : providerFallbackStarts > 0 || auditError
+                ? "fallback"
+                : "idle",
+          exact_starts: exactAuditStarts,
+          exact_completions: exactAuditCompletions,
+          error: auditError,
+        };
         const usageDelta = runtime.usageDelta(response.usage);
         if (usageDelta) {
           usage.input_tokens_total += usageDelta.inputTokens;

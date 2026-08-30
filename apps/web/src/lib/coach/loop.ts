@@ -82,6 +82,12 @@ export type DetailState = {
       error: string | null;
     };
     event_counts: Record<string, number>;
+    mcp_audit?: {
+      status: "idle" | "healthy" | "fallback";
+      exact_starts: number;
+      exact_completions: number;
+      error: string | null;
+    };
     tool_events: Array<{
       name: string;
       phase: "started" | "completed";

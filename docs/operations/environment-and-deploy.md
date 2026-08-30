@@ -137,6 +137,22 @@ catalog without starting the Whoop MCP server or spending a model turn:
 fleet exec opti 'cd /home/george/Documents/whoop-dashboard/apps/web && ~/.nvm/versions/node/v20.20.2/bin/node --env-file=.env.local --conditions=react-server --import tsx scripts/check-cursor-acp-user.ts 2 /home/george/.local/bin/cursor-agent gpt-5.6-luna'
 ```
 
+For real ACP turns, Coach creates a private NDJSON MCP audit file inside each
+throwaway Cursor workspace. The MCP subprocess receives its path and a random
+runtime ID from the parent; every turn rotates the file and server-controlled
+epoch. These are internal per-process variables, not operator configuration.
+The parent accepts only matching runtime/epoch events, redacts and bounds them
+before persistence, and removes the complete workspace when the session is
+disposed.
+
+`chat_logs.details.cursor.mcp_audit.status` is `healthy` when exact app-owned
+tool events arrived, `idle` when the turn used no MCP tools, and `fallback`
+when Coach had to rely on Cursor's generic `MCP: tool` notifications. Any
+`fallback` turn that attempted a tool should be investigated; the associated
+`error`, `exact_starts`, and `exact_completions` fields distinguish a silent
+writer from malformed, partial, or unavailable channel output. Provider
+notifications never add a second work-log entry once exact events are present.
+
 ```bash
 scripts/deploy --check
 scripts/deploy

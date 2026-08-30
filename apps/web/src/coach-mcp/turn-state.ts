@@ -17,6 +17,13 @@ export class CoachMcpTurnState {
   constructor(private readonly epochPath: string) {}
 
   async current(): Promise<ToolTurnState> {
+    return (await this.currentContext()).state;
+  }
+
+  async currentContext(): Promise<{
+    epoch: string;
+    state: ToolTurnState;
+  }> {
     const previous = this.refreshTail;
     let release: (() => void) | undefined;
     this.refreshTail = new Promise<void>((resolve) => {
@@ -24,7 +31,8 @@ export class CoachMcpTurnState {
     });
     await previous;
     try {
-      return await this.currentUnlocked();
+      const state = await this.currentUnlocked();
+      return { epoch: this.epoch ?? "unscoped", state };
     } finally {
       release?.();
     }

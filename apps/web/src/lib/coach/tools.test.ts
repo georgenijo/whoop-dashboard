@@ -36,7 +36,13 @@ import {
   type WorkoutPlan,
 } from "@/lib/db";
 import { runWhoopSync } from "@/lib/sync";
-import { chatLogToolSummaries, executeTool, newToolTurnState, type ToolDetail } from "./tools";
+import {
+  captureToolInput,
+  chatLogToolSummaries,
+  executeTool,
+  newToolTurnState,
+  type ToolDetail,
+} from "./tools";
 
 const addSyncLogMock = vi.mocked(addSyncLog);
 const getJournalRangeMock = vi.mocked(getJournalRange);
@@ -496,6 +502,18 @@ describe("chatLogToolSummaries", () => {
 
     expect(summary).not.toHaveProperty("response");
     expect(summary.error).toBe("boom");
+  });
+});
+
+describe("captureToolInput", () => {
+  it("redacts secrets and bounds oversized audit input", () => {
+    expect(captureToolInput({ api_key: "secret", date: "2026-08-30" })).toEqual({
+      api_key: "[REDACTED]",
+      date: "2026-08-30",
+    });
+    expect(captureToolInput({ prompt: "x".repeat(5_000) })).toMatchObject({
+      _truncated: true,
+    });
   });
 });
 
