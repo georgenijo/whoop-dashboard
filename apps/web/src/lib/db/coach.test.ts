@@ -377,6 +377,92 @@ describe("chat message work logs", () => {
     expect(messages[1].work_log).toEqual(workLog);
   });
 
+  it("hides historical narration duplicated by the final work-log notes", () => {
+    const threadId = insertThread(1);
+    const firstNote = "Pulling your recovery now.";
+    const secondNote = "Comparing it with your recent baseline.";
+    insertMessage(threadId, "user", "How is my recovery?");
+    insertMessage(threadId, "assistant", firstNote, [
+      { type: "text", text: firstNote },
+    ]);
+    insertMessage(threadId, "assistant", "", [
+      { type: "tool_use", id: "tool-1", name: "query_recovery", input: {} },
+    ]);
+    insertMessage(threadId, "user", "[tool_result]", [
+      { type: "tool_result", tool_use_id: "tool-1", content: "[]" },
+    ]);
+    insertMessage(threadId, "assistant", secondNote, [
+      { type: "text", text: secondNote },
+    ]);
+    insertMessage(threadId, "assistant", "", [
+      { type: "tool_use", id: "tool-2", name: "query_sleep", input: {} },
+    ]);
+    insertMessage(threadId, "user", "[tool_result]", [
+      { type: "tool_result", tool_use_id: "tool-2", content: "[]" },
+    ]);
+    coach.addChatMessages(threadId, [
+      {
+        role: "assistant",
+        content: "Recovery is 81%.",
+        blocks: [{ type: "text", text: "Recovery is 81%." }],
+        work_log: { ...workLog, notes: [firstNote, secondNote] },
+      },
+    ]);
+
+    expect(
+      coach.getChatThreadMessages(1, threadId).map(({ role, content }) => ({
+        role,
+        content,
+      })),
+    ).toEqual([
+      { role: "user", content: "How is my recovery?" },
+      { role: "assistant", content: "Recovery is 81%." },
+    ]);
+    const conversationText = coach
+      .getChatThreadConversation(1, threadId)
+      .flatMap((message) => message.contentBlocks)
+      .flatMap((block) =>
+        typeof block === "object" &&
+        block !== null &&
+        "type" in block &&
+        block.type === "text" &&
+        "text" in block &&
+        typeof block.text === "string"
+          ? [block.text]
+          : [],
+      );
+    expect(conversationText).not.toContain(firstNote);
+    expect(conversationText).not.toContain(secondNote);
+    expect(conversationText).toContain("Recovery is 81%.");
+    expect(
+      helperDb
+        .prepare("SELECT COUNT(*) AS count FROM chat_messages WHERE thread_id = ?")
+        .get(threadId),
+    ).toEqual({ count: 8 });
+  });
+
+  it("does not hide matching text from an earlier user turn", () => {
+    const threadId = insertThread(1);
+    insertMessage(threadId, "assistant", "Checking recent recovery.", []);
+    insertMessage(threadId, "user", "What about today?");
+    coach.addChatMessages(threadId, [
+      {
+        role: "assistant",
+        content: "Today looks good.",
+        blocks: [{ type: "text", text: "Today looks good." }],
+        work_log: workLog,
+      },
+    ]);
+
+    expect(
+      coach.getChatThreadMessages(1, threadId).map((message) => message.content),
+    ).toEqual([
+      "Checking recent recovery.",
+      "What about today?",
+      "Today looks good.",
+    ]);
+  });
+
   it("returns malformed and unsupported receipts as null", () => {
     const threadId = insertThread(1);
     const malformedId = insertMessage(threadId, "assistant", "Malformed", []);

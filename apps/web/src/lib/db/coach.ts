@@ -86,6 +86,40 @@ function visibleChatPreviewClause(alias: string): string {
   return `${visibleChatMessageClause(alias)} AND (${alias}.status IS NULL OR ${alias}.status != 'aborted' OR ${alias}.role != 'assistant')`;
 }
 
+type MessageWithWorkLog = Pick<
+  ChatMessage,
+  "id" | "role" | "content" | "work_log"
+>;
+
+function withoutDuplicatedWorkNotes<T extends MessageWithWorkLog>(
+  messages: T[],
+): T[] {
+  const duplicateIds = new Set<number>();
+  for (let finalIndex = 0; finalIndex < messages.length; finalIndex += 1) {
+    const finalMessage = messages[finalIndex];
+    if (finalMessage.role !== "assistant" || !finalMessage.work_log) continue;
+    const notes = new Set(
+      finalMessage.work_log.notes.map((note) => note.trim()).filter(Boolean),
+    );
+    if (notes.size === 0) continue;
+
+    for (let index = finalIndex - 1; index >= 0; index -= 1) {
+      const candidate = messages[index];
+      if (candidate.role === "user" && candidate.content !== "[tool_result]") {
+        break;
+      }
+      if (
+        candidate.role === "assistant" &&
+        candidate.work_log === null &&
+        notes.has(candidate.content.trim())
+      ) {
+        duplicateIds.add(candidate.id);
+      }
+    }
+  }
+  return messages.filter((message) => !duplicateIds.has(message.id));
+}
+
 function hasChatThread(db: DB, threadId: number, userId?: number): boolean {
   const row =
     userId == null
@@ -355,7 +389,7 @@ export function getChatThreadMessages(userId: number, threadId: number): ChatMes
         list.push(attachmentDto(attachment));
         attachmentMap.set(attachment.message_id, list);
       }
-      return rows.map((row) => ({
+      const messages: ChatMessage[] = rows.map((row) => ({
         id: row.id,
         role: row.role,
         content: row.content,
@@ -371,6 +405,7 @@ export function getChatThreadMessages(userId: number, threadId: number): ChatMes
           }
         })(),
       }));
+      return withoutDuplicatedWorkNotes(messages);
     }) ?? []
   );
 }
@@ -389,18 +424,25 @@ export function getChatThreadConversation(
       }
       const rows = db
         .prepare(
-          "SELECT id, role, content, blocks FROM chat_messages WHERE thread_id = ? AND (status IS NULL OR status != 'aborted') ORDER BY id DESC LIMIT ?"
+          "SELECT id, role, content, blocks, work_log FROM chat_messages WHERE thread_id = ? AND (status IS NULL OR status != 'aborted') ORDER BY id DESC LIMIT ?"
         )
         .all(threadId, MAX_HISTORY_ROWS) as {
           id: number;
           role: "user" | "assistant";
           content: string;
           blocks: string | null;
+          work_log: string | null;
         }[];
       rows.reverse();
+      const historyRows = withoutDuplicatedWorkNotes(
+        rows.map((row) => ({
+          ...row,
+          work_log: parseCoachWorkLog(row.work_log),
+        })),
+      );
       const imageMap = new Map<number, CoachImage[]>();
       const unavailableImageMessages = new Set<number>();
-      for (const attachment of attachmentRows(db, rows.map((row) => row.id))) {
+      for (const attachment of attachmentRows(db, historyRows.map((row) => row.id))) {
         try {
           const list = imageMap.get(attachment.message_id) ?? [];
           list.push(attachmentImage(attachment));
@@ -412,7 +454,7 @@ export function getChatThreadConversation(
           unavailableImageMessages.add(attachment.message_id);
         }
       }
-      const conversation = rows.map((row) => {
+      const conversation = historyRows.map((row) => {
         const unavailableMarker = unavailableImageMessages.has(row.id)
           ? [{
               type: "text",
