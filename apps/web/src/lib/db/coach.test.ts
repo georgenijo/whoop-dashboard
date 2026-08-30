@@ -422,7 +422,14 @@ describe("chat message work logs", () => {
       .getChatThreadConversation(1, threadId)
       .flatMap((message) => message.contentBlocks)
       .flatMap((block) =>
-        block.type === "text" && "text" in block ? [block.text] : [],
+        typeof block === "object" &&
+        block !== null &&
+        "type" in block &&
+        block.type === "text" &&
+        "text" in block &&
+        typeof block.text === "string"
+          ? [block.text]
+          : [],
       );
     expect(conversationText).not.toContain(firstNote);
     expect(conversationText).not.toContain(secondNote);
