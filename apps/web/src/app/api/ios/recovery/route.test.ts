@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { initIosTestDb, makeIosRequest } from "../_helpers.test";
 import { rmSync } from "node:fs";
+import { localToday } from "@/lib/ios/range";
+import { shiftDate } from "@/lib/range";
 
 vi.mock("server-only", () => ({}));
 
@@ -41,7 +43,7 @@ afterAll(() => {
 describe("GET /api/ios/recovery", () => {
   it("returns 200 + valid shape on seeded DB", async () => {
     for (let i = 0; i < 30; i++) {
-      const d = new Date(2026, 4, 1 + i).toISOString().slice(0, 10);
+      const d = shiftDate(localToday(), -(29 - i));
       testDb.seedRecovery(d, { score: 70 + i, hrv: 50 + i, rhr: 55 - i / 4, spo2: 97 + (i % 3) * 0.2 });
     }
 
@@ -67,6 +69,22 @@ describe("GET /api/ios/recovery", () => {
     expect(spo2.avg).toBeTypeOf("number");
     expect(spo2.y_min).toBeTypeOf("number");
     expect(spo2.y_max).toBeTypeOf("number");
+  });
+
+  it("keeps every recovery series inside the selected range", async () => {
+    const today = localToday();
+    testDb.seedRecovery(shiftDate(today, -8), { score: 10, spo2: 90 });
+    testDb.seedRecovery(shiftDate(today, -6), { score: 70, spo2: 97 });
+    testDb.seedRecovery(today, { score: 80, spo2: 98 });
+
+    const res = await route.GET(makeIosRequest("/api/ios/recovery?range=7d"));
+    const body = (await res.json()) as {
+      recovery_trend: { date: string }[];
+      spo2_trend: { points: { date: string }[] };
+    };
+
+    expect(body.recovery_trend.map((p) => p.date)).toEqual([shiftDate(today, -6), today]);
+    expect(body.spo2_trend.points.map((p) => p.date)).toEqual([shiftDate(today, -6), today]);
   });
 
   it("returns 401 when auth rejects", async () => {

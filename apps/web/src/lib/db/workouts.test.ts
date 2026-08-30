@@ -209,6 +209,11 @@ describe("getWorkoutsRange", () => {
     expect(result.rows[0].id).toBe("w-509");
     expect(result.rows[result.rows.length - 1].id).toBe("w-10");
     expect(result.rows.map((r) => r.id)).not.toContain("w-0");
+
+    const chartRows = workouts.getWorkoutRowsRange(1, "2024-01-01", "2026-12-31");
+    expect(chartRows).toHaveLength(510);
+    expect(chartRows[0].id).toBe("w-509");
+    expect(chartRows[chartRows.length - 1].id).toBe("w-0");
   });
 
   it("returns rows in DESC date order (most recent first)", () => {

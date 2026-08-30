@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { NapRow } from "@/lib/db";
 
-type Props = { naps: NapRow[] };
+type Props = { naps: NapRow[]; rangeLabel: string };
 
 function formatHM(ms: number): string {
   const total = Math.round(ms / 60_000);
@@ -43,7 +43,7 @@ const DEEP_C = "#7b61ff";
 const REM_C = "#00d4aa";
 const AWAKE_C = "rgba(255,255,255,0.18)";
 
-export default function NapsList({ naps }: Props) {
+export default function NapsList({ naps, rangeLabel }: Props) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const sorted = [...naps].sort((a, b) => (a.date < b.date ? 1 : -1));
@@ -60,12 +60,12 @@ export default function NapsList({ naps }: Props) {
             <span className="dot" style={{ background: TEAL, color: TEAL }} />
             Nap stages
           </div>
-          <div className="card-sub" style={{ marginTop: 4 }}>Last 4 weeks</div>
+          <div className="card-sub" style={{ marginTop: 4 }}>{rangeLabel}</div>
         </div>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 16 }}>
-        <KPI label="Naps this month" value={`${count}`} />
+        <KPI label="Naps in range" value={`${count}`} />
         <KPI label="Avg duration" value={count > 0 ? formatHM(avgMs) : "—"} />
         <KPI label="Total nap credit" value={count > 0 ? formatHM(totalMs) : "—"} />
       </div>
@@ -80,7 +80,7 @@ export default function NapsList({ naps }: Props) {
             textAlign: "center",
           }}
         >
-          No naps in the last 4 weeks
+          No naps in this range
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>

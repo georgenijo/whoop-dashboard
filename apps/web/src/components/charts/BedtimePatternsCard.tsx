@@ -14,7 +14,7 @@ import {
 import type { BedtimePatternsResult } from "@/lib/analytics/bedtime";
 import { BEDTIME_ANCHOR_HOUR } from "@/lib/analytics/bedtime";
 
-type Props = { result: BedtimePatternsResult | null };
+type Props = { result: BedtimePatternsResult | null; rangeLabel: string };
 
 function formatTickDate(date: string): string {
   return new Date(date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -89,7 +89,7 @@ function PatternsTooltip({
   );
 }
 
-export default function BedtimePatternsCard({ result }: Props) {
+export default function BedtimePatternsCard({ result, rangeLabel }: Props) {
   if (!result) {
     return (
       <div className="card">
@@ -120,7 +120,7 @@ export default function BedtimePatternsCard({ result }: Props) {
             Bedtime patterns
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
-            Regularity + weekday vs weekend
+            {rangeLabel} · regularity + weekday vs weekend
           </div>
         </div>
       </div>

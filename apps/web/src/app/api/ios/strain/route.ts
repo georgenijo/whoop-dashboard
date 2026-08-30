@@ -1,12 +1,13 @@
 import { requireAuth } from "@/lib/auth";
 import {
   getOverview,
-  getStrainTrend,
+  getStrainRange,
   getTodayStrainAggregate,
   getTodayWorkouts,
 } from "@/lib/db";
 import { buildKPITiles, type KPITile } from "@/lib/ios/kpi";
 import { parseRange, rangeLabel, localToday } from "@/lib/ios/range";
+import { resolveRangeWindow } from "@/lib/range";
 import { rollingMean } from "@/lib/analytics/trends";
 import { kJToKcal } from "@/lib/format";
 
@@ -48,7 +49,8 @@ export async function GET(req: Request) {
     if (parsed instanceof Response) return parsed;
 
     const today = localToday();
-    const trend = getStrainTrend(user.id, parsed.days);
+    const window = resolveRangeWindow(parsed.range, today);
+    const trend = getStrainRange(user.id, window.start, window.end);
     const overview = getOverview(user.id, parsed.days);
     const todayAgg = getTodayStrainAggregate(user.id, today);
     const todayWorkouts = getTodayWorkouts(user.id, today);

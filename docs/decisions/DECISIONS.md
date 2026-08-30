@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-30: Page time filters govern every rendered graph
+
+**Decision:** A dashboard range such as `7d` resolves to an exact inclusive calendar window (today plus the preceding six dates), and every web and iOS graph on that page renders only records inside that window. An analytic may load older records to seed a rolling baseline or EWMA, but must trim its visible points and range-derived summaries back to the selected window; fixed 14/30/90/180-day display datasets are not allowed behind a page-level picker.
+
+**Rationale:** Row-count limits leak older dates when data has gaps, inclusive `today - N` bounds produce N+1 dates, and hard-coded component lookbacks make the same graph ignore selector changes. Separating hidden computation history from visible range data preserves stable analytics such as TSB and illness baselines without breaking the filter contract users see.
+
+**Status:** active
+
+**References:** `apps/web/src/lib/range.ts`, `apps/web/src/app/(dashboard)/recovery/page.tsx`, `apps/web/src/app/(dashboard)/sleep/page.tsx`, `apps/web/src/app/(dashboard)/strain/page.tsx`, `apps/web/src/app/(dashboard)/workouts/page.tsx`, `apps/web/src/app/api/ios/`
+
+---
+
 ## 2026-08-30: Coach owns authoritative MCP tool audit events
 
 **Decision:** Persistent agent runtimes receive a private, per-workspace NDJSON audit channel controlled by Coach. The MCP bridge emits versioned, bounded, redacted tool start/end events bound to a random runtime ID and server-controlled turn epoch; provider notifications remain lifecycle hints and are used as a visible fallback only when no exact app-owned events arrive.

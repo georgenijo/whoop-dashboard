@@ -10,15 +10,16 @@ import {
   type YoyMetric,
   type MonthlyRollupRow,
 } from "@/lib/db";
-import { localToday, localDateNDaysAgo } from "@/lib/date";
+import { localToday } from "@/lib/date";
+import { shiftDate } from "@/lib/range";
 
 export const dynamic = "force-dynamic";
 
 // ---------------------------------------------------------------------------
 // Range pills — extend the existing `?range=` pattern with stats-specific
-// windows. The pills scope the "By sport" breakdown; all-time totals, the
-// YoY comparison, personal records, and the trend are intrinsically scoped
-// and ignore the pill. Default is the current year.
+// windows. The pills scope range-based visualizations; lifetime totals,
+// same-period YoY comparison, and personal records retain their explicit
+// intrinsic scopes. Default is the current year.
 // ---------------------------------------------------------------------------
 type StatsRange = "30d" | "90d" | "ytd" | "year" | "all";
 const RANGE_KEYS: StatsRange[] = ["30d", "90d", "ytd", "year", "all"];
@@ -61,9 +62,9 @@ function resolveRange(
     : "year";
   switch (range) {
     case "30d":
-      return { range, start: localDateNDaysAgo(30), end: today, label: "Last 30 days" };
+      return { range, start: shiftDate(today, -29), end: today, label: "Last 30 days" };
     case "90d":
-      return { range, start: localDateNDaysAgo(90), end: today, label: "Last 90 days" };
+      return { range, start: shiftDate(today, -89), end: today, label: "Last 90 days" };
     case "ytd":
       return { range, start: `${year}-01-01`, end: today, label: "Year to date" };
     case "all":
@@ -309,7 +310,7 @@ export default async function StatsPage({
   const yoy = getYearComparison(user.id, year);
   const sports = getSportBreakdown(user.id, sel.start, sel.end);
   const records = getPersonalRecords(user.id);
-  const months = getMonthlyRollup(user.id, localDateNDaysAgo(400));
+  const months = getMonthlyRollup(user.id, sel.start, sel.end);
 
   // ---- Range pills (server-friendly Links) ----
   const pillLabel = (k: StatsRange): string =>
@@ -539,10 +540,10 @@ export default async function StatsPage({
           <div>
             <div className="card-title">
               <span className="dot" style={{ background: "#2563eb", color: "#2563eb" }} />
-              Year-over-year trend
+              Activity trend
             </div>
             <div className="card-sub" style={{ marginTop: 4 }}>
-              monthly rollup · {trendLabel}
+              {sel.label} · monthly rollup · {trendLabel}
             </div>
           </div>
           <div className="trend-legend">

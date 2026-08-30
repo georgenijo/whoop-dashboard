@@ -16,7 +16,7 @@ import type {
 } from "@/lib/analytics/cardiacDrift";
 import { sportColor } from "@/lib/sport-color";
 
-type Props = { report: CardiacDriftReport };
+type Props = { report: CardiacDriftReport; rangeLabel: string };
 
 const MAX_SPORTS_RENDERED = 5;
 
@@ -46,7 +46,7 @@ function reasonLabel(
   return `span too short (${span}d, need ≥28d)`;
 }
 
-export default function CardiacDriftCard({ report }: Props) {
+export default function CardiacDriftCard({ report, rangeLabel }: Props) {
   const { qualifying, belowThreshold } = report;
   const isEmpty = qualifying.length === 0 && belowThreshold.length === 0;
 
@@ -63,7 +63,7 @@ export default function CardiacDriftCard({ report }: Props) {
               Cardiac drift
             </div>
             <div className="card-sub" style={{ marginTop: 4 }}>
-              avg HR regression on duration-matched workouts
+              {rangeLabel} · avg HR regression on duration-matched workouts
             </div>
           </div>
         </div>
@@ -90,7 +90,7 @@ export default function CardiacDriftCard({ report }: Props) {
             Cardiac drift
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
-            avg HR regression on duration-matched workouts (median ±25%)
+            {rangeLabel} · avg HR regression on duration-matched workouts (median ±25%)
           </div>
         </div>
       </div>

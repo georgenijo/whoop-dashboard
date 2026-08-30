@@ -90,7 +90,13 @@ function KPI({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function RecoveryReboundCard({ events }: { events: ReboundEvent[] }) {
+export default function RecoveryReboundCard({
+  events,
+  rangeLabel,
+}: {
+  events: ReboundEvent[];
+  rangeLabel: string;
+}) {
   if (events.length === 0) {
     return (
       <div className="card" style={{ marginTop: 24 }}>
@@ -101,7 +107,7 @@ export default function RecoveryReboundCard({ events }: { events: ReboundEvent[]
               Recovery rebound rate
             </div>
             <div className="card-sub" style={{ marginTop: 4 }}>
-              Days from red (&lt;33) to green (&gt;66)
+              {rangeLabel} · days from red (&lt;33) to green (&gt;66)
             </div>
           </div>
         </div>
@@ -133,7 +139,7 @@ export default function RecoveryReboundCard({ events }: { events: ReboundEvent[]
             Recovery rebound rate
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
-            Days from red (&lt;33) to green (&gt;66) · lower is better
+            {rangeLabel} · days from red (&lt;33) to green (&gt;66) · lower is better
           </div>
         </div>
       </div>

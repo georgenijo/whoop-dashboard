@@ -5,16 +5,13 @@ import WorkoutDistanceChart from "@/components/charts/WorkoutDistanceChart";
 import Zone2Tracker from "@/components/charts/Zone2Tracker";
 import CardiacDriftCard from "@/components/charts/CardiacDriftCard";
 import WorkoutsTable from "@/components/workouts/WorkoutsTable";
-import { getWorkoutsRange, getBodyMeasurements } from "@/lib/db";
+import { getWorkoutsRange, getWorkoutRowsRange, getBodyMeasurements } from "@/lib/db";
 import { requireAuthOrSignin } from "@/lib/auth";
 import { computeCardiacDrift } from "@/lib/analytics/cardiacDrift";
-import { parseDays, formatRangeLabel } from "@/lib/range";
-import { localToday, localDateNDaysAgo } from "@/lib/date";
+import { resolveRangeWindow } from "@/lib/range";
+import { localToday } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
-
-// CardiacDrift baseline needs a long window regardless of the page selector.
-const CARDIAC_DRIFT_LOOKBACK_DAYS = 180;
 
 export default async function WorkoutsPage({
   searchParams,
@@ -26,20 +23,14 @@ export default async function WorkoutsPage({
     new Request("http://localhost", { headers: headerList }),
   );
   const { range } = await searchParams;
-  const days = parseDays(range);
-  const rangeLabel = formatRangeLabel(range);
-
   const today = localToday();
-  const rangeRows = getWorkoutsRange(user.id, localDateNDaysAgo(days), today).rows;
-
-  // CardiacDrift baseline is analytics-only; always use a long fixed window.
-  const driftRows =
-    days >= CARDIAC_DRIFT_LOOKBACK_DAYS
-      ? rangeRows
-      : getWorkoutsRange(user.id, localDateNDaysAgo(CARDIAC_DRIFT_LOOKBACK_DAYS), today).rows;
+  const window = resolveRangeWindow(range, today);
+  const rangeResult = getWorkoutsRange(user.id, window.start, window.end);
+  const rangeRows = getWorkoutRowsRange(user.id, window.start, window.end);
+  const rangeLabel = window.label;
   const body = getBodyMeasurements(user.id);
   const maxHR = body?.max_heart_rate ?? null;
-  const driftReport = computeCardiacDrift(driftRows);
+  const driftReport = computeCardiacDrift(rangeRows);
 
   return (
     <>
@@ -47,18 +38,18 @@ export default async function WorkoutsPage({
 
       <WorkoutZoneChart rows={rangeRows} maxHR={maxHR} rangeLabel={rangeLabel} />
 
-      <CardiacDriftCard report={driftReport} />
+      <CardiacDriftCard report={driftReport} rangeLabel={rangeLabel} />
 
       <div className="grid-main">
         <div className="col">
-          <WorkoutDistanceChart rows={rangeRows} />
+          <WorkoutDistanceChart rows={rangeRows} rangeLabel={rangeLabel} />
         </div>
         <div className="col">
-          <Zone2Tracker rows={rangeRows} />
+          <Zone2Tracker rows={rangeRows} rangeLabel={rangeLabel} />
         </div>
       </div>
 
-      <WorkoutsTable rows={rangeRows} />
+      <WorkoutsTable rows={rangeResult.rows} />
     </>
   );
 }

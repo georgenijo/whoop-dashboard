@@ -92,7 +92,13 @@ function ScatterTooltip({
   );
 }
 
-export default function StrainRecoveryScatter({ rows }: { rows: ScatterRow[] }) {
+export default function StrainRecoveryScatter({
+  rows,
+  rangeLabel,
+}: {
+  rows: ScatterRow[];
+  rangeLabel: string;
+}) {
   const valid: ChartPoint[] = rows
     .filter(
       (r): r is { date: string; strain: number; recovery: number; sleep_hours: number | null } =>
@@ -117,7 +123,7 @@ export default function StrainRecoveryScatter({ rows }: { rows: ScatterRow[] }) 
               <span className="dot" style={{ background: GREEN, color: GREEN }} />
               Strain vs recovery
             </div>
-            <div className="card-sub" style={{ marginTop: 4 }}>30-day scatter</div>
+            <div className="card-sub" style={{ marginTop: 4 }}>{rangeLabel} scatter</div>
           </div>
         </div>
         <div className="empty-state">
@@ -143,7 +149,7 @@ export default function StrainRecoveryScatter({ rows }: { rows: ScatterRow[] }) 
             Strain vs recovery
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
-            30 days · {valid.length} points
+            {rangeLabel} · {valid.length} points
           </div>
         </div>
         <span className="card-sub">

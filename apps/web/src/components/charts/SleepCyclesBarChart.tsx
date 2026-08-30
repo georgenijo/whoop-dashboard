@@ -13,7 +13,7 @@ import {
 } from "recharts";
 import type { SleepRow } from "@/lib/db";
 
-type Props = { rows: SleepRow[] };
+type Props = { rows: SleepRow[]; rangeLabel: string };
 
 function formatTickDate(date: string): string {
   return new Date(date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -57,9 +57,8 @@ function CyclesTooltip({
   );
 }
 
-export default function SleepCyclesBarChart({ rows }: Props) {
-  const recent = rows.slice(-14);
-  const data = recent.map((r) => ({ date: r.date, cycles: r.cycles }));
+export default function SleepCyclesBarChart({ rows, rangeLabel }: Props) {
+  const data = rows.map((r) => ({ date: r.date, cycles: r.cycles }));
   const valid = data.filter((d) => d.cycles != null);
 
   if (valid.length < 2) {
@@ -87,7 +86,7 @@ export default function SleepCyclesBarChart({ rows }: Props) {
             <span className="dot" style={{ background: "#00d4aa", color: "#00d4aa" }} />
             Sleep cycles
           </div>
-          <div className="card-sub" style={{ marginTop: 4 }}>14d · 4–5 complete 90-min cycles = optimal</div>
+          <div className="card-sub" style={{ marginTop: 4 }}>{rangeLabel} · 4–5 complete 90-min cycles = optimal</div>
         </div>
       </div>
       <div style={{ height: 160 }}>

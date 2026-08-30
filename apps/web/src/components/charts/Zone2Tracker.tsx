@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import type { WorkoutRow } from "@/lib/db";
 
-type Props = { rows: WorkoutRow[] };
+type Props = { rows: WorkoutRow[]; rangeLabel: string };
 
 const TARGET_MIN = 30;
 const HIT_COLOR = "#10b981";
@@ -25,25 +25,13 @@ function formatShortDate(date: string): string {
   });
 }
 
-function daysAgo(today: Date, n: number): Date {
-  const d = new Date(today);
-  d.setDate(d.getDate() - n);
-  return d;
-}
+export default function Zone2Tracker({ rows, rangeLabel }: Props) {
+  const chronological = [...rows].sort((a, b) => a.date.localeCompare(b.date));
+  const midpoint = Math.ceil(chronological.length / 2);
+  const earlier = chronological.slice(0, midpoint);
+  const recent = chronological.slice(midpoint);
 
-function toIsoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
-export default function Zone2Tracker({ rows }: Props) {
-  const today = new Date();
-  const start30 = toIsoDate(daysAgo(today, 30));
-  const start60 = toIsoDate(daysAgo(today, 60));
-
-  const last30 = rows.filter((r) => r.date >= start30);
-  const prev30 = rows.filter((r) => r.date >= start60 && r.date < start30);
-
-  const chartData = last30
+  const chartData = chronological
     .map((r) => ({
       date: r.date,
       sport: r.sport ?? "—",
@@ -60,8 +48,8 @@ export default function Zone2Tracker({ rows }: Props) {
     );
   };
 
-  const avgThis = z2Avg(last30);
-  const avgPrev = z2Avg(prev30);
+  const avgThis = z2Avg(recent.length > 0 ? recent : chronological);
+  const avgPrev = z2Avg(earlier);
   const pctChange = avgPrev > 0 ? ((avgThis - avgPrev) / avgPrev) * 100 : null;
   const changeColor = pctChange == null ? "var(--fg-2)" : pctChange >= 0 ? HIT_COLOR : "#ff6b6b";
 
@@ -91,7 +79,7 @@ export default function Zone2Tracker({ rows }: Props) {
             Zone 2 aerobic focus
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
-            last 30 days · target {TARGET_MIN} min/session
+            {rangeLabel} · target {TARGET_MIN} min/session
           </div>
         </div>
       </div>
@@ -104,12 +92,12 @@ export default function Zone2Tracker({ rows }: Props) {
           marginBottom: 16,
         }}
       >
-        <Kpi label="This month avg" value={`${avgThis.toFixed(0)} min`} sub="per Z2 session" />
-        <Kpi label="Prior month avg" value={`${avgPrev.toFixed(0)} min`} sub="per Z2 session" />
+        <Kpi label="Recent half avg" value={`${avgThis.toFixed(0)} min`} sub="per Z2 session" />
+        <Kpi label="Earlier half avg" value={`${avgPrev.toFixed(0)} min`} sub="per Z2 session" />
         <Kpi
           label="Change"
           value={pctChange == null ? "—" : `${pctChange >= 0 ? "+" : ""}${pctChange.toFixed(0)}%`}
-          sub="vs prior month"
+          sub="recent vs earlier half"
           valueColor={changeColor}
         />
       </div>

@@ -74,7 +74,13 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: { payl
   );
 }
 
-export default function DayOfWeekRecovery({ rows }: { rows: DayOfWeekRecoveryRow[] }) {
+export default function DayOfWeekRecovery({
+  rows,
+  rangeLabel,
+}: {
+  rows: DayOfWeekRecoveryRow[];
+  rangeLabel: string;
+}) {
   const data = buildSeries(rows);
   const totalDays = data.reduce((acc, d) => acc + d.count, 0);
 
@@ -87,7 +93,7 @@ export default function DayOfWeekRecovery({ rows }: { rows: DayOfWeekRecoveryRow
               <span className="dot" style={{ background: "#00d4aa", color: "#00d4aa" }} />
               Recovery by day of week
             </div>
-            <div className="card-sub" style={{ marginTop: 4 }}>90-day average</div>
+            <div className="card-sub" style={{ marginTop: 4 }}>{rangeLabel} average</div>
           </div>
         </div>
         <div className="empty-state">
@@ -107,7 +113,7 @@ export default function DayOfWeekRecovery({ rows }: { rows: DayOfWeekRecoveryRow
             Recovery by day of week
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
-            90-day average · {totalDays} {totalDays === 1 ? "day" : "days"} of history
+            {rangeLabel} average · {totalDays} {totalDays === 1 ? "day" : "days"} with data
           </div>
         </div>
       </div>
