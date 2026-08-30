@@ -208,6 +208,18 @@ describe("buildSystemPrompt custom instructions (issue #498)", () => {
 });
 
 describe("DEFAULT_SYSTEM_PROMPT", () => {
+  it("uses typed presentation blocks for new chart requests", () => {
+    expect(DEFAULT_SYSTEM_PROMPT).toContain(
+      "include one validated `chart` object",
+    );
+    expect(DEFAULT_SYSTEM_PROMPT).toContain(
+      "Do not emit Mermaid unless the user specifically requests Mermaid syntax.",
+    );
+    expect(DEFAULT_SYSTEM_PROMPT).not.toContain(
+      "emit one fenced `mermaid` `xychart-beta` block",
+    );
+  });
+
   it("documents the row-dating convention for sleep/recovery/strain", () => {
     expect(DEFAULT_SYSTEM_PROMPT).toMatch(/sleep date = wake date/i);
     expect(DEFAULT_SYSTEM_PROMPT).toMatch(/last night.*today's date/i);
@@ -249,6 +261,15 @@ describe("DEFAULT_SYSTEM_PROMPT", () => {
 });
 
 describe("buildCursorSystemPrompt", () => {
+  it("uses the same typed chart contract as Anthropic", () => {
+    expect(CURSOR_SYSTEM_PROMPT).toContain(
+      "include one validated `chart` object",
+    );
+    expect(CURSOR_SYSTEM_PROMPT).not.toContain(
+      "emit one fenced `mermaid` `xychart-beta` block",
+    );
+  });
+
   it("keeps Cursor-specific safety and routing rules compact", () => {
     const prompt = buildCursorSystemPrompt(
       new Date("2026-05-02T02:35:00.000Z"),

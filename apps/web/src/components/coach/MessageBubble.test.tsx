@@ -85,6 +85,51 @@ xychart-beta
     expect(container).toHaveTextContent("Recovery is rising");
   });
 
+  it("renders completed presentation blocks only on assistant messages", () => {
+    const presentationBlocks = [
+      {
+        version: 1 as const,
+        type: "metric_strip" as const,
+        fallback: "Recovery is 78 percent.",
+        metrics: [
+          {
+            label: "Recovery",
+            value: 78,
+            display_value: "78%",
+            unit: "%",
+            direction: "up" as const,
+            tone: "positive" as const,
+          },
+        ],
+      },
+    ];
+    const assistant = render(
+      <MessageBubble
+        msg={{
+          role: "assistant",
+          content: "Recovery is strong.",
+          status: "complete",
+          presentationBlocks,
+        }}
+      />,
+    );
+
+    expect(screen.getByText("78%")).toBeVisible();
+    assistant.unmount();
+
+    render(
+      <MessageBubble
+        msg={{
+          role: "user",
+          content: "Show my recovery.",
+          status: "complete",
+          presentationBlocks,
+        }}
+      />,
+    );
+    expect(screen.queryByText("78%")).toBeNull();
+  });
+
   it("strips the standard XSS vectors from streamed assistant content", () => {
     const html = browserHtml(XSS);
 

@@ -268,6 +268,12 @@ export async function runCursorAcpTurn(
   const historyFingerprint = conversationFingerprint(conversation);
   const visibleText = new CursorVisibleTextAccumulator();
   let pendingAssistant: ChatMessageInsert | null = null;
+  const discardPendingAssistant = () => {
+    if (!pendingAssistant) return;
+    const pendingIndex = messages.lastIndexOf(pendingAssistant);
+    if (pendingIndex >= 0) messages.splice(pendingIndex, 1);
+    pendingAssistant = null;
+  };
   const tools = new Map<string, AcpToolState>();
   let completedToolCalls = 0;
   const eventCounts: Record<string, number> = {};
@@ -446,8 +452,12 @@ export async function runCursorAcpTurn(
           if (tracked && !state.startedEmitted) {
             const { name } = tracked;
             state.startedEmitted = true;
+            // Pre-tool narration is live work-log context, not a durable chat
+            // turn. The client already folds it into the disclosure when the
+            // tool event starts; remove the provisional persistence row so a
+            // reload does not resurrect it as a separate assistant bubble.
+            discardPendingAssistant();
             visibleText.toolBoundary();
-            pendingAssistant = null;
             toolEvents.push({
               name,
               phase: "started",

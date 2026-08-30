@@ -100,9 +100,6 @@ export default function MessageBubble({ msg, onAttachmentClick }: Props) {
             {msg.content ? (
               <div className="coach-user-message-text">{msg.content}</div>
             ) : null}
-            {!msg.streaming ? (
-              <CoachPresentationBlocks blocks={msg.presentationBlocks ?? []} />
-            ) : null}
           </>
         ) : (
           <>
@@ -165,6 +162,9 @@ export default function MessageBubble({ msg, onAttachmentClick }: Props) {
               <span className="sr-only" role="status">
                 Coach is writing
               </span>
+            ) : null}
+            {!msg.streaming ? (
+              <CoachPresentationBlocks blocks={msg.presentationBlocks ?? []} />
             ) : null}
             {isAborted ? (
               <span className="coach-message-stopped">(stopped)</span>
