@@ -17,8 +17,19 @@
 // go to stderr, or cursor-agent will fail to parse the stream.
 import {
   TOOLS,
+  captureToolInput,
+  captureToolResponse,
+  countToolRows,
   executeTool,
 } from "@/lib/coach/tools";
+import { MAX_COACH_MCP_TOOL_CALLS } from "@/lib/coach/tool-turn-state";
+import { randomUUID } from "node:crypto";
+import { appendFile } from "node:fs/promises";
+import {
+  COACH_MCP_AUDIT_MAX_LINE_CHARS,
+  COACH_MCP_AUDIT_VERSION,
+  type CoachMcpAuditEvent,
+} from "./audit-events";
 import { viewChatImage } from "./chat-image-tool";
 import { COACH_MCP_TOOL_NAMES, isCoachMcpToolName } from "./tool-policy";
 import { CoachMcpTurnState } from "./turn-state";
@@ -37,8 +48,11 @@ import { CoachMcpTurnState } from "./turn-state";
 const USER_ID = Number(process.env.COACH_MCP_USER_ID);
 const ATTACHMENT_MANIFEST = process.env.COACH_MCP_ATTACHMENT_MANIFEST ?? "";
 const TURN_EPOCH_PATH = process.env.COACH_MCP_TURN_EPOCH_PATH ?? "";
+const AUDIT_PATH = process.env.COACH_MCP_AUDIT_PATH ?? "";
+const AUDIT_RUNTIME_ID = process.env.COACH_MCP_AUDIT_RUNTIME_ID ?? "";
 
 const TURN_STATE = new CoachMcpTurnState(TURN_EPOCH_PATH);
+let auditWriteTail = Promise.resolve();
 
 function log(msg: string, extra?: unknown) {
   process.stderr.write(
@@ -55,6 +69,36 @@ function reply(id: JsonRpcId, result: unknown) {
 }
 function replyError(id: JsonRpcId, code: number, message: string) {
   send({ jsonrpc: "2.0", id, error: { code, message } });
+}
+
+async function emitAudit(event: CoachMcpAuditEvent): Promise<void> {
+  if (!AUDIT_PATH || !AUDIT_RUNTIME_ID) return;
+  const line = `${JSON.stringify(event)}\n`;
+  if (line.length > COACH_MCP_AUDIT_MAX_LINE_CHARS) {
+    log("audit_event_too_large", {
+      call_id: event.call_id,
+      phase: event.phase,
+      chars: line.length,
+    });
+    return;
+  }
+  const previous = auditWriteTail;
+  let release: (() => void) | undefined;
+  auditWriteTail = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previous;
+  try {
+    await appendFile(AUDIT_PATH, line, { encoding: "utf8", mode: 0o600 });
+  } catch (error) {
+    log("audit_write_failed", {
+      call_id: event.call_id,
+      phase: event.phase,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  } finally {
+    release?.();
+  }
 }
 
 function listTools() {
@@ -92,10 +136,44 @@ async function callTool(id: JsonRpcId, params: unknown) {
   if (!isCoachMcpToolName(name)) {
     return replyError(id, -32601, `Unknown or unavailable tool: ${name}`);
   }
+  const callId = randomUUID();
+  const startedAt = Date.now();
+  let turnEpoch = "unavailable";
   try {
-    const turnState = await TURN_STATE.current();
+    const turn = await TURN_STATE.currentContext();
+    const turnState = turn.state;
+    turnEpoch = turn.epoch;
+    turnState.mcpToolCalls += 1;
+    await emitAudit({
+      version: COACH_MCP_AUDIT_VERSION,
+      runtime_id: AUDIT_RUNTIME_ID,
+      turn_epoch: turnEpoch,
+      call_id: callId,
+      tool_name: name,
+      phase: "start",
+      at_ms: startedAt,
+      input: captureToolInput(p.arguments ?? {}),
+    });
+    if (turnState.mcpToolCalls > MAX_COACH_MCP_TOOL_CALLS) {
+      throw new Error(
+        `Coach turn exceeded ${MAX_COACH_MCP_TOOL_CALLS} MCP tool calls`,
+      );
+    }
     if (name === "view_chat_image") {
       const image = await viewChatImage(p.arguments, ATTACHMENT_MANIFEST);
+      await emitAudit({
+        version: COACH_MCP_AUDIT_VERSION,
+        runtime_id: AUDIT_RUNTIME_ID,
+        turn_epoch: turnEpoch,
+        call_id: callId,
+        tool_name: name,
+        phase: "end",
+        at_ms: Date.now(),
+        duration_ms: Date.now() - startedAt,
+        rows: null,
+        status: "ok",
+        response: { reviewed: true, mime_type: image.mimeType },
+      });
       reply(id, {
         content: [{ type: "image", ...image }],
         isError: false,
@@ -106,12 +184,39 @@ async function callTool(id: JsonRpcId, params: unknown) {
       userId: USER_ID,
       turnState,
     });
+    await emitAudit({
+      version: COACH_MCP_AUDIT_VERSION,
+      runtime_id: AUDIT_RUNTIME_ID,
+      turn_epoch: turnEpoch,
+      call_id: callId,
+      tool_name: name,
+      phase: "end",
+      at_ms: Date.now(),
+      duration_ms: Date.now() - startedAt,
+      rows: countToolRows(result),
+      status: "ok",
+      response: captureToolResponse(result),
+    });
     reply(id, {
       content: [{ type: "text", text: JSON.stringify(result) }],
       isError: false,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    await emitAudit({
+      version: COACH_MCP_AUDIT_VERSION,
+      runtime_id: AUDIT_RUNTIME_ID,
+      turn_epoch: turnEpoch,
+      call_id: callId,
+      tool_name: name,
+      phase: "end",
+      at_ms: Date.now(),
+      duration_ms: Date.now() - startedAt,
+      rows: null,
+      status: "error",
+      error: message.slice(0, 500),
+      response: { error: message.slice(0, 500) },
+    });
     log("tool_error", { name, message });
     // MCP convention: tool-level failures come back as a result with
     // isError:true (not a protocol error) so the model can react to them.

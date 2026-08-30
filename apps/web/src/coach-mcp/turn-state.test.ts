@@ -36,6 +36,7 @@ describe("CoachMcpTurnState", () => {
     expect(second).not.toBe(first);
     expect(second.syncAttempts).toBe(0);
     expect(second.savedPlanHashes.size).toBe(0);
+    expect(second.mcpToolCalls).toBe(0);
   });
 
   it("fails closed when a configured epoch is empty", async () => {

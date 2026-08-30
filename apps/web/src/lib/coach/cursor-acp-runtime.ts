@@ -31,6 +31,8 @@ import {
   createCursorAcpWorkspace,
   type CursorAcpWorkspace,
 } from "./cursor-acp-workspace";
+import type { CoachMcpAuditEvent } from "@/coach-mcp/audit-events";
+import type { CursorMcpAuditListener } from "./cursor-mcp-audit";
 import { COACH_MCP_TOOL_NAMES } from "@/coach-mcp/tool-policy";
 
 const CURSOR_ACP_WALL_MS = 120_000;
@@ -587,8 +589,16 @@ export class CursorAcpRuntime {
 
   async prepareTurn(
     images: Parameters<CursorAcpWorkspace["prepareTurn"]>[0],
-  ): Promise<void> {
-    await this.workspace.prepareTurn(images);
+  ): Promise<string> {
+    return this.workspace.prepareTurn(images);
+  }
+
+  listenForMcpAudit(
+    turnEpoch: string,
+    onEvent: (event: CoachMcpAuditEvent) => void,
+    onFailure: (error: Error) => void,
+  ): CursorMcpAuditListener {
+    return this.workspace.auditChannel.listen(turnEpoch, onEvent, onFailure);
   }
 
   usageDelta(next: AcpUsage | null | undefined): AcpUsage | null {

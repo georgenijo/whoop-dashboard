@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { CoachMcpAuditEvent } from "@/coach-mcp/audit-events";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/db", () => ({
@@ -59,7 +60,16 @@ const runtime = vi.hoisted(() => ({
       promptMs: 10,
     },
   },
-  prepareTurn: vi.fn(async () => {}),
+  prepareTurn: vi.fn(async () => "turn-1"),
+  listenForMcpAudit: vi.fn<
+    (
+      turnEpoch: string,
+      onEvent: (event: CoachMcpAuditEvent) => void,
+      onFailure: (error: Error) => void,
+    ) => { drainAndStop: () => Promise<void> }
+  >(() => ({
+      drainAndStop: vi.fn(async () => {}),
+    })),
   applyModel: vi.fn(async () => {}),
   cancelActiveTurn: vi.fn(async () => {}),
   usageDelta: vi.fn(() => ({
@@ -120,6 +130,7 @@ describe("runCursorAcpTurn", () => {
   beforeEach(() => {
     runtime.hasPrompted = false;
     runtime.prepareTurn.mockClear();
+    runtime.listenForMcpAudit.mockClear();
     runtime.applyModel.mockClear();
     runtime.cancelActiveTurn.mockClear();
     runtime.prompt.mockClear();
@@ -361,6 +372,49 @@ describe("runCursorAcpTurn", () => {
     expect(runtime.cancelActiveTurn).toHaveBeenCalledOnce();
   });
 
+  it("cancels from the authoritative audit channel on its thirteenth start", async () => {
+    runtime.listenForMcpAudit.mockImplementationOnce(
+      (_turnEpoch, onEvent) => ({
+        drainAndStop: vi.fn(async () => {
+          for (let index = 0; index < 13; index += 1) {
+            onEvent({
+              version: 1,
+              runtime_id: "runtime-1",
+              turn_epoch: "turn-1",
+              call_id: `exact-${index}`,
+              tool_name: "query_recovery",
+              phase: "start",
+              at_ms: Date.now(),
+              input: {},
+            });
+          }
+        }),
+      }),
+    );
+    runtime.prompt.mockResolvedValueOnce({ stopReason: "end_turn", usage: {} });
+
+    await expect(
+      runCursorAcpTurn({
+        userId: 7,
+        threadId: 150,
+        model: "gpt-5.6-luna",
+        turn: { displayText: "Tools", modelText: "Tools", images: [] },
+        conversation: [],
+        toolDetails: [],
+        usage: {
+          input_tokens_total: 0,
+          output_tokens_total: 0,
+          cache_creation_input_tokens_total: 0,
+          cache_read_input_tokens_total: 0,
+          calls: 0,
+        },
+        detailState: { iterations: 0 },
+        options: {},
+      }),
+    ).rejects.toThrow("exceeded 12 tool calls");
+    expect(runtime.cancelActiveTurn).toHaveBeenCalledOnce();
+  });
+
   it("tracks Cursor's generic production MCP event without fabricating history", async () => {
     runtime.prompt.mockImplementationOnce(async (_text, _signal, onUpdate) => {
       onUpdate({
@@ -428,7 +482,124 @@ describe("runCursorAcpTurn", () => {
     ]);
     expect(detailState).toMatchObject({
       iterations: 2,
-      cursor: { attempted_tool_calls: 1 },
+      cursor: {
+        attempted_tool_calls: 1,
+        mcp_audit: {
+          status: "fallback",
+          exact_starts: 0,
+          exact_completions: 0,
+          error: "No exact Coach MCP audit events were received",
+        },
+      },
+    });
+  });
+
+  it("uses exact app-owned MCP events without double-counting provider hints", async () => {
+    runtime.listenForMcpAudit.mockImplementationOnce(
+      (_turnEpoch, onEvent) => ({
+        drainAndStop: vi.fn(async () => {
+          for (const [index, name] of [
+            "query_recovery",
+            "query_sleep",
+          ].entries()) {
+            const callId = `exact-${index}`;
+            onEvent({
+              version: 1,
+              runtime_id: "runtime-1",
+              turn_epoch: "turn-1",
+              call_id: callId,
+              tool_name: name,
+              phase: "start",
+              at_ms: 10 + index,
+              input: { day: "2026-08-30" },
+            });
+            onEvent({
+              version: 1,
+              runtime_id: "runtime-1",
+              turn_epoch: "turn-1",
+              call_id: callId,
+              tool_name: name,
+              phase: "end",
+              at_ms: 20 + index,
+              duration_ms: 10,
+              rows: 1,
+              status: "ok",
+              response: [{ score: 80 + index }],
+            });
+          }
+        }),
+      }),
+    );
+    runtime.prompt.mockImplementationOnce(async (_text, _signal, onUpdate) => {
+      for (let index = 0; index < 2; index += 1) {
+        onUpdate({
+          sessionId: "session-1",
+          update: {
+            sessionUpdate: "tool_call",
+            toolCallId: `provider-${index}`,
+            title: "MCP: tool",
+            status: "completed",
+            rawInput: {},
+            rawOutput: { success: true },
+          },
+        });
+      }
+      onUpdate({
+        sessionId: "session-1",
+        update: {
+          sessionUpdate: "agent_message_chunk",
+          content: { type: "text", text: "Exact answer." },
+        },
+      });
+      return { stopReason: "end_turn", usage: {} };
+    });
+    const toolDetails: Array<{ name: string }> = [];
+    const detailState = { iterations: 0 };
+    const onToolUseStart = vi.fn();
+    const onToolUseEnd = vi.fn();
+
+    const result = await runCursorAcpTurn({
+      userId: 7,
+      threadId: 150,
+      model: "gpt-5.6-luna",
+      turn: { displayText: "Both", modelText: "Both", images: [] },
+      conversation: [],
+      toolDetails: toolDetails as never[],
+      usage: {
+        input_tokens_total: 0,
+        output_tokens_total: 0,
+        cache_creation_input_tokens_total: 0,
+        cache_read_input_tokens_total: 0,
+        calls: 0,
+      },
+      detailState,
+      options: { onToolUseStart, onToolUseEnd },
+    });
+
+    expect(toolDetails.map((detail) => detail.name)).toEqual([
+      "query_recovery",
+      "query_sleep",
+    ]);
+    expect(onToolUseStart).toHaveBeenCalledTimes(2);
+    expect(onToolUseEnd).toHaveBeenCalledTimes(2);
+    expect(onToolUseStart).not.toHaveBeenCalledWith(
+      expect.objectContaining({ name: "whoop_tool" }),
+    );
+    expect(result.messages.map((message) => message.role)).toEqual([
+      "user",
+      "assistant",
+    ]);
+    expect(detailState).toMatchObject({
+      iterations: 3,
+      cursor: {
+        attempted_tool_calls: 2,
+        mcp_audit: {
+          status: "healthy",
+          exact_starts: 2,
+          exact_completions: 2,
+          error: null,
+        },
+      },
     });
   });
 

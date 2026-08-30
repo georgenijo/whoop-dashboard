@@ -18,6 +18,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-30: Coach owns authoritative MCP tool audit events
+
+**Decision:** Persistent agent runtimes receive a private, per-workspace NDJSON audit channel controlled by Coach. The MCP bridge emits versioned, bounded, redacted tool start/end events bound to a random runtime ID and server-controlled turn epoch; provider notifications remain lifecycle hints and are used as a visible fallback only when no exact app-owned events arrive.
+
+**Rationale:** Cursor Agent 2026.08 redacts MCP calls to `MCP: tool`, so provider events cannot authoritatively identify tools, populate diagnostics, or enforce the 12-call safety limit. A local file channel cannot be selected by model input or blocked by a missing reader, keeps health payloads off provider diagnostics, and gives future persistent provider adapters the same app-owned accounting boundary.
+
+**Status:** active
+
+**References:** #551, `apps/web/src/coach-mcp/audit-events.ts`, `apps/web/src/coach-mcp/server.ts`, `apps/web/src/lib/coach/cursor-mcp-audit.ts`
+
+---
+
 ## 2026-08-18: Coach persists validated typed presentation blocks
 
 **Decision:** Assistant messages may persist a versioned `presentation_blocks` array containing only app-owned `metric_strip`, `comparison`, `chart`, `action_plan`, `data_freshness`, `workout_plan`, and `evidence` schemas. Providers propose blocks through fenced JSON, but the server validates all versions, types, numeric values, text lengths, and collection caps before stripping the proposal from Markdown; any invalid payload is discarded and downgraded to safe prose. Web and iOS render the same semantics natively and retain bounded `xychart-beta` as a historical compatibility path.

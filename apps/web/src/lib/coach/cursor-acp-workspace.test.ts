@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { access, readFile } from "node:fs/promises";
+import { access, appendFile, readFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -56,6 +56,10 @@ describe("createCursorAcpWorkspace", () => {
     expect(workspace.mcpServer).toMatchObject({
       name: "whoop",
       args: ["server.mjs"],
+      env: expect.arrayContaining([
+        expect.objectContaining({ name: "COACH_MCP_AUDIT_PATH" }),
+        expect.objectContaining({ name: "COACH_MCP_AUDIT_RUNTIME_ID" }),
+      ]),
     });
     expect(dependencies.dbPath).toHaveBeenCalledOnce();
     expect(dependencies.resolveMcpServerArgs).toHaveBeenCalledWith(true);
@@ -71,5 +75,81 @@ describe("createCursorAcpWorkspace", () => {
     await expect(access(workspace.root)).rejects.toMatchObject({
       code: "ENOENT",
     });
+  });
+
+  it("rotates exact audit events across turns in one persistent workspace", async () => {
+    const workspace = await createCursorAcpWorkspace(7, true);
+    workspaces.push(workspace);
+    const mcpServer = workspace.mcpServer as {
+      env?: Array<{ name: string; value: string }>;
+    } | null;
+    const env = Object.fromEntries(
+      mcpServer?.env?.map(({ name, value }) => [name, value]) ?? [],
+    );
+    const auditPath = env.COACH_MCP_AUDIT_PATH;
+    const runtimeId = env.COACH_MCP_AUDIT_RUNTIME_ID;
+    expect(auditPath).toBeTruthy();
+    expect(runtimeId).toBeTruthy();
+    const received: string[] = [];
+
+    const firstEpoch = await workspace.prepareTurn([]);
+    const first = workspace.auditChannel.listen(
+      firstEpoch,
+      (event) => received.push(event.call_id),
+      (error) => {
+        throw error;
+      },
+    );
+    await appendFile(
+      auditPath,
+      `${JSON.stringify({
+        version: 1,
+        runtime_id: runtimeId,
+        turn_epoch: firstEpoch,
+        call_id: "first",
+        tool_name: "query_recovery",
+        phase: "start",
+        at_ms: 1,
+        input: {},
+      })}\n`,
+    );
+    await first.drainAndStop();
+
+    const secondEpoch = await workspace.prepareTurn([]);
+    const second = workspace.auditChannel.listen(
+      secondEpoch,
+      (event) => received.push(event.call_id),
+      (error) => {
+        throw error;
+      },
+    );
+    await appendFile(
+      auditPath,
+      [
+        JSON.stringify({
+          version: 1,
+          runtime_id: runtimeId,
+          turn_epoch: firstEpoch,
+          call_id: "stale",
+          tool_name: "query_sleep",
+          phase: "start",
+          at_ms: 2,
+          input: {},
+        }),
+        JSON.stringify({
+          version: 1,
+          runtime_id: runtimeId,
+          turn_epoch: secondEpoch,
+          call_id: "second",
+          tool_name: "query_sleep",
+          phase: "start",
+          at_ms: 3,
+          input: {},
+        }),
+      ].join("\n") + "\n",
+    );
+    await second.drainAndStop();
+
+    expect(received).toEqual(["first", "second"]);
   });
 });

@@ -859,7 +859,7 @@ export type ToolProgressHandlers = {
 // Best-effort row count for the /logs UI. Plain arrays report length;
 // query_workouts and query_daily_snapshot wrap rows in containers, so
 // peek inside instead of recording null.
-function countRows(result: unknown): number | null {
+export function countToolRows(result: unknown): number | null {
   if (Array.isArray(result)) return result.length;
   if (result && typeof result === "object") {
     const obj = result as Record<string, unknown>;
@@ -981,7 +981,7 @@ export async function executeToolResult(
   }
 
   const durationMs = Date.now() - startMs;
-  const rows = countRows(result);
+  const rows = countToolRows(result);
   toolDetails.push({
     id: toolUse.id,
     name: toolUse.name,
@@ -1016,6 +1016,7 @@ export async function executeToolResult(
 // Cap on the persisted response payload per tool call (JSON chars). Past this,
 // emit a `_truncated` marker with a 5-row preview when the shape allows it.
 const TOOL_RESPONSE_MAX_CHARS = 12_000;
+const TOOL_INPUT_MAX_CHARS = 4_000;
 const SENSITIVE_KEY = /^(?:authorization|cookie|api[_-]?key|.*token.*|.*secret.*)$/i;
 
 export function redactToolPayload(
@@ -1038,6 +1039,17 @@ export function redactToolPayload(
     );
   }
   return value;
+}
+
+export function captureToolInput(input: unknown): unknown {
+  const safeInput = redactToolPayload(input);
+  try {
+    const serialized = JSON.stringify(safeInput);
+    if (serialized.length <= TOOL_INPUT_MAX_CHARS) return safeInput;
+    return { _truncated: true, size_chars: serialized.length };
+  } catch {
+    return { _truncated: true, reason: "non_serializable" };
+  }
 }
 
 export function captureToolResponse(response: unknown): unknown {
