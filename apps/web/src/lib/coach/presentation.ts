@@ -102,6 +102,46 @@ const MAX_TEXT = 240;
 const MAX_ITEMS = 12;
 const MAX_POINTS = 100;
 const BLOCK_FENCE = /```coach-blocks\s*\n([\s\S]*?)```/gi;
+const BLOCK_FENCE_MARKER = "```coach-blocks";
+
+/**
+ * Keeps provider-only presentation metadata out of the visible token stream.
+ * The authoritative `done` event replaces the in-flight text with the fully
+ * parsed Markdown and validated blocks, so once a proposal fence starts there
+ * is nothing else in that stream that a client should render.
+ *
+ * A short carry handles a marker split across provider deltas without adding
+ * latency to ordinary prose (only a suffix that could begin the marker waits
+ * for the next delta).
+ */
+export class CoachPresentationStreamFilter {
+  private carry = "";
+  private suppressing = false;
+
+  push(delta: string): string {
+    if (!delta || this.suppressing) return "";
+
+    const combined = `${this.carry}${delta}`;
+    this.carry = "";
+    const markerIndex = combined
+      .toLowerCase()
+      .indexOf(BLOCK_FENCE_MARKER);
+    if (markerIndex >= 0) {
+      this.suppressing = true;
+      return combined.slice(0, markerIndex);
+    }
+
+    const lower = combined.toLowerCase();
+    const maxCarry = Math.min(BLOCK_FENCE_MARKER.length - 1, lower.length);
+    for (let length = maxCarry; length > 0; length -= 1) {
+      if (BLOCK_FENCE_MARKER.startsWith(lower.slice(-length))) {
+        this.carry = combined.slice(-length);
+        return combined.slice(0, -length);
+      }
+    }
+    return combined;
+  }
+}
 
 function record(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)

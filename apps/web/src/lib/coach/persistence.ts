@@ -27,6 +27,7 @@ import type {
   CoachUserTurn,
 } from "./image-types";
 import {
+  CoachPresentationStreamFilter,
   extractCoachPresentation,
   type CoachPresentationBlock,
 } from "./presentation";
@@ -85,7 +86,17 @@ export async function runAndPersistCoachTurn(
   const accumulator = handle?.accumulator;
   const selection = resolveCoachProvider(userId);
   const workLogCollector = new CoachWorkLogCollector();
-  const providerOptions = workLogCollector.wrap(options);
+  const presentationStream = new CoachPresentationStreamFilter();
+  const clientTextDelta = options.onTextDelta;
+  const providerOptions = workLogCollector.wrap({
+    ...options,
+    onTextDelta: clientTextDelta
+      ? (text) => {
+          const visibleText = presentationStream.push(text);
+          if (visibleText) clientTextDelta(visibleText);
+        }
+      : undefined,
+  });
 
   const buildDetails = () =>
     JSON.stringify({

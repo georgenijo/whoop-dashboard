@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CoachPresentationStreamFilter,
   extractCoachPresentation,
   MAX_PRESENTATION_BLOCKS,
   parseCoachPresentationBlocks,
@@ -22,6 +23,24 @@ const metric = {
 };
 
 describe("Coach presentation contract", () => {
+  it("keeps provider-only blocks out of the visible delta stream", () => {
+    const filter = new CoachPresentationStreamFilter();
+
+    expect(filter.push("Your recovery is strong.\n\n``")).toBe(
+      "Your recovery is strong.\n\n",
+    );
+    expect(filter.push("`coach-")).toBe("");
+    expect(filter.push('blocks\n[{"version":1}]\n```')).toBe("");
+    expect(filter.push("This must stay hidden too.")).toBe("");
+  });
+
+  it("passes ordinary Markdown deltas through unchanged", () => {
+    const filter = new CoachPresentationStreamFilter();
+
+    expect(filter.push("Use `code` and ")).toBe("Use `code` and ");
+    expect(filter.push("**bold text**.")).toBe("**bold text**.");
+  });
+
   it("extracts a valid provider-neutral proposal and removes its fence", () => {
     const result = extractCoachPresentation(
       `Your recovery is strong.\n\n\`\`\`coach-blocks\n${JSON.stringify([metric])}\n\`\`\``,

@@ -194,6 +194,84 @@ describe("runCursorAcpTurn", () => {
     });
   });
 
+  it("keeps pre-tool narration live but out of persisted chat history", async () => {
+    runtime.prompt.mockImplementationOnce(async (_text, _signal, onUpdate) => {
+      onUpdate({
+        sessionId: "session-1",
+        update: {
+          sessionUpdate: "agent_message_chunk",
+          content: { type: "text", text: "Pulling your recovery now." },
+        },
+      });
+      onUpdate({
+        sessionId: "session-1",
+        update: {
+          sessionUpdate: "tool_call",
+          toolCallId: "tool-1",
+          title: "Query recovery",
+          status: "in_progress",
+          rawInput: { start_date: "2026-08-18", end_date: "2026-08-18" },
+        },
+      });
+      onUpdate({
+        sessionId: "session-1",
+        update: {
+          sessionUpdate: "tool_call_update",
+          toolCallId: "tool-1",
+          status: "completed",
+          rawOutput: {
+            content: [
+              { type: "text", text: JSON.stringify([{ recovery_score: 81 }]) },
+            ],
+            isError: false,
+          },
+        },
+      });
+      onUpdate({
+        sessionId: "session-1",
+        update: {
+          sessionUpdate: "agent_message_chunk",
+          content: { type: "text", text: "Recovery is 81%." },
+        },
+      });
+      return { stopReason: "end_turn", usage: {} };
+    });
+    const onTextDelta = vi.fn();
+
+    const result = await runCursorAcpTurn({
+      userId: 7,
+      threadId: 168,
+      model: "gpt-5.6-luna",
+      turn: {
+        displayText: "How is my recovery?",
+        modelText: "How is my recovery?",
+        images: [],
+      },
+      conversation: [],
+      toolDetails: [],
+      usage: {
+        input_tokens_total: 0,
+        output_tokens_total: 0,
+        cache_creation_input_tokens_total: 0,
+        cache_read_input_tokens_total: 0,
+        calls: 0,
+      },
+      detailState: { iterations: 0 },
+      options: { onTextDelta },
+    });
+
+    expect(onTextDelta.mock.calls.flat()).toEqual([
+      "Pulling your recovery now.",
+      "Recovery is 81%.",
+    ]);
+    expect(result.messages.map(({ role, content }) => ({ role, content }))).toEqual([
+      { role: "user", content: "How is my recovery?" },
+      { role: "assistant", content: "" },
+      { role: "user", content: "[tool_result]" },
+      { role: "assistant", content: "Recovery is 81%." },
+    ]);
+  });
+
   it("rejects a provider refusal", async () => {
     runtime.prompt.mockResolvedValueOnce({ stopReason: "refusal", usage: {} });
 
