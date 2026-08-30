@@ -1,13 +1,12 @@
 import { requireAuth } from "@/lib/auth";
-import { getWorkoutsRange, type WorkoutRow } from "@/lib/db";
+import { getWorkoutsRange, getWorkoutRowsRange, type WorkoutRow } from "@/lib/db";
 import { parseRange, rangeLabel, localToday } from "@/lib/ios/range";
+import { resolveRangeWindow } from "@/lib/range";
 import { sportColor } from "@/lib/sport-color";
 
 export const dynamic = "force-dynamic";
 
 const SPORT_FREQUENCY_TOP_N = 5;
-const ZONE_BREAKDOWN_LIMIT = 14;
-const DISTANCE_LIMIT = 30;
 const WORKOUTS_CAP = 500;
 
 type SportFrequency = {
@@ -50,12 +49,6 @@ type WorkoutsResponse = {
   workouts: WorkoutRow[];
 };
 
-function isoNDaysAgo(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
-}
-
 function buildSportFrequency(rows: WorkoutRow[]): SportFrequency[] {
   type Bucket = { sessions: number; kj: number; duration_min: number };
   const totals = new Map<string, Bucket>();
@@ -96,7 +89,7 @@ function buildZoneBreakdown(rows: WorkoutRow[]): ZoneBreakdown[] {
       + (r.zone_3_ms ?? 0) + (r.zone_4_ms ?? 0) + (r.zone_5_ms ?? 0);
     return total > 0;
   });
-  return withZones.slice(0, ZONE_BREAKDOWN_LIMIT).map((r) => {
+  return withZones.map((r) => {
     const z0 = r.zone_0_ms ?? 0;
     const z1 = r.zone_1_ms ?? 0;
     const z2 = r.zone_2_ms ?? 0;
@@ -125,7 +118,6 @@ function buildZoneBreakdown(rows: WorkoutRow[]): ZoneBreakdown[] {
 function buildDistance(rows: WorkoutRow[]): DistanceEntry[] {
   return rows
     .filter((r) => r.distance_m != null && r.distance_m > 0)
-    .slice(0, DISTANCE_LIMIT)
     .map((r) => ({
       workout_id: r.id,
       date: r.date,
@@ -140,20 +132,23 @@ export async function GET(req: Request) {
     const parsed = parseRange(req);
     if (parsed instanceof Response) return parsed;
 
-    const start = isoNDaysAgo(parsed.days);
     const end = localToday();
-    const result = getWorkoutsRange(user.id, start, end);
+    const window = resolveRangeWindow(parsed.range, end);
+    const result = getWorkoutsRange(user.id, window.start, window.end);
     // getWorkoutsRange returns rows ordered date DESC and caps at 500
     // internally, so total_count and truncated mirror that contract exactly.
     const rows = result.rows;
+    const chartRows = result.truncated
+      ? getWorkoutRowsRange(user.id, window.start, window.end)
+      : rows;
 
     const body: WorkoutsResponse = {
       range_label: rangeLabel(parsed.range),
       total_count: result.total_count,
       truncated: result.truncated,
-      sport_frequency: buildSportFrequency(rows),
-      zone_breakdown_recent: buildZoneBreakdown(rows),
-      distance_recent: buildDistance(rows),
+      sport_frequency: buildSportFrequency(chartRows),
+      zone_breakdown_recent: buildZoneBreakdown(chartRows),
+      distance_recent: buildDistance(chartRows),
       workouts: rows.slice(0, WORKOUTS_CAP),
     };
     return Response.json(body);

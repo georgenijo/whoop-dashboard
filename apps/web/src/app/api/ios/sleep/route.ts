@@ -1,7 +1,8 @@
 import { requireAuth } from "@/lib/auth";
-import { getFullSleepTrend, getLatestSleep, getOverview } from "@/lib/db";
+import { getSleepRange, getLatestSleep, getOverview } from "@/lib/db";
 import { buildKPITiles, type KPITile } from "@/lib/ios/kpi";
-import { parseRange, rangeLabel } from "@/lib/ios/range";
+import { parseRange, rangeLabel, localToday } from "@/lib/ios/range";
+import { resolveRangeWindow } from "@/lib/range";
 import { rollingMean } from "@/lib/analytics/trends";
 
 export const dynamic = "force-dynamic";
@@ -71,7 +72,8 @@ export async function GET(req: Request) {
     const parsed = parseRange(req);
     if (parsed instanceof Response) return parsed;
 
-    const trend = getFullSleepTrend(user.id, parsed.days);
+    const window = resolveRangeWindow(parsed.range, localToday());
+    const trend = getSleepRange(user.id, window.start, window.end);
     const overview = getOverview(user.id, parsed.days);
     const latest = getLatestSleep(user.id);
 

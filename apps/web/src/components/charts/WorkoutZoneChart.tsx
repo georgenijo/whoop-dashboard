@@ -22,8 +22,6 @@ const ZONES = [
   { key: "zone_5_ms" as const, label: "Z5", color: "#b91c1c", lowPct: 90, highPct: 100 },
 ];
 
-const MAX_ROWS = 14;
-
 function formatLabel(date: string, sport: string | null): string {
   const d = new Date(date + "T00:00:00").toLocaleDateString("en-US", {
     month: "short",
@@ -52,15 +50,13 @@ export default function WorkoutZoneChart({ rows, maxHR, rangeLabel }: Props) {
   const effectiveMax =
     maxHR != null && Number.isFinite(maxHR) && maxHR > 0 ? maxHR : null;
 
-  // Rows arrive ordered date DESC (newest first) from getWorkoutsRange. Take
-  // the first MAX_ROWS so the most-recent workout always appears, and keep
-  // newest-on-top in the rendered vertical bar list.
+  // Rows arrive ordered date DESC (newest first) from getWorkoutsRange. Keep
+  // every session in the selected page range.
   const withZones = rows
     .filter((r) => {
       const total = ZONES.reduce((sum, z) => sum + (r[z.key] ?? 0), 0);
       return total > 0;
-    })
-    .slice(0, MAX_ROWS);
+    });
 
   if (withZones.length === 0) {
     return (

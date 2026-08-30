@@ -1,14 +1,13 @@
 import { requireAuth } from "@/lib/auth";
-import { getOverview, getRecoveryTrend } from "@/lib/db";
+import { getOverview, getRecoveryRange } from "@/lib/db";
 import { buildKPITiles, type KPITile } from "@/lib/ios/kpi";
-import { parseRange, rangeLabel } from "@/lib/ios/range";
+import { parseRange, rangeLabel, localToday } from "@/lib/ios/range";
+import { resolveRangeWindow } from "@/lib/range";
 import { rollingMean, detectHRVAnomalies, type HRVAnomaly } from "@/lib/analytics/trends";
 
 export const dynamic = "force-dynamic";
 
-// Mirrors the recovery page: recovery trend + HRV trend (with anomaly
-// detection) + RHR trend + SpO2 30d series. Page-level range governs
-// recovery/HRV/RHR; SpO2 is always 30d (web does the same).
+// Mirrors the recovery page: every plotted series follows the page range.
 
 type TrendPoint = {
   date: string;
@@ -82,7 +81,8 @@ export async function GET(req: Request) {
     const parsed = parseRange(req);
     if (parsed instanceof Response) return parsed;
 
-    const trend = getRecoveryTrend(user.id, parsed.days);
+    const window = resolveRangeWindow(parsed.range, localToday());
+    const trend = getRecoveryRange(user.id, window.start, window.end);
     const overview = getOverview(user.id, parsed.days);
 
     const recovery_trend = buildTrend(trend, trend.map((r) => r.recovery_score));
@@ -92,10 +92,7 @@ export async function GET(req: Request) {
       trend.map((r) => ({ date: r.date, hrv: r.hrv })),
     );
 
-    // SpO2 always pulls 30d regardless of page range — matches the web
-    // Spo2TrendCard subtitle "30-day · 95% floor".
-    const trend30 = parsed.days === 30 ? trend : getRecoveryTrend(user.id, 30);
-    const spo2_trend = buildSpo2(trend30.map((r) => ({ date: r.date, spo2: r.spo2 })));
+    const spo2_trend = buildSpo2(trend.map((r) => ({ date: r.date, spo2: r.spo2 })));
 
     const body: RecoveryResponse = {
       range_label: rangeLabel(parsed.range),

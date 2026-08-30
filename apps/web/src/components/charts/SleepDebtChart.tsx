@@ -69,9 +69,14 @@ function CustomTooltip({ active, payload }: { active?: boolean; payload?: { payl
   );
 }
 
-export default function SleepDebtChart({ rows }: { rows: SleepRow[] }) {
-  const last30 = rows.slice(-30);
-  const data = buildSeries(last30);
+export default function SleepDebtChart({
+  rows,
+  rangeLabel,
+}: {
+  rows: SleepRow[];
+  rangeLabel: string;
+}) {
+  const data = buildSeries(rows);
   const todayCumulative = data.length > 0 ? data[data.length - 1].cumulative : 0;
   const accentColor = todayCumulative > 0 ? COLOR_DEBT : COLOR_OK;
 
@@ -84,7 +89,7 @@ export default function SleepDebtChart({ rows }: { rows: SleepRow[] }) {
               <span className="dot" style={{ background: accentColor, color: accentColor }} />
               Cumulative sleep debt
             </div>
-            <div className="card-sub" style={{ marginTop: 4 }}>30-day running total</div>
+            <div className="card-sub" style={{ marginTop: 4 }}>{rangeLabel} running total</div>
           </div>
         </div>
         <div className="empty-state">
@@ -104,7 +109,7 @@ export default function SleepDebtChart({ rows }: { rows: SleepRow[] }) {
             Cumulative sleep debt
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
-            30-day running total · debt = max(0, need − actual)
+            {rangeLabel} running total · debt = max(0, need − actual)
           </div>
         </div>
         <span className="card-sub">

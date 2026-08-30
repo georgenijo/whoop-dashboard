@@ -7,12 +7,12 @@ import TodayWorkouts from "@/components/strain/TodayWorkouts";
 import FreshnessBanner from "@/components/strain/FreshnessBanner";
 import {
   getOverview,
-  getStrainTrend,
+  getStrainRange,
   getTodayStrainAggregate,
   getTodayWorkouts,
 } from "@/lib/db";
 import { requireAuthOrSignin } from "@/lib/auth";
-import { parseDays, formatRangeLabel } from "@/lib/range";
+import { resolveRangeWindow, shiftDate } from "@/lib/range";
 import { localToday } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
@@ -27,16 +27,19 @@ export default async function StrainPage({
     new Request("http://localhost", { headers: headerList }),
   );
   const { range } = await searchParams;
-  const days = parseDays(range);
-  const rangeLabel = formatRangeLabel(range);
+  const today = localToday();
+  const window = resolveRangeWindow(range, today);
+  const { days, label: rangeLabel } = window;
   const data = getOverview(user.id, days);
-  const trend = getStrainTrend(user.id, days);
-  const tsbTrend = days >= 180 ? trend : getStrainTrend(user.id, 180);
+  const trend = getStrainRange(user.id, window.start, window.end);
+  const tsbStart = window.start === "0000-01-01"
+    ? window.start
+    : shiftDate(window.start, -180);
+  const tsbTrend = getStrainRange(user.id, tsbStart, window.end);
 
   const strainData = trend.map((r) => ({ date: r.date, value: r.strain }));
   const hrData = trend.map((r) => ({ date: r.date, value: r.avg_hr }));
 
-  const today = localToday();
   const todayAgg = getTodayStrainAggregate(user.id, today);
   const todayWorkouts = getTodayWorkouts(user.id, today);
 
@@ -91,7 +94,7 @@ export default async function StrainPage({
         </div>
       </div>
 
-      <TSBCurve rows={tsbTrend} />
+      <TSBCurve rows={tsbTrend} displayStart={window.start} rangeLabel={rangeLabel} />
     </>
   );
 }

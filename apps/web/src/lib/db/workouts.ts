@@ -196,6 +196,19 @@ export type WorkoutsRangeResult = {
   total_count: number;
 };
 
+/** Uncapped rows for user-facing range visualizations. */
+export function getWorkoutRowsRange(
+  userId: number,
+  startDate: string,
+  endDate: string,
+): WorkoutRow[] {
+  const range = dateRangeClause(startDate, endDate);
+  return forUser(userId).all<WorkoutRow>(
+    `SELECT ${WORKOUT_COLUMNS} FROM workouts WHERE ${range.clause} AND user_id = ? ORDER BY date DESC`,
+    ...range.params,
+  );
+}
+
 // Caps Coach `query_workouts` payloads. Without this, a 5-year range from the
 // LLM dumps every workout into the tool result and balloons token cost.
 // Fetches LIMIT+1 so a count > LIMIT trips truncated without a separate
@@ -523,6 +536,7 @@ export type MonthlyRollupRow = {
 export function getMonthlyRollup(
   userId: number,
   fromDate: string,
+  toDate = "9999-12-31",
 ): MonthlyRollupRow[] {
   const rows = forUser(userId).all<{
     ym: string;
@@ -535,9 +549,10 @@ export function getMonthlyRollup(
             AVG(strain) AS avg_strain,
             MIN(date) AS first_day
        FROM workouts
-      WHERE date >= ? AND user_id = ?
+      WHERE date >= ? AND date <= ? AND user_id = ?
       GROUP BY ym ORDER BY ym ASC`,
     fromDate,
+    toDate,
   );
 
   const now = new Date();

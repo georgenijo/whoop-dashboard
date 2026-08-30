@@ -13,16 +13,14 @@ import {
   getOverview,
   getRecoveryByDayOfWeek,
   getRecoveryRange,
-  getRecoveryTrend,
   getSleepRange,
-  getSleepTrend,
-  getStrainTrend,
+  getStrainRange,
 } from "@/lib/db";
 import { requireAuthOrSignin } from "@/lib/auth";
 import { computeIllnessSignal } from "@/lib/analytics/illness";
 import { computeRebound } from "@/lib/analytics/rebound";
-import { parseDays, formatRangeLabel } from "@/lib/range";
-import { localToday, localDateNDaysAgo } from "@/lib/date";
+import { resolveRangeWindow, shiftDate } from "@/lib/range";
+import { localToday } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -43,39 +41,39 @@ export default async function RecoveryPage({
     new Request("http://localhost", { headers: headerList }),
   );
   const { range } = await searchParams;
-  const days = parseDays(range);
-  const rangeLabel = formatRangeLabel(range);
+  const window = resolveRangeWindow(range, localToday());
+  const { days, label: rangeLabel } = window;
   const data = getOverview(user.id, days);
-  const trend = getRecoveryTrend(user.id, days);
-  const trend30 = getRecoveryTrend(user.id, 30);
-  const otsRecovery = getRecoveryTrend(user.id, OTS_LOOKBACK_DAYS);
-  const otsCycles = getStrainTrend(user.id, OTS_LOOKBACK_DAYS);
+  const trend = getRecoveryRange(user.id, window.start, window.end);
+  const strainTrend = getStrainRange(user.id, window.start, window.end);
+  const sleepTrend = getSleepRange(user.id, window.start, window.end);
+  const otsRecovery = trend.slice(-OTS_LOOKBACK_DAYS);
+  const otsCycles = strainTrend.slice(-OTS_LOOKBACK_DAYS);
 
   const recoveryData = trend.map((r) => ({ date: r.date, value: r.recovery_score }));
   const hrvSeries = trend.map((r) => ({ date: r.date, hrv: r.hrv }));
   const rhrData = trend.map((r) => ({ date: r.date, value: r.rhr }));
-  const skinTempSeries = trend30.map((r) => ({
+  const skinTempSeries = trend.map((r) => ({
     date: r.date,
     skin_temp: r.skin_temp,
     recovery_score: r.recovery_score,
   }));
-  const spo2Series = trend30.map((r) => ({ date: r.date, spo2: r.spo2 }));
+  const spo2Series = trend.map((r) => ({ date: r.date, spo2: r.spo2 }));
 
   // Illness signal needs ~14 days of pre-window history for the baseline,
   // plus the current display window.
-  const illnessDays = Math.max(days, 30) + 14;
-  const end = localToday();
-  const start = localDateNDaysAgo(illnessDays);
-  const illnessRecovery = getRecoveryRange(user.id, start, end);
-  const illnessSleep = getSleepRange(user.id, start, end);
-  const illnessRows = computeIllnessSignal(illnessRecovery, illnessSleep);
-  const dowRecovery = getRecoveryByDayOfWeek(user.id);
+  const baselineStart = window.start === "0000-01-01"
+    ? window.start
+    : shiftDate(window.start, -14);
+  const illnessRecovery = getRecoveryRange(user.id, baselineStart, window.end);
+  const illnessSleep = getSleepRange(user.id, baselineStart, window.end);
+  const illnessRows = computeIllnessSignal(illnessRecovery, illnessSleep)
+    .filter((row) => row.date >= window.start && row.date <= window.end);
+  const dowRecovery = getRecoveryByDayOfWeek(user.id, window.start, window.end);
 
-  const strain30 = getStrainTrend(user.id, 30);
-  const sleep30 = getSleepTrend(user.id, 30);
-  const strainByDate = new Map(strain30.map((c) => [c.date, c.strain]));
+  const strainByDate = new Map(strainTrend.map((c) => [c.date, c.strain]));
   const sleepByDate = new Map(
-    sleep30.map((s) => {
+    sleepTrend.map((s) => {
       const total = (s.light_ms ?? 0) + (s.deep_ms ?? 0) + (s.rem_ms ?? 0);
       const hours =
         s.light_ms != null && s.deep_ms != null && s.rem_ms != null
@@ -84,15 +82,14 @@ export default async function RecoveryPage({
       return [s.date, hours];
     })
   );
-  const scatterRows = trend30.map((r) => ({
+  const scatterRows = trend.map((r) => ({
     date: r.date,
     strain: strainByDate.get(r.date) ?? null,
     recovery: r.recovery_score,
     sleep_hours: sleepByDate.get(r.date) ?? null,
   }));
 
-  const reboundRecovery = getRecoveryTrend(user.id, Math.max(days, 90));
-  const reboundEvents = computeRebound(reboundRecovery);
+  const reboundEvents = computeRebound(trend);
 
   return (
     <>
@@ -110,7 +107,7 @@ export default async function RecoveryPage({
 
       <OvertrainingCard recovery={otsRecovery} cycles={otsCycles} />
 
-      <DayOfWeekRecovery rows={dowRecovery} />
+      <DayOfWeekRecovery rows={dowRecovery} rangeLabel={rangeLabel} />
 
       <div className="grid-main">
         <div className="col">
@@ -124,7 +121,7 @@ export default async function RecoveryPage({
             showRollingToggle
           />
           <HRVTrend subtitle={rangeLabel} data={hrvSeries} />
-          <SkinTempDeviationCard data={skinTempSeries} />
+          <SkinTempDeviationCard data={skinTempSeries} rangeLabel={rangeLabel} />
         </div>
         <div className="col">
           <TrendChart
@@ -136,15 +133,15 @@ export default async function RecoveryPage({
             unit=" bpm"
             showRollingToggle
           />
-          <Spo2TrendCard data={spo2Series} />
+          <Spo2TrendCard data={spo2Series} rangeLabel={rangeLabel} />
         </div>
       </div>
 
-      <IllnessSignalCard rows={illnessRows} />
+      <IllnessSignalCard rows={illnessRows} rangeLabel={rangeLabel} />
 
-      <StrainRecoveryScatter rows={scatterRows} />
+      <StrainRecoveryScatter rows={scatterRows} rangeLabel={rangeLabel} />
 
-      <RecoveryReboundCard events={reboundEvents} />
+      <RecoveryReboundCard events={reboundEvents} rangeLabel={rangeLabel} />
     </>
   );
 }

@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import type { NapImpact, NapWithStartHour } from "@/lib/analytics/naps";
 
-type Props = { naps: NapWithStartHour[]; impact: NapImpact };
+type Props = { naps: NapWithStartHour[]; impact: NapImpact; rangeLabel: string };
 
 const MS_PER_MIN = 60_000;
 
@@ -71,7 +71,7 @@ function NapTooltip({
   );
 }
 
-export default function NapTrackerCard({ naps, impact }: Props) {
+export default function NapTrackerCard({ naps, impact, rangeLabel }: Props) {
   const points: NapPoint[] = naps
     .filter((n) => n.start_hour != null && n.duration_ms != null)
     .map((n, i) => ({
@@ -112,7 +112,7 @@ export default function NapTrackerCard({ naps, impact }: Props) {
             Nap impact
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
-            Timing + with-vs-without nightly sleep comparison
+            {rangeLabel} · timing + with-vs-without nightly sleep comparison
           </div>
         </div>
       </div>

@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import type { SleepRow } from "@/lib/db";
 
-type Props = { rows: SleepRow[] };
+type Props = { rows: SleepRow[]; rangeLabel: string };
 
 const ANOMALY_THRESHOLD = 2;
 const WINDOW = 14;
@@ -90,9 +90,8 @@ function PointDot({ cx, cy, payload }: DotProps) {
   return <Dot cx={cx} cy={cy} r={2} fill="#00d4aa" />;
 }
 
-export default function RespiratoryRateChart({ rows }: Props) {
-  const recent = rows.slice(-14);
-  const valid = recent.filter(
+export default function RespiratoryRateChart({ rows, rangeLabel }: Props) {
+  const valid = rows.filter(
     (r): r is SleepRow & { respiratory_rate: number } => r.respiratory_rate != null,
   );
 
@@ -113,7 +112,7 @@ export default function RespiratoryRateChart({ rows }: Props) {
     );
   }
 
-  const data: ChartDatum[] = recent.map((r, i) => {
+  const data: ChartDatum[] = rows.map((r, i) => {
     if (r.respiratory_rate == null) {
       return { date: r.date, rr: null, mean: null, lower: null, upper: null, anomaly: false };
     }
@@ -121,7 +120,7 @@ export default function RespiratoryRateChart({ rows }: Props) {
     let sum = 0;
     let count = 0;
     for (let j = start; j <= i; j++) {
-      const v = recent[j].respiratory_rate;
+      const v = rows[j].respiratory_rate;
       if (v != null) {
         sum += v;
         count += 1;
@@ -152,7 +151,7 @@ export default function RespiratoryRateChart({ rows }: Props) {
             Respiratory rate
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
-            14d · personal baseline ±{ANOMALY_THRESHOLD} br/min · mean {overallMean.toFixed(1)}
+            {rangeLabel} · 14-day rolling baseline ±{ANOMALY_THRESHOLD} br/min · mean {overallMean.toFixed(1)}
             {anomalies > 0 && (
               <span style={{ color: "#ff8888", marginLeft: 6 }}>
                 · {anomalies} anomaly{anomalies === 1 ? "" : "s"}

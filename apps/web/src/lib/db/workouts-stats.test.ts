@@ -139,10 +139,12 @@ describe("getSportBreakdown + getMonthlyRollup", () => {
   it("rolls up per month with avg strain and partial flags", () => {
     seed(1, "a", "2026-01-10", { strain: 8 });
     seed(1, "b", "2026-01-20", { strain: 10 });
-    const rows = workouts.getMonthlyRollup(1, "2026-01-01");
+    seed(1, "future", "2026-02-01", { strain: 20 });
+    const rows = workouts.getMonthlyRollup(1, "2026-01-01", "2026-01-31");
     const jan = rows.find((r) => r.month === "2026-01");
     expect(jan?.count).toBe(2);
     expect(jan?.avgStrain).toBeCloseTo(9);
+    expect(rows.some((r) => r.month === "2026-02")).toBe(false);
   });
 });
 

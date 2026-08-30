@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import type { DeepSleepEffRow } from "@/lib/analytics/deepSleep";
 
-type Props = { rows: DeepSleepEffRow[] };
+type Props = { rows: DeepSleepEffRow[]; rangeLabel: string };
 
 function formatTickDate(date: string): string {
   return new Date(date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -70,7 +70,7 @@ function rollingMean(values: number[], window: number): (number | null)[] {
   return out;
 }
 
-export default function DeepSleepEfficiencyCard({ rows }: Props) {
+export default function DeepSleepEfficiencyCard({ rows, rangeLabel }: Props) {
   if (rows.length < 7) {
     return (
       <div className="card" style={{ marginTop: 24 }}>
@@ -105,7 +105,7 @@ export default function DeepSleepEfficiencyCard({ rows }: Props) {
             Deep sleep efficiency
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
-            deep hrs / prior-day strain · mean {overallMean.toFixed(3)}
+            {rangeLabel} · deep hrs / prior-day strain · mean {overallMean.toFixed(3)}
           </div>
         </div>
       </div>

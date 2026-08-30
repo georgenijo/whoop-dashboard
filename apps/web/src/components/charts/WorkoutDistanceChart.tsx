@@ -16,7 +16,7 @@ import {
 import type { WorkoutRow } from "@/lib/db";
 import { sportColor } from "@/lib/sport-color";
 
-type Props = { rows: WorkoutRow[] };
+type Props = { rows: WorkoutRow[]; rangeLabel: string };
 
 const PACE_SPORTS = ["running", "cycling", "walking"] as const;
 
@@ -27,19 +27,17 @@ function formatShortDate(date: string): string {
   });
 }
 
-export default function WorkoutDistanceChart({ rows }: Props) {
+export default function WorkoutDistanceChart({ rows, rangeLabel }: Props) {
   const withDistance = rows.filter(
     (r) => r.distance_m != null && r.distance_m > 0 && r.duration_sec != null && r.duration_sec > 0,
   );
 
   const distanceData = withDistance
-    .slice(-30)
     .map((r) => ({
       label: `${formatShortDate(r.date)} · ${r.sport ?? "—"}`,
       km: (r.distance_m as number) / 1000,
       sport: r.sport ?? "—",
-    }))
-    .reverse();
+    }));
 
   const paceRows = withDistance.filter(
     (r) => r.sport != null && (PACE_SPORTS as readonly string[]).includes(r.sport),
@@ -77,7 +75,7 @@ export default function WorkoutDistanceChart({ rows }: Props) {
               Distance by workout
             </div>
             <div className="card-sub" style={{ marginTop: 4 }}>
-              {distanceData.length} sessions with GPS · last 30
+              {rangeLabel} · {distanceData.length} sessions with GPS
             </div>
           </div>
         </div>
@@ -145,7 +143,7 @@ export default function WorkoutDistanceChart({ rows }: Props) {
               Pace trend
             </div>
             <div className="card-sub" style={{ marginTop: 4 }}>
-              min/km · lower = faster · running, cycling, walking
+              {rangeLabel} · min/km · lower = faster · running, cycling, walking
             </div>
           </div>
         </div>

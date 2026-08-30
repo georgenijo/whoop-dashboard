@@ -13,7 +13,7 @@ import {
 } from "recharts";
 import type { SleepRow } from "@/lib/db";
 
-type Props = { rows: SleepRow[] };
+type Props = { rows: SleepRow[]; rangeLabel: string };
 
 const CHART_HOURS = 16;
 const HOUR_TICKS = [0, 4, 8, 12, 16];
@@ -123,10 +123,9 @@ function TimelineTooltip({ active, payload }: { active?: boolean; payload?: { pa
   );
 }
 
-export default function BedWakeTimeline({ rows }: Props) {
+export default function BedWakeTimeline({ rows, rangeLabel }: Props) {
   const eligible = rows
-    .filter((r) => r.start_local && r.end_local)
-    .slice(-14);
+    .filter((r) => r.start_local && r.end_local);
 
   const data: Datum[] = [];
   for (const r of eligible) {
@@ -187,7 +186,7 @@ export default function BedWakeTimeline({ rows }: Props) {
         <div>
           <div className="card-title">
             <span className="dot" style={{ background: "#7b61ff", color: "#7b61ff" }} />
-            Sleep schedule (last 14 days)
+            Sleep schedule ({rangeLabel})
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>{subtitle}</div>
         </div>

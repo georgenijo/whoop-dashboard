@@ -11,7 +11,7 @@ import {
 } from "recharts";
 import type { SleepRow } from "@/lib/db";
 
-type Props = { rows: SleepRow[] };
+type Props = { rows: SleepRow[]; rangeLabel: string };
 
 function formatTickDate(date: string): string {
   return new Date(date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -55,12 +55,11 @@ function avg(values: (number | null)[]): number | null {
   return valid.reduce((a, b) => a + b, 0) / valid.length;
 }
 
-export default function SleepConsistencyCard({ rows }: Props) {
-  const recent = rows.slice(-14);
-  const data = recent.map((r) => ({ date: r.date, consistency: r.consistency }));
-  const avgConsistency = avg(recent.map((r) => r.consistency));
-  const avgEfficiency = avg(recent.map((r) => r.efficiency));
-  const avgDisturbances = avg(recent.map((r) => r.disturbances));
+export default function SleepConsistencyCard({ rows, rangeLabel }: Props) {
+  const data = rows.map((r) => ({ date: r.date, consistency: r.consistency }));
+  const avgConsistency = avg(rows.map((r) => r.consistency));
+  const avgEfficiency = avg(rows.map((r) => r.efficiency));
+  const avgDisturbances = avg(rows.map((r) => r.disturbances));
 
   if (data.filter((d) => d.consistency != null).length < 2) {
     return (
@@ -87,7 +86,7 @@ export default function SleepConsistencyCard({ rows }: Props) {
             <span className="dot" style={{ background: "#00aaff", color: "#00aaff" }} />
             Sleep consistency
           </div>
-          <div className="card-sub" style={{ marginTop: 4 }}>14d trend</div>
+          <div className="card-sub" style={{ marginTop: 4 }}>{rangeLabel} trend</div>
         </div>
       </div>
       <div style={{ height: 140 }}>

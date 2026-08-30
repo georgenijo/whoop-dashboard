@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { initIosTestDb, makeIosRequest } from "../_helpers.test";
 import { rmSync } from "node:fs";
+import { localToday } from "@/lib/ios/range";
+import { shiftDate } from "@/lib/range";
 
 vi.mock("server-only", () => ({}));
 
@@ -41,7 +43,7 @@ afterAll(() => {
 describe("GET /api/ios/sleep", () => {
   it("returns 200 + shape on seeded DB", async () => {
     for (let i = 0; i < 7; i++) {
-      const d = new Date(2026, 4, 1 + i).toISOString().slice(0, 10);
+      const d = shiftDate(localToday(), -(6 - i));
       testDb.seedSleep(d, {
         in_bed_ms: 8 * 3_600_000,
         light_ms: 3 * 3_600_000,

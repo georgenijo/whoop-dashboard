@@ -9,16 +9,13 @@ import {
   type YoyMetric,
 } from "@/lib/db";
 import { parseRange, rangeLabel, localToday } from "@/lib/ios/range";
-import { localDateNDaysAgo } from "@/lib/date";
+import { resolveRangeWindow } from "@/lib/range";
 import { sportColor } from "@/lib/sport-color";
 
 export const dynamic = "force-dynamic";
 
 const METERS_PER_MILE = 1609.344;
 const KJ_PER_KCAL = 4.184;
-// Mirrors the web Stats page: a 400-day window of the monthly rollup powers the
-// year-over-year trend (≈13 months so the current month always has a prior).
-const TREND_LOOKBACK_DAYS = 400;
 
 type YoyMetricOut = {
   key: string;
@@ -61,12 +58,6 @@ type StatsResponse = {
   }[];
   history_floor: string | null;
 };
-
-function isoNDaysAgo(n: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
-}
 
 function fmtInt(n: number): string {
   return Math.round(n).toLocaleString("en-US");
@@ -112,15 +103,13 @@ export async function GET(req: Request) {
     const today = localToday();
     const year = new Date().getFullYear();
 
-    // Range pills scope only the by-sport breakdown; all-time totals, YoY,
-    // records and the trend are intrinsically scoped (match the web behaviour).
-    const sportStart = isoNDaysAgo(parsed.days);
+    const window = resolveRangeWindow(parsed.range, today);
 
     const allTime = getAllTimeStats(user.id);
     const yoy = getYearComparison(user.id, year);
-    const sports = getSportBreakdown(user.id, sportStart, today);
+    const sports = getSportBreakdown(user.id, window.start, window.end);
     const records = getPersonalRecords(user.id);
-    const months = getMonthlyRollup(user.id, localDateNDaysAgo(TREND_LOOKBACK_DAYS));
+    const months = getMonthlyRollup(user.id, window.start, window.end);
     const historyFloor = getWorkoutHistoryFloor(user.id);
 
     const metrics: YoyMetricOut[] = [

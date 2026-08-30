@@ -5,7 +5,7 @@ import {
   type ApneaRow,
 } from "@/lib/analytics/apnea";
 
-type Props = { rows: ApneaRow[] };
+type Props = { rows: ApneaRow[]; rangeLabel: string };
 
 const FLAGS = [
   { key: "flag_disturbances" as const, label: "Disturbances >10", color: "#ff6b6b" },
@@ -13,8 +13,6 @@ const FLAGS = [
   { key: "flag_resp_rate" as const, label: "Resp Rate Elevated", color: "#00aaff" },
   { key: "flag_deep_sleep" as const, label: "Deep Sleep <15%", color: "#7b61ff" },
 ];
-
-const CHART_NIGHTS = 30;
 
 function pickAxisLabels(dates: string[]): string[] {
   if (dates.length === 0) return [];
@@ -33,7 +31,7 @@ function pickAxisLabels(dates: string[]): string[] {
   );
 }
 
-export default function ApneaRiskCard({ rows }: Props) {
+export default function ApneaRiskCard({ rows, rangeLabel }: Props) {
   const caption = "Screening signal only — not a medical diagnosis";
 
   if (rows.length === 0) {
@@ -45,7 +43,7 @@ export default function ApneaRiskCard({ rows }: Props) {
               <span className="dot" style={{ background: "#ff8c00", color: "#ff8c00" }} />
               Sleep Apnea Risk Signal
             </div>
-            <div className="card-sub" style={{ marginTop: 4 }}>{caption}</div>
+            <div className="card-sub" style={{ marginTop: 4 }}>{rangeLabel} · {caption}</div>
           </div>
         </div>
         <div className="empty-state">
@@ -62,14 +60,13 @@ export default function ApneaRiskCard({ rows }: Props) {
   const highRisk14d = highRiskNightsCount(rows, 14);
   const noSpo2 = rows.every((r) => !r.has_spo2);
 
-  const recent = rows.slice(-CHART_NIGHTS);
-  const dates = recent.map((r) => r.date);
+  const dates = rows.map((r) => r.date);
   const axis = pickAxisLabels(dates);
 
   // Chart 1: 7-night rolling bars
   // Y-axis fixed at 28 (theoretical max with 4 flags x 7 nights)
   const ROLLING_MAX = 28;
-  const barWidth = 100 / Math.max(recent.length, 1);
+  const barWidth = 100 / Math.max(rows.length, 1);
   const thresholdY = 100 - (7 / ROLLING_MAX) * 100;
 
   // Chart 2: Stacked nightly flags, y-axis 0..4
@@ -83,7 +80,7 @@ export default function ApneaRiskCard({ rows }: Props) {
             <span className="dot" style={{ background: "#ff8c00", color: "#ff8c00" }} />
             Sleep Apnea Risk Signal
           </div>
-          <div className="card-sub" style={{ marginTop: 4 }}>{caption}</div>
+          <div className="card-sub" style={{ marginTop: 4 }}>{rangeLabel} · {caption}</div>
         </div>
       </div>
 
@@ -151,7 +148,7 @@ export default function ApneaRiskCard({ rows }: Props) {
               strokeWidth="0.2"
               vectorEffect="non-scaling-stroke"
             />
-            {recent.map((r, i) => {
+            {rows.map((r, i) => {
               const h = (r.apnea_score_7d / ROLLING_MAX) * 100;
               return (
                 <rect
@@ -229,7 +226,7 @@ export default function ApneaRiskCard({ rows }: Props) {
             preserveAspectRatio="none"
             style={{ width: "100%", height: "100%", display: "block", overflow: "visible" }}
           >
-            {recent.map((r, i) => {
+            {rows.map((r, i) => {
               let stackOffset = 0;
               return (
                 <g key={r.date}>
