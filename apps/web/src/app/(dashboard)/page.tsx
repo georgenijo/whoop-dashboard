@@ -14,7 +14,7 @@ import {
   getDailySummary,
   getOverview,
   getPRStats,
-  getRecoveryTrend,
+  getRecoveryRange,
   getUserSettings,
   type DailySummaryRow,
   type RecoveryRow,
@@ -27,7 +27,8 @@ import {
   getInsightStatus,
   regenerateInsight,
 } from "@/lib/insights";
-import { parseDays } from "@/lib/range";
+import { resolveRangeWindow } from "@/lib/range";
+import { localToday } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -57,9 +58,9 @@ export default async function OverviewPage({
   const whoopStatus = getIntegrationStatus(user.id, "whoop");
 
   const { range } = await searchParams;
-  const days = parseDays(range);
-  const data = getOverview(user.id, days);
-  const trend = getRecoveryTrend(user.id, days);
+  const window = resolveRangeWindow(range, localToday());
+  const data = getOverview(user.id, window.days);
+  const trend = getRecoveryRange(user.id, window.start, window.end);
   const prStats = getPRStats(user.id);
   const summaryByDate = new Map(
     getDailySummary(user.id, "0000-01-01", "9999-12-31")
@@ -133,7 +134,7 @@ export default async function OverviewPage({
 
       <div className="grid-main">
         <div className="col">
-          <RecoveryTrend rows={trend} />
+          <RecoveryTrend rows={trend} rangeLabel={window.label} />
           <PRsCard stats={prStats} />
         </div>
         <div className="col">{/* Phase 2 */}</div>

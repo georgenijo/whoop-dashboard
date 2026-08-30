@@ -16,6 +16,7 @@ type Row = { date: string; spo2: number | null };
 
 type Props = {
   data: Row[];
+  rangeLabel: string;
 };
 
 const COLOR = "#00aaff";
@@ -141,7 +142,7 @@ function Kpi({ label, value, color }: { label: string; value: string; color?: st
   );
 }
 
-export default function Spo2TrendCard({ data }: Props) {
+export default function Spo2TrendCard({ data, rangeLabel }: Props) {
   const computed = useMemo(() => {
     const valid = data
       .filter((r): r is { date: string; spo2: number } =>
@@ -177,7 +178,7 @@ export default function Spo2TrendCard({ data }: Props) {
               SpO2
             </div>
             <div className="card-sub" style={{ marginTop: 4 }}>
-              30-day · 95% floor
+              {rangeLabel} · 95% floor
             </div>
           </div>
         </div>
@@ -217,7 +218,7 @@ export default function Spo2TrendCard({ data }: Props) {
             SpO2
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
-            30-day · 95% floor reference
+            {rangeLabel} · 95% floor reference
           </div>
         </div>
         <span className="card-sub">
@@ -282,7 +283,7 @@ export default function Spo2TrendCard({ data }: Props) {
       </div>
 
       <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
-        <Kpi label="30d avg" value={`${avg.toFixed(1)}%`} />
+        <Kpi label={`${rangeLabel} avg`} value={`${avg.toFixed(1)}%`} />
         <Kpi
           label="Lowest"
           value={`${lowest.toFixed(1)}%`}

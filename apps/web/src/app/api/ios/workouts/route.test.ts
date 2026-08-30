@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { initIosTestDb, makeIosRequest } from "../_helpers.test";
 import { rmSync } from "node:fs";
 import { localToday } from "@/lib/ios/range";
+import { shiftDate } from "@/lib/range";
 
 vi.mock("server-only", () => ({}));
 
@@ -95,6 +96,33 @@ describe("GET /api/ios/workouts", () => {
     authShouldReject = true;
     const res = await route.GET(makeIosRequest("/api/ios/workouts?range=30d"));
     expect(res.status).toBe(401);
+  });
+
+  it("returns all chart rows in the selected window and excludes older rows", async () => {
+    const today = localToday();
+    testDb.seedWorkout("outside", shiftDate(today, -7), {
+      sport: "running",
+      distance_m: 1000,
+      zone_2_ms: 60_000,
+    });
+    for (let i = 0; i < 7; i++) {
+      testDb.seedWorkout(`inside-${i}`, shiftDate(today, -i), {
+        sport: "running",
+        distance_m: 1000 + i,
+        zone_2_ms: 60_000,
+      });
+    }
+
+    const res = await route.GET(makeIosRequest("/api/ios/workouts?range=7d"));
+    const body = (await res.json()) as {
+      zone_breakdown_recent: unknown[];
+      distance_recent: unknown[];
+      workouts: { id: string }[];
+    };
+
+    expect(body.zone_breakdown_recent).toHaveLength(7);
+    expect(body.distance_recent).toHaveLength(7);
+    expect(body.workouts.map((row) => row.id)).not.toContain("outside");
   });
 
   it("returns 400 on invalid range", async () => {

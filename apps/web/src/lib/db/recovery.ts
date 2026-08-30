@@ -55,16 +55,20 @@ export type DayOfWeekRecoveryRow = {
 
 export function getRecoveryByDayOfWeek(
   userId: number,
+  startDate: string,
+  endDate: string,
 ): DayOfWeekRecoveryRow[] {
+  const range = dateRangeClause(startDate, endDate);
   return forUser(userId).all<DayOfWeekRecoveryRow>(
     `SELECT CAST(strftime('%w', date) AS INTEGER) AS dow,
             AVG(recovery_score) AS avg,
             COUNT(*) AS count
      FROM recovery
      WHERE recovery_score IS NOT NULL
-       AND date >= date('now', '-90 days')
+       AND ${range.clause}
        AND user_id = ?
      GROUP BY dow
      ORDER BY dow`,
+    ...range.params,
   );
 }

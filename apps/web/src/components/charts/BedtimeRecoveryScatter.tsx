@@ -14,7 +14,7 @@ import {
 } from "recharts";
 import type { BedtimeRecoveryResult } from "@/lib/analytics/bedtime";
 
-type Props = { result: BedtimeRecoveryResult | null };
+type Props = { result: BedtimeRecoveryResult | null; rangeLabel: string };
 
 function formatLongDate(date: string): string {
   return new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
@@ -66,7 +66,7 @@ function PointTooltip({
   );
 }
 
-export default function BedtimeRecoveryScatter({ result }: Props) {
+export default function BedtimeRecoveryScatter({ result, rangeLabel }: Props) {
   if (!result) {
     return (
       <div className="card">
@@ -106,7 +106,7 @@ export default function BedtimeRecoveryScatter({ result }: Props) {
           <div className="card-sub" style={{ marginTop: 4 }}>
             <span style={{ color: rColor }}>r = {r.toFixed(2)}</span>
             <span style={{ color: "var(--fg-3)", marginLeft: 6 }}>
-              · {result.points.length} paired nights
+              · {rangeLabel} · {result.points.length} paired nights
             </span>
           </div>
         </div>

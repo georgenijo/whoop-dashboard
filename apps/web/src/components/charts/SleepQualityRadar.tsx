@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import type { SleepRow } from "@/lib/db";
 
-type Props = { latest: SleepRow | null; window: SleepRow[] };
+type Props = { latest: SleepRow | null; window: SleepRow[]; rangeLabel: string };
 
 const REM_TARGET = 30;
 const DEEP_TARGET = 25;
@@ -67,7 +67,7 @@ const AXES: (keyof Metrics)[] = [
   "Low Disturbance",
 ];
 
-export default function SleepQualityRadar({ latest, window }: Props) {
+export default function SleepQualityRadar({ latest, window, rangeLabel }: Props) {
   const latestM = latest ? rowMetrics(latest) : null;
   const avgM = avgMetrics(window);
 
@@ -91,7 +91,7 @@ export default function SleepQualityRadar({ latest, window }: Props) {
   const data = AXES.map((axis) => ({
     axis,
     "Last night": latestM ? Number(latestM[axis].toFixed(1)) : 0,
-    "30d avg": avgM ? Number(avgM[axis].toFixed(1)) : 0,
+    "Range avg": avgM ? Number(avgM[axis].toFixed(1)) : 0,
   }));
 
   return (
@@ -103,7 +103,7 @@ export default function SleepQualityRadar({ latest, window }: Props) {
             Sleep quality
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
-            6 dimensions · last night vs 30d avg
+            6 dimensions · last night vs {rangeLabel} avg
           </div>
         </div>
       </div>
@@ -122,8 +122,8 @@ export default function SleepQualityRadar({ latest, window }: Props) {
               axisLine={false}
             />
             <Radar
-              name="30d avg"
-              dataKey="30d avg"
+              name={`${rangeLabel} avg`}
+              dataKey="Range avg"
               stroke="#ff8800"
               fill="#ff8800"
               fillOpacity={0.12}

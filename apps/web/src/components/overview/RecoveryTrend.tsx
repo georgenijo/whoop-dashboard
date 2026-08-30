@@ -3,6 +3,7 @@ import type { RecoveryRow } from "@/lib/db";
 
 type Props = {
   rows: RecoveryRow[];
+  rangeLabel: string;
 };
 
 function pickAxis(rows: RecoveryRow[]): string[] {
@@ -14,7 +15,7 @@ function pickAxis(rows: RecoveryRow[]): string[] {
   });
 }
 
-export default function RecoveryTrend({ rows }: Props) {
+export default function RecoveryTrend({ rows, rangeLabel }: Props) {
   const values = rows
     .map((r) => r.recovery_score)
     .filter((v): v is number => v != null && Number.isFinite(v));
@@ -27,12 +28,12 @@ export default function RecoveryTrend({ rows }: Props) {
             <div className="card-title">
               Recovery trend
             </div>
-            <div className="card-sub" style={{ marginTop: 4 }}>30 days</div>
+            <div className="card-sub" style={{ marginTop: 4 }}>{rangeLabel}</div>
           </div>
         </div>
         <div className="empty-state">
           <div className="title">Not enough recovery data yet</div>
-          <div className="sub">Connect Whoop and sync to see the 30-day trend</div>
+          <div className="sub">Connect Whoop and sync to see this range</div>
         </div>
       </div>
     );
@@ -57,7 +58,7 @@ export default function RecoveryTrend({ rows }: Props) {
             Recovery trend
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
-            {values.length} days · avg {avg.toFixed(0)}%
+            {rangeLabel} · {values.length} days with data · avg {avg.toFixed(0)}%
           </div>
         </div>
         <span className="card-sub">

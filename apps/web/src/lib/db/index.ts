@@ -59,6 +59,7 @@ export {
   getWorkoutHrSeries,
   getWorkoutSource,
   getWorkoutsRange,
+  getWorkoutRowsRange,
   getTodayWorkouts,
   getTodayStrainAggregate,
   getAllTimeStats,

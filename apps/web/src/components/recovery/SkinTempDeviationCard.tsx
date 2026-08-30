@@ -16,6 +16,7 @@ type Row = { date: string; skin_temp: number | null; recovery_score: number | nu
 
 type Props = {
   data: Row[];
+  rangeLabel: string;
 };
 
 const ELEVATED_COLOR = "#ffaa00";
@@ -141,7 +142,7 @@ function CustomTooltip({
   );
 }
 
-export default function SkinTempDeviationCard({ data }: Props) {
+export default function SkinTempDeviationCard({ data, rangeLabel }: Props) {
   const computed = useMemo(() => {
     const valid = data.filter(
       (r): r is { date: string; skin_temp: number; recovery_score: number | null } =>
@@ -188,7 +189,7 @@ export default function SkinTempDeviationCard({ data }: Props) {
               Skin temperature deviation
             </div>
             <div className="card-sub" style={{ marginTop: 4 }}>
-              30-day baseline · °C from mean
+              {rangeLabel} baseline · °C from mean
             </div>
           </div>
         </div>
@@ -227,7 +228,7 @@ export default function SkinTempDeviationCard({ data }: Props) {
             Skin temperature deviation
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
-            30-day baseline · mean {mean.toFixed(2)} °C
+            {rangeLabel} baseline · mean {mean.toFixed(2)} °C
           </div>
         </div>
         <span className="card-sub">

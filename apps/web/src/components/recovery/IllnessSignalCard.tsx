@@ -2,6 +2,7 @@ import type { IllnessRow } from "@/lib/analytics/illness";
 
 type Props = {
   rows: IllnessRow[];
+  rangeLabel: string;
 };
 
 const SIGNAL_COLORS = ["#00d4aa", "#ffd166", "#ffaa00", "#ff3b3b"];
@@ -31,7 +32,7 @@ function pickAxis(rows: IllnessRow[]): string[] {
   return Array.from(new Set(idx)).map((i) => formatShort(rows[i].date));
 }
 
-export default function IllnessSignalCard({ rows }: Props) {
+export default function IllnessSignalCard({ rows, rangeLabel }: Props) {
   const baselined = rows.filter((r) => r.rhr_baseline != null);
 
   if (baselined.length === 0) {
@@ -58,7 +59,7 @@ export default function IllnessSignalCard({ rows }: Props) {
 
   const today = baselined[baselined.length - 1];
   const status = statusFor(today.signal_count);
-  const strip = baselined.slice(-30);
+  const strip = baselined;
   const anyHasSkinTemp = baselined.some((r) => r.has_skin_temp);
   const anyHasRespRate = baselined.some((r) => r.respiratory_rate != null);
 
@@ -71,7 +72,7 @@ export default function IllnessSignalCard({ rows }: Props) {
             Illness signal
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
-            14-day baseline · {baselined.length} days of history
+            {rangeLabel} · 14-day rolling baseline · {baselined.length} days with data
           </div>
         </div>
         <span className="card-sub">

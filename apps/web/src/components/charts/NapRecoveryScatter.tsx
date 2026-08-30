@@ -14,7 +14,7 @@ import {
 import type { NapRow, RecoveryRow } from "@/lib/db";
 import { linearRegression } from "@/lib/analytics/bedtime";
 
-type Props = { naps: NapRow[]; recovery: RecoveryRow[] };
+type Props = { naps: NapRow[]; recovery: RecoveryRow[]; rangeLabel: string };
 
 const MS_PER_MIN = 60_000;
 
@@ -63,7 +63,7 @@ function PointTooltip({
   );
 }
 
-export default function NapRecoveryScatter({ naps, recovery }: Props) {
+export default function NapRecoveryScatter({ naps, recovery, rangeLabel }: Props) {
   const recoveryByDate = new Map<string, number>();
   for (const r of recovery) {
     if (r.recovery_score != null) recoveryByDate.set(r.date, r.recovery_score);
@@ -120,7 +120,7 @@ export default function NapRecoveryScatter({ naps, recovery }: Props) {
           <div className="card-sub" style={{ marginTop: 4 }}>
             {r != null && <span style={{ color: rColor }}>r = {r.toFixed(2)}</span>}
             <span style={{ color: "var(--fg-3)", marginLeft: r != null ? 6 : 0 }}>
-              · {points.length} pairs
+              · {rangeLabel} · {points.length} pairs
             </span>
           </div>
         </div>

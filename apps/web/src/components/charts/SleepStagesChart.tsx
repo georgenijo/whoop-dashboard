@@ -48,7 +48,7 @@ export default function SleepStagesChart({ rows }: Props) {
         </div>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        {rows.slice(-14).map((r) => {
+        {rows.map((r) => {
           const total = (r.deep_ms ?? 0) + (r.rem_ms ?? 0) + (r.light_ms ?? 0) + (r.awake_ms ?? 0);
           if (total === 0) return null;
           const label = new Date(r.date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });

@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-08-30: Page time filters govern every rendered graph
+
+**Decision:** A dashboard range such as `7d` resolves to an exact inclusive calendar window (today plus the preceding six dates), and every web and iOS graph on that page renders only records inside that window. An analytic may load older records to seed a rolling baseline or EWMA, but must trim its visible points and range-derived summaries back to the selected window; fixed 14/30/90/180-day display datasets are not allowed behind a page-level picker.
+
+**Rationale:** Row-count limits leak older dates when data has gaps, inclusive `today - N` bounds produce N+1 dates, and hard-coded component lookbacks make the same graph ignore selector changes. Separating hidden computation history from visible range data preserves stable analytics such as TSB and illness baselines without breaking the filter contract users see.
+
+**Status:** active
+
+**References:** `apps/web/src/lib/range.ts`, `apps/web/src/app/(dashboard)/recovery/page.tsx`, `apps/web/src/app/(dashboard)/sleep/page.tsx`, `apps/web/src/app/(dashboard)/strain/page.tsx`, `apps/web/src/app/(dashboard)/workouts/page.tsx`, `apps/web/src/app/api/ios/`
+
+---
+
 ## 2026-08-18: Coach persists validated typed presentation blocks
 
 **Decision:** Assistant messages may persist a versioned `presentation_blocks` array containing only app-owned `metric_strip`, `comparison`, `chart`, `action_plan`, `data_freshness`, `workout_plan`, and `evidence` schemas. Providers propose blocks through fenced JSON, but the server validates all versions, types, numeric values, text lengths, and collection caps before stripping the proposal from Markdown; any invalid payload is discarded and downgraded to safe prose. Web and iOS render the same semantics natively and retain bounded `xychart-beta` as a historical compatibility path.

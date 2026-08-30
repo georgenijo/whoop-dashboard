@@ -20,8 +20,6 @@ const COLOR_TSB_FATIGUE = "#ff3b3b";
 
 const CTL_SPAN = 42;
 const ATL_SPAN = 7;
-const DISPLAY_DAYS = 90;
-
 type ChartRow = {
   date: string;
   shortDate: string;
@@ -33,7 +31,7 @@ type ChartRow = {
   tsb: number;
 };
 
-function computeTSB(rows: CycleRow[]): ChartRow[] {
+function computeTSB(rows: CycleRow[], displayStart: string): ChartRow[] {
   if (rows.length === 0) return [];
   const alphaCtl = 2 / (CTL_SPAN + 1);
   const alphaAtl = 2 / (ATL_SPAN + 1);
@@ -48,7 +46,8 @@ function computeTSB(rows: CycleRow[]): ChartRow[] {
     raw.push({ date: r.date, ctl, atl, tsb: ctl - atl });
   }
 
-  return raw.slice(-DISPLAY_DAYS).map((r, i, arr) => {
+  const visible = raw.filter((r) => r.date >= displayStart);
+  return visible.map((r, i, arr) => {
     const prev = i > 0 ? arr[i - 1] : null;
     const signFlipped = prev != null && Math.sign(prev.tsb) !== Math.sign(r.tsb) && prev.tsb !== 0 && r.tsb !== 0;
     const tsbPos = r.tsb >= 0 ? r.tsb : signFlipped ? 0 : null;
@@ -112,9 +111,17 @@ function Row({ label, value, color, bold }: { label: string; value: string; colo
   );
 }
 
-export default function TSBCurve({ rows }: { rows: CycleRow[] }) {
-  const data = computeTSB(rows);
-  if (data.length < 14) {
+export default function TSBCurve({
+  rows,
+  displayStart,
+  rangeLabel,
+}: {
+  rows: CycleRow[];
+  displayStart: string;
+  rangeLabel: string;
+}) {
+  const data = computeTSB(rows, displayStart);
+  if (rows.length < 14 || data.length === 0) {
     return (
       <div className="card" style={{ marginTop: 24 }}>
         <div className="card-head">
@@ -149,7 +156,7 @@ export default function TSBCurve({ rows }: { rows: CycleRow[] }) {
             Fitness · Fatigue · Form (TSB)
           </div>
           <div className="card-sub" style={{ marginTop: 4 }}>
-            CTL 42d EWM · ATL 7d EWM · TSB = CTL − ATL · last {data.length} days
+            {rangeLabel} · CTL 42d EWM · ATL 7d EWM · TSB = CTL − ATL · {data.length} days with data
           </div>
         </div>
         <span className="card-sub">
