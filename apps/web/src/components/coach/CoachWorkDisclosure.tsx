@@ -5,34 +5,16 @@ import type {
   CoachWorkLog,
 } from "@/lib/coach/work-log-types";
 import { useEffect, useRef, useState } from "react";
-import {
-  AgentActivityLine,
-  type AgentActivityState,
-} from "@/components/brainless/agent-activity-line";
+import CoachActivityMark from "./CoachActivityMark";
 import CoachToolCall, { formatWorkDuration } from "./CoachToolCall";
 import { workPhaseLabel } from "./useChatSend";
 
-function activityState(status: CoachWorkLog["status"]): AgentActivityState {
-  switch (status) {
-    case "running":
-      return "active";
-    case "complete":
-      return "complete";
-    case "error":
-      return "failed";
-    case "aborted":
-      return "stopped";
-    default: {
-      const _exhaustive: never = status;
-      return _exhaustive;
-    }
-  }
-}
-
-function activityLabel(status: CoachWorkLog["status"]): string {
-  if (status === "running") return "Working";
-  if (status === "complete") return "Worked";
-  return "Stopped";
+function disclosureLabel(workLog: CoachWorkLog, elapsedMs: number): string {
+  const duration = workLog.duration_ms ?? elapsedMs;
+  const formatted = formatWorkDuration(duration) || "0s";
+  if (workLog.status === "running") return `Working for ${formatted}`;
+  if (workLog.status === "complete") return `Worked for ${formatted}`;
+  return `Stopped after ${formatted}`;
 }
 
 function partitionTools(tools: CoachToolActivity[]) {
@@ -99,15 +81,7 @@ export default function CoachWorkDisclosure({
 
   const { previous, visible } = partitionTools(workLog.tools);
   const phase = workPhaseLabel(workLog, hasVisibleText);
-  const duration = formatWorkDuration(workLog.duration_ms ?? elapsedMs) || "0s";
-  const detail =
-    workLog.status === "running"
-      ? phase
-      : workLog.status === "error"
-        ? "Turn failed"
-        : workLog.status === "aborted"
-          ? "Turn stopped"
-          : null;
+  const hasActivity = workLog.notes.length > 0 || workLog.tools.length > 0;
 
   return (
     <details
@@ -115,12 +89,13 @@ export default function CoachWorkDisclosure({
       className={`coach-work-disclosure ${workLog.status}`}
     >
       <summary>
-        <AgentActivityLine
-          state={activityState(workLog.status)}
-          label={activityLabel(workLog.status)}
-          detail={detail}
-          meta={duration}
-        />
+        <CoachActivityMark active={workLog.status === "running"} />
+        <span className="coach-work-summary-label">
+          {disclosureLabel(workLog, elapsedMs)}
+        </span>
+        {phase && !hasActivity ? (
+          <span className="coach-work-summary-phase">{phase}</span>
+        ) : null}
         <span className="coach-work-caret" aria-hidden="true" />
       </summary>
       <div className="coach-work-body">
@@ -134,6 +109,9 @@ export default function CoachWorkDisclosure({
             <p className="coach-work-note">{note}</p>
           </div>
         ))}
+        {phase && hasActivity ? (
+          <div className="coach-work-phase">{phase}</div>
+        ) : null}
         {workLog.tools.length === 0 ? (
           workLog.status === "running" ? null : (
             <div className="coach-work-empty">No tool calls</div>
