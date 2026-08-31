@@ -81,6 +81,9 @@ describe("CoachWorkDisclosure", () => {
     );
     const disclosures = container.querySelectorAll("details");
     disclosures[0].open = true;
+    expect(
+      container.querySelector('[data-brainless="tool-disclosure"]'),
+    ).not.toBeNull();
     expect(screen.getByText("I’ll compare your recent recovery.")).toBeInTheDocument();
     fireEvent.click(screen.getByText("Queried recovery"));
     expect(screen.getByText("query_recovery")).toBeInTheDocument();
@@ -103,10 +106,12 @@ describe("CoachWorkDisclosure", () => {
     expect(screen.getByText("+1 previous tool calls")).toBeInTheDocument();
     expect(screen.getByText("Running query sleep…")).toBeInTheDocument();
     expect(screen.getByText("Querying sleep")).toBeInTheDocument();
-    expect(container.querySelector(".coach-tool-state")).not.toBeNull();
+    expect(
+      container.querySelector('[data-brainless="tool-disclosure"][data-state="active"]'),
+    ).not.toBeNull();
   });
 
-  it("uses one animated activity mark without a dangling phase marker", () => {
+  it("uses one honest Brainless activity line without terminal-only claims", () => {
     const { container } = render(
       <CoachWorkDisclosure
         workLog={{ ...log("running"), notes: [] }}
@@ -114,10 +119,13 @@ describe("CoachWorkDisclosure", () => {
       />,
     );
 
-    expect(container.querySelector(".coach-activity-mark.is-active")).not.toBeNull();
-    expect(screen.getByText("Thinking…")).toHaveClass("coach-work-summary-phase");
+    const activity = container.querySelector('[data-brainless="activity"]');
+    expect(activity).not.toBeNull();
+    expect(activity).toHaveAttribute("role", "status");
+    expect(screen.getByText("Thinking…")).toBeInTheDocument();
     expect(screen.getByText("Thinking…").closest("summary")).not.toBeNull();
     expect(container.querySelector(".coach-work-step.current")).toBeNull();
+    expect(container).not.toHaveTextContent(/Claude|Codex|Grok|tokens|esc to interrupt/i);
   });
 
   it("reports no tools for a direct reply", () => {

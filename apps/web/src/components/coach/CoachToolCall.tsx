@@ -1,6 +1,10 @@
 "use client";
 
 import ToolResponseBlock from "@/components/logs/ToolResponseBlock";
+import {
+  AgentToolDisclosure,
+  type AgentToolState,
+} from "@/components/brainless/agent-tool-disclosure";
 import type { CoachToolActivity } from "@/lib/coach/work-log-types";
 
 const TOOL_LABELS: Record<string, { active: string; complete: string }> = {
@@ -56,6 +60,11 @@ function prettyJson(value: unknown): string {
   }
 }
 
+function agentToolState(tool: CoachToolActivity): AgentToolState {
+  if (tool.state === "running") return "active";
+  return tool.status === "error" ? "failure" : "success";
+}
+
 export default function CoachToolCall({ tool }: { tool: CoachToolActivity }) {
   const running = tool.state === "running";
   const failed = tool.status === "error";
@@ -63,30 +72,15 @@ export default function CoachToolCall({ tool }: { tool: CoachToolActivity }) {
   const rowCount =
     tool.rows == null ? "" : `${tool.rows} row${tool.rows === 1 ? "" : "s"}`;
   const stage = tool.stage_message ?? tool.stage?.replaceAll("_", " ");
+  const result = [rowCount, stage, duration].filter(Boolean).join(" · ");
 
   return (
-    <details className={`coach-tool-call ${running ? "running" : failed ? "error" : "complete"}`}>
-      <summary>
-        <span className="coach-tool-state" aria-hidden="true">
-          {!running ? (
-            <svg viewBox="0 0 16 16">
-              {failed ? (
-                <path d="m5 5 6 6m0-6-6 6" />
-              ) : (
-                <path d="m4 8 2.5 2.5L12 5" />
-              )}
-            </svg>
-          ) : null}
-        </span>
-        <span className="coach-tool-label">{coachToolLabel(tool.name, running)}</span>
-        {rowCount || stage || duration ? (
-          <span className="coach-tool-meta">
-            {rowCount ? <span>{rowCount}</span> : null}
-            {stage ? <span>{stage}</span> : null}
-            {duration ? <span className="coach-tool-duration">{duration}</span> : null}
-          </span>
-        ) : null}
-      </summary>
+    <AgentToolDisclosure
+      className={`coach-tool-call ${running ? "running" : failed ? "error" : "complete"}`}
+      state={agentToolState(tool)}
+      label={coachToolLabel(tool.name, running)}
+      result={result || undefined}
+    >
       <div className="coach-tool-detail">
         <div className="coach-work-field coach-work-field-compact">
           <span>Tool</span>
@@ -115,6 +109,6 @@ export default function CoachToolCall({ tool }: { tool: CoachToolActivity }) {
           </div>
         ) : null}
       </div>
-    </details>
+    </AgentToolDisclosure>
   );
 }
