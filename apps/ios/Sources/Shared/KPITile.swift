@@ -11,7 +11,7 @@ struct KPITile: Decodable, Identifiable, Hashable {
     let colorHex: String
 
     enum Key: String, Decodable {
-        case recovery, hrv, rhr, sleep, strain, spo2
+        case recovery, hrv, rhr, sleep, strain, spo2, steps
     }
 
     enum Href: String, Decodable, Hashable {

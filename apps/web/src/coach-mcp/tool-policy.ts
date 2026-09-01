@@ -8,6 +8,7 @@ export const COACH_MCP_TOOL_NAMES = new Set([
   "query_strain",
   "query_workouts",
   "query_naps",
+  "query_steps",
   "query_journal",
   "query_daily_snapshot",
   "query_workout_plans",

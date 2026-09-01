@@ -192,6 +192,8 @@ export function synthesizePreamble(toolUses: ToolUseBlock[]): string {
       return "Looking at your workouts.";
     case "query_naps":
       return "Checking your naps.";
+    case "query_steps":
+      return "Pulling your step counts.";
     case "query_journal":
       return "Checking your journal entries.";
     case "query_daily_snapshot":

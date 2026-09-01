@@ -76,6 +76,13 @@ export { getPRStats } from "./prs";
 export type { JournalRow } from "./journal";
 export { getJournalRange } from "./journal";
 
+export type { StepsRow } from "./steps";
+export {
+  getLatestSteps,
+  getPreviousSteps,
+  getStepsRange,
+} from "./steps";
+
 export type {
   Intensity,
   PlanExercise,

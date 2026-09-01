@@ -60,7 +60,7 @@ describe("GET /api/ios/dashboard", () => {
     expect(body).toHaveProperty("recovery_trend");
 
     const kpi = body.kpi as unknown[];
-    expect(kpi).toHaveLength(6);
+    expect(kpi).toHaveLength(7);
 
     const hero = body.recovery_hero as Record<string, unknown>;
     expect(hero.score).toBe(75);
@@ -94,7 +94,7 @@ describe("GET /api/ios/dashboard", () => {
     expect(body.ai_insight).toBeNull();
     expect(body.recovery_trend).toEqual([]);
     const kpi = body.kpi as Array<Record<string, unknown>>;
-    expect(kpi).toHaveLength(6);
+    expect(kpi).toHaveLength(7);
     for (const t of kpi) {
       expect(t.value).toBeNull();
       expect(t.delta).toBeNull();

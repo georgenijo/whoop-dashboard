@@ -15,6 +15,8 @@ const EMPTY_OVERVIEW: Overview = {
   recoveryTrend: [],
   strainTrend: [],
   sleepTrend: [],
+  latestSteps: null,
+  previousSteps: null,
   hasData: false,
 };
 
@@ -51,7 +53,7 @@ function sleepRow(date: string, inBedMs: number) {
 }
 
 describe("buildKPITiles", () => {
-  it("returns 6 tiles in the expected order with expected labels", () => {
+  it("returns 7 tiles in the expected order with expected labels", () => {
     const overview: Overview = {
       ...EMPTY_OVERVIEW,
       latestRecovery: recoveryRow("2026-05-10", 75, 60, 50, 97.5),
@@ -63,7 +65,7 @@ describe("buildKPITiles", () => {
       hasData: true,
     };
     const tiles = buildKPITiles(overview);
-    expect(tiles).toHaveLength(6);
+    expect(tiles).toHaveLength(7);
     expect(tiles.map((t) => t.key)).toEqual([
       "recovery",
       "hrv",
@@ -71,6 +73,7 @@ describe("buildKPITiles", () => {
       "sleep",
       "strain",
       "spo2",
+      "steps",
     ]);
     expect(tiles.map((t) => t.label)).toEqual([
       "Recovery",
@@ -79,6 +82,7 @@ describe("buildKPITiles", () => {
       "Sleep",
       "Strain",
       "SpO2",
+      "Steps",
     ]);
 
     const recovery = tiles[0];
@@ -103,9 +107,9 @@ describe("buildKPITiles", () => {
     expect(strain.href).toBe("/strain");
   });
 
-  it("returns 6 tiles with null value + null delta when overview is empty", () => {
+  it("returns 7 tiles with null value + null delta when overview is empty", () => {
     const tiles = buildKPITiles(EMPTY_OVERVIEW);
-    expect(tiles).toHaveLength(6);
+    expect(tiles).toHaveLength(7);
     for (const t of tiles) {
       expect(t.value).toBeNull();
       expect(t.delta).toBeNull();
@@ -118,6 +122,7 @@ describe("buildKPITiles", () => {
       "sleep",
       "strain",
       "spo2",
+      "steps",
     ]);
   });
 

@@ -137,6 +137,7 @@ const DOMAIN_TABLES = [
   "sleep",
   "workouts",
   "daily_summary",
+  "daily_steps",
   "body_measurements",
 ];
 
@@ -165,8 +166,10 @@ const ALLOWLIST_RELATIVE = new Set<string>([
   // HealthKit ingest write helper (issue #425) — match-lookup reads route
   // through forUser(); insert/enrich writes go through openWrite() directly.
   "src/lib/healthkit/ingest.ts",
+  "src/lib/healthkit/steps-ingest.ts",
   // Domain read modules — all SQL flows through forUser(...).
   "src/lib/db/recovery.ts",
+  "src/lib/db/steps.ts",
   "src/lib/db/sleep.ts",
   "src/lib/db/strain.ts",
   "src/lib/db/workouts.ts",

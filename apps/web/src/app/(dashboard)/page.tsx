@@ -127,6 +127,8 @@ export default async function OverviewPage({
         previousCycle={data.previousCycle}
         latestSleep={data.latestSleep}
         previousSleep={data.previousSleep}
+        latestSteps={data.latestSteps}
+        previousSteps={data.previousSteps}
         recoveryTrend={data.recoveryTrend}
         strainTrend={data.strainTrend}
         sleepTrend={data.sleepTrend}
