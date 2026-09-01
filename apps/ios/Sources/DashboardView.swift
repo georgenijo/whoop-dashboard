@@ -34,6 +34,7 @@ struct DashboardView: View {
                 case .recovery: RecoveryView()
                 case .sleep: SleepView()
                 case .strain: StrainView()
+                case .steps: StepsView()
                 }
             }
         }

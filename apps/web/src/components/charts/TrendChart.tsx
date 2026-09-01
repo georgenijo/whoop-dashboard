@@ -42,6 +42,7 @@ type Props = {
   data: DataPoint[];
   unit?: string;
   showRollingToggle?: boolean;
+  emptySubtext?: string;
 };
 
 type Tooltip = {
@@ -84,6 +85,7 @@ export default function TrendChart({
   data,
   unit = "",
   showRollingToggle = false,
+  emptySubtext = "Sync Whoop to populate this chart",
 }: Props) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
@@ -162,7 +164,7 @@ export default function TrendChart({
         </div>
         <div className="empty-state">
           <div className="title">Not enough data yet</div>
-          <div className="sub">Sync Whoop to populate this chart</div>
+          <div className="sub">{emptySubtext}</div>
         </div>
       </div>
     );

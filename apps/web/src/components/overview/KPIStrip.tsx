@@ -126,6 +126,7 @@ export default function KPIStrip(p: Props) {
           }
           metric="steps"
           delta={formatDelta(p.latestSteps?.steps ?? null, p.previousSteps?.steps ?? null, { unit: "", precision: 0, ...stepsDates })}
+          href="/steps"
         />
       </div>
     </section>

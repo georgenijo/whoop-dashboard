@@ -22,6 +22,7 @@ const TITLES: Record<string, string> = {
   "/recovery": "Recovery",
   "/sleep": "Sleep",
   "/strain": "Strain",
+  "/steps": "Steps",
   "/workouts": "Workouts",
   "/stats": "Stats",
   "/coach": "Coach",
@@ -100,6 +101,7 @@ export default function TopBar() {
     pathname === "/recovery" ||
     pathname === "/sleep" ||
     pathname === "/strain" ||
+    pathname === "/steps" ||
     pathname === "/workouts";
 
   return (

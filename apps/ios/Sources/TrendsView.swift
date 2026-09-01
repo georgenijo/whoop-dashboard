@@ -4,7 +4,7 @@ struct TrendsView: View {
     @State private var destination: Metric?
 
     private enum Metric: String, Identifiable, CaseIterable {
-        case recovery, sleep, strain, workouts
+        case recovery, sleep, strain, steps, workouts
         var id: String { rawValue }
 
         var name: String {
@@ -12,6 +12,7 @@ struct TrendsView: View {
             case .recovery: return "Recovery"
             case .sleep: return "Sleep"
             case .strain: return "Strain"
+            case .steps: return "Steps"
             case .workouts: return "Workouts"
             }
         }
@@ -21,6 +22,7 @@ struct TrendsView: View {
             case .recovery: return "waveform.path.ecg"
             case .sleep: return "moon.fill"
             case .strain: return "flame.fill"
+            case .steps: return "figure.walk"
             case .workouts: return "figure.run"
             }
         }
@@ -30,6 +32,7 @@ struct TrendsView: View {
             case .recovery: return Theme.Palette.recovery
             case .sleep: return Theme.Palette.sleepDeep
             case .strain: return Theme.Palette.strain
+            case .steps: return Theme.Palette.info
             case .workouts: return Theme.Palette.info
             }
         }
@@ -58,6 +61,7 @@ struct TrendsView: View {
                 case .recovery: RecoveryView()
                 case .sleep: SleepView()
                 case .strain: StrainView()
+                case .steps: StepsView()
                 case .workouts: WorkoutsView()
                 }
             }

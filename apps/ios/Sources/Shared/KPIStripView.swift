@@ -4,25 +4,28 @@ struct KPIStripView: View {
     let tiles: [KPITile]
     var onTap: (KPITile) -> Void = { _ in }
 
-    private var strip: [KPITile] { Array(tiles.prefix(4)) }
+    private var strip: [KPITile] { tiles }
 
     var body: some View {
-        HStack(spacing: 1) {
-            ForEach(Array(strip.enumerated()), id: \.offset) { index, tile in
-                if tile.href != nil {
-                    Button {
-                        onTap(tile)
-                    } label: {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 1) {
+                ForEach(Array(strip.enumerated()), id: \.offset) { index, tile in
+                    if tile.href != nil {
+                        Button {
+                            onTap(tile)
+                        } label: {
+                            KPICell(tile: tile)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
                         KPICell(tile: tile)
                     }
-                    .buttonStyle(.plain)
-                } else {
-                    KPICell(tile: tile)
-                }
-                if index < strip.count - 1 {
-                    Rectangle()
-                        .fill(Theme.Palette.borderSubtle)
-                        .frame(width: 1)
+                    .frame(width: 82)
+                    if index < strip.count - 1 {
+                        Rectangle()
+                            .fill(Theme.Palette.borderSubtle)
+                            .frame(width: 1)
+                    }
                 }
             }
         }

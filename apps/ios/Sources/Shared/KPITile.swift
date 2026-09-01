@@ -18,6 +18,7 @@ struct KPITile: Decodable, Identifiable, Hashable {
         case recovery = "/recovery"
         case sleep = "/sleep"
         case strain = "/strain"
+        case steps = "/steps"
     }
 
     struct Delta: Decodable, Hashable {

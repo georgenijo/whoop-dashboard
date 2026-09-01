@@ -36,3 +36,11 @@ export function getStepsRange(
     ...range.params,
   );
 }
+
+export function getStepsTrend(
+  userId: number,
+  startDate: string,
+  endDate: string,
+): StepsRow[] {
+  return getStepsRange(userId, startDate, endDate);
+}
