@@ -27,6 +27,17 @@ describe("AIInsightRefreshWatcher", () => {
     expect(refresh).toHaveBeenCalledTimes(7);
   });
 
+  it("stops checking after the five-minute regeneration window", () => {
+    vi.useFakeTimers();
+    render(<AIInsightRefreshWatcher />);
+
+    act(() => {
+      vi.advanceTimersByTime(305_000);
+    });
+
+    expect(refresh).toHaveBeenCalledTimes(60);
+  });
+
   it("stops checking when the watcher unmounts", () => {
     vi.useFakeTimers();
     const { unmount } = render(<AIInsightRefreshWatcher />);
