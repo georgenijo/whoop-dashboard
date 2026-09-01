@@ -30,6 +30,7 @@ export type IosTestDb = {
   seedSleep: (date: string, opts?: SleepOpts) => void;
   seedCycle: (date: string, opts?: CycleOpts) => void;
   seedWorkout: (id: string, date: string, opts?: WorkoutOpts) => void;
+  seedSteps: (date: string, steps: number, source?: string, userId?: number) => void;
 };
 
 type RecoveryOpts = {
@@ -97,7 +98,7 @@ export function initIosTestDb(prefix: string): IosTestDb {
   function reset(): void {
     const d = db();
     try {
-      for (const t of ["recovery", "sleep", "cycles", "workouts"]) {
+      for (const t of ["recovery", "sleep", "cycles", "workouts", "daily_steps"]) {
         d.prepare(`DELETE FROM ${t} WHERE user_id = 1`).run();
       }
     } finally {
@@ -209,7 +210,18 @@ export function initIosTestDb(prefix: string): IosTestDb {
     }
   }
 
-  return { dbFile, tmpRoot, db, reset, seedRecovery, seedSleep, seedCycle, seedWorkout };
+  function seedSteps(date: string, steps: number, source = "apple_health", userId = 1) {
+    const d = db();
+    try {
+      d.prepare(
+        "INSERT OR REPLACE INTO daily_steps (user_id, date, steps, source, updated_at) VALUES (?, ?, ?, ?, datetime('now'))",
+      ).run(userId, date, steps, source);
+    } finally {
+      d.close();
+    }
+  }
+
+  return { dbFile, tmpRoot, db, reset, seedRecovery, seedSleep, seedCycle, seedWorkout, seedSteps };
 }
 
 export function makeIosRequest(pathAndQuery: string, headers: Record<string, string> = {}): Request {

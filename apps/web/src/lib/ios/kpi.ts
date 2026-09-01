@@ -13,7 +13,7 @@ export type KPITile = {
   unit: string;
   precision: number;
   delta: KPIDelta | null;
-  href: "/recovery" | "/sleep" | "/strain" | null;
+  href: "/recovery" | "/sleep" | "/strain" | "/steps" | null;
   color_hex: string;
 };
 
@@ -169,7 +169,7 @@ export function buildKPITiles(overview: Overview): KPITile[] {
           ...stepsDates,
         },
       ),
-      href: null,
+      href: "/steps",
       color_hex: "#5ac8fa",
     },
   ];

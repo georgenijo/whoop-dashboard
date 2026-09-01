@@ -81,6 +81,7 @@ export {
   getLatestSteps,
   getPreviousSteps,
   getStepsRange,
+  getStepsTrend,
 } from "./steps";
 
 export type {
