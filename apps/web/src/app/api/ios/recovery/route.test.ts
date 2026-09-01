@@ -52,7 +52,7 @@ describe("GET /api/ios/recovery", () => {
     const body = (await res.json()) as Record<string, unknown>;
 
     expect(body.range_label).toBe("30 days");
-    expect(body.kpi).toHaveProperty("length", 6);
+    expect(body.kpi).toHaveProperty("length", 7);
     expect(body.recovery_trend).toBeInstanceOf(Array);
     const recovery_trend = body.recovery_trend as Array<Record<string, unknown>>;
     expect(recovery_trend.length).toBe(30);

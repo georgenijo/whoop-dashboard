@@ -93,7 +93,7 @@ export function optionalUserFkTables(db: DB): string[] {
  *
  * Verified against the live schema: `integrations` PK (user_id, provider),
  * `user_settings` PK (user_id), `device_tokens` PK (user_id, token),
- * `recovery` / `cycles` / `daily_summary` PK (user_id, date), `sleep` PK
+ * `recovery` / `cycles` / `daily_summary` / `daily_steps` PK (user_id, date), `sleep` PK
  * (user_id, sleep_id). The keys are deliberately NOT uniform — see the DB
  * layer section of CLAUDE.md — which is why mergeConflictTable derives the
  * collision key from `PRAGMA table_info` / `index_list` at run time instead
@@ -121,6 +121,7 @@ export const USER_FK_CONFLICT_TABLES = [
   "cycles",
   "sleep",
   "daily_summary",
+  "daily_steps",
 ] as const;
 
 /**
