@@ -3,6 +3,9 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+const REFRESH_INTERVAL_MS = 5_000;
+const MAX_REFRESH_ATTEMPTS = 60;
+
 export default function AIInsightRefreshWatcher() {
   const router = useRouter();
 
@@ -11,10 +14,10 @@ export default function AIInsightRefreshWatcher() {
     const interval = window.setInterval(() => {
       refreshCount += 1;
       router.refresh();
-      if (refreshCount >= 6) {
+      if (refreshCount >= MAX_REFRESH_ATTEMPTS) {
         window.clearInterval(interval);
       }
-    }, 5000);
+    }, REFRESH_INTERVAL_MS);
 
     return () => {
       window.clearInterval(interval);
