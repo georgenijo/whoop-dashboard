@@ -1,19 +1,21 @@
 import Link from "next/link";
 import { formatDelta, msToHoursNumber } from "@/lib/format";
-import type { CycleRow, RecoveryRow, SleepRow } from "@/lib/db";
+import type { CycleRow, RecoveryRow, SleepRow, StepsRow } from "@/lib/db";
+
+type Metric = "hrv" | "rhr" | "sleep" | "strain" | "spo2" | "steps";
 
 type CardProps = {
   label: string;
   value: string;
   unit?: string;
-  metric: "hrv" | "rhr" | "sleep" | "strain" | "spo2";
+  metric: Metric;
   delta: { label: string; dir: "up" | "down" | "flat" };
-  href: string;
+  href?: string;
 };
 
 function KPI({ label, value, unit, metric, delta, href }: CardProps) {
-  return (
-    <Link href={href} className={`kpi metric-${metric}`}>
+  const body = (
+    <>
       <div className="head">
         <span className="lbl">{label}</span>
         <span className="dot" />
@@ -23,6 +25,16 @@ function KPI({ label, value, unit, metric, delta, href }: CardProps) {
         {unit && <span className="unit">{unit}</span>}
       </div>
       <div className={`delta ${delta.dir}`}>{delta.label}</div>
+    </>
+  );
+
+  if (!href) {
+    return <div className={`kpi metric-${metric}`}>{body}</div>;
+  }
+
+  return (
+    <Link href={href} className={`kpi metric-${metric}`}>
+      {body}
     </Link>
   );
 }
@@ -34,6 +46,8 @@ type Props = {
   previousCycle: CycleRow | null;
   latestSleep: SleepRow | null;
   previousSleep: SleepRow | null;
+  latestSteps: StepsRow | null;
+  previousSteps: StepsRow | null;
   recoveryTrend: RecoveryRow[];
   strainTrend: CycleRow[];
   sleepTrend: SleepRow[];
@@ -53,6 +67,10 @@ export default function KPIStrip(p: Props) {
   const sleepDates = {
     latestDate: p.latestSleep?.date,
     previousDate: p.previousSleep?.date,
+  };
+  const stepsDates = {
+    latestDate: p.latestSteps?.date,
+    previousDate: p.previousSteps?.date,
   };
 
   return (
@@ -98,6 +116,16 @@ export default function KPIStrip(p: Props) {
           metric="spo2"
           delta={formatDelta(p.latestRecovery?.spo2 ?? null, p.previousRecovery?.spo2 ?? null, { unit: "%", precision: 1, ...recoveryDates })}
           href="/recovery"
+        />
+        <KPI
+          label="Steps"
+          value={
+            p.latestSteps?.steps != null
+              ? p.latestSteps.steps.toLocaleString("en-US")
+              : "—"
+          }
+          metric="steps"
+          delta={formatDelta(p.latestSteps?.steps ?? null, p.previousSteps?.steps ?? null, { unit: "", precision: 0, ...stepsDates })}
         />
       </div>
     </section>

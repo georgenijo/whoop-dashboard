@@ -653,6 +653,22 @@ export function openWrite(): DB | null {
       "CREATE INDEX IF NOT EXISTS idx_workouts_external ON workouts(user_id, external_id)"
     );
 
+    // Apple Health daily steps — separate from Whoop daily_summary so Whoop
+    // recomputes never clobber HealthKit-only metrics.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS daily_steps (
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        date TEXT NOT NULL,
+        steps INTEGER NOT NULL,
+        source TEXT NOT NULL DEFAULT 'apple_health',
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (user_id, date)
+      )
+    `);
+    db.exec(
+      "CREATE INDEX IF NOT EXISTS idx_daily_steps_date ON daily_steps(date DESC)"
+    );
+
     return db;
   } catch (err) {
     // Surfacing the error is critical: silent null returns hide schema

@@ -12,6 +12,7 @@ import {
   getNaps,
   getRecoveryRange,
   getSleepRangeRaw,
+  getStepsRange,
   getStrainRange,
   getUserSettings,
   getWorkoutPlans,
@@ -43,6 +44,7 @@ export type CoachToolName =
   | "query_workouts"
   | "query_journal"
   | "query_naps"
+  | "query_steps"
   | "query_daily_snapshot"
   | "query_workout_plans"
   | "save_workout_plan"
@@ -239,6 +241,13 @@ export const TOOLS: ToolSchema[] = [
     strict: true,
   },
   {
+    name: "query_steps",
+    description:
+      "Query daily step totals from Apple Health for a date range. Returns date, steps, source (apple_health), and updated_at. Empty when the iOS app has not synced steps yet.",
+    input_schema: DATE_RANGE_SCHEMA,
+    strict: true,
+  },
+  {
     name: "query_journal",
     description:
       "Query journal rows for a date range when journal data exists. Returns an empty array when no journal table is available.",
@@ -248,7 +257,7 @@ export const TOOLS: ToolSchema[] = [
   {
     name: "query_daily_snapshot",
     description:
-      "Bundled fetch of recovery + sleep + strain + workouts for a date range, in one tool call. Returns the same row shapes as the individual query_* tools under the keys recovery, sleep, strain, workouts (workouts is { rows, _meta } matching query_workouts). Naps and journal are NOT included — use query_naps / query_journal directly when those are the question. Use this for broad 'how am I doing' / daily-status questions to avoid 4 round-trips; use the single-domain tools when the user asks about exactly one area.",
+      "Bundled fetch of recovery + sleep + strain + workouts + steps for a date range, in one tool call. Returns the same row shapes as the individual query_* tools under the keys recovery, sleep, strain, workouts (workouts is { rows, _meta } matching query_workouts), and steps. Naps and journal are NOT included — use query_naps / query_journal directly when those are the question. Use this for broad 'how am I doing' / daily-status questions to avoid multiple round-trips; use the single-domain tools when the user asks about exactly one area.",
     input_schema: DATE_RANGE_SCHEMA,
     strict: true,
     cache_control: { type: "ephemeral", ttl: "1h" },
@@ -799,6 +808,8 @@ export async function executeTool(
       return buildWorkoutsPayload(options.userId, startDate, endDate);
     case "query_naps":
       return getNaps(options.userId, startDate, endDate);
+    case "query_steps":
+      return getStepsRange(options.userId, startDate, endDate);
     case "query_journal":
       return getJournalRange(options.userId, startDate, endDate);
     case "query_daily_snapshot":
@@ -807,6 +818,7 @@ export async function executeTool(
         sleep: getSleepRangeRaw(options.userId, startDate, endDate),
         strain: getStrainRange(options.userId, startDate, endDate),
         workouts: buildWorkoutsPayload(options.userId, startDate, endDate),
+        steps: getStepsRange(options.userId, startDate, endDate),
       };
     default:
       throw new ToolInputError(`Unknown tool: ${name}`, {

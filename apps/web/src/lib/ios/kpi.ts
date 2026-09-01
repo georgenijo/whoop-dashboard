@@ -2,7 +2,7 @@ import "server-only";
 import { formatDelta, msToHoursNumber } from "@/lib/format";
 import type { Overview } from "@/lib/db/summary";
 
-export type KPIKey = "recovery" | "hrv" | "rhr" | "sleep" | "strain" | "spo2";
+export type KPIKey = "recovery" | "hrv" | "rhr" | "sleep" | "strain" | "spo2" | "steps";
 
 export type KPIDelta = { label: string; dir: "up" | "down" | "flat" };
 
@@ -13,7 +13,7 @@ export type KPITile = {
   unit: string;
   precision: number;
   delta: KPIDelta | null;
-  href: "/recovery" | "/sleep" | "/strain";
+  href: "/recovery" | "/sleep" | "/strain" | null;
   color_hex: string;
 };
 
@@ -63,6 +63,10 @@ export function buildKPITiles(overview: Overview): KPITile[] {
   const recoveryDates = { latestDate: lr?.date, previousDate: pr?.date };
   const cycleDates = { latestDate: lc?.date, previousDate: pc?.date };
   const sleepDates = { latestDate: ls?.date, previousDate: ps?.date };
+  const stepsDates = {
+    latestDate: overview.latestSteps?.date,
+    previousDate: overview.previousSteps?.date,
+  };
 
   return [
     {
@@ -149,6 +153,24 @@ export function buildKPITiles(overview: Overview): KPITile[] {
       }),
       href: "/recovery",
       color_hex: "#00d4aa",
+    },
+    {
+      key: "steps",
+      label: "Steps",
+      value: overview.latestSteps?.steps ?? null,
+      unit: "",
+      precision: 0,
+      delta: shapeDelta(
+        overview.latestSteps?.steps,
+        overview.previousSteps?.steps,
+        {
+          unit: "",
+          precision: 0,
+          ...stepsDates,
+        },
+      ),
+      href: null,
+      color_hex: "#5ac8fa",
     },
   ];
 }

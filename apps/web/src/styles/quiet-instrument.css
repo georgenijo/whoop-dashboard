@@ -329,6 +329,7 @@ textarea { font: inherit; }
 .kpi.metric-sleep .dot { background: var(--d-sleep); }
 .kpi.metric-strain .dot { background: var(--d-strain); }
 .kpi.metric-spo2 .dot { background: var(--d-spo2); }
+.kpi.metric-steps .dot { background: #5ac8fa; }
 .kpi .val { color: var(--fg); font-family: var(--font-num); font-size: var(--t-xl); font-weight: 450; }
 .kpi .val .unit { color: var(--fg-3); font-size: var(--t-sm); }
 .kpi .delta { color: var(--fg-3); font-size: var(--t-xs); }

@@ -38,8 +38,14 @@ struct HealthKitIngestWorkout: Encodable {
     }
 }
 
+struct HealthKitIngestDaily: Encodable {
+    let date: String
+    let steps: Int
+}
+
 struct HealthKitIngestRequest: Encodable {
     let workouts: [HealthKitIngestWorkout]
+    let daily: [HealthKitIngestDaily]
 }
 
 struct HealthKitIngestResponse: Decodable {
@@ -47,4 +53,10 @@ struct HealthKitIngestResponse: Decodable {
     let inserted: Int
     let enriched: Int
     let skipped: Int
+    let steps: StepsResult?
+
+    struct StepsResult: Decodable {
+        let upserted: Int
+        let skipped: Int
+    }
 }

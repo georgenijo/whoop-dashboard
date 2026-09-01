@@ -12,6 +12,7 @@ actor HealthKitService {
     private static let batchSize = 25
     private static let targetMaxPoints = 600
     private static let baseIntervalSec = 5
+    private static let stepsLookbackDays = 14
 
     private static let iso: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
@@ -53,6 +54,7 @@ actor HealthKitService {
 
         guard !workouts.isEmpty else {
             if let newAnchor { HealthKitAnchorStore.save(newAnchor) }
+            await syncSteps()
             return
         }
 
@@ -69,7 +71,7 @@ actor HealthKitService {
             do {
                 let _: HealthKitIngestResponse = try await api.post(
                     "/api/ingest/healthkit",
-                    body: HealthKitIngestRequest(workouts: batch)
+                    body: HealthKitIngestRequest(workouts: batch, daily: [])
                 )
             } catch {
                 // Don't advance the anchor on a failed upload — the next run
@@ -93,6 +95,37 @@ actor HealthKitService {
             "healthkit_sync",
             details: ["uploaded": payloads.count]
         )
+        await syncSteps()
+    }
+
+    private func syncSteps() async {
+        let daily: [HealthKitIngestDaily]
+        do {
+            daily = try await fetchDailySteps()
+        } catch {
+            ClientLogger.shared.warn(
+                "healthkit_steps_fetch_failed",
+                details: ["error": String(describing: error)]
+            )
+            return
+        }
+        guard !daily.isEmpty else { return }
+
+        do {
+            let _: HealthKitIngestResponse = try await api.post(
+                "/api/ingest/healthkit",
+                body: HealthKitIngestRequest(workouts: [], daily: daily)
+            )
+            ClientLogger.shared.lifecycle(
+                "healthkit_steps_sync",
+                details: ["uploaded": daily.count]
+            )
+        } catch {
+            ClientLogger.shared.warn(
+                "healthkit_steps_upload_failed",
+                details: ["error": String(describing: error)]
+            )
+        }
     }
 
     // MARK: - Authorization
@@ -101,6 +134,7 @@ actor HealthKitService {
         let read: Set<HKObjectType> = [
             HKObjectType.workoutType(),
             HKQuantityType(.heartRate),
+            HKQuantityType(.stepCount),
         ]
         do {
             try await store.requestAuthorization(toShare: [], read: read)
@@ -194,6 +228,66 @@ actor HealthKitService {
                     (date: $0.startDate, bpm: $0.quantity.doubleValue(for: unit))
                 }
                 continuation.resume(returning: points)
+            }
+            store.execute(query)
+        }
+    }
+
+    private func fetchDailySteps() async throws -> [HealthKitIngestDaily] {
+        let stepType = HKQuantityType(.stepCount)
+        let calendar = Calendar.current
+        let end = calendar.startOfDay(for: Date())
+        guard
+            let start = calendar.date(
+                byAdding: .day,
+                value: -(Self.stepsLookbackDays - 1),
+                to: end
+            )
+        else {
+            return []
+        }
+
+        return try await withCheckedThrowingContinuation { continuation in
+            var interval = DateComponents()
+            interval.day = 1
+
+            let query = HKStatisticsCollectionQuery(
+                quantityType: stepType,
+                quantitySamplePredicate: nil,
+                options: .cumulativeSum,
+                anchorDate: end,
+                intervalComponents: interval
+            )
+
+            query.initialResultsHandler = { _, collection, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                guard let collection else {
+                    continuation.resume(returning: [])
+                    return
+                }
+
+                let formatter = DateFormatter()
+                formatter.calendar = calendar
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.timeZone = calendar.timeZone
+                formatter.dateFormat = "yyyy-MM-dd"
+
+                var rows: [HealthKitIngestDaily] = []
+                collection.enumerateStatistics(from: start, to: calendar.date(byAdding: .day, value: 1, to: end)!) { stats, _ in
+                    guard let quantity = stats.sumQuantity() else { return }
+                    let steps = Int(quantity.doubleValue(for: .count()).rounded())
+                    guard steps > 0 else { return }
+                    rows.append(
+                        HealthKitIngestDaily(
+                            date: formatter.string(from: stats.startDate),
+                            steps: steps
+                        )
+                    )
+                }
+                continuation.resume(returning: rows)
             }
             store.execute(query)
         }
