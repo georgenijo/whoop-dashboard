@@ -10,15 +10,17 @@ struct KPIStripView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 1) {
                 ForEach(Array(strip.enumerated()), id: \.offset) { index, tile in
-                    if tile.href != nil {
-                        Button {
-                            onTap(tile)
-                        } label: {
+                    Group {
+                        if tile.href != nil {
+                            Button {
+                                onTap(tile)
+                            } label: {
+                                KPICell(tile: tile)
+                            }
+                            .buttonStyle(.plain)
+                        } else {
                             KPICell(tile: tile)
                         }
-                        .buttonStyle(.plain)
-                    } else {
-                        KPICell(tile: tile)
                     }
                     .frame(width: 82)
                     if index < strip.count - 1 {
