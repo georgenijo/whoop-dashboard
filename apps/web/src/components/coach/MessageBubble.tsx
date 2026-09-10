@@ -6,6 +6,7 @@ import { useMemo, useSyncExternalStore } from "react";
 import CoachInlineChart from "./CoachInlineChart";
 import CoachWorkDisclosure from "./CoachWorkDisclosure";
 import CoachPresentationBlocks from "./CoachPresentationBlocks";
+import CoachMessageActions from "./CoachMessageActions";
 import type {
   ComposerAttachment,
   ComposerMessage,
@@ -168,6 +169,12 @@ export default function MessageBubble({ msg, onAttachmentClick }: Props) {
             ) : null}
             {isAborted ? (
               <span className="coach-message-stopped">(stopped)</span>
+            ) : null}
+            {!msg.streaming && (msg.content.trim() || msg.presentationBlocks?.length) ? (
+              <CoachMessageActions text={[
+                msg.content.trim(),
+                ...(msg.presentationBlocks ?? []).map((block) => block.fallback),
+              ].filter(Boolean).join("\n\n")} />
             ) : null}
           </>
         )}

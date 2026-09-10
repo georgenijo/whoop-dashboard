@@ -5,9 +5,11 @@ vi.mock("server-only", () => ({}));
 import {
   buildCursorSystemPrompt,
   buildSystemPrompt,
+  COACH_RESPONSE_GUIDANCE,
   CURSOR_SYSTEM_PROMPT,
   DEFAULT_SYSTEM_PROMPT,
   normalizeCustomInstructions,
+  PRESENTATION_BLOCK_PROMPT,
 } from "./prompts";
 
 // Issue #498 — normalizeCustomInstructions replaced resolveSystemPrompt.
@@ -208,6 +210,71 @@ describe("buildSystemPrompt custom instructions (issue #498)", () => {
 });
 
 describe("DEFAULT_SYSTEM_PROMPT", () => {
+  it("shares the concise response guidance with every provider", () => {
+    const anthropicPrompt = buildSystemPrompt(
+      new Date("2026-05-02T00:00:00Z"),
+    );
+    const cursorPrompt = buildCursorSystemPrompt(
+      new Date("2026-05-02T00:00:00Z"),
+    );
+
+    expect(
+      anthropicPrompt.some((block) =>
+        block.text.includes(COACH_RESPONSE_GUIDANCE),
+      ),
+    ).toBe(true);
+    expect(cursorPrompt).toContain(COACH_RESPONSE_GUIDANCE);
+  });
+
+  it("defines the approved everyday response shapes", () => {
+    expect(COACH_RESPONSE_GUIDANCE).toContain("aim for 60-90 words");
+    expect(COACH_RESPONSE_GUIDANCE).toContain("at most 3 meaningful facts");
+    expect(COACH_RESPONSE_GUIDANCE).toContain("one practical next step");
+    expect(COACH_RESPONSE_GUIDANCE).toContain(
+      "needs no native presentation block",
+    );
+    expect(COACH_RESPONSE_GUIDANCE).toMatch(
+      /\`metric_strip\` with 1-3 key metrics/,
+    );
+    expect(COACH_RESPONSE_GUIDANCE).toMatch(
+      /\`comparison\` block[\s\S]*behind details/,
+    );
+    expect(COACH_RESPONSE_GUIDANCE).toContain(
+      "do not repeat every card value in prose",
+    );
+    expect(COACH_RESPONSE_GUIDANCE).toContain(
+      "Give a detailed answer when the user asks for detail.",
+    );
+  });
+
+  it("keeps fallback prose useful without duplicating presentation blocks", () => {
+    expect(PRESENTATION_BLOCK_PROMPT).toContain(
+      "the conclusion and the context needed to understand it",
+    );
+    expect(PRESENTATION_BLOCK_PROMPT).toContain(
+      "without repeating every value shown in the block",
+    );
+    expect(PRESENTATION_BLOCK_PROMPT).not.toContain("complete on its own");
+  });
+
+  it("prefers comparison blocks unless the user asks for a Markdown table", () => {
+    expect(COACH_RESPONSE_GUIDANCE).toMatch(
+      /prefer a \`comparison\` block over a Markdown table/i,
+    );
+    expect(COACH_RESPONSE_GUIDANCE).toMatch(
+      /do not duplicate the comparison in a Markdown table/i,
+    );
+    expect(COACH_RESPONSE_GUIDANCE).toMatch(
+      /explicitly asks for a Markdown table, provide one/i,
+    );
+    expect(DEFAULT_SYSTEM_PROMPT).not.toContain(
+      "a small table only when comparing the same metrics",
+    );
+    expect(CURSOR_SYSTEM_PROMPT).not.toContain(
+      "tables only for same-metric comparisons",
+    );
+  });
+
   it("uses typed presentation blocks for new chart requests", () => {
     expect(DEFAULT_SYSTEM_PROMPT).toContain(
       "include one validated `chart` object",

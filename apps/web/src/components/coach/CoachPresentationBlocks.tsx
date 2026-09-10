@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import {
   Bar,
   CartesianGrid,
@@ -17,64 +18,68 @@ import {
 import type {
   ChartBlock,
   CoachPresentationBlock,
+  ComparisonBlock,
+  MetricStripBlock,
 } from "@/lib/coach/presentation";
 
 function number(value: number | null, unit = ""): string {
   if (value === null) return "Not available";
-  return `${value.toLocaleString()}${unit ? ` ${unit}` : ""}`;
+  return `${value.toLocaleString("en-US")}${unit === "%" ? "%" : unit ? ` ${unit}` : ""}`;
 }
 
-function blockText(block: CoachPresentationBlock): string {
-  return block.fallback;
-}
-
-function BlockActions({ block }: { block: CoachPresentationBlock }) {
-  const [copied, setCopied] = useState(false);
-  async function copy() {
-    await navigator.clipboard.writeText(blockText(block));
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1_500);
-  }
-  async function share() {
-    const canvas = document.createElement("canvas");
-    canvas.width = 1_200;
-    canvas.height = 630;
-    const context = canvas.getContext("2d");
-    if (!context) return copy();
-    context.fillStyle = "#f4f0e8";
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.fillStyle = "#171714";
-    context.font = "600 32px system-ui";
-    context.fillText("Coach summary", 72, 88);
-    context.font = "400 27px system-ui";
-    const words = blockText(block).split(/\s+/);
-    const lines: string[] = [];
-    let line = "";
-    for (const word of words) {
-      const candidate = `${line} ${word}`.trim();
-      if (context.measureText(candidate).width > 1_050) {
-        lines.push(line);
-        line = word;
-      } else line = candidate;
-    }
-    if (line) lines.push(line);
-    lines.slice(0, 9).forEach((item, index) => context.fillText(item, 72, 155 + index * 45));
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
-    if (blob && navigator.share) {
-      const file = new File([blob], "coach-summary.png", { type: "image/png" });
-      if (!navigator.canShare || navigator.canShare({ files: [file] })) {
-        await navigator.share({ title: "Coach summary", text: blockText(block), files: [file] });
-        return;
-      }
-    }
-    if (navigator.share) await navigator.share({ title: "Coach summary", text: blockText(block) });
-    else await copy();
-  }
+function MetricCards({ metrics, comparison, columns }: { metrics: MetricStripBlock["metrics"]; comparison?: ComparisonBlock; columns?: 1 | 2 | 3 }) {
   return (
-    <div className="coach-rich-actions">
-      <button type="button" onClick={copy}>{copied ? "Copied" : "Copy"}</button>
-      <button type="button" onClick={share}>Share</button>
+    <div className="coach-rich-metrics" style={{ gridTemplateColumns: `repeat(${columns ?? Math.min(metrics.length, 3)}, minmax(0, 1fr))` }}>
+      {metrics.map((metric) => {
+        const matches = metric.value === null ? [] : comparison?.items.filter((item) =>
+          item.label === metric.label && item.unit === metric.unit && item.current === metric.value,
+        ) ?? [];
+        const match = matches.length === 1 ? matches[0] : undefined;
+        const baseline = match?.baseline != null ? match : undefined;
+        return (
+        <div className={`coach-rich-metric tone-${metric.tone}`} key={metric.label}>
+          <span className="coach-rich-metric-label">{metric.label}</span>
+          <strong className="coach-rich-metric-value">
+            {metric.value === null ? <><span aria-hidden="true">—</span><span className="sr-only">Not available</span></> : metric.display_value}
+            {metric.value !== null && metric.unit && !metric.display_value.toLowerCase().includes(metric.unit.toLowerCase()) ? <small>{metric.unit}</small> : null}
+          </strong>
+          <span className="coach-rich-metric-direction">
+            {baseline ? comparisonChange(baseline) : metric.value === null || metric.direction === "neutral" ? null : metric.direction === "up" ? "↑ Higher" : "↓ Lower"}
+          </span>
+          <span className="coach-rich-metric-baseline">{baseline && baseline.baseline !== null ? `Baseline ${number(baseline.baseline, baseline.unit)}` : null}</span>
+        </div>
+        );
+      })}
     </div>
+  );
+}
+
+function comparisonChange(item: ComparisonBlock["items"][number]): string {
+  if (item.current === null || item.baseline === null) return "Not available";
+  const delta = item.current - item.baseline;
+  if (!Number.isFinite(delta)) return "Not available";
+  if (delta === 0) return "Unchanged";
+  const magnitude = Math.abs(delta);
+  const unit = item.unit === "%" ? (magnitude === 1 ? "pt" : "pts") : item.unit;
+  const change = magnitude < 0.01 ? `<${number(0.01, unit)}` : number(Number(magnitude.toFixed(2)), unit);
+  return `${delta > 0 ? "↑" : "↓"} ${change}`;
+}
+
+function Comparison({ block }: { block: ComparisonBlock }) {
+  return (
+    <details className="coach-rich-details coach-rich-comparison">
+      <summary><ChevronRight size={16} aria-hidden="true" /><span>{block.title}</span><small>{block.items.length} {block.items.length === 1 ? "metric" : "metrics"}</small></summary>
+      <div className="coach-rich-table-wrap">
+        <table className="coach-rich-table">
+          <caption className="sr-only">{block.title}</caption>
+          <thead><tr><th scope="col">Metric</th><th scope="col">Current</th><th scope="col">Baseline</th><th scope="col">Change</th></tr></thead>
+          <tbody>{block.items.map((item) => (
+            <tr key={item.label}><th scope="row">{item.label}</th><td>{number(item.current, item.unit)}</td><td>{number(item.baseline, item.unit)}</td><td>{comparisonChange(item)}</td></tr>
+          ))}</tbody>
+        </table>
+      </div>
+      {block.items.some((item) => item.unit === "%") ? <p className="coach-rich-table-note">Changes in percentages are shown in percentage points.</p> : null}
+    </details>
   );
 }
 
@@ -132,20 +137,23 @@ function RichChart({ block }: { block: ChartBlock }) {
           </table>
         </div>
       )}
-      <div className="coach-rich-chart-actions"><button type="button" onClick={copyTable}>Copy table</button><BlockActions block={block} /></div>
+      <div className="coach-rich-chart-actions"><button type="button" onClick={copyTable}>Copy table</button></div>
     </section>
   );
 }
 
-function RichBlock({ block }: { block: CoachPresentationBlock }) {
+function RichBlock({ block, comparison }: { block: CoachPresentationBlock; comparison?: ComparisonBlock }) {
   const [syncState, setSyncState] = useState<"idle" | "running" | "done" | "error">("idle");
   if (block.type === "chart") return <RichChart block={block} />;
   return (
     <section className={`coach-rich-block coach-rich-${block.type}`} aria-label={block.fallback}>
       {block.type === "metric_strip" ? (
-        <div className="coach-rich-metrics">{block.metrics.map((metric) => <div className={`coach-rich-metric tone-${metric.tone}`} key={metric.label}><span>{metric.label}</span><strong>{metric.display_value}</strong><small>{metric.unit}{metric.direction === "neutral" ? "" : ` · ${metric.direction === "up" ? "↑" : "↓"}`}</small></div>)}</div>
+        <>
+          <MetricCards metrics={block.metrics.slice(0, 3)} comparison={comparison} />
+          {block.metrics.length > 3 ? <details className="coach-rich-details coach-rich-extra-metrics"><summary><ChevronRight size={16} aria-hidden="true" /><span>View {block.metrics.length - 3} more {block.metrics.length === 4 ? "metric" : "metrics"}</span></summary><MetricCards metrics={block.metrics.slice(3)} comparison={comparison} columns={3} /></details> : null}
+        </>
       ) : block.type === "comparison" ? (
-        <><h3>{block.title}</h3><div className="coach-rich-comparison">{block.items.map((item) => <div key={item.label}><span>{item.label}</span><strong>{number(item.current, item.unit)}</strong><small>Baseline {number(item.baseline, item.unit)} · Δ {number(item.delta, item.unit)}</small></div>)}</div></>
+        <Comparison block={block} />
       ) : block.type === "action_plan" ? (
         <><h3>{block.title}</h3><div className="coach-rich-plan">{block.sections.map((section) => <div key={section.timeframe}><h4>{section.timeframe}</h4><ul>{section.items.map((item) => <li key={item}>{item}</li>)}</ul></div>)}</div></>
       ) : block.type === "data_freshness" ? (
@@ -155,12 +163,13 @@ function RichBlock({ block }: { block: CoachPresentationBlock }) {
       ) : (
         <details><summary>{block.title}</summary><p>{block.date_range} · {block.record_count} records · {block.missing_days} missing days</p><p>Sources: {block.sources.join(", ")}</p><ul>{block.points.map((point) => <li key={point}>{point}</li>)}</ul></details>
       )}
-      <BlockActions block={block} />
     </section>
   );
 }
 
 export default function CoachPresentationBlocks({ blocks }: { blocks: CoachPresentationBlock[] }) {
   if (blocks.length === 0) return null;
-  return <div className="coach-rich-blocks">{blocks.map((block, index) => <RichBlock block={block} key={`${block.type}:${index}`} />)}</div>;
+  const comparisons = blocks.filter((block) => block.type === "comparison");
+  const comparison = comparisons.length === 1 ? comparisons[0] : undefined;
+  return <div className="coach-rich-blocks">{blocks.map((block, index) => <RichBlock block={block} comparison={comparison} key={`${block.type}:${index}`} />)}</div>;
 }

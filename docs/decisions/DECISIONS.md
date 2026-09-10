@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-09-10: Keep Coach check-ins concise and reveal detail on demand
+
+**Decision:** Apply one shared response guideline across Coach providers: lead with the answer, aim for 60–90 words or fewer for routine check-ins, use up to three meaningful facts and one practical next step, and expand when requested. Support all three approved presentation styles: plain prose, compact key metrics, and a full comparison behind a disclosure. Group Copy and Share once beneath each completed answer.
+
+**Rationale:** Thread 176 showed that useful data can be hard to read when the answer repeats a long metric report and the card spreads labels and values across the screen. George approved all three concepts in the response study. Keep the existing presentation schema and stored conversations; show baseline context on a key metric only when a single comparison supplies an unambiguous matching label, unit, and current value.
+
+**Status:** active
+
+**References:** `apps/web/src/lib/coach/prompts.ts`, `apps/web/src/components/coach/CoachPresentationBlocks.tsx`, `apps/web/src/components/coach/CoachMessageActions.tsx`, Fleet artifact `art_20260910T155057Z_8843c66a72`
+
+---
+
 ## 2026-08-30: Page time filters govern every rendered graph
 
 **Decision:** A dashboard range such as `7d` resolves to an exact inclusive calendar window (today plus the preceding six dates), and every web and iOS graph on that page renders only records inside that window. An analytic may load older records to seed a rolling baseline or EWMA, but must trim its visible points and range-derived summaries back to the selected window; fixed 14/30/90/180-day display datasets are not allowed behind a page-level picker.

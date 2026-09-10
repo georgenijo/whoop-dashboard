@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import MessageBubble from "./MessageBubble";
 
 // This file runs under vitest's configured `jsdom` environment, so `window`
@@ -128,6 +128,39 @@ xychart-beta
       />,
     );
     expect(screen.queryByText("78%")).toBeNull();
+  });
+
+  it("copies the answer and its supporting detail from one message action row", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    render(<MessageBubble msg={{
+      role: "assistant",
+      content: "You are holding steady.",
+      status: "complete",
+      presentationBlocks: [
+        { version: 1, type: "metric_strip", fallback: "Recovery is 66%.", metrics: [{ label: "Recovery", value: 66, display_value: "66%", unit: "%", direction: "neutral", tone: "neutral" }] },
+        { version: 1, type: "comparison", title: "Two-week comparison", fallback: "The two-week average is 67%.", items: [{ label: "Recovery", current: 66, baseline: 67, delta: -1, unit: "%", direction: "down" }] },
+      ],
+    }} />);
+    expect(screen.getAllByRole("group", { name: "Message actions" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Copy" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Share" })).toHaveLength(1);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Copy" })));
+    expect(writeText).toHaveBeenCalledWith("You are holding steady.\n\nRecovery is 66%.\n\nThe two-week average is 67%.");
+  });
+
+  it("keeps plain answers card-free and withholds actions while streaming", () => {
+    const { container, rerender } = render(<MessageBubble msg={{ role: "assistant", content: "You are holding steady.", streaming: true }} />);
+    expect(screen.queryByRole("group", { name: "Message actions" })).not.toBeInTheDocument();
+    rerender(<MessageBubble msg={{ role: "assistant", content: "You are holding steady.", status: "complete" }} />);
+    expect(screen.getByRole("group", { name: "Message actions" })).toBeVisible();
+    expect(container.querySelector(".coach-rich-blocks")).toBeNull();
+  });
+
+  it("keeps the stopped marker with the partial answer above its actions", () => {
+    const { container } = render(<MessageBubble msg={{ role: "assistant", content: "Your recovery is", status: "aborted" }} />);
+    expect(screen.getByText("(stopped)")).toBeVisible();
+    expect(container.querySelector(".coach-message-stopped")?.nextElementSibling).toHaveClass("coach-message-actions");
   });
 
   it("strips the standard XSS vectors from streamed assistant content", () => {
