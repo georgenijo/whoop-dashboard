@@ -71,16 +71,34 @@ describe("CoachPresentationBlocks", () => {
     expect(screen.queryByRole("button", { name: "Share" })).not.toBeInTheDocument();
   });
 
-  it("uses the change's sign instead of a contradictory model-authored direction", () => {
+  it("derives the change from the displayed values despite contradictory model metadata", () => {
     const { container } = render(<CoachPresentationBlocks blocks={[{
       version: 1,
       type: "comparison",
       title: "HRV",
       fallback: "HRV fell by 2 ms.",
-      items: [{ label: "HRV", current: 45.8, baseline: 47.8, delta: -2, unit: "ms", direction: "up" }],
+      items: [{ label: "HRV", current: 45.8, baseline: 47.8, delta: 2, unit: "ms", direction: "up" }],
     }]} />);
     expect(container).toHaveTextContent("↓ 2 ms");
     expect(container).not.toHaveTextContent("↑");
+  });
+
+  it.each([1, 0, null])("derives percentage points when the supplied delta is %s", (delta) => {
+    const { container } = render(<CoachPresentationBlocks blocks={[{
+      version: 1, type: "comparison", title: "Recovery", fallback: "Recovery is 1 point lower.",
+      items: [{ label: "Recovery", current: 66, baseline: 67, delta, unit: "%", direction: "up" }],
+    }]} />);
+    expect(container).toHaveTextContent("↓ 1 pt");
+    expect(container).not.toHaveTextContent("Unchanged");
+  });
+
+  it("does not round a small difference into an unchanged value", () => {
+    const { container } = render(<CoachPresentationBlocks blocks={[{
+      version: 1, type: "comparison", title: "Small difference", fallback: "A small increase.",
+      items: [{ label: "HRV", current: 47.804, baseline: 47.8, delta: null, unit: "ms", direction: "neutral" }],
+    }]} />);
+    expect(container).toHaveTextContent("↑ <0.01 ms");
+    expect(container).not.toHaveTextContent("Unchanged");
   });
 
   it("shows three key metrics and keeps the rest available without repeating units", () => {
@@ -115,5 +133,16 @@ describe("CoachPresentationBlocks", () => {
     rerender(<CoachPresentationBlocks blocks={[metric, comparison, { ...comparison, title: "Another period" }]} />);
     expect(screen.queryByText("Baseline 67%")).not.toBeInTheDocument();
     expect(screen.getByText("↓ Lower")).toBeVisible();
+  });
+
+  it("keeps the metric's direction when the matching baseline is unavailable", () => {
+    render(<CoachPresentationBlocks blocks={[
+      { version: 1, type: "metric_strip", fallback: "HRV is 45.8 ms.", metrics: [{ label: "HRV", value: 45.8, display_value: "45.8 ms", unit: "ms", direction: "down", tone: "neutral" }] },
+      { version: 1, type: "comparison", title: "HRV baseline", fallback: "No baseline is available.", items: [{ label: "HRV", current: 45.8, baseline: null, delta: null, unit: "ms", direction: "neutral" }] },
+    ]} />);
+    const metric = within(screen.getByRole("region", { name: "HRV is 45.8 ms." }));
+    expect(metric.getByText("45.8 ms")).toBeVisible();
+    expect(metric.getByText("↓ Lower")).toBeVisible();
+    expect(metric.queryByText("Not available")).not.toBeInTheDocument();
   });
 });

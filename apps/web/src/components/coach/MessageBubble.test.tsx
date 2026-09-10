@@ -157,6 +157,12 @@ xychart-beta
     expect(container.querySelector(".coach-rich-blocks")).toBeNull();
   });
 
+  it("keeps the stopped marker with the partial answer above its actions", () => {
+    const { container } = render(<MessageBubble msg={{ role: "assistant", content: "Your recovery is", status: "aborted" }} />);
+    expect(screen.getByText("(stopped)")).toBeVisible();
+    expect(container.querySelector(".coach-message-stopped")?.nextElementSibling).toHaveClass("coach-message-actions");
+  });
+
   it("strips the standard XSS vectors from streamed assistant content", () => {
     const html = browserHtml(XSS);
 

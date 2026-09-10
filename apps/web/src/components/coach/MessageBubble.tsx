@@ -167,14 +167,14 @@ export default function MessageBubble({ msg, onAttachmentClick }: Props) {
             {!msg.streaming ? (
               <CoachPresentationBlocks blocks={msg.presentationBlocks ?? []} />
             ) : null}
+            {isAborted ? (
+              <span className="coach-message-stopped">(stopped)</span>
+            ) : null}
             {!msg.streaming && (msg.content.trim() || msg.presentationBlocks?.length) ? (
               <CoachMessageActions text={[
                 msg.content.trim(),
                 ...(msg.presentationBlocks ?? []).map((block) => block.fallback),
               ].filter(Boolean).join("\n\n")} />
-            ) : null}
-            {isAborted ? (
-              <span className="coach-message-stopped">(stopped)</span>
             ) : null}
           </>
         )}

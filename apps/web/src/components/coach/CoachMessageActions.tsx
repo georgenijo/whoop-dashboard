@@ -5,7 +5,7 @@ import { Check, Copy, Share2 } from "lucide-react";
 
 type Feedback =
   | { kind: "idle" }
-  | { kind: "copied" }
+  | { kind: "copied"; action: "copy" | "share" }
   | { kind: "error"; message: string };
 
 const COPIED_DURATION_MS = 1_500;
@@ -88,6 +88,8 @@ export default function CoachMessageActions({ text }: { text: string }) {
   const [feedback, setFeedback] = useState<Feedback>({ kind: "idle" });
   const copiedTimeout = useRef<number | null>(null);
   const mounted = useRef(true);
+  const busyRef = useRef(false);
+  const [busy, setBusy] = useState(false);
 
   function clearCopiedTimeout() {
     if (copiedTimeout.current === null) return;
@@ -99,6 +101,7 @@ export default function CoachMessageActions({ text }: { text: string }) {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      busyRef.current = false;
       clearCopiedTimeout();
     };
   }, []);
@@ -108,13 +111,26 @@ export default function CoachMessageActions({ text }: { text: string }) {
     setFeedback({ kind: "idle" });
   }
 
-  function showCopied() {
+  function beginOperation(): boolean {
+    if (busyRef.current || !mounted.current) return false;
+    busyRef.current = true;
+    resetFeedback();
+    setBusy(true);
+    return true;
+  }
+
+  function finishOperation() {
+    busyRef.current = false;
+    if (mounted.current) setBusy(false);
+  }
+
+  function showCopied(action: "copy" | "share") {
     if (!mounted.current) return;
     clearCopiedTimeout();
-    setFeedback({ kind: "copied" });
+    setFeedback({ kind: "copied", action });
     copiedTimeout.current = window.setTimeout(() => {
       copiedTimeout.current = null;
-      setFeedback({ kind: "idle" });
+      if (mounted.current) setFeedback({ kind: "idle" });
     }, COPIED_DURATION_MS);
   }
 
@@ -123,23 +139,27 @@ export default function CoachMessageActions({ text }: { text: string }) {
   }
 
   async function copyAnswer() {
-    resetFeedback();
+    if (!beginOperation()) return;
     try {
       if (!await writeToClipboard(text)) throw new Error("Clipboard unavailable");
-      showCopied();
+      showCopied("copy");
     } catch {
       showError("Couldn't copy. Try again.");
+    } finally {
+      finishOperation();
     }
   }
 
   async function shareAnswer() {
-    resetFeedback();
-    if (!navigator.share) {
-      await copyAnswer();
-      return;
-    }
+    if (!beginOperation()) return;
 
     try {
+      if (!navigator.share) {
+        if (!await writeToClipboard(text)) throw new Error("Clipboard unavailable");
+        showCopied("share");
+        return;
+      }
+
       const file = await createSummaryFile(text);
       if (!mounted.current) return;
       if (file && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
@@ -151,34 +171,37 @@ export default function CoachMessageActions({ text }: { text: string }) {
       if (!isShareCancellation(error)) {
         showError("Couldn't share. Try again.");
       }
+    } finally {
+      finishOperation();
     }
   }
 
-  const copied = feedback.kind === "copied";
+  const copiedAction = feedback.kind === "copied" ? feedback.action : null;
 
   return (
     <div className="coach-message-actions" role="group" aria-label="Message actions">
       <button
         type="button"
         className="coach-message-action"
+        disabled={busy}
         onClick={() => { void copyAnswer(); }}
       >
-        {copied ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}
-        {copied ? "Copied" : "Copy"}
+        {copiedAction === "copy" ? <Check aria-hidden="true" size={16} /> : <Copy aria-hidden="true" size={16} />}
+        {copiedAction === "copy" ? "Copied" : "Copy"}
       </button>
       <button
         type="button"
         className="coach-message-action"
+        disabled={busy}
         onClick={() => { void shareAnswer(); }}
       >
-        <Share2 aria-hidden="true" size={16} />
-        Share
+        {copiedAction === "share" ? <Check aria-hidden="true" size={16} /> : <Share2 aria-hidden="true" size={16} />}
+        {copiedAction === "share" ? "Copied" : "Share"}
       </button>
-      {feedback.kind === "error" ? (
-        <span className="coach-message-action-status" role="status">
-          {feedback.message}
-        </span>
-      ) : null}
+      <span className="coach-message-action-status" role="status">
+        {feedback.kind === "error" ? feedback.message : null}
+        {feedback.kind === "copied" ? <span className="sr-only">Copied to clipboard</span> : null}
+      </span>
     </div>
   );
 }

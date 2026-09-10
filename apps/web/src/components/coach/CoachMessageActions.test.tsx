@@ -13,7 +13,7 @@ describe("CoachMessageActions", () => {
   const writeText = vi.fn<(text: string) => Promise<void>>();
 
   beforeEach(() => {
-    writeText.mockResolvedValue(undefined);
+    writeText.mockReset().mockResolvedValue(undefined);
     setNavigatorProperty("clipboard", { writeText });
     setNavigatorProperty("share", undefined);
     setNavigatorProperty("canShare", undefined);
@@ -34,6 +34,8 @@ describe("CoachMessageActions", () => {
     expect(within(actions).getAllByRole("button")).toHaveLength(2);
     expect(within(actions).getByRole("button", { name: "Copy" })).toHaveClass("coach-message-action");
     expect(within(actions).getByRole("button", { name: "Share" })).toHaveClass("coach-message-action");
+    expect(within(actions).getByRole("status")).toHaveClass("coach-message-action-status");
+    expect(within(actions).getByRole("status")).toBeEmptyDOMElement();
   });
 
   it("copies the answer and only reports success after the write completes", async () => {
@@ -46,9 +48,13 @@ describe("CoachMessageActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy" }));
     expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
     expect(writeText).toHaveBeenCalledWith("Recovery is trending up.");
+    expect(screen.getByRole("button", { name: "Copy" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Share" })).toBeDisabled();
 
     finishCopy?.();
     expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Copied to clipboard");
+    expect(screen.getByText("Copied to clipboard")).toHaveClass("sr-only");
   });
 
   it("clears the copied-label timer when the row unmounts", async () => {
@@ -87,10 +93,52 @@ describe("CoachMessageActions", () => {
   it("falls back to copying when native sharing is unavailable", async () => {
     render(<CoachMessageActions text="Keep today easy." />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Share" }));
+    const shareButton = screen.getByRole("button", { name: "Share" });
+    fireEvent.click(shareButton);
 
-    expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Copied" })).toBe(shareButton);
+    expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Copied to clipboard");
     expect(writeText).toHaveBeenCalledWith("Keep today easy.");
+  });
+
+  it("blocks overlapping actions while a clipboard write is pending", async () => {
+    let finishCopy: (() => void) | undefined;
+    writeText.mockImplementation(() => new Promise<void>((resolve) => {
+      finishCopy = resolve;
+    }));
+    render(<CoachMessageActions text="Keep today easy." />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+    fireEvent.click(screen.getByRole("button", { name: "Share" }));
+    expect(writeText).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      finishCopy?.();
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("button", { name: "Share" })).toBeEnabled();
+  });
+
+  it("blocks copy while a native share is pending", async () => {
+    let finishShare: (() => void) | undefined;
+    const share = vi.fn(() => new Promise<void>((resolve) => {
+      finishShare = resolve;
+    }));
+    setNavigatorProperty("share", share);
+    render(<CoachMessageActions text="Take a rest day." />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Share" }));
+    await waitFor(() => expect(share).toHaveBeenCalledTimes(1));
+    expect(screen.getByRole("button", { name: "Copy" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Copy" }));
+    expect(writeText).not.toHaveBeenCalled();
+
+    await act(async () => {
+      finishShare?.();
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("button", { name: "Copy" })).toBeEnabled();
   });
 
   it("handles a canceled native share without showing an error", async () => {
@@ -104,7 +152,7 @@ describe("CoachMessageActions", () => {
       title: "Coach summary",
       text: "Take a rest day.",
     }));
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
   it("shows a share failure and clears it when a retry succeeds", async () => {
@@ -115,11 +163,11 @@ describe("CoachMessageActions", () => {
     render(<CoachMessageActions text="Hydrate before training." />);
 
     fireEvent.click(screen.getByRole("button", { name: "Share" }));
-    expect(await screen.findByRole("status")).toHaveTextContent("Couldn't share. Try again.");
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Couldn't share. Try again."));
 
     fireEvent.click(screen.getByRole("button", { name: "Share" }));
     await waitFor(() => expect(share).toHaveBeenCalledTimes(2));
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeEmptyDOMElement();
   });
 
   it("shows a rejected clipboard write and allows a successful retry", async () => {
@@ -127,10 +175,10 @@ describe("CoachMessageActions", () => {
     render(<CoachMessageActions text="Sleep a little earlier." />);
 
     fireEvent.click(screen.getByRole("button", { name: "Copy" }));
-    expect(await screen.findByRole("status")).toHaveTextContent("Couldn't copy. Try again.");
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Couldn't copy. Try again."));
 
     fireEvent.click(screen.getByRole("button", { name: "Copy" }));
     expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Copied to clipboard");
   });
 });

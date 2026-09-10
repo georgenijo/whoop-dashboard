@@ -9,6 +9,7 @@ import {
   CURSOR_SYSTEM_PROMPT,
   DEFAULT_SYSTEM_PROMPT,
   normalizeCustomInstructions,
+  PRESENTATION_BLOCK_PROMPT,
 } from "./prompts";
 
 // Issue #498 — normalizeCustomInstructions replaced resolveSystemPrompt.
@@ -243,6 +244,34 @@ describe("DEFAULT_SYSTEM_PROMPT", () => {
     );
     expect(COACH_RESPONSE_GUIDANCE).toContain(
       "Give a detailed answer when the user asks for detail.",
+    );
+  });
+
+  it("keeps fallback prose useful without duplicating presentation blocks", () => {
+    expect(PRESENTATION_BLOCK_PROMPT).toContain(
+      "the conclusion and the context needed to understand it",
+    );
+    expect(PRESENTATION_BLOCK_PROMPT).toContain(
+      "without repeating every value shown in the block",
+    );
+    expect(PRESENTATION_BLOCK_PROMPT).not.toContain("complete on its own");
+  });
+
+  it("prefers comparison blocks unless the user asks for a Markdown table", () => {
+    expect(COACH_RESPONSE_GUIDANCE).toMatch(
+      /prefer a \`comparison\` block over a Markdown table/i,
+    );
+    expect(COACH_RESPONSE_GUIDANCE).toMatch(
+      /do not duplicate the comparison in a Markdown table/i,
+    );
+    expect(COACH_RESPONSE_GUIDANCE).toMatch(
+      /explicitly asks for a Markdown table, provide one/i,
+    );
+    expect(DEFAULT_SYSTEM_PROMPT).not.toContain(
+      "a small table only when comparing the same metrics",
+    );
+    expect(CURSOR_SYSTEM_PROMPT).not.toContain(
+      "tables only for same-metric comparisons",
     );
   });
 

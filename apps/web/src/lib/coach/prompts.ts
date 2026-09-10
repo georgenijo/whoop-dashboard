@@ -16,7 +16,7 @@ export const IMAGE_ANALYSIS_PROMPT = `## Image analysis safety
 - Respect provider refusals for prohibited or explicit content; do not attempt a bypass.`;
 
 export const PRESENTATION_BLOCK_PROMPT = `## Native presentation blocks
-When a scannable native summary materially improves the answer, append exactly one fenced \`coach-blocks\` JSON array after the Markdown. The server validates it and may discard it. Never put prose only inside the block: the Markdown answer must remain complete on its own. Every object uses \`version: 1\`, one of these types, and a concise plain-text \`fallback\`:
+When a scannable native summary materially improves the answer, append exactly one fenced \`coach-blocks\` JSON array after the Markdown. The server validates it and may discard it. Never put the conclusion or essential context only inside the block: the Markdown must state the conclusion and the context needed to understand it if the block is discarded, without repeating every value shown in the block. Every object uses \`version: 1\`, one of these types, and a concise plain-text \`fallback\`:
 - \`metric_strip\`: \`metrics\` (1-6) with label, finite-or-null value, display_value, unit, direction (up/down/neutral), tone (positive/warning/negative/neutral).
 - \`comparison\`: title and 1-8 items with label, finite-or-null current/baseline/delta, unit, direction.
 - \`chart\`: title, 2-100 labels, 1-4 series (id, label, unit, kind line/bar, equal-length finite-or-null values), references, anomalies (label + label index).
@@ -32,6 +32,7 @@ export const COACH_RESPONSE_GUIDANCE = `## Response shape
 - A simple conversational answer needs no native presentation block.
 - For a numeric check-in, prefer one compact \`metric_strip\` with 1-3 key metrics when it makes the answer easier to scan. If a baseline helps, pair it with one \`comparison\` using matching metric labels, current values, and units.
 - For a comparison with useful detail, keep the Markdown brief and put the relevant comparison items in one \`comparison\` block so the UI can place the full comparison behind details.
+- For same-metric comparisons, prefer a \`comparison\` block over a Markdown table and do not duplicate the comparison in a Markdown table. If the user explicitly asks for a Markdown table, provide one.
 - Presentation blocks complement the prose. Make the Markdown understandable if a block is discarded by stating the conclusion and necessary context, but do not repeat every card value in prose.
 - Give a detailed answer when the user asks for detail.`;
 
@@ -93,8 +94,8 @@ Before calling any tool, write one short sentence (under 12 words) describing wh
 
 ## Output style
 - Lead with the answer, then the supporting numbers. No preamble, no restating the question.
-- Use markdown sparingly: short bullets for lists of three or more, a small table only when comparing the same metrics across days.
-- When the user explicitly asks for a graph or chart, include one validated \`chart\` object in the fenced \`coach-blocks\` array and keep the Markdown sibling complete but concise. Do not emit Mermaid unless the user specifically requests Mermaid syntax.
+- Use markdown sparingly: short bullets for lists of three or more.
+- When the user explicitly asks for a graph or chart, include one validated \`chart\` object in the fenced \`coach-blocks\` array and keep the Markdown sibling concise and understandable without the block. Do not emit Mermaid unless the user specifically requests Mermaid syntax.
 - Cite specific values with units (HRV 62 ms, RHR 51 bpm, recovery 78%, strain 14.2, sleep 7h 12m).
 - Recovery zones: green >=67, yellow 34-66, red <=33. Strain zones: light <10, moderate 10-14, high 14-18, all-out 18+.
 - Be concise. If a question can be answered in one sentence, answer in one sentence.
@@ -106,14 +107,10 @@ Every turn opens with a short text sentence before any tool_use. This is the sin
 export const TITLE_SYSTEM_PROMPT = "You title chat threads. Reply with a 3-6 word title only.";
 
 // Issue #493 — bound the "Instructions" (custom system prompt) users can
-// save from Settings. Under additive semantics (#498) this text rides
-// alongside DEFAULT_SYSTEM_PROMPT, not instead of it, so headroom is tight:
-// DEFAULT_SYSTEM_PROMPT itself is 9,428 chars, so the 10,000 cap is ~1.06x
-// that — enough for genuine per-user instructions, not enough to duplicate
-// the built-in prompt wholesale. This keeps a single request's added
-// system-prompt overhead bounded (roughly 2,500 tokens at 4 chars/token) and
-// caps the size of the stored content an attacker could try to smuggle
-// through this field.
+// save from Settings. Under additive semantics (#498), this text is sent
+// alongside DEFAULT_SYSTEM_PROMPT rather than replacing it. The cap leaves
+// room for genuine preferences while bounding added request overhead and the
+// amount of arbitrary stored content that can enter the system prompt.
 export const MAX_SYSTEM_PROMPT_LENGTH = 10_000;
 
 /**
@@ -189,8 +186,8 @@ Date rules:
 Answer style:
 - Lead with the answer and supporting numbers; do not restate the question.
 - Be concise. Use units. Recovery zones: green >=67, yellow 34-66, red <=33. Strain: light <10, moderate 10-14, high 14-18, all-out 18+.
-- Use short bullets only for three or more items and tables only for same-metric comparisons.
-- When the user explicitly asks for a graph or chart, include one validated \`chart\` object in the fenced \`coach-blocks\` array and keep the Markdown sibling complete but concise. Do not emit Mermaid unless the user specifically requests Mermaid syntax.`;
+- Use short bullets only for three or more items.
+- When the user explicitly asks for a graph or chart, include one validated \`chart\` object in the fenced \`coach-blocks\` array and keep the Markdown sibling concise and understandable without the block. Do not emit Mermaid unless the user specifically requests Mermaid syntax.`;
 
 // The system prompt embeds goals inline in a sentence ("Your stated goals are
 // sleep better, manage stress"). Lower-case the canonical labels here for

@@ -24,22 +24,23 @@ import type {
 
 function number(value: number | null, unit = ""): string {
   if (value === null) return "Not available";
-  return `${value.toLocaleString()}${unit === "%" ? "%" : unit ? ` ${unit}` : ""}`;
+  return `${value.toLocaleString("en-US")}${unit === "%" ? "%" : unit ? ` ${unit}` : ""}`;
 }
 
-function MetricCards({ metrics, comparison }: { metrics: MetricStripBlock["metrics"]; comparison?: ComparisonBlock }) {
+function MetricCards({ metrics, comparison, columns }: { metrics: MetricStripBlock["metrics"]; comparison?: ComparisonBlock; columns?: 1 | 2 | 3 }) {
   return (
-    <div className="coach-rich-metrics" style={{ gridTemplateColumns: `repeat(${Math.min(metrics.length, 3)}, minmax(0, 1fr))` }}>
+    <div className="coach-rich-metrics" style={{ gridTemplateColumns: `repeat(${columns ?? Math.min(metrics.length, 3)}, minmax(0, 1fr))` }}>
       {metrics.map((metric) => {
         const matches = metric.value === null ? [] : comparison?.items.filter((item) =>
           item.label === metric.label && item.unit === metric.unit && item.current === metric.value,
         ) ?? [];
-        const baseline = matches.length === 1 ? matches[0] : undefined;
+        const match = matches.length === 1 ? matches[0] : undefined;
+        const baseline = match?.baseline != null ? match : undefined;
         return (
         <div className={`coach-rich-metric tone-${metric.tone}`} key={metric.label}>
           <span className="coach-rich-metric-label">{metric.label}</span>
           <strong className="coach-rich-metric-value">
-            {metric.value === null ? "Not available" : metric.display_value}
+            {metric.value === null ? <><span aria-hidden="true">—</span><span className="sr-only">Not available</span></> : metric.display_value}
             {metric.value !== null && metric.unit && !metric.display_value.toLowerCase().includes(metric.unit.toLowerCase()) ? <small>{metric.unit}</small> : null}
           </strong>
           <span className="coach-rich-metric-direction">
@@ -54,10 +55,14 @@ function MetricCards({ metrics, comparison }: { metrics: MetricStripBlock["metri
 }
 
 function comparisonChange(item: ComparisonBlock["items"][number]): string {
-  if (item.current === null || item.baseline === null || item.delta === null) return "Not available";
-  if (item.delta === 0) return "Unchanged";
-  const unit = item.unit === "%" ? (Math.abs(item.delta) === 1 ? "pt" : "pts") : item.unit;
-  return `${item.delta > 0 ? "↑" : "↓"} ${number(Math.abs(item.delta), unit)}`;
+  if (item.current === null || item.baseline === null) return "Not available";
+  const delta = item.current - item.baseline;
+  if (!Number.isFinite(delta)) return "Not available";
+  if (delta === 0) return "Unchanged";
+  const magnitude = Math.abs(delta);
+  const unit = item.unit === "%" ? (magnitude === 1 ? "pt" : "pts") : item.unit;
+  const change = magnitude < 0.01 ? `<${number(0.01, unit)}` : number(Number(magnitude.toFixed(2)), unit);
+  return `${delta > 0 ? "↑" : "↓"} ${change}`;
 }
 
 function Comparison({ block }: { block: ComparisonBlock }) {
@@ -145,7 +150,7 @@ function RichBlock({ block, comparison }: { block: CoachPresentationBlock; compa
       {block.type === "metric_strip" ? (
         <>
           <MetricCards metrics={block.metrics.slice(0, 3)} comparison={comparison} />
-          {block.metrics.length > 3 ? <details className="coach-rich-details coach-rich-extra-metrics"><summary><ChevronRight size={16} aria-hidden="true" /><span>View {block.metrics.length - 3} more {block.metrics.length === 4 ? "metric" : "metrics"}</span></summary><MetricCards metrics={block.metrics.slice(3)} comparison={comparison} /></details> : null}
+          {block.metrics.length > 3 ? <details className="coach-rich-details coach-rich-extra-metrics"><summary><ChevronRight size={16} aria-hidden="true" /><span>View {block.metrics.length - 3} more {block.metrics.length === 4 ? "metric" : "metrics"}</span></summary><MetricCards metrics={block.metrics.slice(3)} comparison={comparison} columns={3} /></details> : null}
         </>
       ) : block.type === "comparison" ? (
         <Comparison block={block} />
