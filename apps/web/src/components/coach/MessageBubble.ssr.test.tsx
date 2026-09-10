@@ -69,7 +69,8 @@ describe("MessageBubble server render (no browser DOM)", () => {
 
     expect(body.querySelector("script")).toBeNull();
     expect(body.querySelector("img")).toBeNull();
-    expect(body.querySelector("svg")).toBeNull();
+    expect(body.querySelector(".prose-coach svg")).toBeNull();
+    expect(body.querySelectorAll(".coach-message-actions svg")).toHaveLength(2);
     expect(body.querySelector("animate")).toBeNull();
     expect(body.querySelector("a")).toBeNull();
     for (const element of body.querySelectorAll("*")) {
