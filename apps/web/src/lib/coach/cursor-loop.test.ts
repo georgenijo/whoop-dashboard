@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { readFileSync, statSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import { access, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -133,6 +134,7 @@ async function waitForSpawn(): Promise<void> {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllEnvs();
   vi.restoreAllMocks();
   spawnMock.mockReset();
   // Restore the module-factory defaults: vi.restoreAllMocks() strips the
@@ -894,4 +896,25 @@ describe("runCursorTurn early-exit timing", () => {
       earlyExitMs ?? 0,
     );
   });
+});
+
+
+it("writes owner-only legacy MCP config with the scoped Whoop credential environment", async () => {
+  vi.stubEnv("VAULT_KEY", "synthetic-vault");
+  vi.stubEnv("WHOOP_CLIENT_ID", "synthetic-client");
+  vi.stubEnv("WHOOP_CLIENT_SECRET", "synthetic-secret");
+  vi.stubEnv("JWT_SIGNING_KEY", "do-not-forward");
+  const child = fakeChild();
+  spawnMock.mockReturnValue(child);
+  const turn = runCursorTurn(baseArgs({ iterations: 0 }));
+  await waitForSpawn();
+  const workspace = spawnMock.mock.calls[0][2].cwd;
+  const file = path.join(workspace, ".cursor", "mcp.json");
+  const config = JSON.parse(readFileSync(file, "utf8"));
+  expect(config.mcpServers.whoop.env).toMatchObject({ VAULT_KEY: "synthetic-vault", WHOOP_CLIENT_ID: "synthetic-client", WHOOP_CLIENT_SECRET: "synthetic-secret" });
+  expect(config.mcpServers.whoop.env).not.toHaveProperty("JWT_SIGNING_KEY");
+  expect(statSync(file).mode & 0o777).toBe(0o600);
+  child.stdout.end();
+  child.emit("close", 0);
+  await turn.catch(() => undefined);
 });

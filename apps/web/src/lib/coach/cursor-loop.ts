@@ -1,3 +1,4 @@
+import { whoopMcpEnv } from "./whoop-mcp-env";
 import "server-only";
 // Cursor Composer coach provider. Runs the official `cursor-agent` CLI as a
 // subprocess in read-only `--mode ask` (which natively blocks shell/write —
@@ -631,6 +632,7 @@ async function makeWorkspace(userId: number, images: CoachImage[]): Promise<stri
             // PATH included explicitly so `node` resolves even if a future
             // cursor-agent treats `env` as a replacement rather than a merge.
             env: {
+              ...whoopMcpEnv(),
               PATH: process.env.PATH ?? "",
               COACH_MCP_USER_ID: String(userId),
               COACH_MCP_ATTACHMENT_MANIFEST: manifestPath,
@@ -640,6 +642,7 @@ async function makeWorkspace(userId: number, images: CoachImage[]): Promise<stri
           },
         },
       }),
+      { mode: 0o600 },
     );
     return ws;
   } catch (err) {
