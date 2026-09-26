@@ -31,6 +31,7 @@ afterEach(async () => {
     workspaces.splice(0).map((workspace) => workspace.dispose()),
   );
   vi.clearAllMocks();
+  vi.unstubAllEnvs();
 });
 
 describe("createCursorAcpWorkspace", () => {
@@ -152,4 +153,19 @@ describe("createCursorAcpWorkspace", () => {
 
     expect(received).toEqual(["first", "second"]);
   });
+});
+
+
+it("passes the app's Whoop vault/OAuth configuration to the isolated MCP child", async () => {
+  vi.stubEnv("VAULT_KEY", "synthetic-vault");
+  vi.stubEnv("WHOOP_CLIENT_ID", "synthetic-client");
+  vi.stubEnv("WHOOP_CLIENT_SECRET", "synthetic-secret");
+  vi.stubEnv("JWT_SIGNING_KEY", "never-forward");
+  const workspace = await createCursorAcpWorkspace(7, true);
+  workspaces.push(workspace);
+  const server = workspace.mcpServer;
+  if (!server || !("env" in server)) throw new Error("Expected a stdio MCP server");
+  const env = Object.fromEntries(server.env.map(({ name, value }) => [name, value]));
+  expect(env).toMatchObject({ VAULT_KEY: "synthetic-vault", WHOOP_CLIENT_ID: "synthetic-client", WHOOP_CLIENT_SECRET: "synthetic-secret", COACH_MCP_USER_ID: "7" });
+  expect(env).not.toHaveProperty("JWT_SIGNING_KEY");
 });

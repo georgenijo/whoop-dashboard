@@ -1,3 +1,4 @@
+import { whoopMcpEnv } from "./whoop-mcp-env";
 import "server-only";
 
 import type { McpServer } from "@agentclientprotocol/sdk";
@@ -79,6 +80,7 @@ export async function createCursorAcpWorkspace(
     let mcpServer: McpServer | null = null;
     if (withMcp) {
       const env = {
+        ...whoopMcpEnv(),
         PATH: process.env.PATH ?? "",
         COACH_MCP_USER_ID: String(userId),
         COACH_MCP_ATTACHMENT_MANIFEST: manifestPath,
