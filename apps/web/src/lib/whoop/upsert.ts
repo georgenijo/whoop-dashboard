@@ -1,6 +1,9 @@
 import "server-only";
 import { openWrite, safeQuery, type DB } from "@/lib/db/connection";
 import { MATCH_WINDOW_MS, SQL_WINDOW_MS, sportsCompatible } from "@/lib/healthkit/match";
+import { upsertWhoopCycleSteps } from "./cycle-steps";
+
+export { upsertWhoopCycleSteps } from "./cycle-steps";
 
 // KEEP IN SYNC WITH streamlit/whoop/db.py:147-262 (column lists for recovery/cycles/sleep/workouts)
 // KEEP IN SYNC WITH sync/daily_summary.py:26-91 (SELECT/INSERT_DAILY_SUMMARY SQL)
@@ -37,9 +40,12 @@ export type WhoopSleepRecord = {
 
 export type WhoopCycleRecord = {
   id?: number;
+  created_at?: string;
+  updated_at?: string;
   start: string;
   end?: string;
   score_state?: string;
+  step_count?: number | null;
   score?: {
     strain: number;
     kilojoule: number;
@@ -265,20 +271,23 @@ const CYCLE_UPSERT_SQL = `
 `;
 
 export function upsertCycle(record: WhoopCycleRecord, userId: number, tz: string): boolean {
-  if (record.score_state !== "SCORED" || !record.score) return false;
   const db = openWrite();
   if (!db) return false;
   try {
-    db.prepare(CYCLE_UPSERT_SQL).run({
-      user_id: userId,
-      date: parseDate(record.start, tz),
-      strain: record.score.strain,
-      kilojoule: record.score.kilojoule,
-      avg_hr: record.score.average_heart_rate,
-      max_hr: record.score.max_heart_rate,
-      raw: JSON.stringify(record),
-    });
-    return true;
+    return db.transaction(() => {
+      const stepsWritten = upsertWhoopCycleSteps(record, userId, tz, db);
+      if (record.score_state !== "SCORED" || !record.score) return stepsWritten;
+      db.prepare(CYCLE_UPSERT_SQL).run({
+        user_id: userId,
+        date: parseDate(record.start, tz),
+        strain: record.score.strain,
+        kilojoule: record.score.kilojoule,
+        avg_hr: record.score.average_heart_rate,
+        max_hr: record.score.max_heart_rate,
+        raw: JSON.stringify(record),
+      });
+      return true;
+    })();
   } finally {
     db.close();
   }
@@ -297,8 +306,10 @@ export function upsertCycle(record: WhoopCycleRecord, userId: number, tz: string
  * `persistAll` in `sync.ts` already uses the single-transaction shape; the
  * cycles reconcile (#415) uses this to match it.
  *
- * Records that aren't `SCORED` are skipped. Duplicate records for the same
- * date are LAST-write-wins, matching `persistAll`'s `INSERT OR REPLACE` loop.
+ * Every identified record writes native steps, including unscored cycles.
+ * Only scored records write strain and trigger summary recompute. Duplicate
+ * scored records for the same date are last-write-wins for strain, matching
+ * `persistAll`'s `INSERT OR REPLACE` loop.
  *
  * Returns the distinct dates written, in first-seen order.
  */
@@ -308,13 +319,14 @@ export function upsertCyclesAndRecompute(
   tz: string,
 ): string[] {
   const db = openWrite();
-  if (!db) return [];
+  if (!db) throw new Error("DB unavailable while upserting WHOOP cycles");
   try {
     const stmt = db.prepare(CYCLE_UPSERT_SQL);
     return db.transaction(() => {
       const dates: string[] = [];
       const seen = new Set<string>();
       for (const record of records) {
+        upsertWhoopCycleSteps(record, userId, tz, db);
         if (record.score_state !== "SCORED" || !record.score) continue;
         const date = parseDate(record.start, tz);
         stmt.run({

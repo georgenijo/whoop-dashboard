@@ -83,7 +83,7 @@ export async function GET(req: Request) {
 
     const window = resolveRangeWindow(parsed.range, localToday());
     const trend = getRecoveryRange(user.id, window.start, window.end);
-    const overview = getOverview(user.id, parsed.days);
+    const overview = getOverview(user.id, parsed.days, "apple_health");
 
     const recovery_trend = buildTrend(trend, trend.map((r) => r.recovery_score));
     const hrvPoints = buildTrend(trend, trend.map((r) => r.hrv));

@@ -118,14 +118,14 @@ export default function KPIStrip(p: Props) {
           href="/recovery"
         />
         <KPI
-          label="Steps"
+          label={p.latestSteps?.source === "whoop" ? "Whoop steps" : "Steps"}
           value={
             p.latestSteps?.steps != null
               ? p.latestSteps.steps.toLocaleString("en-US")
               : "—"
           }
           metric="steps"
-          delta={formatDelta(p.latestSteps?.steps ?? null, p.previousSteps?.steps ?? null, { unit: "", precision: 0, ...stepsDates })}
+          delta={p.latestSteps?.is_partial ? { label: "Cycle so far", dir: "flat" } : formatDelta(p.latestSteps?.steps ?? null, p.previousSteps?.steps ?? null, { unit: "", precision: 0, ...stepsDates })}
           href="/steps"
         />
       </div>

@@ -1555,6 +1555,49 @@ describe("Phase D — domain tables carry user_id", () => {
   // uniqueness key, so the repoint cannot just move it. Policy: SURVIVOR
   // WINS, and the drop is counted in the merge log line.
   // -------------------------------------------------------------------------
+  it("merges native WHOOP cycle steps by newer upstream revision", () => {
+    const file = newDbFile();
+    process.env.WHOOP_DB_PATH = file;
+    conn.openWrite()?.close();
+    const seed = new Database(file);
+    let goneId: number;
+    try {
+      seed.pragma("foreign_keys = ON");
+      seed.prepare("UPDATE users SET apple_sub = ?, email = ? WHERE id = 1")
+        .run("native-steps-keep", "old-native@example.com");
+      goneId = Number(seed.prepare("INSERT INTO users (email) VALUES (?)")
+        .run("new-native@example.com").lastInsertRowid);
+      const insert = seed.prepare(`
+        INSERT INTO whoop_cycle_steps
+          (user_id, cycle_id, date, cycle_start, step_count, upstream_updated_at, fetched_at)
+        VALUES (?, ?, '2026-09-25', '2026-09-25T02:09:00Z', ?, ?, ?)
+      `);
+      insert.run(1, 401, 100, "2026-09-25T10:00:00Z", "2026-09-25 11:00:00");
+      insert.run(goneId, 401, 200, "2026-09-25T12:00:00Z", "2026-09-25 12:30:00");
+      insert.run(1, 402, 300, "2026-09-25T14:00:00Z", "2026-09-25 14:30:00");
+      insert.run(goneId, 402, 400, "2026-09-25T13:00:00Z", "2026-09-25 15:00:00");
+      insert.run(goneId, 403, 500, "2026-09-25T15:00:00Z", "2026-09-25 15:30:00");
+    } finally {
+      seed.close();
+    }
+
+    expect(authMod.upsertUserByAppleSub("native-steps-keep", "new-native@example.com").id).toBe(1);
+    const after = new Database(file);
+    try {
+      const rows = after.prepare(
+        "SELECT user_id, cycle_id, step_count FROM whoop_cycle_steps ORDER BY cycle_id",
+      ).all();
+      expect(rows).toEqual([
+        { user_id: 1, cycle_id: 401, step_count: 200 },
+        { user_id: 1, cycle_id: 402, step_count: 300 },
+        { user_id: 1, cycle_id: 403, step_count: 500 },
+      ]);
+      expect(after.pragma("foreign_key_check")).toEqual([]);
+    } finally {
+      after.close();
+    }
+  });
+
   it("issue #504: survivor's row wins a collision, the loser's is dropped and counted in the log", () => {
     const file = newDbFile();
     process.env.WHOOP_DB_PATH = file;

@@ -28,7 +28,7 @@ import {
   SLEEP_DEDUP_WHERE,
 } from "./sleep";
 import { type WorkoutRow } from "./workouts";
-import { type StepsRow, getLatestSteps, getPreviousSteps } from "./steps";
+import { type StepsRow, type StepsSource, getLatestSteps, getPreviousSteps } from "./steps";
 
 export type DailySummaryRow = {
   date: string;
@@ -174,7 +174,7 @@ export function getDailySummary(
   );
 }
 
-export function getOverview(userId: number, days = 30): Overview {
+export function getOverview(userId: number, days = 30, stepsSource: StepsSource = "auto"): Overview {
   const recoveryTrend = getRecoveryTrend(userId, days);
   const strainTrend = getStrainTrend(userId, days);
   const sleepTrend = getSleepTrend(userId, days);
@@ -191,8 +191,8 @@ export function getOverview(userId: number, days = 30): Overview {
     recoveryTrend,
     strainTrend,
     sleepTrend,
-    latestSteps: getLatestSteps(userId),
-    previousSteps: getPreviousSteps(userId),
+    latestSteps: getLatestSteps(userId, stepsSource),
+    previousSteps: getPreviousSteps(userId, stepsSource),
     hasData: Boolean(latestRecovery || latestCycle || latestSleep),
   };
 }

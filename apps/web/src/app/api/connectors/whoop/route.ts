@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getIntegration } from "@/lib/db/integrations";
 import { getLastSuccessfulSyncAt } from "@/lib/db";
+import { getLastSuccessfulResourceEventAt } from "@/lib/db/logs";
 import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,7 @@ type ConnectorResponse = {
   scope: string | null;
   source: "db" | null;
   last_sync_at: string | null;
+  last_event_at: string | null;
 };
 
 function expiresAtFromIso(iso: string | null): {
@@ -75,6 +77,7 @@ export async function GET(req: Request) {
   }
 
   const last = getLastSuccessfulSyncAt(auth.user.id);
+  const lastEvent = getLastSuccessfulResourceEventAt(auth.user.id);
 
   const body: ConnectorResponse = {
     provider: "whoop",
@@ -83,6 +86,7 @@ export async function GET(req: Request) {
     scope,
     source,
     last_sync_at: last ? last.toISOString() : null,
+    last_event_at: lastEvent ? lastEvent.toISOString() : null,
   };
   return NextResponse.json(body);
 }

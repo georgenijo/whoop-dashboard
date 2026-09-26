@@ -51,7 +51,7 @@ export async function GET(req: Request) {
     const today = localToday();
     const window = resolveRangeWindow(parsed.range, today);
     const trend = getStrainRange(user.id, window.start, window.end);
-    const overview = getOverview(user.id, parsed.days);
+    const overview = getOverview(user.id, parsed.days, "apple_health");
     const todayAgg = getTodayStrainAggregate(user.id, today);
     const todayWorkouts = getTodayWorkouts(user.id, today);
 

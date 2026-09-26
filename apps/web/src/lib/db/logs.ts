@@ -277,11 +277,12 @@ export function getSyncLogs(userId: number, limit = 200): SyncLog[] {
  * That's the safe direction to fail: an extra sync costs an API call, whereas
  * falling back to a global row would resurrect the leak.
  *
- * Excludes `source = 'keepalive'` rows (the #273 refresh-only route, every
- * 30 min). Those are token-refresh pings, not data syncs — if they counted
- * here, the cooldown gate in `/api/sync` would see a fresh "successful
- * sync" every 30 minutes forever and permanently skip real syncs, which is
- * strictly worse than the bug #273 was fixing.
+ * Only completed data-sync runs count. Webhooks update individual resources,
+ * keepalives only refresh tokens; neither should suppress the next full sync
+ * or advance the connector's `last_sync_at`. A partial run still counts: the
+ * health-data transaction committed and only post-commit metadata failed.
+ * Legacy source-less runs still count when they have all three
+ * endpoint counts. Zero counts are valid for a completed empty sync.
  */
 export function getLastSuccessfulSyncAt(userId: number): Date | null {
   return safeQuery((db) => {
@@ -291,10 +292,33 @@ export function getLastSuccessfulSyncAt(userId: number): Date | null {
       .prepare(
         `SELECT started_at FROM sync_logs
          WHERE status = 'ok' AND user_id = ?
-           AND (source IS NULL OR source != ?)
+           AND (source IS NULL OR source NOT IN ('webhook', ?))
+           AND recovery_count IS NOT NULL
+           AND sleep_count IS NOT NULL
+           AND workouts_count IS NOT NULL
          ORDER BY id DESC LIMIT 1`
       )
       .get(userId, KEEPALIVE_SYNC_SOURCE) as { started_at: string } | undefined;
+    return row ? new Date(row.started_at) : null;
+  });
+}
+
+/** Latest successfully handled Whoop resource webhook for this tenant.
+ * Kept separate from full-sync freshness: a recovery event does not prove
+ * that cycles, sleeps, and workouts have all been refreshed. */
+export function getLastSuccessfulResourceEventAt(userId: number): Date | null {
+  return safeQuery((db) => {
+    if (!hasTable(db, "sync_logs") || !hasColumn(db, "sync_logs", "user_id")) return null;
+    const row = db
+      .prepare(
+        `SELECT started_at FROM sync_logs
+         WHERE status = 'ok' AND user_id = ? AND source = 'webhook'
+           AND CASE WHEN json_valid(details)
+             THEN json_extract(details, '$.note') IS NULL
+             ELSE 0 END
+         ORDER BY id DESC LIMIT 1`
+      )
+      .get(userId) as { started_at: string } | undefined;
     return row ? new Date(row.started_at) : null;
   });
 }

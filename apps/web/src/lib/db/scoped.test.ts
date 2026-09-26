@@ -138,6 +138,7 @@ const DOMAIN_TABLES = [
   "workouts",
   "daily_summary",
   "daily_steps",
+  "whoop_cycle_steps",
   "body_measurements",
 ];
 
@@ -161,7 +162,9 @@ const STATEMENT_RE = new RegExp(
 const ALLOWLIST_RELATIVE = new Set<string>([
   "src/lib/db/scoped.ts",
   "src/lib/db/connection.ts",
+  "src/lib/db/auth.ts",
   "src/lib/whoop/upsert.ts",
+  "src/lib/whoop/cycle-steps.ts",
   "src/lib/sync.ts",
   // HealthKit ingest write helper (issue #425) — match-lookup reads route
   // through forUser(); insert/enrich writes go through openWrite() directly.

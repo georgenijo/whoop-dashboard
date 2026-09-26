@@ -669,6 +669,26 @@ export function openWrite(): DB | null {
       "CREATE INDEX IF NOT EXISTS idx_daily_steps_date ON daily_steps(date DESC)"
     );
 
+    // WHOOP steps are totals for physiological cycles, not calendar days.
+    // A user may have multiple cycles with the same local display date, so
+    // the stable WHOOP cycle ID (with tenant ID) is the primary key.
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS whoop_cycle_steps (
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        cycle_id INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        cycle_start TEXT NOT NULL,
+        cycle_end TEXT,
+        score_state TEXT,
+        step_count INTEGER CHECK (step_count IS NULL OR step_count >= 0),
+        upstream_updated_at TEXT,
+        fetched_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        PRIMARY KEY (user_id, cycle_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_whoop_cycle_steps_user_date
+        ON whoop_cycle_steps(user_id, date DESC, cycle_start DESC);
+    `);
+
     return db;
   } catch (err) {
     // Surfacing the error is critical: silent null returns hide schema

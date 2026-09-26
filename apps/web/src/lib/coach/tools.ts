@@ -12,7 +12,6 @@ import {
   getNaps,
   getRecoveryRange,
   getSleepRangeRaw,
-  getStepsRange,
   getStrainRange,
   getUserSettings,
   getWorkoutPlans,
@@ -36,6 +35,7 @@ import {
   type SyncResult,
 } from "@/lib/sync";
 import { PARTIAL_ERROR_FALLBACK } from "@/lib/sync-meta";
+import { querySteps } from "./steps";
 
 export type CoachToolName =
   | "query_recovery"
@@ -243,8 +243,15 @@ export const TOOLS: ToolSchema[] = [
   {
     name: "query_steps",
     description:
-      "Query daily step totals from Apple Health for a date range. Returns date, steps, source (apple_health), and updated_at. Empty when the iOS app has not synced steps yet.",
-    input_schema: DATE_RANGE_SCHEMA,
+      "Query steps from WHOOP (default) or Apple Health. WHOOP queries refresh native cycle step counts from the API, with a bounded timeout, and return {rows, _meta} including source, refresh status and time basis. WHOOP rows include cycle boundaries and is_partial; dates label cycles, not midnight-to-midnight totals. Never mix sources or treat missing rows as zero. Use at most 366 days per call.",
+    input_schema: {
+      ...DATE_RANGE_SCHEMA,
+      properties: {
+        ...DATE_RANGE_SCHEMA.properties,
+        source: { type: ["string", "null"], enum: ["whoop", "apple_health", null], description: "WHOOP by default; Apple Health only when requested." },
+      },
+      required: ["start_date", "end_date", "source"],
+    },
     strict: true,
   },
   {
@@ -257,7 +264,7 @@ export const TOOLS: ToolSchema[] = [
   {
     name: "query_daily_snapshot",
     description:
-      "Bundled fetch of recovery + sleep + strain + workouts + steps for a date range, in one tool call. Returns the same row shapes as the individual query_* tools under the keys recovery, sleep, strain, workouts (workouts is { rows, _meta } matching query_workouts), and steps. Naps and journal are NOT included — use query_naps / query_journal directly when those are the question. Use this for broad 'how am I doing' / daily-status questions to avoid multiple round-trips; use the single-domain tools when the user asks about exactly one area.",
+      "Bundled fetch of recovery + sleep + strain + workouts + steps for a date range, in one tool call. Returns the same row shapes as the individual query_* tools under the keys recovery, sleep, strain, workouts (workouts is { rows, _meta } matching query_workouts; steps is { rows, _meta } matching query_steps with a bounded native WHOOP refresh), and steps. Naps and journal are NOT included — use query_naps / query_journal directly when those are the question. Use this for broad 'how am I doing' / daily-status questions to avoid multiple round-trips; use the single-domain tools when the user asks about exactly one area.",
     input_schema: DATE_RANGE_SCHEMA,
     strict: true,
     cache_control: { type: "ephemeral", ttl: "1h" },
@@ -808,8 +815,16 @@ export async function executeTool(
       return buildWorkoutsPayload(options.userId, startDate, endDate);
     case "query_naps":
       return getNaps(options.userId, startDate, endDate);
-    case "query_steps":
-      return getStepsRange(options.userId, startDate, endDate);
+    case "query_steps": {
+      const source = isRecord(input) ? input.source : undefined;
+      if (source != null && source !== "whoop" && source !== "apple_health") {
+        throw new ToolInputError("source must be whoop or apple_health.", { code: "invalid_steps_source" });
+      }
+      if ((Date.parse(endDate) - Date.parse(startDate)) / 86_400_000 >= 366) {
+        throw new ToolInputError("Query at most 366 days of steps at a time.", { code: "steps_range_too_large" });
+      }
+      return querySteps(options.userId, startDate, endDate, source ?? "whoop", options.signal);
+    }
     case "query_journal":
       return getJournalRange(options.userId, startDate, endDate);
     case "query_daily_snapshot":
@@ -818,7 +833,7 @@ export async function executeTool(
         sleep: getSleepRangeRaw(options.userId, startDate, endDate),
         strain: getStrainRange(options.userId, startDate, endDate),
         workouts: buildWorkoutsPayload(options.userId, startDate, endDate),
-        steps: getStepsRange(options.userId, startDate, endDate),
+        steps: await querySteps(options.userId, startDate, endDate, "whoop", options.signal),
       };
     default:
       throw new ToolInputError(`Unknown tool: ${name}`, {

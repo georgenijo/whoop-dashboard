@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-09-26: Keep native Whoop cycle steps distinct from calendar-day steps
+
+**Decision:** Store native Whoop step counts by tenant and upstream cycle ID, retaining null counts, actual boundaries, upstream revision, and fetch time. Label each cycle by the user's local `created_at` day, falling back to its start day for older records; the label is not a midnight-to-midnight total. Source-specific queries never blend Whoop with Apple Health. Keep shipped iOS metric screens on Apple Health until the native app gains a source selector; shared Coach tools support Whoop on both clients.
+
+**Rationale:** Whoop's cycle can start the prior evening, so start-day keys can collapse two cycles or mislabel a waking day's steps. Existing strain history retains its legacy local start-day attribution; Coach must not join steps to strain solely by date. Current cycles are explicitly partial and excluded from completed-cycle baselines. A bounded Coach query refreshes Whoop directly, while normal data sync and resource webhooks maintain stored cycles. Token refreshes and individual resource events do not imply a full data sync; successful core-data commits retain the cooldown even when post-commit metadata is partial.
+
+**Status:** active
+
+**References:** #571, `apps/web/src/lib/whoop/cycle-steps.ts`, `apps/web/src/lib/coach/steps.ts`, [Whoop Cycle API](https://developer.whoop.com/docs/developing/user-data/cycle/)
+
+---
+
 ## 2026-09-10: Keep Coach check-ins concise and reveal detail on demand
 
 **Decision:** Apply one shared response guideline across Coach providers: lead with the answer, aim for 60–90 words or fewer for routine check-ins, use up to three meaningful facts and one practical next step, and expand when requested. Support all three approved presentation styles: plain prose, compact key metrics, and a full comparison behind a disclosure. Group Copy and Share once beneath each completed answer.

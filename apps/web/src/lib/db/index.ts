@@ -76,8 +76,9 @@ export { getPRStats } from "./prs";
 export type { JournalRow } from "./journal";
 export { getJournalRange } from "./journal";
 
-export type { StepsRow } from "./steps";
+export type { StepsRow, StepsSource } from "./steps";
 export {
+  resolveStepsSource,
   getLatestSteps,
   getPreviousSteps,
   getStepsRange,
