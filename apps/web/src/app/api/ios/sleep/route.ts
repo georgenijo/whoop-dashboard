@@ -74,7 +74,7 @@ export async function GET(req: Request) {
 
     const window = resolveRangeWindow(parsed.range, localToday());
     const trend = getSleepRange(user.id, window.start, window.end);
-    const overview = getOverview(user.id, parsed.days);
+    const overview = getOverview(user.id, parsed.days, "apple_health");
     const latest = getLatestSleep(user.id);
 
     const durationRaw = trend.map((r) =>

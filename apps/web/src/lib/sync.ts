@@ -22,6 +22,7 @@ import {
   sleepSummaryDate,
   toLocalIso,
   upsertBodyMeasurement,
+  upsertWhoopCycleSteps,
   upsertCyclesAndRecompute,
   workoutSummaryDate,
   type WhoopBodyMeasurement,
@@ -428,6 +429,9 @@ function persistAll(
       }
       checkAborted(signal);
       for (const r of data.cycles) {
+        // step_count is a top-level cycle field, independent of score_state.
+        // Use this transaction's handle so rollback covers steps too.
+        upsertWhoopCycleSteps(r, userId, tz, db);
         if (r.score_state !== "SCORED" || !r.score) continue;
         cyclesStmt.run({
           user_id: userId,
@@ -773,14 +777,11 @@ async function healOrphanedCycleDates(
     );
     apiCalls += pageCount;
 
-    // Only records whose local date is one we're actually missing. Duplicates
-    // for the same date are handled last-write-wins inside the batch upsert,
-    // matching `persistAll`.
+    // Only records whose local strain date is one we're actually missing.
+    // Include unscored records: their native step_count can exist before
+    // strain is SCORED, and the batch helper persists it independently.
     const wanted = records.filter(
-      (r) =>
-        r.score_state === "SCORED" &&
-        r.score &&
-        pending.has(cycleSummaryDate(r, tz)),
+      (r) => pending.has(cycleSummaryDate(r, tz)),
     );
     for (const date of upsertCyclesAndRecompute(wanted, userId, tz)) {
       if (pending.delete(date)) healed += 1;

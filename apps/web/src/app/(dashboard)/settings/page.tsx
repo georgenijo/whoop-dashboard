@@ -27,6 +27,7 @@ type WhoopConnector = {
   scope: string | null;
   source: "db" | null;
   last_sync_at: string | null;
+  last_event_at: string | null;
 };
 
 type ByokState = { present: boolean; masked: string | null };
@@ -629,10 +630,15 @@ export default function SettingsPage() {
                       ? "Couldn't load connection status. Try again."
                       : whoop
                       ? whoop.last_sync_at
-                        ? `Last sync ${formatRelative(whoop.last_sync_at)}`
-                        : "Ready for the first sync"
+                        ? `Last full sync ${formatRelative(whoop.last_sync_at)}`
+                        : "No full sync recorded"
                       : "Checking connection status…"}
                   </p>
+                  {whoop?.last_event_at && (
+                    <p className={styles.connectorMeta}>
+                      Latest Whoop update {formatRelative(whoop.last_event_at)} · individual metrics may differ
+                    </p>
+                  )}
                 </div>
               </div>
 

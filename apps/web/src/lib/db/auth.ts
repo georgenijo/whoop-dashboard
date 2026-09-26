@@ -93,7 +93,8 @@ export function optionalUserFkTables(db: DB): string[] {
  *
  * Verified against the live schema: `integrations` PK (user_id, provider),
  * `user_settings` PK (user_id), `device_tokens` PK (user_id, token),
- * `recovery` / `cycles` / `daily_summary` / `daily_steps` PK (user_id, date), `sleep` PK
+ * `recovery` / `cycles` / `daily_summary` / `daily_steps` PK (user_id, date),
+ * `whoop_cycle_steps` PK (user_id, cycle_id), `sleep` PK
  * (user_id, sleep_id). The keys are deliberately NOT uniform — see the DB
  * layer section of CLAUDE.md — which is why mergeConflictTable derives the
  * collision key from `PRAGMA table_info` / `index_list` at run time instead
@@ -122,6 +123,7 @@ export const USER_FK_CONFLICT_TABLES = [
   "sleep",
   "daily_summary",
   "daily_steps",
+  "whoop_cycle_steps",
 ] as const;
 
 /**
@@ -513,6 +515,36 @@ function mergeConflictTable(
 }
 
 /**
+ * Native WHOOP cycle rows represent the same upstream object across merged
+ * accounts. If both accounts have a copy, retain the newer upstream revision
+ * (then the newer fetch on a tie) before the ordinary collision drop/repoint.
+ */
+function preferNewerWhoopCycleSteps(db: DB, fromId: number, toId: number): void {
+  db.prepare(`
+    UPDATE whoop_cycle_steps AS survivor SET
+      date = loser.date,
+      cycle_start = loser.cycle_start,
+      cycle_end = loser.cycle_end,
+      score_state = loser.score_state,
+      step_count = loser.step_count,
+      upstream_updated_at = loser.upstream_updated_at,
+      fetched_at = loser.fetched_at
+    FROM whoop_cycle_steps AS loser
+    WHERE survivor.user_id = ? AND loser.user_id = ?
+      AND survivor.cycle_id = loser.cycle_id
+      AND (
+        julianday(COALESCE(loser.upstream_updated_at, loser.fetched_at)) >
+          julianday(COALESCE(survivor.upstream_updated_at, survivor.fetched_at))
+        OR (
+          julianday(COALESCE(loser.upstream_updated_at, loser.fetched_at)) =
+            julianday(COALESCE(survivor.upstream_updated_at, survivor.fetched_at))
+          AND julianday(loser.fetched_at) > julianday(survivor.fetched_at)
+        )
+      )
+  `).run(toId, fromId);
+}
+
+/**
  * Route each of `tables` to the bare repoint or to the survivor-wins conflict
  * merge, decided from the live schema rather than the table's name (issue
  * #518) — an optional table's schema is unknown, and may not exist at all, so
@@ -636,6 +668,9 @@ function mergeUserInto(db: DB, fromId: number, toId: number): void {
   }
 
   for (const { table, keys } of conflictTables) {
+    if (table === "whoop_cycle_steps") {
+      preferNewerWhoopCycleSteps(db, fromId, toId);
+    }
     const { dropped, moved } = mergeConflictTable(db, table, fromId, toId, keys);
     moves[table] = moved;
     drops[table] = dropped;

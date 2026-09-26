@@ -10,6 +10,7 @@ vi.mock("@/lib/db", () => ({
   getLastSuccessfulSyncAt: vi.fn(),
   // Unused but re-exported by tools.ts at module load.
   getJournalRange: vi.fn(),
+  getStepsRange: vi.fn(),
   getNaps: vi.fn(),
   getRecoveryRange: vi.fn(),
   getSleepRangeRaw: vi.fn(),
@@ -19,6 +20,8 @@ vi.mock("@/lib/db", () => ({
   getWorkoutPlans: vi.fn(),
   saveWorkoutPlan: vi.fn(),
 }));
+
+vi.mock("./steps", () => ({ querySteps: vi.fn(async () => ({ rows: [], _meta: { source: "whoop", refresh: "updated" } })) }));
 
 vi.mock("@/lib/sync", () => ({
   runWhoopSync: vi.fn(),
@@ -690,4 +693,30 @@ describe("query_workout_plans tool", () => {
     expect(getWorkoutPlansMock).toHaveBeenCalledWith(7);
     expect(result).toEqual(plans);
   });
+});
+
+
+describe("query_steps source routing", () => {
+  it("defaults to native Whoop and honors explicit Apple Health", async () => {
+    const { querySteps } = await import("./steps");
+    const opts = { userId: 2, turnState: newToolTurnState() };
+    await executeTool("query_steps", { start_date: "2026-09-24", end_date: "2026-09-26" }, opts);
+    expect(querySteps).toHaveBeenLastCalledWith(2, "2026-09-24", "2026-09-26", "whoop", undefined);
+    await executeTool("query_steps", { start_date: "2026-09-24", end_date: "2026-09-26", source: "apple_health" }, opts);
+    expect(querySteps).toHaveBeenLastCalledWith(2, "2026-09-24", "2026-09-26", "apple_health", undefined);
+  });
+  it("rejects unknown sources and oversized upstream requests", async () => {
+    const opts = { userId: 2, turnState: newToolTurnState() };
+    await expect(executeTool("query_steps", { start_date: "2026-09-24", end_date: "2026-09-26", source: "combined" }, opts)).rejects.toThrow("source");
+    await expect(executeTool("query_steps", { start_date: "2020-01-01", end_date: "2026-09-26" }, opts)).rejects.toThrow("366");
+  });
+});
+
+
+it("refreshes native steps in a broad daily snapshot too", async () => {
+  const { querySteps } = await import("./steps");
+  getWorkoutsRangeMock.mockReturnValue({ rows: [], total_count: 0, truncated: false });
+  const result = await executeTool("query_daily_snapshot", { start_date: "2026-09-26", end_date: "2026-09-26" }, { userId: 2, turnState: newToolTurnState() });
+  expect(querySteps).toHaveBeenLastCalledWith(2, "2026-09-26", "2026-09-26", "whoop", undefined);
+  expect(result).toMatchObject({ steps: { rows: [], _meta: { source: "whoop", refresh: "updated" } } });
 });

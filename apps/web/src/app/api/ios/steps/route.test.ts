@@ -106,3 +106,24 @@ describe("GET /api/ios/steps", () => {
     expect(body.today).toMatchObject({ steps: 7000, vs_7d_avg: 6500 });
   });
 });
+
+
+it("keeps every shipped iOS KPI and Steps screen on Apple Health when native Whoop exists", async () => {
+  const today = localToday();
+  testDb.seedSteps(today, 4200);
+  const { upsertWhoopCycleSteps } = await import("@/lib/whoop/upsert");
+  upsertWhoopCycleSteps({ id: 555, start: today + "T05:00:00Z", created_at: today + "T12:00:00Z", step_count: 999, score_state: "PENDING_SCORE" }, 1, "UTC");
+  try {
+    const routes = [route, await import("../dashboard/route"), await import("../recovery/route"), await import("../sleep/route"), await import("../strain/route")];
+    for (const current of routes) {
+      const response = await current.GET(makeIosRequest("/api/ios/steps?range=30d"));
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body.kpi.find((tile: { key: string }) => tile.key === "steps").value).toBe(4200);
+    }
+  } finally {
+    const d = testDb.db();
+    d.prepare("DELETE FROM whoop_cycle_steps WHERE user_id=1").run();
+    d.close();
+  }
+});

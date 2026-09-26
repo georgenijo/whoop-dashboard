@@ -29,7 +29,7 @@ export async function GET(req: Request) {
 
     const today = localToday();
     const window = resolveRangeWindow(parsed.range, today);
-    const trend = getStepsTrend(user.id, window.start, window.end);
+    const trend = getStepsTrend(user.id, window.start, window.end, "apple_health");
     const values = trend.map((row) => row.steps);
     const ma7 = rollingMean(values, 7);
     const steps_trend: TrendPoint[] = trend.map((row, index) => ({
@@ -42,7 +42,9 @@ export async function GET(req: Request) {
     const todayComparisonAverage = todaySteps == null ? null : mean(values.slice(-7));
     const body: StepsResponse = {
       range_label: rangeLabel(parsed.range),
-      kpi: buildKPITiles(getOverview(user.id, parsed.days)),
+      // Existing native builds label this screen Apple Health. Keep that
+      // contract until a source selector ships in the iOS application.
+      kpi: buildKPITiles(getOverview(user.id, parsed.days, "apple_health")),
       steps_trend,
       today: {
         date: today,

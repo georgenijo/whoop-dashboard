@@ -60,7 +60,7 @@ export async function GET(req: Request) {
     const parsed = parseRange(req);
     if (parsed instanceof Response) return parsed;
 
-    const overview = getOverview(user.id, parsed.days);
+    const overview = getOverview(user.id, parsed.days, "apple_health");
 
     // Recovery trend always uses 30d — the overview page does the same and
     // the iOS hero chart expects a consistent baseline width regardless of

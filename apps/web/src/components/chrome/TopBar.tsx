@@ -86,7 +86,7 @@ export default function TopBar() {
       if (!r.ok) {
         console.error("Sync failed", data);
       } else if (data.skipped && data.lastSyncAt) {
-        flashMessage(`Already up to date (synced ${formatAgo(data.lastSyncAt)})`);
+        flashMessage(`Full sync ran ${formatAgo(data.lastSyncAt)}; wait before retrying`);
       }
       router.refresh();
     } catch (e) {

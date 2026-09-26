@@ -37,6 +37,8 @@ type DataPoint = { date: string; value: number | null };
 type Props = {
   title: string;
   subtitle?: string;
+  /** Optional source-aware average, e.g. excluding an ongoing cycle. */
+  averageLabel?: string;
   color: string;
   gradientId: string;
   data: DataPoint[];
@@ -80,6 +82,7 @@ function formatTick(v: number): string {
 export default function TrendChart({
   title,
   subtitle,
+  averageLabel,
   color,
   gradientId,
   data,
@@ -212,7 +215,7 @@ export default function TrendChart({
           </div>
           {subtitle && (
             <div className="card-sub" style={{ marginTop: 4 }}>
-              {subtitle} · avg {avg.toFixed(1)}{unit}
+              {subtitle} · {averageLabel ?? `avg ${avg.toFixed(1)}${unit}`}
             </div>
           )}
         </div>

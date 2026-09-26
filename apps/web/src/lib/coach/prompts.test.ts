@@ -346,7 +346,9 @@ describe("buildCursorSystemPrompt", () => {
     expect(prompt).toContain("Today's date is 2026-05-01.");
     expect(prompt).toContain("under 12 words");
     expect(prompt).toContain("query_daily_snapshot once");
-    expect(prompt).toContain("Sync is unavailable");
+    expect(prompt).not.toContain("Sync is unavailable");
+    expect(prompt).toContain("trigger_whoop_sync once");
+    expect(prompt).toContain("WHOOP-native steps");
     expect(prompt).toContain("sleep better");
     expect(prompt.length).toBeLessThan(DEFAULT_SYSTEM_PROMPT.length / 2);
   });

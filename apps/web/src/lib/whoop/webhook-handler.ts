@@ -1,7 +1,7 @@
 import "server-only";
 import { getUserSettings } from "@/lib/db";
 import { lookupUserIdByProvider } from "@/lib/db/integrations";
-import { whoopGet, WhoopRecoveryListMissError } from "./client";
+import { whoopGet, WhoopNotFoundError, WhoopRecoveryListMissError } from "./client";
 import {
   deleteRecoveryAndRecompute,
   deleteSleepAndRecompute,
@@ -10,10 +10,12 @@ import {
   recomputeDailySummary,
   recoverySummaryDate,
   sleepSummaryDate,
+  upsertCyclesAndRecompute,
   upsertRecovery,
   upsertSleep,
   upsertWorkout,
   workoutSummaryDate,
+  type WhoopCycleRecord,
   type WhoopRecoveryRecord,
   type WhoopSleepRecord,
   type WhoopWorkoutRecord,
@@ -55,6 +57,51 @@ export type HandleEventOutcome =
 export function resolveEventUserId(evt: WhoopWebhookEvent): number | null {
   if (evt.user_id == null) return null;
   return lookupUserIdByProvider("whoop", String(evt.user_id));
+}
+
+/** Refresh the current and previous cycle without paging through history.
+ * Recovery's cycle_id anchors the associated cycle even when a delayed event
+ * has fallen outside that small window. A missing associated cycle is a
+ * retryable webhook failure, rather than a successful recovery with stale
+ * cycle data. */
+async function refreshRecentCycles(
+  userId: number,
+  tz: string,
+  requiredCycleId?: number,
+): Promise<void> {
+  let recent: { records: WhoopCycleRecord[] };
+  try {
+    recent = await whoopGet<{ records: WhoopCycleRecord[] }>(
+      "/v2/cycle?limit=2",
+      { userId },
+    );
+  } catch (error) {
+    if (error instanceof WhoopNotFoundError) {
+      throw new Error("Recent Whoop cycles not yet available");
+    }
+    throw error;
+  }
+  if (!Array.isArray(recent.records)) {
+    throw new Error("Whoop cycle collection did not contain records");
+  }
+  const records = recent.records;
+  if (requiredCycleId != null && !records.some((cycle) => cycle.id === requiredCycleId)) {
+    try {
+      records.push(await whoopGet<WhoopCycleRecord>(
+        `/v2/cycle/${requiredCycleId}`,
+        { userId },
+      ));
+    } catch (error) {
+      if (error instanceof WhoopNotFoundError) {
+        throw new Error(`Associated cycle ${requiredCycleId} not yet available`);
+      }
+      throw error;
+    }
+  }
+  const dates = upsertCyclesAndRecompute(records, userId, tz);
+  if (records.some((cycle) => cycle.score_state === "SCORED" && cycle.score) && dates.length === 0) {
+    throw new Error("Whoop cycles could not be stored");
+  }
 }
 
 /** Surfaces `WhoopNotFoundError` raw because callers handle it differently
@@ -106,6 +153,7 @@ export async function handleEvent(evt: WhoopWebhookEvent): Promise<HandleEventOu
       const r = await whoopGet<WhoopWorkoutRecord>(`/v2/activity/workout/${evt.id}`, { userId });
       upsertWorkout(r, userId, tz);
       recomputeDailySummary(workoutSummaryDate(r, tz), userId);
+      await refreshRecentCycles(userId, tz);
       return { kind: "handled" };
     }
     case "recovery.updated": {
@@ -123,6 +171,7 @@ export async function handleEvent(evt: WhoopWebhookEvent): Promise<HandleEventOu
       }
       upsertRecovery(r, userId, tz);
       recomputeDailySummary(recoverySummaryDate(r, tz), userId);
+      await refreshRecentCycles(userId, tz, r.cycle_id);
       return { kind: "handled" };
     }
     case "sleep.deleted": {

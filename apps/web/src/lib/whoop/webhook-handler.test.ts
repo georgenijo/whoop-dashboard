@@ -85,7 +85,7 @@ function seedIntegration(
 describe("handleEvent — Phase D webhook user mapping", () => {
   it("resolves evt.user_id → local users.id via integrations.provider_user_id and upserts under that user", async () => {
     seedIntegration(42, "9876");
-    whoopGetMock.mockResolvedValue({
+    whoopGetMock.mockResolvedValueOnce({
       id: "w-1",
       start: "2025-04-12T10:00:00.000Z",
       end: "2025-04-12T11:00:00.000Z",
@@ -107,6 +107,7 @@ describe("handleEvent — Phase D webhook user mapping", () => {
         },
       },
     });
+    whoopGetMock.mockResolvedValueOnce({ records: [] });
 
     const outcome = await webhook.handleEvent({
       type: "workout.updated",
@@ -115,6 +116,10 @@ describe("handleEvent — Phase D webhook user mapping", () => {
     });
 
     expect(outcome.kind).toBe("handled");
+    expect(whoopGetMock.mock.calls.map((call) => call[0])).toEqual([
+      "/v2/activity/workout/w-1",
+      "/v2/cycle?limit=2",
+    ]);
 
     const db = new Database(dbFile);
     try {
@@ -150,6 +155,135 @@ describe("handleEvent — Phase D webhook user mapping", () => {
 
     expect(outcome).toEqual({ kind: "noop", reason: "missing_whoop_user_id" });
     expect(whoopGetMock).not.toHaveBeenCalled();
+  });
+});
+
+function cycle(id: number, date: string, strain = 6) {
+  return {
+    id,
+    start: `${date}T08:00:00.000Z`,
+    score_state: "SCORED",
+    score: {
+      strain,
+      kilojoule: 1000,
+      average_heart_rate: 70,
+      max_heart_rate: 140,
+    },
+  };
+}
+
+describe("handleEvent — bounded cycle continuity", () => {
+  it("refreshes recent cycles and the associated older cycle for recovery.updated", async () => {
+    seedIntegration(1, "1001");
+    whoopGetMock.mockResolvedValueOnce({
+      records: [{
+        cycle_id: 23,
+        sleep_id: "s-23",
+        created_at: "2026-09-24T09:00:00.000Z",
+        score_state: "SCORED",
+        score: { recovery_score: 70, hrv_rmssd_milli: 35, resting_heart_rate: 54 },
+      }],
+    });
+    whoopGetMock.mockResolvedValueOnce({
+      records: [cycle(26, "2026-09-26"), cycle(25, "2026-09-25")],
+    });
+    whoopGetMock.mockResolvedValueOnce(cycle(23, "2026-09-23"));
+
+    await expect(webhook.handleEvent({
+      type: "recovery.updated", id: "s-23", user_id: 1001,
+    })).resolves.toEqual({ kind: "handled" });
+    expect(whoopGetMock.mock.calls.map((call) => call[0])).toEqual([
+      "/v2/recovery?limit=10",
+      "/v2/cycle?limit=2",
+      "/v2/cycle/23",
+    ]);
+    const db = new Database(dbFile);
+    try {
+      const dates = db.prepare("SELECT date FROM cycles WHERE user_id = 1 ORDER BY date")
+        .all() as Array<{ date: string }>;
+      expect(dates.map((row) => row.date)).toEqual([
+        "2026-09-23", "2026-09-25", "2026-09-26",
+      ]);
+      const summary = db.prepare(
+        "SELECT day_strain FROM daily_summary WHERE user_id = 1 AND date = '2026-09-23'",
+      ).get() as { day_strain: number } | undefined;
+      expect(summary?.day_strain).toBe(6);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("persists the recovery but fails visibly when its cycle refresh fails", async () => {
+    seedIntegration(1, "1001");
+    whoopGetMock.mockResolvedValueOnce({
+      records: [{
+        cycle_id: 26,
+        sleep_id: "s-26",
+        created_at: "2026-09-26T09:00:00.000Z",
+        score_state: "SCORED",
+        score: { recovery_score: 70, hrv_rmssd_milli: 35, resting_heart_rate: 54 },
+      }],
+    });
+    whoopGetMock.mockRejectedValueOnce(new Error("Whoop cycle API unavailable"));
+
+    await expect(webhook.handleEvent({
+      type: "recovery.updated", id: "s-26", user_id: 1001,
+    })).rejects.toThrow("Whoop cycle API unavailable");
+    const db = new Database(dbFile);
+    try {
+      const recovery = db.prepare("SELECT date FROM recovery WHERE user_id = 1").get() as { date: string };
+      expect(recovery.date).toBe("2026-09-26");
+    } finally {
+      db.close();
+    }
+  });
+
+  it("retries an unavailable associated cycle instead of discarding the recovery webhook", async () => {
+    seedIntegration(1, "1001");
+    whoopGetMock.mockResolvedValueOnce({
+      records: [{
+        cycle_id: 23,
+        sleep_id: "s-23",
+        created_at: "2026-09-24T09:00:00.000Z",
+        score_state: "SCORED",
+        score: { recovery_score: 70, hrv_rmssd_milli: 35, resting_heart_rate: 54 },
+      }],
+    });
+    whoopGetMock.mockResolvedValueOnce({ records: [cycle(26, "2026-09-26")] });
+    const { WhoopNotFoundError } = await import("./client");
+    whoopGetMock.mockRejectedValueOnce(new WhoopNotFoundError("Whoop 404"));
+
+    await expect(webhook.handleEvent({
+      type: "recovery.updated", id: "s-23", user_id: 1001,
+    })).rejects.toThrow("Associated cycle 23 not yet available");
+    expect(whoopGetMock.mock.calls.map((call) => call[0])).toEqual([
+      "/v2/recovery?limit=10", "/v2/cycle?limit=2", "/v2/cycle/23",
+    ]);
+  });
+
+  it("refreshes the latest two cycles after workout.updated", async () => {
+    seedIntegration(1, "1001");
+    whoopGetMock.mockResolvedValueOnce({
+      id: "w-26",
+      start: "2026-09-26T10:00:00.000Z",
+      end: "2026-09-26T11:00:00.000Z",
+      score_state: "PENDING_SCORE",
+    });
+    whoopGetMock.mockResolvedValueOnce({
+      records: [cycle(26, "2026-09-26", 8), cycle(25, "2026-09-25", 5)],
+    });
+
+    await expect(webhook.handleEvent({
+      type: "workout.updated", id: "w-26", user_id: 1001,
+    })).resolves.toEqual({ kind: "handled" });
+    const db = new Database(dbFile);
+    try {
+      const dates = db.prepare("SELECT date FROM cycles WHERE user_id = 1 ORDER BY date")
+        .all() as Array<{ date: string }>;
+      expect(dates.map((row) => row.date)).toEqual(["2026-09-25", "2026-09-26"]);
+    } finally {
+      db.close();
+    }
   });
 });
 

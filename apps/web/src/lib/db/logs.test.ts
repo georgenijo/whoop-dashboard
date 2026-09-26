@@ -200,6 +200,64 @@ describe("sync_logs — tenant scoping", () => {
 
     expect(logs.getLastSuccessfulSyncAt(1)?.toISOString()).toBe(realSyncedAt);
   });
+
+  it("keeps full-sync and webhook freshness separate across tenants", async () => {
+    const logs = await bootstrap();
+    const full = "2026-09-13T10:00:00.000Z";
+    const handled = "2026-09-26T10:00:00.000Z";
+    logs.addSyncLog(syncLog(1, full));
+    logs.addSyncLog({
+      ...syncLog(1, "2026-09-25T10:00:00.000Z"),
+      source: "manual",
+      partial: true,
+    });
+    logs.addSyncLog({
+      ...syncLog(1, handled),
+      source: "webhook",
+      recovery_count: null,
+      sleep_count: null,
+      workouts_count: null,
+      details: JSON.stringify({ event_type: "recovery.updated", resource_id: "s-1" }),
+    });
+    logs.addSyncLog({
+      ...syncLog(1, "2026-09-26T11:00:00.000Z"),
+      source: "webhook",
+      recovery_count: null,
+      sleep_count: null,
+      workouts_count: null,
+      details: JSON.stringify({ note: "already_deleted" }),
+    });
+    logs.addSyncLog({
+      ...syncLog(1, "2026-09-26T12:00:00.000Z"),
+      source: "keepalive",
+      recovery_count: null,
+      sleep_count: null,
+      workouts_count: null,
+    });
+
+    expect(logs.getLastSuccessfulSyncAt(1)?.toISOString()).toBe("2026-09-25T10:00:00.000Z");
+    expect(logs.getLastSuccessfulResourceEventAt(1)?.toISOString()).toBe(handled);
+    expect(logs.getLastSuccessfulSyncAt(2)).toBeNull();
+    expect(logs.getLastSuccessfulResourceEventAt(2)).toBeNull();
+  });
+
+  it("counts zero-result and legacy source-less full syncs, but rejects missing counts", async () => {
+    const logs = await bootstrap();
+    logs.addSyncLog({
+      ...syncLog(1, "2026-09-01T00:00:00.000Z"),
+      source: null,
+      recovery_count: 0,
+      sleep_count: 0,
+      workouts_count: 0,
+    });
+    logs.addSyncLog({
+      ...syncLog(1, "2026-09-02T00:00:00.000Z"),
+      source: "scheduled",
+      recovery_count: null,
+    });
+
+    expect(logs.getLastSuccessfulSyncAt(1)?.toISOString()).toBe("2026-09-01T00:00:00.000Z");
+  });
 });
 
 function routeLog(userId: number | null, startedAt: string, route: string) {
