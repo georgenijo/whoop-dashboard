@@ -213,7 +213,7 @@ private extension View {
     }
 }
 
-private struct CardLabel: View {
+private struct CoachCardLabel: View {
     let text: String
     init(_ text: String) { self.text = text }
 
@@ -327,7 +327,7 @@ private struct ComparisonView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            CardLabel(comparison.title)
+            CoachCardLabel(comparison.title)
                 .padding(.bottom, 6)
             ForEach(Array(comparison.items.enumerated()), id: \.offset) { index, item in
                 if index > 0 {
@@ -409,7 +409,7 @@ private struct ActionPlanView: View {
                 .fixedSize(horizontal: false, vertical: true)
             ForEach(Array(plan.sections.enumerated()), id: \.offset) { _, section in
                 VStack(alignment: .leading, spacing: 8) {
-                    CardLabel(section.timeframe)
+                    CoachCardLabel(section.timeframe)
                     ForEach(Array(section.items.enumerated()), id: \.offset) { _, item in
                         HStack(alignment: .firstTextBaseline, spacing: 10) {
                             Image(systemName: "circle")
@@ -438,7 +438,7 @@ private struct DataFreshnessView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            CardLabel("Data freshness")
+            CoachCardLabel("Data freshness")
             ForEach(block.sources, id: \.source) { source in
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Circle()
