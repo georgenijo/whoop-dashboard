@@ -18,78 +18,73 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    WhoopConnectorCard()
-                        .listRowBackground(rowBackground)
-                } header: {
-                    Text("CONNECTORS")
-                        .font(Theme.FontStyle.sans(10, weight: .semibold))
-                        .tracking(1.4)
-                        .foregroundStyle(Theme.Palette.fg2)
-                }
+            VStack(spacing: 0) {
+                PageHeader("Settings")
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                        section("Connections") {
+                            WhoopConnectorCard()
+                                .glassCard(padding: Theme.Spacing.md)
+                        }
 
-                Section {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Button {
-                            triggerSync()
-                        } label: {
-                            HStack {
-                                Text("Sync Whoop now")
-                                    .font(Theme.FontStyle.sans(13, weight: .medium))
-                                    .foregroundStyle(Theme.Palette.fg1)
-                                Spacer()
-                                if isSyncing {
-                                    ProgressView()
-                                        .controlSize(.small)
-                                        .tint(Theme.Palette.fg2)
+                        section("Data") {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Button {
+                                    triggerSync()
+                                } label: {
+                                    SettingsRow(icon: "arrow.triangle.2.circlepath", tint: Theme.Palette.recovery,
+                                                title: "Sync Whoop now") {
+                                        if isSyncing {
+                                            ProgressView()
+                                                .controlSize(.small)
+                                                .tint(Theme.Palette.fg2)
+                                        }
+                                    }
+                                }
+                                .buttonStyle(PressableCardStyle())
+                                .disabled(isSyncing)
+
+                                if let line = statusLine {
+                                    Text(line.text)
+                                        .font(Theme.FontStyle.mono(11))
+                                        .foregroundStyle(line.color)
+                                        .padding(.leading, 44)
+                                        .padding(.bottom, 4)
+                                        .transition(.opacity)
                                 }
                             }
+                            .animation(.snappy, value: statusLine?.text)
+                            .glassCard(padding: Theme.Spacing.md)
                         }
-                        .disabled(isSyncing)
 
-                        if let line = statusLine {
-                            Text(line.text)
-                                .font(Theme.FontStyle.sans(11))
-                                .foregroundStyle(line.color)
+                        section("About") {
+                            SettingsRow(icon: "info.circle", tint: Theme.Palette.fg2, title: "Version") {
+                                Text(versionString)
+                                    .font(Theme.FontStyle.mono(13))
+                                    .foregroundStyle(Theme.Palette.fg3)
+                            }
+                            .accessibilityElement(children: .combine)
+                            .glassCard(padding: Theme.Spacing.md)
                         }
-                    }
-                    .listRowBackground(rowBackground)
-                } header: {
-                    Text("DATA")
-                        .font(Theme.FontStyle.sans(10, weight: .semibold))
-                        .tracking(1.4)
-                        .foregroundStyle(Theme.Palette.fg2)
-                }
 
-                Section {
-                    HStack {
-                        Text("Version")
-                            .font(Theme.FontStyle.sans(13))
-                            .foregroundStyle(Theme.Palette.fg1)
-                        Spacer()
-                        Text(versionString)
-                            .font(Theme.FontStyle.mono(11))
-                            .foregroundStyle(Theme.Palette.fg3)
+                        Button(role: .destructive) {
+                            confirmingSignOut = true
+                        } label: {
+                            SettingsRow(icon: "rectangle.portrait.and.arrow.right", tint: Theme.Palette.brandStrain,
+                                        title: "Sign out", titleColor: Theme.Palette.brandStrain) {
+                                EmptyView()
+                            }
+                            .glassCard(padding: Theme.Spacing.md)
+                        }
+                        .buttonStyle(PressableCardStyle())
+                        .padding(.top, Theme.Spacing.lg)
                     }
-                    .listRowBackground(rowBackground)
+                    .padding(.horizontal, Theme.Spacing.md)
+                    .padding(.bottom, Theme.Spacing.xxl)
                 }
-
-                Section {
-                    Button(role: .destructive) {
-                        confirmingSignOut = true
-                    } label: {
-                        Text("Sign out")
-                            .font(Theme.FontStyle.sans(13, weight: .medium))
-                            .foregroundStyle(Theme.Palette.brandStrain)
-                    }
-                    .listRowBackground(rowBackground)
-                }
+                .scrollIndicators(.hidden)
             }
-            .scrollContentBackground(.hidden)
-            .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbar(.hidden, for: .navigationBar)
             .confirmationDialog(
                 "Sign out of Coach?",
                 isPresented: $confirmingSignOut,
@@ -105,6 +100,15 @@ struct SettingsView: View {
                 Text("You'll need to sign in with Apple again to use Coach.")
             }
         }
+    }
+
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+            CardLabel(title)
+                .padding(.leading, 4)
+            content()
+        }
+        .padding(.top, Theme.Spacing.xs)
     }
 
     private func triggerSync() {
@@ -180,15 +184,6 @@ struct SettingsView: View {
         return f
     }()
 
-    @ViewBuilder
-    private var rowBackground: some View {
-        LinearGradient(
-            colors: [Color.white.opacity(0.04), Color.white.opacity(0.01)],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
     private var versionString: String {
         let info = Bundle.main.infoDictionary
         let short = info?["CFBundleShortVersionString"] as? String
@@ -201,6 +196,32 @@ struct SettingsView: View {
     }
 }
 
+private struct SettingsRow<Trailing: View>: View {
+    let icon: String
+    let tint: Color
+    let title: String
+    var titleColor: Color = Theme.Palette.fg1
+    @ViewBuilder let trailing: () -> Trailing
+
+    var body: some View {
+        HStack(spacing: Theme.Spacing.sm) {
+            Image(systemName: icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 32, height: 32)
+                .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
+            Text(title)
+                .font(Theme.FontStyle.sans(15, weight: .medium))
+                .foregroundStyle(titleColor)
+            Spacer(minLength: Theme.Spacing.xs)
+            trailing()
+        }
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+    }
+}
+
 #Preview {
     SettingsView(onSignOut: {})
+        .preferredColorScheme(.dark)
 }

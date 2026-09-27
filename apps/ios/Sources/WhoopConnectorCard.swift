@@ -29,34 +29,48 @@ struct WhoopConnectorCard: View {
     @State private var lastRefreshAt: Date?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Text("Whoop")
-                    .font(Theme.FontStyle.sans(14, weight: .medium))
-                    .foregroundStyle(Theme.Palette.fg0)
-                statusBadge
-                Spacer()
-                if connector?.status == .needsReconnect {
-                    Button(action: { Task { await handleReconnect() } }) {
+        HStack(spacing: Theme.Spacing.sm) {
+            Image(systemName: "waveform.path.ecg")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.Palette.brandStrain)
+                .frame(width: 32, height: 32)
+                .background(Theme.Palette.brandStrain.opacity(0.14), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: Theme.Spacing.xs) {
+                    Text("Whoop")
+                        .font(Theme.FontStyle.sans(15, weight: .medium))
+                        .foregroundStyle(Theme.Palette.fg0)
+                    statusBadge
+                }
+                Text(detailText)
+                    .font(Theme.FontStyle.mono(11))
+                    .foregroundStyle(Theme.Palette.fg3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: Theme.Spacing.xs)
+
+            if connector?.status == .needsReconnect {
+                Button(action: { Task { await handleReconnect() } }) {
+                    Group {
                         if reconnecting {
                             ProgressView().controlSize(.small)
                         } else {
                             Text("Reconnect")
-                                .font(Theme.FontStyle.sans(11, weight: .semibold))
+                                .font(Theme.FontStyle.sans(13, weight: .semibold))
                         }
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.small)
-                    .tint(Theme.Palette.brandStrain)
-                    .disabled(reconnecting)
+                    .frame(minWidth: 84, minHeight: 36)
                 }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.Palette.brandStrain)
+                .disabled(reconnecting)
+                .frame(minHeight: 44)
             }
-
-            Text(detailText)
-                .font(Theme.FontStyle.mono(10.5))
-                .foregroundStyle(Theme.Palette.fg3)
         }
-        .padding(.vertical, 4)
+        .frame(minHeight: 44)
+        .accessibilityElement(children: .contain)
         .task { await refresh() }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active { Task { await refresh() } }
@@ -72,7 +86,7 @@ struct WhoopConnectorCard: View {
                     .frame(width: 6, height: 6)
                     .shadow(color: badgeColor(for: status).opacity(0.7), radius: 3)
                 Text(badgeLabel(for: status))
-                    .font(Theme.FontStyle.sans(11, weight: .medium))
+                    .font(Theme.FontStyle.sans(13, weight: .medium))
                     .foregroundStyle(badgeColor(for: status))
             }
         } else if loading {

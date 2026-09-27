@@ -57,6 +57,11 @@ type StatsResponse = {
     partial: boolean;
   }[];
   history_floor: string | null;
+  /** Inclusive yyyy-MM-dd window of `by_sport`/`trend`, resolved in the
+   *  server's zone so clients can classify partial months without guessing
+   *  "today" from their own clock. */
+  window_start: string;
+  window_end: string;
 };
 
 function fmtInt(n: number): string {
@@ -213,6 +218,8 @@ export async function GET(req: Request) {
         partial: m.partial,
       })),
       history_floor: historyFloor,
+      window_start: window.start,
+      window_end: window.end,
     };
     return Response.json(out);
   } catch (err) {

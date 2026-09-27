@@ -11,61 +11,53 @@ struct PlanDetailView: View {
                 if let why = plan.plan.why {
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: "sparkle")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 14, weight: .medium))
                             .foregroundStyle(Theme.Palette.ai)
                             .padding(.top, 2)
                         Text(why)
-                            .font(Theme.FontStyle.sans(12.5))
-                            .foregroundStyle(Theme.Palette.fg2)
+                            .font(Theme.FontStyle.sans(15))
+                            .foregroundStyle(Theme.Palette.fg1)
+                            .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .background(Color.white.opacity(0.025))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: Theme.Radius.lg)
-                            .strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1)
-                    )
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
+                    .glassCard(tint: .ai, padding: Theme.Spacing.md)
                 }
 
                 ForEach(Array(plan.plan.days.enumerated()), id: \.offset) { _, day in
                     DayCard(day: day)
                 }
             }
-            .padding()
+            .padding(.horizontal, Theme.Spacing.md)
+            .padding(.bottom, Theme.Spacing.xxl)
         }
-        .navigationTitle(plan.title)
+        .scrollIndicators(.hidden)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(plan.title)
-                .font(Theme.FontStyle.sans(20, weight: .bold))
+                .font(Theme.FontStyle.sans(28, weight: .bold))
                 .foregroundStyle(Theme.Palette.fg0)
             if let description = plan.description {
                 Text(description)
-                    .font(Theme.FontStyle.sans(12.5))
+                    .font(Theme.FontStyle.sans(15))
                     .foregroundStyle(Theme.Palette.fg2)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            HStack(spacing: 6) {
-                if let tag = plan.tag {
-                    Text(tag.uppercased())
-                        .font(Theme.FontStyle.sans(9.5, weight: .semibold))
-                        .tracking(1.0)
-                        .foregroundStyle(Theme.Palette.fg3)
-                }
+            HStack(spacing: Theme.Spacing.xs) {
                 if plan.isActive {
-                    Text("ACTIVE")
-                        .font(Theme.FontStyle.sans(9.5, weight: .semibold))
-                        .tracking(1.0)
+                    Text("Active")
+                        .font(Theme.FontStyle.sans(12, weight: .semibold))
                         .foregroundStyle(Theme.Palette.recovery)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
                         .background(Theme.Palette.recovery.opacity(0.14), in: Capsule())
+                }
+                MetaTag(text: "\(plan.plan.days.count)-day")
+                if let tag = plan.tag {
+                    MetaTag(text: tag)
                 }
             }
             .padding(.top, 2)
@@ -84,17 +76,17 @@ private struct DayCard: View {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(day.name)
-                        .font(Theme.FontStyle.sans(15, weight: .semibold))
+                        .font(Theme.FontStyle.sans(17, weight: .semibold))
                         .foregroundStyle(Theme.Palette.fg0)
                     if let focus = day.focus {
                         Text(focus)
-                            .font(Theme.FontStyle.sans(11.5))
+                            .font(Theme.FontStyle.sans(13))
                             .foregroundStyle(Theme.Palette.fg3)
                     }
                 }
                 Spacer()
                 Text(day.intensity.label)
-                    .font(Theme.FontStyle.sans(10.5, weight: .semibold))
+                    .font(Theme.FontStyle.sans(12, weight: .semibold))
                     .foregroundStyle(accent)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
@@ -104,7 +96,7 @@ private struct DayCard: View {
 
             if day.exercises.isEmpty {
                 Text("Rest — no lifts.")
-                    .font(Theme.FontStyle.sans(12))
+                    .font(Theme.FontStyle.sans(15))
                     .foregroundStyle(Theme.Palette.fg3)
             } else {
                 VStack(spacing: 0) {
@@ -130,20 +122,20 @@ private struct ExerciseRow: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(exercise.name)
-                    .font(Theme.FontStyle.sans(13))
+                    .font(Theme.FontStyle.sans(15))
                     .foregroundStyle(Theme.Palette.fg1)
                 if let note = exercise.note {
                     Text(note)
-                        .font(Theme.FontStyle.sans(10.5))
+                        .font(Theme.FontStyle.sans(13))
                         .foregroundStyle(Theme.Palette.fg3)
                 }
             }
             Spacer()
             Text(exercise.scheme)
-                .font(Theme.FontStyle.mono(11.5, weight: .medium))
+                .font(Theme.FontStyle.mono(13, weight: .medium))
                 .foregroundStyle(Theme.Palette.fg0)
         }
-        .padding(.vertical, 9)
+        .padding(.vertical, 11)
     }
 }
 
