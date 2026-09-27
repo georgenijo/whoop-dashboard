@@ -14,11 +14,11 @@ enum TrendsRoute: Hashable {
 struct TrendsView: View {
     @Environment(\.api) private var api
     @State private var range: DateRange = .d30
-    @State private var recovery: TrendsLoadable<RecoveryPayload> = .loading
-    @State private var sleep: TrendsLoadable<SleepPayload> = .loading
-    @State private var strain: TrendsLoadable<StrainPayload> = .loading
-    @State private var steps: TrendsLoadable<StepsPayload> = .loading
-    @State private var workouts: TrendsLoadable<WorkoutsPayload> = .loading
+    @State private var recovery = TrendsCardState<RecoveryPayload>()
+    @State private var sleep = TrendsCardState<SleepPayload>()
+    @State private var strain = TrendsCardState<StrainPayload>()
+    @State private var steps = TrendsCardState<StepsPayload>()
+    @State private var workouts = TrendsCardState<WorkoutsPayload>()
     @State private var generations: [Card: Int] = [:]
 
     var body: some View {
@@ -54,20 +54,21 @@ struct TrendsView: View {
 
     @ViewBuilder
     private var recoveryCards: some View {
-        switch recovery {
+        switch recovery.phase {
         case .loading:
             TrendsChartPlaceholder(title: "Recovery", chartHeight: 120)
             TrendsChartPlaceholder(title: "HRV", chartHeight: 120)
             TrendsChartPlaceholder(title: "Resting heart rate", chartHeight: 120)
         case .failed(let message):
             TrendsErrorCard(title: "Recovery", message: message) {
-                Task { await load(.recovery, $recovery) { try await RecoveryService(api: api).load(range: range) } }
+                Task { await load(.recovery, $recovery, range: range) { try await RecoveryService(api: api).load(range: $0) } }
             }
         case .loaded(let p):
             let today = p.kpi.first { $0.key == .recovery }
             link(.recovery(range, .score)) {
                 TrendsHubCard(title: "Recovery", unit: "%", accent: Theme.Palette.recovery,
-                              points: p.recoveryTrend, yDomain: 0 ... 100) {
+                              points: p.recoveryTrend, yDomain: 0 ... 100,
+                              context: [today?.value.map { RecoveryZone(score: $0).label }, today?.delta?.label]) {
                     if let score = today?.value {
                         Text(RecoveryZone(score: score).label)
                             .font(Theme.FontStyle.mono(11, weight: .semibold))
@@ -80,11 +81,11 @@ struct TrendsView: View {
             link(.recovery(range, .hrv)) {
                 TrendsHubCard(title: "HRV", unit: "ms", accent: Theme.Palette.hrv,
                               points: p.hrvTrend.points,
-                              markers: p.hrvTrend.anomalies.map { .init(date: $0.date, label: "") }) {
+                              markers: p.hrvTrend.anomalies.map { .init(date: $0.date, label: "") },
+                              context: [hrv?.delta?.label, lowDays(p.hrvTrend.anomalies.count)]) {
                     TrendsDeltaLabel(delta: hrv?.delta)
-                    if !p.hrvTrend.anomalies.isEmpty {
-                        let n = p.hrvTrend.anomalies.count
-                        Text("\(n) low day\(n == 1 ? "" : "s")")
+                    if let low = lowDays(p.hrvTrend.anomalies.count) {
+                        Text(low)
                             .font(Theme.FontStyle.mono(11))
                             .foregroundStyle(Theme.Palette.danger)
                     }
@@ -93,8 +94,9 @@ struct TrendsView: View {
             let rhr = p.kpi.first { $0.key == .rhr }
             link(.recovery(range, .rhr)) {
                 TrendsHubCard(title: "Resting heart rate", unit: "bpm", accent: Theme.Palette.rhr,
-                              points: p.rhrTrend) {
-                    TrendsDeltaLabel(delta: rhr?.delta, invert: true)
+                              points: p.rhrTrend,
+                              context: [rhr?.delta?.label]) {
+                    TrendsDeltaLabel(delta: rhr?.delta)
                 }
             }
         }
@@ -102,12 +104,12 @@ struct TrendsView: View {
 
     @ViewBuilder
     private var sleepCard: some View {
-        switch sleep {
+        switch sleep.phase {
         case .loading:
             TrendsChartPlaceholder(title: "Sleep", chartHeight: 120)
         case .failed(let message):
             TrendsErrorCard(title: "Sleep", message: message) {
-                Task { await load(.sleep, $sleep) { try await SleepService(api: api).load(range: range) } }
+                Task { await load(.sleep, $sleep, range: range) { try await SleepService(api: api).load(range: $0) } }
             }
         case .loaded(let p):
             let tile = p.kpi.first { $0.key == .sleep }
@@ -116,7 +118,8 @@ struct TrendsView: View {
                 TrendsHubCard(title: "Sleep", unit: "", accent: Theme.Palette.sleepDeep,
                               points: p.durationTrend.map { TrendPoint(date: $0.date, raw: $0.rawHours, ma7: $0.ma7, ma30: nil) },
                               style: .bars,
-                              format: { TrendsFormat.hoursMinutes(hours: $0) }) {
+                              format: { TrendsFormat.hoursMinutes(hours: $0) },
+                              context: [tile?.delta?.label, performance.map { "Performance \(Int($0.rounded()))%" }]) {
                     TrendsDeltaLabel(delta: tile?.delta)
                     if let performance {
                         Text("Performance \(Int(performance.rounded()))%")
@@ -130,21 +133,23 @@ struct TrendsView: View {
 
     @ViewBuilder
     private var strainCard: some View {
-        switch strain {
+        switch strain.phase {
         case .loading:
             TrendsChartPlaceholder(title: "Strain", chartHeight: 120)
         case .failed(let message):
             TrendsErrorCard(title: "Strain", message: message) {
-                Task { await load(.strain, $strain) { try await StrainService(api: api).load(range: range) } }
+                Task { await load(.strain, $strain, range: range) { try await StrainService(api: api).load(range: $0) } }
             }
         case .loaded(let p):
             let tile = p.kpi.first { $0.key == .strain }
+            let kcal = p.today.totalKcal.map { kcalLabel($0, dateKey: p.today.date) }
             link(.strain(range)) {
                 TrendsHubCard(title: "Strain", unit: "", accent: Theme.Palette.strain,
-                              points: p.strainTrend, style: .bars, precision: 1) {
+                              points: p.strainTrend, style: .bars, precision: 1,
+                              context: [tile?.delta?.label, kcal]) {
                     TrendsDeltaLabel(delta: tile?.delta)
-                    if let kcal = p.today.totalKcal {
-                        Text("\(Int(kcal.rounded())) kcal today")
+                    if let kcal {
+                        Text(kcal)
                             .font(Theme.FontStyle.mono(11))
                             .foregroundStyle(Theme.Palette.fg2)
                     }
@@ -155,21 +160,23 @@ struct TrendsView: View {
 
     @ViewBuilder
     private var stepsCard: some View {
-        switch steps {
+        switch steps.phase {
         case .loading:
             TrendsChartPlaceholder(title: "Steps", chartHeight: 120)
         case .failed(let message):
             TrendsErrorCard(title: "Steps", message: message) {
-                Task { await load(.steps, $steps) { try await StepsService(api: api).load(range: range) } }
+                Task { await load(.steps, $steps, range: range) { try await StepsService(api: api).load(range: $0) } }
             }
         case .loaded(let p):
             let tile = p.kpi.first { $0.key == .steps }
+            let avg = TrendsStats.recentAverage(p.stepsTrend).map { "7-day avg \($0.formatted(.number.precision(.fractionLength(0))))" }
             link(.steps(range)) {
                 TrendsHubCard(title: "Steps", unit: "", accent: Theme.Palette.info,
-                              points: p.stepsTrend, style: .bars) {
+                              points: p.stepsTrend, style: .bars,
+                              context: [tile?.delta?.label, avg]) {
                     TrendsDeltaLabel(delta: tile?.delta)
-                    if let avg = p.today.vs7dAvg {
-                        Text("7-day avg \(avg.formatted(.number.precision(.fractionLength(0))))")
+                    if let avg {
+                        Text(avg)
                             .font(Theme.FontStyle.mono(11))
                             .foregroundStyle(Theme.Palette.fg2)
                     }
@@ -180,12 +187,12 @@ struct TrendsView: View {
 
     @ViewBuilder
     private var workoutsCard: some View {
-        switch workouts {
+        switch workouts.phase {
         case .loading:
             TrendsChartPlaceholder(title: "Workouts", chartHeight: 40)
         case .failed(let message):
             TrendsErrorCard(title: "Workouts", message: message) {
-                Task { await load(.workouts, $workouts) { try await WorkoutsService(api: api).load(range: range) } }
+                Task { await load(.workouts, $workouts, range: range) { try await WorkoutsService(api: api).load(range: $0) } }
             }
         case .loaded(let p):
             link(.workouts(range)) {
@@ -218,31 +225,43 @@ struct TrendsView: View {
     private func loadAll() async {
         let range = range
         let api = api
-        async let r: Void = load(.recovery, $recovery) { try await RecoveryService(api: api).load(range: range) }
-        async let s: Void = load(.sleep, $sleep) { try await SleepService(api: api).load(range: range) }
-        async let st: Void = load(.strain, $strain) { try await StrainService(api: api).load(range: range) }
-        async let sp: Void = load(.steps, $steps) { try await StepsService(api: api).load(range: range) }
-        async let w: Void = load(.workouts, $workouts) { try await WorkoutsService(api: api).load(range: range) }
+        async let r: Void = load(.recovery, $recovery, range: range) { try await RecoveryService(api: api).load(range: $0) }
+        async let s: Void = load(.sleep, $sleep, range: range) { try await SleepService(api: api).load(range: $0) }
+        async let st: Void = load(.strain, $strain, range: range) { try await StrainService(api: api).load(range: $0) }
+        async let sp: Void = load(.steps, $steps, range: range) { try await StepsService(api: api).load(range: $0) }
+        async let w: Void = load(.workouts, $workouts, range: range) { try await WorkoutsService(api: api).load(range: $0) }
         _ = await (r, s, st, sp, w)
     }
 
     /// Each card owns its own state: one slow or failing endpoint never blanks
-    /// the rest. A card that already has data keeps it if a refresh fails.
-    /// Per-card generations mean only the newest request for a card may
-    /// commit, so a stale range or an older Retry can't overwrite a newer one.
+    /// the rest. Per-card generations mean only the newest request for a card
+    /// may commit. `TrendsCardState` keeps old data only for a same-range
+    /// refresh failure; a failed range change shows the card's Retry state so
+    /// the hub never silently mixes ranges.
     @MainActor
-    private func load<T>(_ key: Card, _ state: Binding<TrendsLoadable<T>>, _ fetch: @escaping () async throws -> T) async {
+    private func load<T>(_ key: Card, _ state: Binding<TrendsCardState<T>>, range: DateRange,
+                         _ fetch: @escaping (DateRange) async throws -> T) async {
         let generation = (generations[key] ?? 0) + 1
         generations[key] = generation
-        if case .failed = state.wrappedValue { state.wrappedValue = .loading }
+        state.wrappedValue.beginLoad()
         do {
-            let value = try await fetch()
+            let value = try await fetch(range)
             guard generations[key] == generation else { return }
-            state.wrappedValue = .loaded(value)
+            state.wrappedValue.succeed(value, range: range)
         } catch {
-            guard generations[key] == generation, !Task.isCancelled, state.wrappedValue.value == nil else { return }
-            state.wrappedValue = .failed(TrendsLoadError.describe(error))
+            guard generations[key] == generation, !Task.isCancelled else { return }
+            state.wrappedValue.fail(TrendsLoadError.describe(error), range: range)
         }
+    }
+
+    private func lowDays(_ n: Int) -> String? {
+        n == 0 ? nil : "\(n) low day\(n == 1 ? "" : "s")"
+    }
+
+    private func kcalLabel(_ kcal: Double, dateKey: String) -> String {
+        let fresh = TrendsStats.freshness(dateKey: dateKey)
+        let when = fresh == "Today" ? "today" : "on \(TrendsFormat.day(dateKey))"
+        return "\(Int(kcal.rounded())) kcal \(when)"
     }
 
     private enum Card: Hashable { case recovery, sleep, strain, steps, workouts }

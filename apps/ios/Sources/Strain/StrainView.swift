@@ -3,7 +3,7 @@ import SwiftUI
 struct StrainView: View {
     @Environment(\.api) private var api
     @State private var range: DateRange
-    @State private var phase: TrendsLoadable<StrainPayload> = .loading
+    @State private var state = TrendsCardState<StrainPayload>()
     /// Bumped by every load (range change, pull-to-refresh, Retry); only the
     /// newest request may commit, so an older refresh can't overwrite a new range.
     @State private var loadGeneration = 0
@@ -25,9 +25,9 @@ struct StrainView: View {
 
     @ViewBuilder
     private var content: some View {
-        switch phase {
+        switch state.phase {
         case .loading:
-            TrendsDetailLoading(titles: ["Strain", "Today", "Avg heart rate"])
+            TrendsDetailLoading(titles: ["Strain", "Activity", "Avg heart rate"])
         case .failed(let message):
             TrendsDetailError(title: "Strain", message: message) { Task { await load() } }
         case .loaded(let payload):
@@ -52,24 +52,26 @@ struct StrainView: View {
     private func load() async {
         loadGeneration += 1
         let generation = loadGeneration
-        if case .failed = phase { phase = .loading }
+        let range = range
+        state.beginLoad()
         do {
             let payload = try await StrainService(api: api).load(range: range)
             guard generation == loadGeneration else { return }
-            phase = .loaded(payload)
+            state.succeed(payload, range: range)
         } catch {
-            guard generation == loadGeneration, !Task.isCancelled, phase.value == nil else { return }
-            phase = .failed(TrendsLoadError.describe(error))
+            guard generation == loadGeneration, !Task.isCancelled else { return }
+            state.fail(TrendsLoadError.describe(error), range: range)
         }
     }
 }
 
-/// The single place today's strain appears: headline and trend from the
-/// chart, plus where today sits on Whoop's 0–21 scale.
+/// The single place the latest strain appears: headline and trend from the
+/// chart, plus where it sits on Whoop's 0–21 scale.
 private struct StrainHeroCard: View {
     let payload: StrainPayload
 
     private var tile: KPITile? { payload.kpi.first { $0.key == .strain } }
+    private var latestDate: String? { payload.strainTrend.last(where: { $0.raw != nil })?.date }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
@@ -86,7 +88,7 @@ private struct StrainHeroCard: View {
             if let score = tile?.value {
                 VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
                     HStack(alignment: .firstTextBaseline) {
-                        Text("Today · \(StrainBand.zone(score))")
+                        Text("\(TrendsStats.freshness(dateKey: latestDate)) · \(StrainBand.zone(score))")
                             .font(Theme.FontStyle.sans(15, weight: .semibold))
                             .foregroundStyle(Theme.Palette.fg1)
                         Spacer(minLength: 0)
@@ -116,32 +118,38 @@ private struct StrainBand: View {
         }
     }
 
+    private static let knob: CGFloat = 14
+
+    /// Knob centre and tick labels share one mapping: value/21 across the
+    /// track, inset by the knob radius so both ends stay on screen.
+    private static func x(_ value: Double, width: CGFloat) -> CGFloat {
+        knob / 2 + (width - knob) * CGFloat(TrendsStrainScale.fraction(value))
+    }
+
     var body: some View {
-        VStack(spacing: 6) {
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(LinearGradient(colors: [Theme.Palette.recovery, Theme.Palette.warning, Theme.Palette.danger],
-                                             startPoint: .leading, endPoint: .trailing))
-                        .frame(height: 6)
-                    Circle()
-                        .fill(Theme.Palette.fg0)
-                        .frame(width: 14, height: 14)
-                        .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
-                        .offset(x: max(0, min(geo.size.width - 14, geo.size.width * CGFloat(score / 21) - 7)))
+        GeometryReader { geo in
+            let w = geo.size.width
+            ZStack(alignment: .topLeading) {
+                Capsule()
+                    .fill(LinearGradient(colors: [Theme.Palette.recovery, Theme.Palette.warning, Theme.Palette.danger],
+                                         startPoint: .leading, endPoint: .trailing))
+                    .frame(width: w - Self.knob, height: 6)
+                    .position(x: w / 2, y: Self.knob / 2)
+                Circle()
+                    .fill(Theme.Palette.fg0)
+                    .frame(width: Self.knob, height: Self.knob)
+                    .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
+                    .position(x: Self.x(score, width: w), y: Self.knob / 2)
+                ForEach(TrendsStrainScale.ticks, id: \.self) { tick in
+                    Text("\(Int(tick))")
+                        .font(Theme.FontStyle.mono(11))
+                        .foregroundStyle(Theme.Palette.fg3)
+                        .fixedSize()
+                        .position(x: Self.x(tick, width: w), y: Self.knob + 14)
                 }
-                .frame(maxHeight: .infinity)
             }
-            .frame(height: 14)
-            HStack {
-                ForEach(["0", "10", "14", "18", "21"], id: \.self) { tick in
-                    Text(tick)
-                    if tick != "21" { Spacer() }
-                }
-            }
-            .font(Theme.FontStyle.mono(11))
-            .foregroundStyle(Theme.Palette.fg3)
         }
+        .frame(height: 36)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Strain scale")
         .accessibilityValue(String(format: "%.1f of 21", score))
@@ -154,7 +162,7 @@ private struct StrainTodayCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            TrendsCardLabel("Today",
+            TrendsCardLabel(TrendsStats.freshness(dateKey: today.date),
                             trailing: "\(today.workoutCount) workout\(today.workoutCount == 1 ? "" : "s")")
             TodayKpisView(today: today)
             if !today.workouts.isEmpty {

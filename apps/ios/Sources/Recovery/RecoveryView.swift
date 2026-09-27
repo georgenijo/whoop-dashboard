@@ -5,7 +5,7 @@ struct RecoveryView: View {
 
     @Environment(\.api) private var api
     @State private var range: DateRange
-    @State private var phase: TrendsLoadable<RecoveryPayload> = .loading
+    @State private var state = TrendsCardState<RecoveryPayload>()
     /// Bumped by every load (range change, pull-to-refresh, Retry); only the
     /// newest request may commit, so an older refresh can't overwrite a new range.
     @State private var loadGeneration = 0
@@ -30,9 +30,9 @@ struct RecoveryView: View {
 
     @ViewBuilder
     private var content: some View {
-        switch phase {
+        switch state.phase {
         case .loading:
-            TrendsDetailLoading(titles: ["Recovery", "Today's signals", "HRV"])
+            TrendsDetailLoading(titles: ["Recovery", "Latest signals", "HRV"])
         case .failed(let message):
             TrendsDetailError(title: "Recovery", message: message) { Task { await load() } }
         case .loaded(let payload):
@@ -74,14 +74,15 @@ struct RecoveryView: View {
     private func load() async {
         loadGeneration += 1
         let generation = loadGeneration
-        if case .failed = phase { phase = .loading }
+        let range = range
+        state.beginLoad()
         do {
             let payload = try await RecoveryService(api: api).load(range: range)
             guard generation == loadGeneration else { return }
-            phase = .loaded(payload)
+            state.succeed(payload, range: range)
         } catch {
-            guard generation == loadGeneration, !Task.isCancelled, phase.value == nil else { return }
-            phase = .failed(TrendsLoadError.describe(error))
+            guard generation == loadGeneration, !Task.isCancelled else { return }
+            state.fail(TrendsLoadError.describe(error), range: range)
         }
     }
 }
@@ -91,6 +92,7 @@ private struct RecoveryHeroCard: View {
     let payload: RecoveryPayload
 
     private var today: KPITile? { payload.kpi.first { $0.key == .recovery } }
+    private var latestDate: String? { payload.recoveryTrend.last(where: { $0.raw != nil })?.date }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
@@ -109,7 +111,7 @@ private struct RecoveryHeroCard: View {
                         Circle()
                             .fill(zone.color)
                             .frame(width: 7, height: 7)
-                        Text("Today · \(zone.label)")
+                        Text("\(TrendsStats.freshness(dateKey: latestDate)) · \(zone.label)")
                             .font(Theme.FontStyle.sans(15, weight: .semibold))
                             .foregroundStyle(zone.color)
                         Spacer(minLength: 0)
@@ -133,13 +135,7 @@ private struct RecoveryHeroCard: View {
 private extension RecoveryPayload {
     var factors: [RecoveryFactorsCardView.Factor] {
         kpi.filter { $0.key != .recovery }.map { tile in
-            let direction: RecoveryFactorsCardView.Factor.Direction = {
-                switch tile.delta?.dir {
-                case .up: return tile.key == .rhr ? .worse : .better
-                case .down: return tile.key == .rhr ? .better : .worse
-                case .flat, .none: return .flat
-                }
-            }()
+            let direction = RecoveryFactorsCardView.Factor.Direction(api: tile.delta?.dir)
             let value: String = {
                 guard let v = tile.value else { return "—" }
                 if tile.key == .sleep { return TrendsFormat.hoursMinutes(hours: v) }

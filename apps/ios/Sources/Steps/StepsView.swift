@@ -3,7 +3,7 @@ import SwiftUI
 struct StepsView: View {
     @Environment(\.api) private var api
     @State private var range: DateRange
-    @State private var phase: TrendsLoadable<StepsPayload> = .loading
+    @State private var state = TrendsCardState<StepsPayload>()
     /// Bumped by every load (range change, pull-to-refresh, Retry); only the
     /// newest request may commit, so an older refresh can't overwrite a new range.
     @State private var loadGeneration = 0
@@ -25,7 +25,7 @@ struct StepsView: View {
 
     @ViewBuilder
     private var content: some View {
-        switch phase {
+        switch state.phase {
         case .loading:
             TrendsDetailLoading(titles: ["Steps"])
         case .failed(let message):
@@ -50,14 +50,15 @@ struct StepsView: View {
     private func load() async {
         loadGeneration += 1
         let generation = loadGeneration
-        if case .failed = phase { phase = .loading }
+        let range = range
+        state.beginLoad()
         do {
             let payload = try await StepsService(api: api).load(range: range)
             guard generation == loadGeneration else { return }
-            phase = .loaded(payload)
+            state.succeed(payload, range: range)
         } catch {
-            guard generation == loadGeneration, !Task.isCancelled, phase.value == nil else { return }
-            phase = .failed(TrendsLoadError.describe(error))
+            guard generation == loadGeneration, !Task.isCancelled else { return }
+            state.fail(TrendsLoadError.describe(error), range: range)
         }
     }
 }
@@ -98,7 +99,7 @@ private struct StepsHeroCard: View {
         let best = days.max { $0.steps < $1.steps }
         let over10k = values.filter { $0 >= 10_000 }.count
         return [
-            TrendsStat(id: "7d", label: "7-day avg", value: format(payload.today.vs7dAvg),
+            TrendsStat(id: "7d", label: "7-day avg", value: format(TrendsStats.recentAverage(payload.stepsTrend)),
                        caption: "rolling"),
             TrendsStat(id: "total", label: "Total", value: format(values.isEmpty ? nil : values.reduce(0, +)), caption: payload.rangeLabel),
             TrendsStat(id: "best", label: "Best day", value: format(best?.steps),

@@ -38,6 +38,7 @@ struct SleepStageDonutView: View {
                         .cornerRadius(3)
                         .foregroundStyle(e.color)
                     }
+                    .accessibilityHidden(true)
                     VStack(spacing: 2) {
                         Text(TrendsFormat.hoursMinutes(ms: asleep))
                             .font(Theme.FontStyle.mono(17, weight: .medium))
@@ -46,9 +47,11 @@ struct SleepStageDonutView: View {
                             .font(Theme.FontStyle.mono(11))
                             .foregroundStyle(Theme.Palette.fg3)
                     }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Asleep")
+                    .accessibilityValue(TrendsFormat.hoursMinutes(ms: asleep))
                 }
                 .frame(width: 128, height: 128)
-                .accessibilityHidden(true)
 
                 VStack(spacing: 10) {
                     ForEach(entries) { e in

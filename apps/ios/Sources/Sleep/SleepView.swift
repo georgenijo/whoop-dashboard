@@ -3,7 +3,7 @@ import SwiftUI
 struct SleepView: View {
     @Environment(\.api) private var api
     @State private var range: DateRange
-    @State private var phase: TrendsLoadable<SleepPayload> = .loading
+    @State private var state = TrendsCardState<SleepPayload>()
     /// Bumped by every load (range change, pull-to-refresh, Retry); only the
     /// newest request may commit, so an older refresh can't overwrite a new range.
     @State private var loadGeneration = 0
@@ -25,7 +25,7 @@ struct SleepView: View {
 
     @ViewBuilder
     private var content: some View {
-        switch phase {
+        switch state.phase {
         case .loading:
             TrendsDetailLoading(titles: ["Sleep", "Last night", "Sleep need"])
         case .failed(let message):
@@ -57,14 +57,15 @@ struct SleepView: View {
     private func load() async {
         loadGeneration += 1
         let generation = loadGeneration
-        if case .failed = phase { phase = .loading }
+        let range = range
+        state.beginLoad()
         do {
             let payload = try await SleepService(api: api).load(range: range)
             guard generation == loadGeneration else { return }
-            phase = .loaded(payload)
+            state.succeed(payload, range: range)
         } catch {
-            guard generation == loadGeneration, !Task.isCancelled, phase.value == nil else { return }
-            phase = .failed(TrendsLoadError.describe(error))
+            guard generation == loadGeneration, !Task.isCancelled else { return }
+            state.fail(TrendsLoadError.describe(error), range: range)
         }
     }
 }

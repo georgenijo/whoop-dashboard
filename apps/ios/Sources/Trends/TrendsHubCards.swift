@@ -12,6 +12,9 @@ struct TrendsHubCard<Footer: View>: View {
     var yDomain: ClosedRange<Double>? = nil
     var markers: [MetricChart.Marker] = []
     var format: ((Double) -> String)? = nil
+    /// The footer's facts, spoken with the card so VoiceOver hears the same
+    /// context (zone, delta, low days) that is shown.
+    var context: [String?] = []
     @ViewBuilder var footer: () -> Footer
 
     var body: some View {
@@ -43,11 +46,22 @@ struct TrendsHubCard<Footer: View>: View {
     }
 
     private var accessibilitySummary: String {
-        let values = points.compactMap(\.raw)
-        guard let last = values.last else { return "No data" }
         let show: (Double) -> String = { format?($0) ?? $0.formatted(.number.precision(.fractionLength(precision))) }
-        let average = values.reduce(0, +) / Double(values.count)
-        return "Latest \(show(last)) \(unit), average \(show(average))"
+        return TrendsA11y.summary(values: points.compactMap(\.raw), unit: unit, show: show, context: context)
+    }
+}
+
+enum TrendsA11y {
+    static func summary(values: [Double], unit: String, show: (Double) -> String, context: [String?]) -> String {
+        var parts: [String] = []
+        if let last = values.last {
+            let average = values.reduce(0, +) / Double(values.count)
+            parts.append("Latest \(show(last))\(unit.isEmpty ? "" : " \(unit)"), average \(show(average))")
+        } else {
+            parts.append("No data")
+        }
+        parts += context.compactMap { $0 }.filter { !$0.isEmpty }
+        return parts.joined(separator: ". ")
     }
 }
 

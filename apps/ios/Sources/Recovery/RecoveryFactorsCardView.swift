@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Today's contributing signals. The score itself lives only in the hero
+/// The latest contributing signals. The score itself lives only in the hero
 /// chart above; this card explains it.
 struct RecoveryFactorsCardView: View {
     let factors: [Factor]
@@ -13,12 +13,24 @@ struct RecoveryFactorsCardView: View {
         let color: Color
         var id: String { label }
 
-        enum Direction { case better, worse, flat }
+        enum Direction {
+            case better, worse, flat
+
+            /// The API's `dir` is already the improvement signal: it reverses
+            /// lower-is-better metrics (RHR) server-side, so no inversion here.
+            init(api dir: KPITile.Delta.Direction?) {
+                switch dir {
+                case .up: self = .better
+                case .down: self = .worse
+                case .flat, .none: self = .flat
+                }
+            }
+        }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-            TrendsCardLabel("Today's signals", trailing: "vs recent")
+            TrendsCardLabel("Latest signals", trailing: "vs previous")
             VStack(spacing: 0) {
                 ForEach(factors) { factor in
                     row(factor)

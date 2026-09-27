@@ -11,6 +11,57 @@ enum TrendsLoadable<Value> {
     }
 }
 
+/// A card's data plus the range it was loaded for. A failed load for a
+/// different range surfaces the error rather than leaving the previous
+/// range's data on screen; only a same-range refresh failure keeps old data.
+struct TrendsCardState<Value> {
+    private(set) var phase: TrendsLoadable<Value> = .loading
+    private(set) var loadedRange: DateRange?
+
+    var value: Value? { phase.value }
+
+    mutating func beginLoad() {
+        if case .failed = phase { phase = .loading }
+    }
+
+    mutating func succeed(_ value: Value, range: DateRange) {
+        phase = .loaded(value)
+        loadedRange = range
+    }
+
+    mutating func fail(_ message: String, range: DateRange) {
+        if phase.value != nil, loadedRange == range { return }
+        phase = .failed(message)
+        loadedRange = nil
+    }
+}
+
+enum TrendsStats {
+    /// Mean of the most recent `days` points that have data, independent of
+    /// whether today has synced yet.
+    static func recentAverage(_ points: [TrendPoint], days: Int = 7) -> Double? {
+        let recent = points.sorted { $0.date < $1.date }.compactMap(\.raw).suffix(days)
+        guard !recent.isEmpty else { return nil }
+        return recent.reduce(0, +) / Double(recent.count)
+    }
+
+    /// "Today" only when the measurement is from today; otherwise "Latest · <day>".
+    static func freshness(dateKey: String?, now: Date = Date()) -> String {
+        guard let dateKey else { return "Latest" }
+        if dateKey == ChartDate.key(now) { return "Today" }
+        return "Latest · \(TrendsFormat.day(dateKey))"
+    }
+}
+
+enum TrendsStrainScale {
+    static let maximum = 21.0
+    static let ticks: [Double] = [0, 10, 14, 18, 21]
+
+    static func fraction(_ value: Double) -> Double {
+        min(max(value / maximum, 0), 1)
+    }
+}
+
 enum TrendsLoadError {
     static func describe(_ error: Error) -> String {
         switch error {
@@ -168,23 +219,24 @@ struct TrendsStatGrid: View {
     }
 }
 
+/// The API's `dir` is already the improvement signal (it reverses
+/// lower-is-better metrics like RHR server-side), so it is used as-is.
 struct TrendsDeltaLabel: View {
     let delta: KPITile.Delta?
-    var invert = false
 
     var body: some View {
         if let delta {
             Text(delta.label)
                 .font(Theme.FontStyle.mono(11, weight: .medium))
-                .foregroundStyle(color(delta.dir))
+                .foregroundStyle(Self.color(delta.dir))
         }
     }
 
-    private func color(_ dir: KPITile.Delta.Direction) -> Color {
+    static func color(_ dir: KPITile.Delta.Direction?) -> Color {
         switch dir {
-        case .flat: return Theme.Palette.fg3
-        case .up: return invert ? Theme.Palette.danger : Theme.Palette.success
-        case .down: return invert ? Theme.Palette.success : Theme.Palette.danger
+        case .up: return Theme.Palette.success
+        case .down: return Theme.Palette.danger
+        case .flat, .none: return Theme.Palette.fg3
         }
     }
 }
