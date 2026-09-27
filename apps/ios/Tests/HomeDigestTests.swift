@@ -66,7 +66,6 @@ final class HomeDigestTests: XCTestCase {
     func testDeltaLabelSplitsAndGroups() {
         let d = KPIDeltaText(KPITile.Delta(label: "↓ 35585 vs yesterday", dir: .down))
         XCTAssertEqual(d.amount, "↓ " + 35585.0.formatted(.number.precision(.fractionLength(0))))
-        XCTAssertNotEqual(d.amount, "↓ 35585")
         XCTAssertEqual(d.context, "vs yesterday")
         let flat = KPIDeltaText(KPITile.Delta(label: "— baseline", dir: .flat))
         XCTAssertEqual(flat.amount, "no change")

@@ -12,9 +12,14 @@ struct KPIStripView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// Accessibility text sizes get two wide columns instead of three
-    /// narrow ones so values and deltas are never clipped.
+    /// narrow ones so values and deltas are never clipped. At the top
+    /// accessibility sizes even two columns can overflow a wide value like
+    /// "35,585", so those sizes drop to a single column.
     private var effectiveColumns: Int {
-        dynamicTypeSize.isAccessibilitySize ? min(columns, 2) : columns
+        if dynamicTypeSize >= .accessibility3 {
+            return 1
+        }
+        return dynamicTypeSize.isAccessibilitySize ? min(columns, 2) : columns
     }
 
     static func rowSizes(count: Int, columns: Int) -> [Int] {
@@ -188,7 +193,7 @@ private struct KPICell: View {
             (Text(text.amount).foregroundStyle(deltaColor(delta.dir))
                 + Text(context).foregroundStyle(Theme.Palette.fg3))
                 .font(Theme.FontStyle.mono(11, weight: .medium))
-                .lineLimit(wraps ? 3 : 1)
+                .lineLimit(wraps ? nil : 1)
                 .minimumScaleFactor(wraps ? 1 : 0.8)
                 .fixedSize(horizontal: false, vertical: wraps)
         } else {
