@@ -122,17 +122,19 @@ enum StatsFormat {
         /// in the Gregorian calendar (API keys are Gregorian regardless of the
         /// device calendar).
         static func fallback(days: Int, today: Date = Date()) -> Window {
-            let end = isoDay.string(from: today)
-            let startDate = gregorian.date(byAdding: .day, value: -(days - 1), to: today) ?? today
-            return Window(start: isoDay.string(from: startDate), end: end)
+            // Resolve the zone per call: cached formatters would keep the zone
+            // the app launched in after the device moves.
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = .current
+            let formatter = DateFormatter()
+            formatter.calendar = calendar
+            formatter.timeZone = .current
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.dateFormat = "yyyy-MM-dd"
+            let startDate = calendar.date(byAdding: .day, value: -(days - 1), to: today) ?? today
+            return Window(start: formatter.string(from: startDate), end: formatter.string(from: today))
         }
     }
-
-    private static let gregorian: Calendar = {
-        var c = Calendar(identifier: .gregorian)
-        c.timeZone = .current
-        return c
-    }()
 
     /// The window's last month is still accumulating ("so far").
     static func isCurrentMonth(_ raw: String, window: Window) -> Bool {

@@ -99,9 +99,12 @@ struct YearOverYearCard: View {
         let changes = yoy.metrics.compactMap { StatsFormat.change(current: $0.current, prior: $0.prior) }
         guard !changes.isEmpty else { return nil }
         let ahead = changes.filter { $0.direction == .up }.count
+        let behind = changes.filter { $0.direction == .down }.count
         let prior = String(yoy.priorYear)
         if ahead == changes.count { return "Ahead of \(prior) on every measure so far." }
-        if ahead == 0 { return "Behind \(prior)'s pace on every measure so far." }
+        if behind == changes.count { return "Behind \(prior)'s pace on every measure so far." }
+        if ahead == 0 && behind == 0 { return "Level with \(prior) so far." }
+        if ahead == 0 { return "Behind \(prior) on \(behind) of \(changes.count) measures so far." }
         return "Ahead of \(prior) on \(ahead) of \(changes.count) measures so far."
     }
 

@@ -89,6 +89,9 @@ struct StatsView: View {
     @MainActor
     private func retry() {
         guard !isLoading else { return }
+        // Reserve synchronously so a second queued tap sees the in-flight
+        // request before the Task below gets to run.
+        isLoading = true
         phase = .loading
         Task { await load() }
     }
