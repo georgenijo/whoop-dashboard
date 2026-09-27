@@ -1,88 +1,102 @@
 import SwiftUI
 
+/// Sleep need, read as a sum: what you needed, what made up that need, and
+/// how much of it you actually got.
 struct SleepNeedBreakdownView: View {
     let need: SleepPayload.LatestSleep.NeedBreakdown
+    var asleepMs: Double? = nil
 
-    private struct Segment: Identifiable {
+    private struct Part: Identifiable {
         let label: String
+        let sign: String
         let ms: Double
         let color: Color
         var id: String { label }
     }
 
-    private var segments: [Segment] {
-        var s = [
-            Segment(label: "Baseline", ms: need.baselineMs, color: Theme.Palette.sleepDeep),
-            Segment(label: "Debt",     ms: need.debtMs,     color: Theme.Palette.warning),
-            Segment(label: "Strain",   ms: need.strainMs,   color: Theme.Palette.rhr)
+    private var parts: [Part] {
+        var p = [
+            Part(label: "Baseline", sign: "", ms: need.baselineMs, color: Theme.Palette.sleepDeep),
+            Part(label: "Sleep debt", sign: "+", ms: need.debtMs, color: Theme.Palette.warning),
+            Part(label: "From strain", sign: "+", ms: need.strainMs, color: Theme.Palette.rhr)
         ]
         if need.napMs > 0 {
-            s.append(Segment(label: "Nap credit", ms: need.napMs, color: Theme.Palette.recovery))
+            p.append(Part(label: "Nap credit", sign: "−", ms: need.napMs, color: Theme.Palette.recovery))
         }
-        return s
+        return p
     }
 
     private var totalNeed: Double {
-        need.baselineMs + need.debtMs + need.strainMs - need.napMs
+        max(0, need.baselineMs + need.debtMs + need.strainMs - need.napMs)
+    }
+
+    private var fraction: Double? {
+        guard let asleepMs, totalNeed > 0 else { return nil }
+        return min(1, asleepMs / totalNeed)
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            HStack {
-                Text("SLEEP NEED")
-                    .font(Theme.FontStyle.sans(10, weight: .semibold))
-                    .tracking(1.4)
-                    .foregroundStyle(Theme.Palette.fg2)
-                Spacer()
-                Text(formatHm(totalNeed))
-                    .font(Theme.FontStyle.display(15, weight: .semibold))
-                    .foregroundStyle(Theme.Palette.fg0)
-                    .monospacedDigit()
-            }
-
-            GeometryReader { geo in
-                HStack(spacing: 2) {
-                    ForEach(segments) { seg in
-                        Rectangle()
-                            .fill(LinearGradient(colors: [seg.color, seg.color.opacity(0.7)],
-                                                 startPoint: .top, endPoint: .bottom))
-                            .frame(width: max(0, geo.size.width * width(of: seg)))
-                    }
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            TrendsCardLabel("Sleep need")
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.lg) {
+                figure(label: "Needed", value: TrendsFormat.hoursMinutes(ms: totalNeed), color: Theme.Palette.fg0)
+                if let asleepMs {
+                    figure(label: "Got", value: TrendsFormat.hoursMinutes(ms: asleepMs), color: Theme.Palette.fg0)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 7))
-                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(Color.white.opacity(0.06), lineWidth: 1))
-            }
-            .frame(height: 14)
-
-            VStack(spacing: 6) {
-                ForEach(segments) { seg in
-                    HStack(spacing: 8) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(seg.color)
-                            .frame(width: 9, height: 9)
-                        Text(seg.label)
-                            .font(Theme.FontStyle.sans(12))
-                            .foregroundStyle(Theme.Palette.fg1)
-                        Spacer()
-                        Text(formatHm(seg.ms))
+                Spacer(minLength: 0)
+                if let fraction {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("\(Int((fraction * 100).rounded()))%")
+                            .font(Theme.FontStyle.mono(22, weight: .medium))
+                            .foregroundStyle(fraction >= 0.85 ? Theme.Palette.success : Theme.Palette.warning)
+                        Text("of need met")
                             .font(Theme.FontStyle.mono(11))
                             .foregroundStyle(Theme.Palette.fg3)
                     }
+                }
+            }
+            if let fraction {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Theme.Palette.bg4)
+                        Capsule()
+                            .fill(Theme.Palette.sleepDeep)
+                            .frame(width: max(8, geo.size.width * fraction))
+                    }
+                }
+                .frame(height: 8)
+                .accessibilityHidden(true)
+            }
+            VStack(spacing: 8) {
+                ForEach(parts) { part in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(part.color)
+                            .frame(width: 10, height: 10)
+                        Text(part.label)
+                            .font(Theme.FontStyle.sans(15))
+                            .foregroundStyle(Theme.Palette.fg1)
+                        Spacer()
+                        Text("\(part.sign)\(part.sign.isEmpty ? "" : " ")\(TrendsFormat.hoursMinutes(ms: part.ms))")
+                            .font(Theme.FontStyle.mono(13, weight: .medium))
+                            .foregroundStyle(Theme.Palette.fg1)
+                    }
+                    .accessibilityElement(children: .combine)
                 }
             }
         }
         .glassCard(tint: .sleep, padding: Theme.Spacing.md)
     }
 
-    private func width(of seg: Segment) -> Double {
-        let total = max(1, segments.reduce(0) { $0 + $1.ms })
-        return seg.ms / total
-    }
-
-    private func formatHm(_ ms: Double) -> String {
-        let total = Int(ms / 60_000)
-        let h = total / 60
-        let m = total % 60
-        return String(format: "%dh %02dm", h, m)
+    private func figure(label: String, value: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(value)
+                .font(Theme.FontStyle.mono(22, weight: .medium))
+                .foregroundStyle(color)
+            Text(label)
+                .font(Theme.FontStyle.mono(11))
+                .foregroundStyle(Theme.Palette.fg3)
+        }
+        .accessibilityElement(children: .combine)
     }
 }

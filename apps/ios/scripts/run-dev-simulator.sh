@@ -8,7 +8,9 @@ IOS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 SIMULATOR_ID="${1:-}"
 DEV_USER_ID="${COACH_DEV_USER_ID:-2}"
 FLEET_NODE="${COACH_DEV_FLEET_NODE:-opti}"
-PROD_ENV_FILE="${COACH_DEV_ENV_FILE:-/home/george/services/whoop-dashboard/.env.local}"
+# Production secrets live in the root-owned whoop-web systemd drop-in, so the
+# remote read runs under sudo (passwordless for george on opti).
+PROD_ENV_FILE="${COACH_DEV_ENV_FILE:-/etc/systemd/system/whoop-web.service.d/override.conf}"
 API_URL="${COACH_API_URL:-https://coach-api.georgenijo.com}"
 BUNDLE_ID="com.georgenijo.coach"
 DERIVED_DATA_PATH="${COACH_DERIVED_DATA_PATH:-/tmp/coach-dev-derived}"
@@ -51,7 +53,7 @@ printf -v REMOTE_USER_ARG '%q' "$DEV_USER_ID"
 printf -v REMOTE_ENV_ARG '%q' "$PROD_ENV_FILE"
 printf 'Minting a Debug-only session for user %s on Fleet node %s...\n' "$DEV_USER_ID" "$FLEET_NODE"
 SESSION_TOKEN="$(
-  fleet exec "$FLEET_NODE" "python3 - $REMOTE_USER_ARG $REMOTE_ENV_ARG" <<'PYTHON'
+  fleet exec "$FLEET_NODE" "sudo python3 - $REMOTE_USER_ARG $REMOTE_ENV_ARG" <<'PYTHON'
 import base64
 import hashlib
 import hmac
@@ -67,9 +69,16 @@ def base64url(value: bytes) -> str:
 
 
 def read_env_value(path: pathlib.Path, key: str) -> str:
+    # Accepts dotenv lines (KEY=value, export KEY=value, optionally quoted)
+    # and systemd drop-in lines (Environment="KEY=value" / Environment=KEY=value).
     pattern = re.compile(rf"^(?:export\s+)?{re.escape(key)}=(.*)$")
     for raw_line in path.read_text().splitlines():
-        match = pattern.match(raw_line.strip())
+        line = raw_line.strip()
+        if line.startswith("Environment="):
+            line = line[len("Environment="):]
+            if len(line) >= 2 and line[0] == line[-1] == '"':
+                line = line[1:-1]
+        match = pattern.match(line)
         if not match:
             continue
         value = match.group(1).strip()

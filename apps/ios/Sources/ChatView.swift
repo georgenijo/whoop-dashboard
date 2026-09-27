@@ -23,12 +23,23 @@ struct ChatView: View {
     @State private var isPreparingImages = false
     @State private var selectedAttachment: ChatAttachment?
     @State private var attachmentCache = ChatAttachmentCache()
+    @State private var scrollState = ChatScrollState()
+    @State private var jumpRequest = 0
     @FocusState private var isComposerFocused: Bool
 
-    init(threadId: Int?, initialTitle: String?) {
+    /// `initialDraft` only pre-fills the composer; nothing is sent until the user taps send.
+    init(threadId: Int?, initialTitle: String?, initialDraft: String? = nil) {
         self.initialTitle = initialTitle
         self._threadId = State(initialValue: threadId)
+        self._input = State(initialValue: initialDraft ?? "")
     }
+
+    static let suggestedPrompts = [
+        "How was my recovery this week?",
+        "Why did I sleep badly last night?",
+        "What should I train today?",
+        "Compare this week to last week"
+    ]
 
     struct StreamingAssistant {
         let id: UUID
@@ -54,22 +65,50 @@ struct ChatView: View {
             case .typing: return "typing"
             }
         }
+
+        /// A user message opens a new turn; extra space above it separates turns.
+        var startsTurn: Bool {
+            switch self {
+            case .persisted(let m): return m.role == .user
+            case .optimistic: return true
+            case .streaming, .typing: return false
+            }
+        }
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            messagesList
-            if let recoveryStatus {
-                recoveryBar(recoveryStatus)
+        messagesList
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: 0) {
+                    if let recoveryStatus {
+                        recoveryBar(recoveryStatus)
+                    }
+                    if let sendError {
+                        sendErrorBanner(sendError)
+                    }
+                    composer
+                }
+                .background {
+                    LinearGradient(
+                        stops: [
+                            .init(color: Theme.Palette.bg0.opacity(0), location: 0),
+                            .init(color: Theme.Palette.bg0.opacity(0.92), location: 0.28),
+                            .init(color: Theme.Palette.bg0, location: 1)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .padding(.top, -18)
+                    .ignoresSafeArea()
+                }
+                .overlay(alignment: .top) {
+                    JumpToLatestButton(scroll: scrollState, hidden: rows.isEmpty) {
+                        jumpRequest += 1
+                    }
+                    .offset(y: -54)
+                }
             }
-            if let sendError {
-                sendErrorBanner(sendError)
-            }
-            Rectangle()
-                .fill(Theme.Palette.borderSubtle)
-                .frame(height: 1)
-            composer
-        }
         .navigationTitle(initialTitle ?? "New chat")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
@@ -182,23 +221,43 @@ struct ChatView: View {
         )
     }
 
+    private static let bottomAnchorId = "chat-bottom"
+    private static let scrollSpace = "chat-scroll"
+
+
     @ViewBuilder
     private var messagesList: some View {
         if rows.isEmpty, let loadError {
-            VStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 12) {
+                Label("Couldn’t load this conversation", systemImage: "exclamationmark.bubble")
+                    .font(Theme.FontStyle.sans(15, weight: .semibold))
+                    .foregroundStyle(Theme.Palette.fg0)
                 Text(loadError)
-                    .font(Theme.FontStyle.sans(12))
+                    .font(Theme.FontStyle.sans(13))
                     .foregroundStyle(Theme.Palette.fg2)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-                Button("Retry") { Task { await loadHistory() } }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Theme.Palette.brandStrain)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    Task { await loadHistory() }
+                } label: {
+                    Text("Retry")
+                        .font(Theme.FontStyle.sans(14, weight: .semibold))
+                        .foregroundStyle(Theme.Palette.bg0)
+                        .padding(.horizontal, 20)
+                        .frame(minHeight: 40)
+                        .background(Theme.Palette.fg0, in: Capsule())
+                        .frame(minHeight: 44)
+                }
+                .buttonStyle(.plain)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassCard()
+            .padding(Theme.Spacing.md)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if rows.isEmpty && threadId != nil {
-            ProgressView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            ChatLoadingPlaceholder()
+                .padding(.horizontal, Theme.Spacing.md)
+                .padding(.top, Theme.Spacing.lg)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         } else if rows.isEmpty {
             ScrollView {
                 emptyAsk
@@ -208,49 +267,169 @@ struct ChatView: View {
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
+                    let dayLabels = Self.dayLabels(for: rows)
                     LazyVStack(spacing: 14) {
-                        ForEach(rows) { row in
-                            MessageBubble(
-                                row: row,
-                                activeTools: activeTools,
-                                api: api,
-                                cache: attachmentCache,
-                                onAttachmentTap: { selectedAttachment = $0 }
+                        ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                            VStack(alignment: .leading, spacing: 0) {
+                                if let day = dayLabels[index] {
+                                    ChatDayDivider(text: day)
+                                        .padding(.top, index == 0 ? 0 : 14)
+                                        .padding(.bottom, 16)
+                                }
+                                MessageBubble(
+                                    row: row,
+                                    activeTools: activeTools,
+                                    api: api,
+                                    cache: attachmentCache,
+                                    onAttachmentTap: { selectedAttachment = $0 }
+                                )
+                            }
+                            .padding(.top, index > 0 && row.startsTurn ? 18 : 0)
+                            .id(row.id)
+                            .transition(
+                                .asymmetric(
+                                    insertion: .opacity.combined(with: .offset(y: 14)),
+                                    removal: .opacity
+                                )
                             )
-                                .id(row.id)
                         }
+                        Color.clear
+                            .frame(height: 1)
+                            .id(Self.bottomAnchorId)
+                            .background {
+                                GeometryReader { geometry in
+                                    Color.clear.onChange(
+                                        of: geometry.frame(in: .named(Self.scrollSpace)).minY,
+                                        initial: true
+                                    ) { _, minY in
+                                        scrollState.update(bottomEdge: minY)
+                                    }
+                                }
+                            }
                     }
+                    .animation(.snappy(duration: 0.32), value: rows.count)
                     .padding(.horizontal, Theme.Spacing.md)
-                    .padding(.vertical, Theme.Spacing.lg)
+                    .padding(.top, Theme.Spacing.md)
+                    .padding(.bottom, Theme.Spacing.sm)
                 }
                 .scrollContentBackground(.hidden)
+                .coordinateSpace(name: Self.scrollSpace)
+                .background {
+                    GeometryReader { geometry in
+                        Color.clear.onChange(of: geometry.size.height, initial: true) { _, height in
+                            scrollState.viewportHeight = height
+                        }
+                    }
+                }
+                .onAppear {
+                    proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
+                }
                 .scrollDismissesKeyboard(.interactively)
                 .onChange(of: rows.last?.id) { _, newLastId in
                     if let newLastId {
                         withAnimation { proxy.scrollTo(newLastId, anchor: .bottom) }
                     }
                 }
+                .onChange(of: jumpRequest) { _, _ in
+                    withAnimation(.snappy) { proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom) }
+                }
             }
         }
     }
 
-    private var emptyAsk: some View {
-        VStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(Theme.Palette.ai.opacity(0.14))
-                    .frame(width: 76, height: 76)
-                Image(systemName: "sparkles")
-                    .font(.system(size: 30, weight: .light))
-                    .foregroundStyle(Theme.Palette.ai)
-                    .shadow(color: Theme.Palette.ai.opacity(0.6), radius: 10)
+    /// A day caption before the first message of each calendar day. Computed
+    /// once per render in a single forward pass — the old per-row lookup
+    /// rescanned the whole preceding transcript for every row, which is
+    /// quadratic over a long thread.
+    static func dayLabels(for rows: [ChatRow]) -> [Int: String] {
+        let calendar = Calendar.current
+        var result: [Int: String] = [:]
+        var previousDate: Date?
+        for (index, row) in rows.enumerated() {
+            guard case .persisted(let message) = row else { continue }
+            if let priorDate = previousDate, calendar.isDate(priorDate, inSameDayAs: message.createdAt) {
+                previousDate = message.createdAt
+                continue
             }
-            Text("Ask the coach")
-                .font(Theme.FontStyle.sans(17, weight: .semibold))
-                .foregroundStyle(Theme.Palette.fg0)
-            Text("Try “How was my recovery this week?”")
-                .font(Theme.FontStyle.sans(12))
-                .foregroundStyle(Theme.Palette.fg2)
+            result[index] = dayText(message.createdAt)
+            previousDate = message.createdAt
+        }
+        return result
+    }
+
+    static func dayText(_ date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return "Today" }
+        if calendar.isDateInYesterday(date) { return "Yesterday" }
+        let sameYear = calendar.isDate(date, equalTo: .now, toGranularity: .year)
+        return sameYear
+            ? date.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
+            : date.formatted(.dateTime.month(.abbreviated).day().year())
+    }
+
+    private var emptyAsk: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 24)
+            VStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            RadialGradient(
+                                colors: [Theme.Palette.ai.opacity(0.28), Theme.Palette.ai.opacity(0)],
+                                center: .center,
+                                startRadius: 0,
+                                endRadius: 48
+                            )
+                        )
+                        .frame(width: 96, height: 96)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 30, weight: .light))
+                        .foregroundStyle(Theme.Palette.ai)
+                        .shadow(color: Theme.Palette.ai.opacity(0.6), radius: 10)
+                }
+                Text("Ask the coach")
+                    .font(Theme.FontStyle.sans(22, weight: .semibold))
+                    .foregroundStyle(Theme.Palette.fg0)
+                Text("It reads your recovery, sleep, and training before it answers.")
+                    .font(Theme.FontStyle.sans(14))
+                    .foregroundStyle(Theme.Palette.fg2)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, Theme.Spacing.xl)
+            }
+            Spacer(minLength: 24)
+            VStack(alignment: .leading, spacing: 8) {
+                Text("TRY")
+                    .font(Theme.FontStyle.sans(11, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(Theme.Palette.fg3)
+                    .padding(.leading, 4)
+                ForEach(Self.suggestedPrompts, id: \.self) { prompt in
+                    Button {
+                        input = prompt
+                        isComposerFocused = true
+                    } label: {
+                        HStack(spacing: 10) {
+                            Text(prompt)
+                                .font(Theme.FontStyle.sans(15))
+                                .foregroundStyle(Theme.Palette.fg1)
+                                .multilineTextAlignment(.leading)
+                            Spacer(minLength: 8)
+                            Image(systemName: "arrow.up.left")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Theme.Palette.fg3)
+                        }
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 48)
+                        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
+                        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.Palette.borderSubtle))
+                        .contentShape(RoundedRectangle(cornerRadius: 14))
+                    }
+                    .buttonStyle(ChatPressStyle())
+                    .accessibilityHint("Fills the message field")
+                }
+            }
+            .padding(.horizontal, Theme.Spacing.md)
+            .padding(.bottom, Theme.Spacing.md)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -306,7 +485,7 @@ struct ChatView: View {
                         "Image analysis isn’t a medical diagnosis.",
                         systemImage: "cross.case"
                     )
-                    .font(Theme.FontStyle.sans(9.5))
+                    .font(Theme.FontStyle.sans(11))
                     .foregroundStyle(Theme.Palette.fg3)
                 }
                 .padding(.horizontal, 2)
@@ -322,65 +501,85 @@ struct ChatView: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
                 TextField("Ask about recovery, sleep, strain…", text: $input, axis: .vertical)
-                    .font(Theme.FontStyle.sans(13))
+                    .font(Theme.FontStyle.sans(15))
                     .foregroundStyle(Theme.Palette.fg0)
-                    .lineLimit(1...5)
+                    .tint(Theme.Palette.ai)
+                    .lineLimit(1...6)
                     .disabled(isSending)
                     .textFieldStyle(.plain)
                     .focused($isComposerFocused)
-                    .padding(.horizontal, 2)
-                    .padding(.vertical, 2)
+                    .padding(.horizontal, 6)
+                    .padding(.top, 8)
 
-                HStack(spacing: 8) {
+                HStack(spacing: 2) {
                     PhotosPicker(
                         selection: $photoPickerItems,
                         maxSelectionCount: max(1, 3 - pendingImages.count),
                         matching: .images
                     ) {
-                        Image(systemName: "paperclip")
+                        Image(systemName: "plus")
                             .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(Theme.Palette.fg2)
+                            .foregroundStyle(Theme.Palette.fg1)
                             .frame(width: 32, height: 32)
+                            .background(Color.white.opacity(0.07), in: Circle())
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
                     }
                     .disabled(isSending || isPreparingImages || pendingImages.count >= 3)
-                    .accessibilityLabel("Choose photos")
+                    .opacity(isSending || pendingImages.count >= 3 ? 0.4 : 1)
+                    .accessibilityLabel("Attach photos")
                     .accessibilityValue("\(pendingImages.count) of 3 selected")
-
-                    Spacer(minLength: 4)
+                    .padding(.leading, -6)
 
                     CoachModelPicker(disabled: isSending)
+
+                    Spacer(minLength: 4)
 
                     Button {
                         Task { await send() }
                     } label: {
-                        Image(systemName: "arrow.up")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(Theme.Palette.bg0)
-                            .frame(width: 32, height: 32)
-                            .background(Theme.Palette.fg0, in: RoundedRectangle(cornerRadius: 7))
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                            .opacity(canSend ? 1 : 0.35)
+                        ZStack {
+                            Circle()
+                                .fill(canSend ? Theme.Palette.fg0 : Color.white.opacity(0.08))
+                            if isSending {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .tint(Theme.Palette.fg2)
+                            } else {
+                                Image(systemName: "arrow.up")
+                                    .font(.system(size: 15, weight: .bold))
+                                    .foregroundStyle(canSend ? Theme.Palette.bg0 : Theme.Palette.fg3)
+                            }
+                        }
+                        .frame(width: 34, height: 34)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                        .animation(.snappy(duration: 0.2), value: canSend)
                     }
+                    .buttonStyle(ChatPressStyle())
                     .disabled(!canSend)
-                    .accessibilityLabel("Send message")
+                    .padding(.trailing, -5)
+                    .accessibilityLabel(isSending ? "Sending" : "Send message")
+                    .sensoryFeedback(.impact(weight: .light), trigger: isSending) { _, sending in sending }
                 }
             }
-            .padding(.horizontal, 9)
-            .padding(.vertical, 8)
-            .background(Theme.Palette.bg1, in: RoundedRectangle(cornerRadius: 12))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 2)
+            .background(Theme.Palette.bg2, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(Theme.Palette.borderDefault, lineWidth: 1)
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(
+                        isComposerFocused ? Theme.Palette.borderStrong : Theme.Palette.borderDefault,
+                        lineWidth: 1
+                    )
             )
+            .animation(.snappy(duration: 0.2), value: isComposerFocused)
         }
-        .padding(.horizontal, Theme.Spacing.md)
-        .padding(.top, 7)
-        .padding(.bottom, isComposerFocused ? 6 : 8)
+        .padding(.horizontal, Theme.Spacing.sm)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
     }
 
     private var canSend: Bool {
@@ -944,17 +1143,19 @@ private struct MessageBubble: View {
             }
             if !content.isEmpty {
                 Text(content)
-                    .font(Theme.FontStyle.sans(13))
-                    .foregroundStyle(Theme.Palette.fg0)
+                    .font(Theme.FontStyle.sans(15))
+                    .foregroundStyle(Theme.Palette.fg0.opacity(dimmed ? 0.7 : 1))
+                    .lineSpacing(3)
                     .textSelection(.enabled)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
-                    .background(Color.white.opacity(dimmed ? 0.04 : 0.06))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color.white.opacity(dimmed ? 0.06 : 0.09))
                     .overlay(bubbleBorder(role: .user))
                     .clipShape(bubbleShape(role: .user))
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+        .padding(.leading, 48)
         .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
@@ -968,13 +1169,16 @@ private struct MessageBubble: View {
         presentationBlocks: [CoachPresentationBlock]
     ) -> some View {
         if role == .assistant {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 14) {
                 if let workLog {
                     CoachWorkLogView(workLog: workLog)
+                        .padding(.bottom, -4)
                 }
-                MarkdownView(content: content)
-                    .font(Theme.FontStyle.sans(13))
-                CoachPresentationBlocksView(blocks: presentationBlocks)
+                MarkdownView(content: content, style: .chat)
+                if !presentationBlocks.isEmpty {
+                    CoachPresentationBlocksView(blocks: presentationBlocks)
+                        .padding(.top, 2)
+                }
             }
         } else {
             VStack(alignment: .leading, spacing: 8) {
@@ -1042,10 +1246,74 @@ private struct MessageBubble: View {
 
     private func bubbleShape(role: ChatMessage.Role) -> UnevenRoundedRectangle {
         if role == .user {
-            UnevenRoundedRectangle(cornerRadii: .init(topLeading: 14, bottomLeading: 14, bottomTrailing: 4, topTrailing: 14))
+            UnevenRoundedRectangle(cornerRadii: .init(topLeading: 18, bottomLeading: 18, bottomTrailing: 6, topTrailing: 18), style: .continuous)
         } else {
             UnevenRoundedRectangle(cornerRadii: .init(topLeading: 14, bottomLeading: 4, bottomTrailing: 14, topTrailing: 14))
         }
+    }
+}
+
+struct ChatPressStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.6 : 1)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(.snappy(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+private struct ChatDayDivider: View {
+    let text: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            line
+            Text(text)
+                .font(Theme.FontStyle.mono(11))
+                .foregroundStyle(Theme.Palette.fg3)
+                .fixedSize()
+            line
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(text)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    private var line: some View {
+        Rectangle()
+            .fill(Theme.Palette.borderSubtle)
+            .frame(height: 1)
+    }
+}
+
+/// Shaped stand-in for a thread while its history loads.
+private struct ChatLoadingPlaceholder: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack {
+                Spacer(minLength: 80)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(Color.white.opacity(0.07))
+                    .frame(width: 200, height: 40)
+            }
+            RoundedRectangle(cornerRadius: 4)
+                .fill(Color.white.opacity(0.05))
+                .frame(width: 120, height: 12)
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach([1.0, 0.94, 0.98, 0.6], id: \.self) { fraction in
+                    GeometryReader { proxy in
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.white.opacity(0.06))
+                            .frame(width: proxy.size.width * fraction)
+                    }
+                    .frame(height: 13)
+                }
+            }
+        }
+        .phaseAnimator([0.55, 1.0]) { content, phase in
+            content.opacity(phase)
+        } animation: { _ in .easeInOut(duration: 0.9) }
+        .accessibilityLabel("Loading conversation")
     }
 }
 
@@ -1121,8 +1389,69 @@ private struct ChatAttachmentViewer: View {
     }
 }
 
-#Preview {
+#Preview("New chat") {
     NavigationStack {
         ChatView(threadId: nil, initialTitle: nil)
+    }
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Loading + day divider") {
+    VStack(spacing: 24) {
+        ChatDayDivider(text: "Saturday, Sep 26")
+        ChatLoadingPlaceholder()
+    }
+    .padding()
+    .frame(maxHeight: .infinity, alignment: .top)
+    .background(Color.black)
+    .preferredColorScheme(.dark)
+}
+
+/// Holds scroll position outside ChatView's own state. Only JumpToLatestButton
+/// reads it, so crossing the bottom never re-renders the message list. Keeping
+/// it as ChatView @State caused a re-layout loop that pinned the main thread.
+@Observable
+final class ChatScrollState {
+    private(set) var isAtBottom = true
+    @ObservationIgnored var viewportHeight: CGFloat = 0
+
+    /// `bottomEdge` is the end-of-transcript marker's y in the scroll viewport.
+    func update(bottomEdge: CGFloat) {
+        guard viewportHeight > 0 else { return }
+        let atBottom = bottomEdge <= viewportHeight + 120
+        if atBottom != isAtBottom { isAtBottom = atBottom }
+    }
+}
+
+private struct JumpToLatestButton: View {
+    let scroll: ChatScrollState
+    let hidden: Bool
+    let action: () -> Void
+
+    var body: some View {
+        let visible = !scroll.isAtBottom && !hidden
+        ZStack {
+            if visible {
+                button
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
+            }
+        }
+        .animation(.snappy, value: visible)
+    }
+
+    private var button: some View {
+        Button(action: action) {
+            Image(systemName: "arrow.down")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Theme.Palette.fg0)
+                .frame(width: 36, height: 36)
+                .background(Theme.Palette.bg3, in: Circle())
+                .overlay(Circle().strokeBorder(Theme.Palette.borderDefault))
+                .shadow(color: .black.opacity(0.5), radius: 10, y: 4)
+                .frame(width: 44, height: 44)
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Jump to latest message")
     }
 }

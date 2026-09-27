@@ -50,7 +50,6 @@ private enum WD {
         guard let d = ChartDate.parse(date) else { return date }
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(identifier: "UTC")
         f.dateFormat = "MMM d, yyyy"
         return f.string(from: d)
     }

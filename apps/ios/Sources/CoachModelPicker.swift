@@ -33,10 +33,13 @@ struct CoachModelPicker: View {
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Theme.Palette.fg3)
             }
-            .font(Theme.FontStyle.sans(11.5, weight: .medium))
+            .font(Theme.FontStyle.sans(12.5, weight: .medium))
             .foregroundStyle(Theme.Palette.fg1)
-            .padding(.horizontal, 6)
-            .frame(minHeight: 32)
+            .padding(.horizontal, 11)
+            .frame(minHeight: 30)
+            .background(Color.white.opacity(0.07), in: Capsule())
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(disabled || isSaving)

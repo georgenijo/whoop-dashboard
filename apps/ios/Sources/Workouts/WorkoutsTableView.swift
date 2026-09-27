@@ -6,8 +6,8 @@ struct WorkoutsTableView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("ALL WORKOUTS")
-                .font(Theme.FontStyle.sans(10, weight: .semibold))
-                .tracking(1.4)
+                .font(Theme.FontStyle.sans(11, weight: .semibold))
+                .tracking(1.2)
                 .foregroundStyle(Theme.Palette.fg2)
                 .padding(.bottom, 8)
             if workouts.isEmpty {
@@ -51,11 +51,11 @@ private struct WorkoutRow: View {
     var body: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(workout.sport ?? "Workout")
-                    .font(Theme.FontStyle.sans(13.5, weight: .medium))
+                Text(TrendsFormat.sport(workout.sport))
+                    .font(Theme.FontStyle.sans(15, weight: .medium))
                     .foregroundStyle(Theme.Palette.fg0)
                 HStack(spacing: 6) {
-                    Text(workout.date)
+                    Text(TrendsFormat.day(workout.date))
                     Text("·").foregroundStyle(Theme.Palette.fg4)
                     Text(formatDuration(workout.durationSec))
                     if let avg = workout.avgHr {
@@ -63,7 +63,7 @@ private struct WorkoutRow: View {
                         Text("\(Int(avg.rounded())) bpm")
                     }
                 }
-                .font(Theme.FontStyle.mono(10.5))
+                .font(Theme.FontStyle.mono(11))
                 .foregroundStyle(Theme.Palette.fg3)
             }
             Spacer()

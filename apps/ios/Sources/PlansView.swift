@@ -18,16 +18,10 @@ struct PlansView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                PageHeader("Plans") {
-                    Circle()
-                        .fill(Theme.Palette.recovery)
-                        .frame(width: 8, height: 8)
-                        .shadow(color: Theme.Palette.recovery.opacity(0.7), radius: 5)
-                }
+                PageHeader("Plans")
                 content
             }
             .toolbar(.hidden, for: .navigationBar)
-            .refreshable { await load(showSpinner: false) }
         }
         .task { await load(showSpinner: true) }
         .onChange(of: scenePhase) { _, newPhase in
@@ -41,49 +35,50 @@ struct PlansView: View {
     private var content: some View {
         switch phase {
         case .loading:
-            ProgressView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            PlansContent(plans: PlansSample.plans, recovery: PlansSample.recovery)
+                .redacted(reason: .placeholder)
+                .allowsHitTesting(false)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Loading plans")
         case .loaded(let result):
             if result.plans.isEmpty {
-                emptyState
+                ScrollView {
+                    emptyState
+                        .padding(.horizontal, Theme.Spacing.md)
+                }
+                .refreshable { await load(showSpinner: false) }
             } else {
                 PlansContent(plans: result.plans, recovery: result.recovery)
+                    .refreshable { await load(showSpinner: false) }
             }
         case .error(let message):
-            VStack(spacing: 12) {
-                Text(message)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-                Button("Retry") { Task { await load(showSpinner: true) } }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Theme.Palette.recovery)
+            ScrollView {
+                InlineErrorCard(title: "Couldn't load plans", message: message) {
+                    Task { await load(showSpinner: true) }
+                }
+                .padding(Theme.Spacing.md)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .refreshable { await load(showSpinner: false) }
         }
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(Theme.Palette.recovery.opacity(0.12))
-                    .frame(width: 80, height: 80)
-                Image(systemName: "figure.strengthtraining.traditional")
-                    .font(.system(size: 30, weight: .light))
-                    .foregroundStyle(Theme.Palette.recovery)
-            }
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            Image(systemName: "figure.strengthtraining.traditional")
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(Theme.Palette.recovery)
+                .frame(width: 44, height: 44)
+                .background(Theme.Palette.recovery.opacity(0.14), in: Circle())
             Text("No plans yet")
-                .font(Theme.FontStyle.sans(16, weight: .semibold))
+                .font(Theme.FontStyle.sans(20, weight: .semibold))
                 .foregroundStyle(Theme.Palette.fg0)
-            Text("Ask the coach to build you a recovery-tuned split.")
-                .font(Theme.FontStyle.sans(12))
+            Text("Ask the coach to build you a recovery-tuned split. Saved plans show up here with today's session up top.")
+                .font(Theme.FontStyle.sans(15))
                 .foregroundStyle(Theme.Palette.fg2)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard(padding: Theme.Spacing.lg)
     }
 
     @MainActor
@@ -98,20 +93,20 @@ struct PlansView: View {
 
         do {
             let result = try await PlansService(api: api).load()
-            phase = .loaded(result)
+            withAnimation(.snappy) { phase = .loaded(result) }
             lastFetched = Date()
         } catch APIError.unauthorized {
-            if !hadData { phase = .error("Session expired. Sign in again.") }
-        } catch APIError.network(let err) {
-            if !hadData { phase = .error("Network error: \(err.localizedDescription)") }
+            if !hadData { phase = .error("Your session expired. Sign in again.") }
+        } catch APIError.network {
+            if !hadData { phase = .error("Check your connection and try again.") }
         } catch APIError.serverError(let code) {
-            if !hadData { phase = .error("Server error (\(code))") }
+            if !hadData { phase = .error("The server had a problem (\(code)).") }
         } catch APIError.decode {
-            if !hadData { phase = .error("Bad response from server") }
+            if !hadData { phase = .error("The server sent something unexpected.") }
         } catch APIError.badResponse {
-            if !hadData { phase = .error("Bad response from server") }
+            if !hadData { phase = .error("The server sent something unexpected.") }
         } catch {
-            if !hadData { phase = .error("Could not load plans") }
+            if !hadData { phase = .error("Something went wrong.") }
         }
     }
 }
@@ -137,38 +132,45 @@ struct PlansContent: View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
                 if let hero = heroPlan {
-                    TodaySessionHero(
-                        plan: hero,
-                        isActive: heroIsActive,
-                        today: recovery?.today
-                    )
+                    TodaySessionHero(plan: hero, isActive: heroIsActive, today: recovery?.today)
+
                     if let week = recovery?.week, !week.isEmpty {
                         WeekReadinessStrip(week: week, todayDate: recovery?.today?.date)
                     }
                 }
 
                 if !savedPlans.isEmpty {
-                    Text("SAVED SPLITS")
-                        .font(Theme.FontStyle.sans(9.5, weight: .semibold))
-                        .tracking(1.4)
-                        .foregroundStyle(Theme.Palette.fg3)
-                        .padding(.top, 6)
+                    CardLabel("Saved splits")
+                        .padding(.top, Theme.Spacing.md)
                         .padding(.leading, 4)
 
-                    VStack(spacing: 8) {
+                    VStack(spacing: Theme.Spacing.xs) {
                         ForEach(savedPlans) { plan in
                             NavigationLink {
                                 PlanDetailView(plan: plan)
                             } label: {
                                 SplitRow(plan: plan)
                             }
-                            .buttonStyle(.plain)
+                            .buttonStyle(PressableCardStyle())
                         }
                     }
                 }
             }
-            .padding()
+            .padding(.horizontal, Theme.Spacing.md)
+            .padding(.bottom, Theme.Spacing.xxl)
         }
+        .scrollIndicators(.hidden)
+    }
+}
+
+/// Press feedback for tappable cards: a slight sink and dim, so a card
+/// reads as a button without extra chrome.
+struct PressableCardStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .opacity(configuration.isPressed ? 0.8 : 1)
+            .animation(.snappy(duration: 0.18), value: configuration.isPressed)
     }
 }
 
@@ -184,49 +186,68 @@ private struct TodaySessionHero: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text(isActive ? "TODAY'S SESSION" : "MOST RECENT PLAN")
-                    .font(Theme.FontStyle.sans(9.5, weight: .semibold))
-                    .tracking(1.4)
-                    .foregroundStyle(Theme.Palette.fg2)
+            HStack(alignment: .center) {
+                CardLabel(isActive ? "Today's session" : "Most recent plan")
                 Spacer()
                 if let today {
-                    ZonePill(score: today.recoveryScore,
-                             prefix: "\(Int(today.recoveryScore.rounded()))%")
+                    ReadinessPill(score: today.recoveryScore)
                 }
             }
 
             Text(plan.title)
-                .font(Theme.FontStyle.sans(21, weight: .bold))
+                .font(Theme.FontStyle.sans(24, weight: .bold))
                 .foregroundStyle(Theme.Palette.fg0)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 12)
 
             if let line = sessionLine {
                 Text(line)
-                    .font(Theme.FontStyle.sans(12.5))
-                    .foregroundStyle(Theme.Palette.fg2)
+                    .font(Theme.FontStyle.sans(15))
+                    .foregroundStyle(Theme.Palette.fg1)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 4)
+                    .padding(.top, 6)
             }
 
-            HStack(spacing: 8) {
+            HStack(spacing: Theme.Spacing.xs) {
                 MetaTag(text: "\(plan.plan.days.count)-day")
                 if let tag = plan.tag {
                     MetaTag(text: tag)
                 }
-                if !isActive {
-                    MetaTag(text: "Most recent")
-                }
             }
             .padding(.top, 14)
         }
-        .glassCard(tint: .recovery, padding: 18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard(tint: .recovery, padding: Theme.Spacing.lg)
+        .accessibilityElement(children: .combine)
     }
 
     private var sessionLine: String? {
         if let band { return band.guidance }
         if let why = plan.plan.why { return why }
         return plan.description
+    }
+}
+
+private struct ReadinessPill: View {
+    let score: Double
+
+    var body: some View {
+        let zone = RecoveryZone(score: score)
+        HStack(spacing: 6) {
+            Circle()
+                .fill(zone.color)
+                .frame(width: 6, height: 6)
+            Text("\(Int(score.rounded()))%")
+                .font(Theme.FontStyle.mono(12, weight: .semibold))
+            Text(zone.label)
+                .font(Theme.FontStyle.sans(12, weight: .medium))
+        }
+        .foregroundStyle(zone.color)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(zone.color.opacity(0.14), in: Capsule())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Recovery \(Int(score.rounded())) percent, \(zone.label)")
     }
 }
 
@@ -238,32 +259,28 @@ private struct WeekReadinessStrip: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("THIS WEEK")
-                .font(Theme.FontStyle.sans(9.5, weight: .semibold))
-                .tracking(1.4)
-                .foregroundStyle(Theme.Palette.fg2)
+            CardLabel("This week")
 
             HStack(spacing: 0) {
                 ForEach(Array(slots.enumerated()), id: \.offset) { _, day in
                     let isToday = day.date == todayDate
-                    VStack(spacing: 6) {
+                    VStack(spacing: 8) {
                         Text(weekdayLabel(day.date))
-                            .font(Theme.FontStyle.sans(9.5, weight: isToday ? .bold : .medium))
+                            .font(Theme.FontStyle.sans(11, weight: isToday ? .bold : .medium))
                             .foregroundStyle(isToday ? Theme.Palette.fg0 : Theme.Palette.fg3)
                         readinessDot(score: day.recoveryScore, isToday: isToday)
+                        Text("\(Int(day.recoveryScore.rounded()))")
+                            .font(Theme.FontStyle.mono(11, weight: isToday ? .semibold : .regular))
+                            .foregroundStyle(isToday ? Theme.Palette.fg1 : Theme.Palette.fg3)
                     }
                     .frame(maxWidth: .infinity)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(weekdayLabel(day.date)), recovery \(Int(day.recoveryScore.rounded())) percent")
                 }
             }
-            .padding(.top, 12)
+            .padding(.top, 14)
         }
-        .padding(14)
-        .background(Color.white.opacity(0.025))
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.Radius.lg)
-                .strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
+        .glassCard(padding: Theme.Spacing.md)
     }
 
     private func weekdayLabel(_ date: String) -> String {
@@ -285,12 +302,11 @@ private struct WeekReadinessStrip: View {
     private func readinessDot(score: Double, isToday: Bool) -> some View {
         let color = Color(hex: RecoveryBand(score: score).colorHex)
         Circle()
-            .fill(color.opacity(0.18))
+            .fill(color.opacity(isToday ? 0.35 : 0.18))
             .overlay(
-                Circle().strokeBorder(color.opacity(0.5), lineWidth: 1.5)
+                Circle().strokeBorder(color.opacity(isToday ? 0.9 : 0.5), lineWidth: 1.5)
             )
-            .frame(width: 22, height: 22)
-            .shadow(color: isToday ? color.opacity(0.5) : .clear, radius: isToday ? 6 : 0)
+            .frame(width: 24, height: 24)
     }
 }
 
@@ -308,47 +324,41 @@ private struct SplitRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
-            Circle()
+        HStack(spacing: Theme.Spacing.sm) {
+            Capsule()
                 .fill(accent)
-                .frame(width: 8, height: 8)
-                .shadow(color: accent.opacity(0.6), radius: 4)
-            VStack(alignment: .leading, spacing: 2) {
+                .frame(width: 4, height: 32)
+            VStack(alignment: .leading, spacing: 3) {
                 Text(plan.title)
-                    .font(Theme.FontStyle.sans(13.5, weight: .semibold))
+                    .font(Theme.FontStyle.sans(15, weight: .semibold))
                     .foregroundStyle(Theme.Palette.fg0)
                     .lineLimit(1)
                 Text(meta)
-                    .font(Theme.FontStyle.sans(11))
+                    .font(Theme.FontStyle.sans(13))
                     .foregroundStyle(Theme.Palette.fg3)
                     .lineLimit(1)
             }
             Spacer()
             Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.Palette.fg3)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(Color.white.opacity(0.025))
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.Radius.lg)
-                .strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
+        .frame(minHeight: 44)
+        .glassCard(padding: Theme.Spacing.md)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 }
 
-private struct MetaTag: View {
+struct MetaTag: View {
     let text: String
 
     var body: some View {
         Text(text)
-            .font(Theme.FontStyle.sans(10.5, weight: .semibold))
+            .font(Theme.FontStyle.sans(12, weight: .semibold))
             .foregroundStyle(Theme.Palette.fg2)
             .padding(.horizontal, 10)
-            .padding(.vertical, 4)
+            .padding(.vertical, 5)
             .background(Color.white.opacity(0.05), in: Capsule())
             .overlay(Capsule().strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1))
     }
@@ -357,13 +367,10 @@ private struct MetaTag: View {
 #Preview("Plans — sample") {
     NavigationStack {
         VStack(spacing: 0) {
-            PageHeader("Plans") {
-                Circle()
-                    .fill(Theme.Palette.recovery)
-                    .frame(width: 8, height: 8)
-            }
+            PageHeader("Plans")
             PlansContent(plans: PlansSample.plans, recovery: PlansSample.recovery)
         }
+        .toolbar(.hidden, for: .navigationBar)
     }
     .preferredColorScheme(.dark)
 }

@@ -153,124 +153,488 @@ struct Evidence: Decodable, Hashable {
     }
 }
 
+
 struct CoachPresentationBlocksView: View {
     let blocks: [CoachPresentationBlock]
     @Environment(\.api) private var api
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
                 blockView(block)
+                    .contextMenu {
+                        ShareLink(item: CoachSummaryImage(text: fallback(block)), preview: SharePreview("Coach summary")) {
+                            Label("Share summary image", systemImage: "square.and.arrow.up")
+                        }
+                        Button { UIPasteboard.general.string = fallback(block) } label: {
+                            Label("Copy summary", systemImage: "doc.on.doc")
+                        }
+                    }
             }
         }
     }
 
     @ViewBuilder private func blockView(_ block: CoachPresentationBlock) -> some View {
-        Group {
-            switch block {
-            case .metricStrip(let strip):
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(strip.metrics, id: \.label) { metric in
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(metric.label).font(Theme.FontStyle.sans(10)).foregroundStyle(Theme.Palette.fg3)
-                                Text(metric.displayValue).font(Theme.FontStyle.mono(16, weight: .semibold)).foregroundStyle(Theme.Palette.fg0)
-                                Text(metric.unit + direction(metric.direction)).font(Theme.FontStyle.mono(9)).foregroundStyle(Theme.Palette.fg3)
-                            }
-                            .frame(minWidth: 96, alignment: .leading)
-                        }
-                    }
-                }
-                .accessibilityLabel(strip.fallback)
-            case .comparison(let comparison):
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(comparison.title).font(Theme.FontStyle.sans(13, weight: .semibold))
-                    ForEach(comparison.items, id: \.label) { item in
-                        HStack { Text(item.label); Spacer(); Text(format(item.current, item.unit)).monospacedDigit() }
-                        Text("Baseline \(format(item.baseline, item.unit)) · Δ \(format(item.delta, item.unit))").font(Theme.FontStyle.sans(10)).foregroundStyle(Theme.Palette.fg3)
-                    }
-                }.accessibilityLabel(comparison.fallback)
-            case .chart(let chart): RichCoachChartView(block: chart)
-            case .actionPlan(let plan):
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(plan.title).font(Theme.FontStyle.sans(13, weight: .semibold))
-                    ForEach(plan.sections, id: \.timeframe) { section in
-                        Text(section.timeframe.capitalized).font(Theme.FontStyle.mono(10, weight: .semibold)).foregroundStyle(Theme.Palette.fg3)
-                        ForEach(section.items, id: \.self) { Text("• \($0)").font(Theme.FontStyle.sans(12)) }
-                    }
-                }.accessibilityLabel(plan.fallback)
-            case .dataFreshness(let freshness):
-                DataFreshnessView(block: freshness, api: api)
-            case .workoutPlan(let plan):
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(plan.title).font(Theme.FontStyle.sans(13, weight: .semibold))
-                    ForEach(plan.exercises, id: \.name) { exercise in
-                        Text("\(exercise.name) — \(exercise.prescription)").font(Theme.FontStyle.sans(12))
-                        if !exercise.notes.isEmpty { Text(exercise.notes).font(Theme.FontStyle.sans(10)).foregroundStyle(Theme.Palette.fg3) }
-                    }
-                    NavigationLink("Open Plans", destination: PlansView()).font(Theme.FontStyle.sans(11, weight: .semibold))
-                }.accessibilityLabel(plan.fallback)
-            case .evidence(let evidence):
-                DisclosureGroup(evidence.title) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("\(evidence.dateRange) · \(evidence.recordCount) records · \(evidence.missingDays) missing days")
-                        Text("Sources: \(evidence.sources.joined(separator: ", "))")
-                        ForEach(evidence.points, id: \.self) { Text("• \($0)") }
-                    }.font(Theme.FontStyle.sans(11)).foregroundStyle(Theme.Palette.fg2)
-                }.accessibilityLabel(evidence.fallback)
-            }
-        }
-        .padding(12)
-        .background(Theme.Palette.bg2, in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.Palette.borderSubtle))
-        .contextMenu {
-            ShareLink(item: CoachSummaryImage(text: fallback(block)), preview: SharePreview("Coach summary")) {
-                Label("Share summary image", systemImage: "square.and.arrow.up")
-            }
-            Button { UIPasteboard.general.string = fallback(block) } label: { Label("Copy summary", systemImage: "doc.on.doc") }
+        switch block {
+        case .metricStrip(let strip):
+            MetricStripView(strip: strip).coachCard()
+        case .comparison(let comparison):
+            ComparisonView(comparison: comparison).coachCard()
+        case .chart(let chart):
+            CoachChartCard(block: chart)
+        case .actionPlan(let plan):
+            ActionPlanView(plan: plan).coachCard()
+        case .dataFreshness(let freshness):
+            DataFreshnessView(block: freshness, api: api).coachCard()
+        case .workoutPlan(let plan):
+            WorkoutPlanView(plan: plan).coachCard()
+        case .evidence(let evidence):
+            EvidenceView(evidence: evidence).coachCard(padding: 0)
         }
     }
 
-    private func direction(_ value: String) -> String { value == "up" ? " · ↑" : value == "down" ? " · ↓" : "" }
-    private func format(_ value: Double?, _ unit: String) -> String { guard let value else { return "Not available" }; return "\(value.formatted())\(unit.isEmpty ? "" : " \(unit)")" }
     private func fallback(_ block: CoachPresentationBlock) -> String {
-        switch block { case .metricStrip(let x): x.fallback; case .comparison(let x): x.fallback; case .chart(let x): x.fallback; case .actionPlan(let x): x.fallback; case .dataFreshness(let x): x.fallback; case .workoutPlan(let x): x.fallback; case .evidence(let x): x.fallback }
+        switch block {
+        case .metricStrip(let x): x.fallback
+        case .comparison(let x): x.fallback
+        case .chart(let x): x.fallback
+        case .actionPlan(let x): x.fallback
+        case .dataFreshness(let x): x.fallback
+        case .workoutPlan(let x): x.fallback
+        case .evidence(let x): x.fallback
+        }
     }
 }
+
+private extension View {
+    func coachCard(padding: CGFloat = Theme.Spacing.md) -> some View {
+        frame(maxWidth: .infinity, alignment: .leading)
+            .glassCard(padding: padding)
+    }
+}
+
+private struct CoachCardLabel: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(Theme.FontStyle.sans(11, weight: .semibold))
+            .tracking(1.2)
+            .foregroundStyle(Theme.Palette.fg2)
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Pure helper for the metric-strip unit-suppression rule, factored out so it
+/// can be unit tested without instantiating a SwiftUI view.
+enum CoachUnitDisplay {
+    static func shows(unit: String, displayValue: String) -> Bool {
+        guard !unit.isEmpty else { return false }
+        let escaped = NSRegularExpression.escapedPattern(for: unit)
+        let pattern = "(?<!\\p{L})\(escaped)(?!\\p{L})"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return !displayValue.localizedCaseInsensitiveContains(unit)
+        }
+        let range = NSRange(displayValue.startIndex..<displayValue.endIndex, in: displayValue)
+        return regex.firstMatch(in: displayValue, options: [], range: range) == nil
+    }
+}
+
+private enum Tone {
+    static func color(_ tone: String) -> Color {
+        switch tone {
+        case "positive": return Theme.Palette.success
+        case "negative": return Theme.Palette.danger
+        case "warning": return Theme.Palette.warning
+        default: return Theme.Palette.fg3
+        }
+    }
+
+    static func arrow(_ direction: String) -> String? {
+        switch direction {
+        case "up": return "arrow.up.right"
+        case "down": return "arrow.down.right"
+        default: return nil
+        }
+    }
+}
+
+// MARK: Metric strip
+
+private struct MetricStripView: View {
+    let strip: MetricStrip
+
+    var body: some View {
+        Group {
+            if strip.metrics.count <= 3 {
+                HStack(alignment: .top, spacing: 0) {
+                    ForEach(Array(strip.metrics.enumerated()), id: \.offset) { index, metric in
+                        if index > 0 {
+                            Rectangle()
+                                .fill(Theme.Palette.borderSubtle)
+                                .frame(width: 1)
+                                .padding(.horizontal, 12)
+                        }
+                        tile(metric)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+            } else {
+                LazyVGrid(
+                    columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)],
+                    alignment: .leading,
+                    spacing: 16
+                ) {
+                    ForEach(Array(strip.metrics.enumerated()), id: \.offset) { _, metric in
+                        tile(metric)
+                    }
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(strip.fallback)
+    }
+
+    private func tile(_ metric: MetricStrip.Metric) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(metric.label.uppercased())
+                .font(Theme.FontStyle.sans(11, weight: .semibold))
+                .tracking(0.9)
+                .foregroundStyle(Theme.Palette.fg2)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text(metric.displayValue)
+                    .font(Theme.FontStyle.mono(22, weight: .medium))
+                    .foregroundStyle(Theme.Palette.fg0)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if showsUnit(metric) {
+                    Text(metric.unit)
+                        .font(Theme.FontStyle.mono(12))
+                        .foregroundStyle(Theme.Palette.fg3)
+                        .lineLimit(1)
+                }
+                if let arrow = Tone.arrow(metric.direction) {
+                    Image(systemName: arrow)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Tone.color(metric.tone))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// "11.9" + "strain" reads well; "54%" + "%" would double up. Suppress the
+    /// unit only when display_value already spells it out (case-insensitively,
+    /// anywhere in the string) — a whitelist of "allowed" characters wrongly
+    /// hid the unit for perfectly normal display values like "≈47 ms" or a
+    /// "39–45%" range that never actually mentions the unit text itself.
+    private func showsUnit(_ metric: MetricStrip.Metric) -> Bool {
+        CoachUnitDisplay.shows(unit: metric.unit, displayValue: metric.displayValue)
+    }
+}
+
+// MARK: Comparison
+
+private struct ComparisonView: View {
+    let comparison: Comparison
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            CoachCardLabel(comparison.title)
+                .padding(.bottom, 6)
+            ForEach(Array(comparison.items.enumerated()), id: \.offset) { index, item in
+                if index > 0 {
+                    Divider().overlay(Theme.Palette.borderSubtle)
+                }
+                row(item)
+                    .padding(.vertical, 10)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(comparison.fallback)
+    }
+
+    private func row(_ item: Comparison.Item) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(item.label)
+                    .font(Theme.FontStyle.sans(15))
+                    .foregroundStyle(Theme.Palette.fg1)
+                Spacer(minLength: 8)
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(item.current.map(CoachNumber.format) ?? "—")
+                        .font(Theme.FontStyle.mono(18, weight: .medium))
+                        .foregroundStyle(Theme.Palette.fg0)
+                    if !item.unit.isEmpty {
+                        Text(item.unit)
+                            .font(Theme.FontStyle.mono(12))
+                            .foregroundStyle(Theme.Palette.fg3)
+                    }
+                }
+            }
+            HStack(spacing: 8) {
+                if let baseline = item.baseline {
+                    Text("vs \(CoachNumber.format(baseline))")
+                        .font(Theme.FontStyle.mono(11))
+                        .foregroundStyle(Theme.Palette.fg3)
+                }
+                Spacer(minLength: 0)
+                if let delta = deltaText(item) {
+                    HStack(spacing: 3) {
+                        if let arrow = Tone.arrow(item.direction) {
+                            Image(systemName: arrow)
+                                .font(.system(size: 9, weight: .bold))
+                        }
+                        Text(delta)
+                            .font(Theme.FontStyle.mono(11, weight: .medium))
+                    }
+                    .foregroundStyle(Theme.Palette.fg1)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Color.white.opacity(0.07), in: Capsule())
+                }
+            }
+        }
+    }
+
+    private func deltaText(_ item: Comparison.Item) -> String? {
+        guard let delta = item.delta else { return nil }
+        let sign = delta > 0 ? "+" : ""
+        var text = "\(sign)\(CoachNumber.format(delta))"
+        if let baseline = item.baseline, baseline != 0 {
+            let pct = delta / abs(baseline) * 100
+            text += " · \(pct > 0 ? "+" : "")\(pct.formatted(.number.precision(.fractionLength(0))))%"
+        }
+        return text
+    }
+}
+
+// MARK: Action plan
+
+private struct ActionPlanView: View {
+    let plan: ActionPlan
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(plan.title)
+                .font(Theme.FontStyle.sans(16, weight: .semibold))
+                .foregroundStyle(Theme.Palette.fg0)
+                .fixedSize(horizontal: false, vertical: true)
+            ForEach(Array(plan.sections.enumerated()), id: \.offset) { _, section in
+                VStack(alignment: .leading, spacing: 8) {
+                    CoachCardLabel(section.timeframe)
+                    ForEach(Array(section.items.enumerated()), id: \.offset) { _, item in
+                        HStack(alignment: .firstTextBaseline, spacing: 10) {
+                            Image(systemName: "circle")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(Theme.Palette.fg3)
+                            Text(MarkdownView.inline(item, emphasis: Theme.Palette.fg0))
+                                .font(Theme.FontStyle.sans(14.5))
+                                .foregroundStyle(Theme.Palette.fg1)
+                                .lineSpacing(3)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: Data freshness
 
 private struct DataFreshnessView: View {
     let block: DataFreshness
     let api: APIClient
     @State private var state = ""
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text("Data freshness").font(Theme.FontStyle.sans(13, weight: .semibold))
+        VStack(alignment: .leading, spacing: 10) {
+            CoachCardLabel("Data freshness")
             ForEach(block.sources, id: \.source) { source in
-                HStack { Text(source.source); Spacer(); Text(source.status.capitalized); Text(source.lastAvailableDate ?? "No data").foregroundStyle(Theme.Palette.fg3) }.font(Theme.FontStyle.sans(11))
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Circle()
+                        .fill(color(source.status))
+                        .frame(width: 7, height: 7)
+                        .alignmentGuide(.firstTextBaseline) { d in d[.bottom] + 2 }
+                    Text(source.source)
+                        .font(Theme.FontStyle.sans(14))
+                        .foregroundStyle(Theme.Palette.fg1)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    Text(dateText(source.lastAvailableDate))
+                        .font(Theme.FontStyle.mono(12))
+                        .foregroundStyle(Theme.Palette.fg2)
+                    Text(source.status.capitalized)
+                        .font(Theme.FontStyle.mono(11, weight: .medium))
+                        .foregroundStyle(color(source.status))
+                        .frame(minWidth: 52, alignment: .trailing)
+                }
+                .accessibilityElement(children: .combine)
             }
-            if block.syncAvailable { Button(state.isEmpty ? "Sync now" : state) { Task { state = "Syncing…"; do { _ = try await api.postSync(); state = "Sync requested" } catch { state = "Sync failed" } } }.disabled(state == "Syncing…") }
-        }.accessibilityLabel(block.fallback)
+            if block.syncAvailable {
+                Button {
+                    Task {
+                        state = "Syncing…"
+                        do { _ = try await api.postSync(); state = "Sync requested" } catch { state = "Sync failed" }
+                    }
+                } label: {
+                    Label(state.isEmpty ? "Sync now" : state, systemImage: "arrow.triangle.2.circlepath")
+                        .font(Theme.FontStyle.sans(13, weight: .medium))
+                        .foregroundStyle(Theme.Palette.fg0)
+                        .padding(.horizontal, 14)
+                        .frame(minHeight: 36)
+                        .background(Color.white.opacity(0.07), in: Capsule())
+                        .overlay(Capsule().strokeBorder(Theme.Palette.borderDefault))
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(state == "Syncing…")
+            }
+        }
+    }
+
+    private func color(_ status: String) -> Color {
+        switch status {
+        case "fresh": return Theme.Palette.success
+        case "stale": return Theme.Palette.warning
+        case "missing": return Theme.Palette.danger
+        default: return Theme.Palette.info
+        }
+    }
+
+    private func dateText(_ raw: String?) -> String {
+        guard let raw else { return "No data" }
+        guard let date = ChartDate.parse(raw) else { return raw }
+        return date.formatted(.dateTime.month(.abbreviated).day())
     }
 }
 
-private struct RichCoachChartView: View {
-    let block: ChartBlock
-    @State private var table = false
-    private struct Point: Identifiable { let id: String; let series: String; let label: String; let value: Double; let kind: String }
-    private var points: [Point] { block.series.flatMap { series in block.labels.enumerated().compactMap { index, label in series.values[index].map { Point(id: "\(series.id):\(index)", series: series.label, label: label, value: $0, kind: series.kind) } } } }
+// MARK: Workout plan
+
+private struct WorkoutPlanView: View {
+    let plan: CoachWorkoutPlanBlock
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack { Text(block.title).font(Theme.FontStyle.sans(13, weight: .semibold)); Spacer(); Toggle("Table", isOn: $table).labelsHidden() }
-            if table {
-                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 5) {
-                    GridRow { Text("Period"); ForEach(block.series) { Text($0.label) } }
-                    ForEach(Array(block.labels.enumerated()), id: \.offset) { index, label in GridRow { Text(label); ForEach(block.series) { Text($0.values[index]?.formatted() ?? "—") } } }
-                }.font(Theme.FontStyle.mono(9))
-            } else {
-                Chart(points) { point in
-                    if point.kind == "bar" { BarMark(x: .value("Period", point.label), y: .value("Value", point.value)).foregroundStyle(by: .value("Series", point.series)) }
-                    else { LineMark(x: .value("Period", point.label), y: .value("Value", point.value)).foregroundStyle(by: .value("Series", point.series)); PointMark(x: .value("Period", point.label), y: .value("Value", point.value)).foregroundStyle(by: .value("Series", point.series)) }
-                }.frame(height: 220).accessibilityLabel("\(block.title). \(block.fallback)")
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(plan.title)
+                    .font(Theme.FontStyle.sans(16, weight: .semibold))
+                    .foregroundStyle(Theme.Palette.fg0)
+                Spacer(minLength: 8)
+                if let date = plan.date {
+                    Text(ChartDate.parse(date)?.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()) ?? date)
+                        .font(Theme.FontStyle.mono(11))
+                        .foregroundStyle(Theme.Palette.fg3)
+                }
+            }
+            .padding(.bottom, 8)
+            ForEach(Array(plan.exercises.enumerated()), id: \.offset) { index, exercise in
+                if index > 0 {
+                    Divider().overlay(Theme.Palette.borderSubtle)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(exercise.name)
+                            .font(Theme.FontStyle.sans(14.5, weight: .medium))
+                            .foregroundStyle(Theme.Palette.fg1)
+                        Spacer(minLength: 8)
+                        Text(exercise.prescription)
+                            .font(Theme.FontStyle.mono(12.5))
+                            .foregroundStyle(Theme.Palette.fg0)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    if !exercise.notes.isEmpty {
+                        Text(exercise.notes)
+                            .font(Theme.FontStyle.sans(12.5))
+                            .foregroundStyle(Theme.Palette.fg3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .padding(.vertical, 9)
+            }
+            NavigationLink(destination: PlansView()) {
+                HStack(spacing: 4) {
+                    Text("Open in Plans")
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                .font(Theme.FontStyle.sans(13, weight: .medium))
+                .foregroundStyle(Theme.Palette.fg0)
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(plan.fallback)
+    }
+}
+
+// MARK: Evidence
+
+private struct EvidenceView: View {
+    let evidence: Evidence
+    @State private var expanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.snappy) { expanded.toggle() }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "doc.text.magnifyingglass")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.Palette.fg2)
+                    Text(evidence.title)
+                        .font(Theme.FontStyle.sans(14, weight: .medium))
+                        .foregroundStyle(Theme.Palette.fg1)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.Palette.fg3)
+                        .rotationEffect(.degrees(expanded ? 90 : 0))
+                }
+                .padding(.horizontal, Theme.Spacing.md)
+                .frame(minHeight: 48)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(evidence.title)
+            .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+
+            if expanded {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("\(evidence.dateRange) · \(evidence.recordCount) records · \(evidence.missingDays) missing")
+                        .font(Theme.FontStyle.mono(11))
+                        .foregroundStyle(Theme.Palette.fg3)
+                    if !evidence.sources.isEmpty {
+                        Text(evidence.sources.joined(separator: ", "))
+                            .font(Theme.FontStyle.sans(12.5))
+                            .foregroundStyle(Theme.Palette.fg2)
+                    }
+                    ForEach(evidence.points, id: \.self) { point in
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Circle().fill(Theme.Palette.fg3).frame(width: 4, height: 4)
+                                .alignmentGuide(.firstTextBaseline) { d in d[.bottom] + 2 }
+                            Text(point)
+                                .font(Theme.FontStyle.sans(13))
+                                .foregroundStyle(Theme.Palette.fg2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .padding(.horizontal, Theme.Spacing.md)
+                .padding(.bottom, Theme.Spacing.md)
+                .transition(.opacity)
             }
         }
     }
