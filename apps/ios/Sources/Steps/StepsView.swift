@@ -2,133 +2,116 @@ import SwiftUI
 
 struct StepsView: View {
     @Environment(\.api) private var api
-    @State private var range: DateRange = .d30
-    @State private var phase: Phase = .loading
+    @State private var range: DateRange
+    @State private var phase: TrendsLoadable<StepsPayload> = .loading
     /// Bumped by every load (range change, pull-to-refresh, Retry); only the
     /// newest request may commit, so an older refresh can't overwrite a new range.
     @State private var loadGeneration = 0
 
-    enum Phase {
-        case loading
-        case loaded(StepsPayload)
-        case error(String)
+    init(initialRange: DateRange = .d30) {
+        _range = State(initialValue: initialRange)
     }
 
     var body: some View {
         content
-            .safeAreaInset(edge: .top, spacing: 0) {
-                RangePicker(selection: $range)
-                    .padding(.horizontal, Theme.Spacing.md)
-                    .padding(.vertical, Theme.Spacing.xs)
-                    .background(Theme.Palette.bg0.opacity(0.92))
-            }
+            .safeAreaInset(edge: .top, spacing: 0) { TrendsRangeBar(range: $range) }
             .navigationTitle("Steps")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.visible, for: .navigationBar)
             .toolbarBackground(.hidden, for: .navigationBar)
-            .task(id: range) { await load(showSpinner: true) }
-            .refreshable { await load(showSpinner: false) }
+            .task(id: range) { await load() }
+            .refreshable { await load() }
     }
 
     @ViewBuilder
     private var content: some View {
         switch phase {
         case .loading:
-            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            TrendsDetailLoading(titles: ["Steps"])
+        case .failed(let message):
+            TrendsDetailError(title: "Steps", message: message) { Task { await load() } }
         case .loaded(let payload):
             ScrollView {
                 VStack(spacing: Theme.Spacing.sm) {
-                    KPIStripView(tiles: payload.kpi)
-                    StepsTodayCard(today: payload.today, rangeLabel: payload.rangeLabel)
-                    TrendChartView(
-                        title: "Daily steps",
-                        unit: "steps",
-                        colorHex: "#5ac8fa",
-                        points: payload.stepsTrend,
-                        style: .bars
-                    )
+                    StepsHeroCard(payload: payload)
                     Text("Apple Health · synced by Coach iOS")
-                        .font(Theme.FontStyle.mono(10.5))
+                        .font(Theme.FontStyle.mono(11))
                         .foregroundStyle(Theme.Palette.fg3)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 4)
                 }
                 .padding(Theme.Spacing.md)
             }
             .scrollContentBackground(.hidden)
-        case .error(let msg):
-            VStack(spacing: 12) {
-                Text(msg)
-                    .font(Theme.FontStyle.sans(12))
-                    .foregroundStyle(Theme.Palette.fg2)
-                Button("Retry") { Task { await load(showSpinner: true) } }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Theme.Palette.info)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
-
     @MainActor
-    private func load(showSpinner: Bool) async {
+    private func load() async {
         loadGeneration += 1
         let generation = loadGeneration
-        let hadLoaded: Bool
-        if case .loaded = phase { hadLoaded = true } else { hadLoaded = false }
-        if showSpinner, !hadLoaded { phase = .loading }
+        if case .failed = phase { phase = .loading }
         do {
             let payload = try await StepsService(api: api).load(range: range)
             guard generation == loadGeneration else { return }
             phase = .loaded(payload)
-        } catch APIError.unauthorized {
-            if !hadLoaded, generation == loadGeneration { phase = .error("Session expired. Sign in again.") }
-        } catch APIError.network(let err) {
-            if !hadLoaded, generation == loadGeneration { phase = .error("Network error: \(err.localizedDescription)") }
-        } catch APIError.serverError(let code) {
-            if !hadLoaded, generation == loadGeneration { phase = .error("Server error (\(code))") }
         } catch {
-            if !hadLoaded, generation == loadGeneration { phase = .error("Could not load") }
+            guard generation == loadGeneration, !Task.isCancelled, phase.value == nil else { return }
+            phase = .failed(TrendsLoadError.describe(error))
         }
     }
 }
 
-private struct StepsTodayCard: View {
-    let today: StepsPayload.Today
-    let rangeLabel: String
+private struct StepsHeroCard: View {
+    let payload: StepsPayload
+
+    private var days: [(date: String, steps: Double)] {
+        payload.stepsTrend.compactMap { p in p.raw.map { (p.date, $0) } }
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            Text("TODAY")
-                .font(Theme.FontStyle.sans(10, weight: .semibold))
-                .tracking(1.4)
-                .foregroundStyle(Theme.Palette.fg2)
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(formatted(today.steps))
-                    .font(Theme.FontStyle.display(38, weight: .medium))
-                    .foregroundStyle(Theme.Palette.fg0)
-                    .monospacedDigit()
-                Text("steps")
-                    .font(Theme.FontStyle.mono(11))
-                    .foregroundStyle(Theme.Palette.info)
-            }
-            if today.steps != nil, let average = today.vs7dAvg {
-                Text("7-day average \(formatted(average)) steps · \(rangeLabel)")
-                    .font(Theme.FontStyle.sans(12))
-                    .foregroundStyle(Theme.Palette.fg2)
-            } else {
-                Text("No Apple Health steps synced for today")
-                    .font(Theme.FontStyle.sans(12))
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            MetricChart(
+                title: "Steps",
+                unit: "",
+                accent: Theme.Palette.info,
+                points: payload.stepsTrend,
+                style: .bars,
+                height: 200
+            )
+            if payload.today.steps == nil {
+                Text("No Apple Health steps synced for today yet.")
+                    .font(Theme.FontStyle.sans(15))
                     .foregroundStyle(Theme.Palette.fg2)
             }
+            TrendsStatGrid(tiles: tiles, columns: 2)
+                .padding(.top, Theme.Spacing.sm)
+                .overlay(alignment: .top) {
+                    Rectangle().fill(Theme.Palette.borderSubtle).frame(height: 1)
+                }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard(padding: Theme.Spacing.md)
     }
 
-    private func formatted(_ value: Double?) -> String {
+    private var tiles: [TrendsStat] {
+        let values = days.map(\.steps)
+        let best = days.max { $0.steps < $1.steps }
+        let over10k = values.filter { $0 >= 10_000 }.count
+        return [
+            TrendsStat(id: "7d", label: "7-day avg", value: format(payload.today.vs7dAvg),
+                       caption: "rolling"),
+            TrendsStat(id: "total", label: "Total", value: format(values.isEmpty ? nil : values.reduce(0, +)), caption: payload.rangeLabel),
+            TrendsStat(id: "best", label: "Best day", value: format(best?.steps),
+                       caption: best.map { TrendsFormat.day($0.date) }),
+            TrendsStat(id: "10k", label: "10k+ days", value: values.isEmpty ? "—" : "\(over10k)",
+                       caption: values.isEmpty ? nil : "of \(values.count) days")
+        ]
+    }
+
+    private func format(_ value: Double?) -> String {
         guard let value else { return "—" }
         return value.formatted(.number.precision(.fractionLength(0)))
     }
 }
 
-#Preview { StepsView() }
+#Preview { NavigationStack { StepsView() } }

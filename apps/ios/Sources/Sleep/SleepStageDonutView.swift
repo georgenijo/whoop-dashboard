@@ -14,63 +14,66 @@ struct SleepStageDonutView: View {
 
     private var entries: [StageEntry] {
         [
+            StageEntry(name: "Deep", ms: stages.deepMs, color: Theme.Palette.sleepDeep),
+            StageEntry(name: "REM", ms: stages.remMs, color: Theme.Palette.sleepRem),
             StageEntry(name: "Light", ms: stages.lightMs, color: Theme.Palette.sleepLight),
-            StageEntry(name: "Deep",  ms: stages.deepMs,  color: Theme.Palette.sleepDeep),
-            StageEntry(name: "REM",   ms: stages.remMs,   color: Theme.Palette.sleepRem),
-            StageEntry(name: "Awake", ms: stages.awakeMs, color: Theme.Palette.rhr)
+            StageEntry(name: "Awake", ms: stages.awakeMs, color: Theme.Palette.fg3)
         ]
     }
 
+    private var inBed: Double { max(1, entries.reduce(0) { $0 + $1.ms }) }
+    private var asleep: Double { stages.lightMs + stages.deepMs + stages.remMs }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("STAGES")
-                    .font(Theme.FontStyle.sans(10, weight: .semibold))
-                    .tracking(1.4)
-                    .foregroundStyle(Theme.Palette.fg2)
-                Text(date)
-                    .font(Theme.FontStyle.mono(10.5))
-                    .foregroundStyle(Theme.Palette.fg3)
-            }
-
-            HStack(spacing: 18) {
-                Chart(entries) { e in
-                    SectorMark(
-                        angle: .value(e.name, e.ms),
-                        innerRadius: .ratio(0.66),
-                        angularInset: 1.5
-                    )
-                    .cornerRadius(4)
-                    .foregroundStyle(e.color)
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            TrendsCardLabel("Last night", trailing: TrendsFormat.day(date))
+            HStack(spacing: Theme.Spacing.lg) {
+                ZStack {
+                    Chart(entries) { e in
+                        SectorMark(
+                            angle: .value(e.name, e.ms),
+                            innerRadius: .ratio(0.72),
+                            angularInset: 1.5
+                        )
+                        .cornerRadius(3)
+                        .foregroundStyle(e.color)
+                    }
+                    VStack(spacing: 2) {
+                        Text(TrendsFormat.hoursMinutes(ms: asleep))
+                            .font(Theme.FontStyle.mono(17, weight: .medium))
+                            .foregroundStyle(Theme.Palette.fg0)
+                        Text("asleep")
+                            .font(Theme.FontStyle.mono(11))
+                            .foregroundStyle(Theme.Palette.fg3)
+                    }
                 }
-                .frame(width: 120, height: 120)
-                .shadow(color: Theme.Palette.sleepDeep.opacity(0.25), radius: 12)
+                .frame(width: 128, height: 128)
+                .accessibilityHidden(true)
 
-                VStack(spacing: 9) {
+                VStack(spacing: 10) {
                     ForEach(entries) { e in
-                        HStack(spacing: 8) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(e.color)
-                                .frame(width: 9, height: 9)
-                                .shadow(color: e.color.opacity(0.6), radius: 3)
+                                .frame(width: 10, height: 10)
                             Text(e.name)
-                                .font(Theme.FontStyle.sans(12.5, weight: .medium))
+                                .font(Theme.FontStyle.sans(15))
                                 .foregroundStyle(Theme.Palette.fg1)
-                            Spacer()
-                            Text(formatHm(e.ms))
-                                .font(Theme.FontStyle.mono(11.5))
-                                .foregroundStyle(Theme.Palette.fg2)
+                            Spacer(minLength: 4)
+                            Text(TrendsFormat.hoursMinutes(ms: e.ms))
+                                .font(Theme.FontStyle.mono(13, weight: .medium))
+                                .foregroundStyle(Theme.Palette.fg0)
+                            Text("\(Int((e.ms / inBed * 100).rounded()))%")
+                                .font(Theme.FontStyle.mono(11))
+                                .foregroundStyle(Theme.Palette.fg3)
+                                .frame(width: 32, alignment: .trailing)
                         }
+                        .accessibilityElement(children: .combine)
                     }
                 }
                 .frame(maxWidth: .infinity)
             }
         }
         .glassCard(padding: Theme.Spacing.md)
-    }
-
-    private func formatHm(_ ms: Double) -> String {
-        let total = Int(ms / 60_000)
-        return String(format: "%dh %02dm", total / 60, total % 60)
     }
 }

@@ -4,81 +4,21 @@ struct TodayKpisView: View {
     let today: StrainPayload.Today
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            HStack {
-                Text("TODAY")
-                    .font(Theme.FontStyle.sans(10, weight: .semibold))
-                    .tracking(1.4)
-                    .foregroundStyle(Theme.Palette.fg2)
-                Spacer()
-                Text("\(today.workoutCount) workout\(today.workoutCount == 1 ? "" : "s")")
-                    .font(Theme.FontStyle.mono(10.5))
-                    .foregroundStyle(Theme.Palette.fg3)
-            }
-            HStack(spacing: 8) {
-                tile(label: "Calories", primary: kcalText, sub: kjText, accent: Theme.Palette.strain)
-                tile(label: "Avg HR", primary: hrText(today.avgHr), sub: "all day", accent: Theme.Palette.rhr)
-                tile(label: "Max HR", primary: hrText(today.maxHr), sub: maxPctText, accent: Theme.Palette.danger)
-            }
-        }
-        .glassCard(padding: Theme.Spacing.md)
+        TrendsStatGrid(tiles: [
+            TrendsStat(id: "kcal", label: "Calories",
+                       value: today.totalKcal.map { Int($0.rounded()).formatted() } ?? "—",
+                       unit: "kcal",
+                       caption: today.totalKilojoule.map { "\(Int($0.rounded()).formatted()) kJ" },
+                       accent: Theme.Palette.strain),
+            TrendsStat(id: "avg", label: "Avg HR", value: hr(today.avgHr), unit: "bpm",
+                       caption: "all day", accent: Theme.Palette.rhr),
+            TrendsStat(id: "max", label: "Max HR", value: hr(today.maxHr), unit: "bpm",
+                       caption: "peak", accent: Theme.Palette.danger)
+        ])
     }
 
-    private var kcalText: String {
-        guard let k = today.totalKcal else { return "—" }
-        return "\(Int(k.rounded()))"
-    }
-
-    private var kjText: String? {
-        guard let kj = today.totalKilojoule else { return nil }
-        return "\(Int(kj.rounded())) kJ"
-    }
-
-    private var maxPctText: String? {
-        guard let max = today.maxHr, max > 0 else { return nil }
-        return "max recorded"
-    }
-
-    private func hrText(_ v: Double?) -> String {
+    private func hr(_ v: Double?) -> String {
         guard let v else { return "—" }
         return "\(Int(v.rounded()))"
-    }
-
-    private func tile(label: String, primary: String, sub: String?, accent: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label.uppercased())
-                .font(Theme.FontStyle.sans(9.5, weight: .semibold))
-                .tracking(1.2)
-                .foregroundStyle(Theme.Palette.fg2)
-            Text(primary)
-                .font(Theme.FontStyle.display(22, weight: .medium))
-                .foregroundStyle(Theme.Palette.fg0)
-                .monospacedDigit()
-            if let sub {
-                Text(sub)
-                    .font(Theme.FontStyle.mono(9.5))
-                    .foregroundStyle(Theme.Palette.fg3)
-            } else {
-                Text(" ")
-                    .font(Theme.FontStyle.mono(9.5))
-                    .accessibilityHidden(true)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(
-            ZStack {
-                LinearGradient(colors: [Color.white.opacity(0.035), Color.white.opacity(0.008)],
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                RadialGradient(colors: [accent.opacity(0.14), .clear],
-                               center: UnitPoint(x: 1, y: 0),
-                               startRadius: 0, endRadius: 120)
-            }
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 14))
     }
 }
