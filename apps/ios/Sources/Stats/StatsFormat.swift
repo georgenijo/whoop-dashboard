@@ -40,30 +40,38 @@ enum StatsFormat {
     }
 
     enum Change: Equatable {
+        /// Non-zero rounded percent; the sign is the direction.
         case percent(Int)
         case multiple(Int)
         case new
+        /// Within ±0.5% — neither ahead nor behind.
+        case flat
 
-        var isUp: Bool {
+        enum Direction { case up, down, flat }
+
+        var direction: Direction {
             switch self {
-            case .percent(let p): return p >= 0
-            case .multiple, .new: return true
+            case .percent(let p): return p > 0 ? .up : .down
+            case .multiple, .new: return .up
+            case .flat: return .flat
             }
         }
 
         var text: String {
             switch self {
-            case .percent(let p): return p >= 0 ? "+\(p)%" : "−\(abs(p))%"
+            case .percent(let p): return p > 0 ? "+\(p)%" : "−\(abs(p))%"
             case .multiple(let m): return "\(m)×"
             case .new: return "New"
+            case .flat: return "Even"
             }
         }
 
         var spoken: String {
             switch self {
-            case .percent(let p): return p >= 0 ? "up \(p) percent" : "down \(abs(p)) percent"
+            case .percent(let p): return p > 0 ? "up \(p) percent" : "down \(abs(p)) percent"
             case .multiple(let m): return "\(m) times"
             case .new: return "new this year"
+            case .flat: return "about even"
             }
         }
     }
@@ -75,12 +83,15 @@ enum StatsFormat {
         if prior <= 0 { return current > 0 ? .new : nil }
         let pct = (current - prior) / prior * 100
         if pct >= 900 { return .multiple(Int((current / prior).rounded())) }
-        return .percent(Int(pct.rounded()))
+        // Round only the displayed magnitude: −0.1% must not read as "+0%" ahead.
+        let rounded = Int(pct.rounded())
+        return rounded == 0 ? .flat : .percent(rounded)
     }
 
     private static let isoDay: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
+        f.timeZone = .current
         f.locale = Locale(identifier: "en_US_POSIX")
         f.dateFormat = "yyyy-MM-dd"
         return f
@@ -100,25 +111,41 @@ enum StatsFormat {
         return m - 1
     }
 
-    /// A month bar is partial when it is the current month or the window
-    /// (`today - (days - 1)` ... today, matching the API) starts after its 1st.
-    /// The API's own `partial` flag guesses from the first workout's date, so a
-    /// fully covered month with no workout on the 1st reads as partial.
-    static func isCurrentMonth(_ raw: String, today: Date = Date(), calendar: Calendar = .current) -> Bool {
-        let c = calendar.dateComponents([.year, .month], from: today)
-        guard let y = c.year, let m = c.month else { return false }
-        return raw.hasPrefix(String(format: "%04d-%02d", y, m))
+    /// The inclusive `yyyy-MM-dd` window the monthly rollup covers. Prefer the
+    /// server's (`window_start`/`window_end`): it resolves "today" in its own
+    /// zone, and the device clock can be a day off or past midnight since load.
+    struct Window: Equatable {
+        let start: String
+        let end: String
+
+        /// Fallback for older servers: rebuild `today - (days - 1) ... today`
+        /// in the Gregorian calendar (API keys are Gregorian regardless of the
+        /// device calendar).
+        static func fallback(days: Int, today: Date = Date()) -> Window {
+            let end = isoDay.string(from: today)
+            let startDate = gregorian.date(byAdding: .day, value: -(days - 1), to: today) ?? today
+            return Window(start: isoDay.string(from: startDate), end: end)
+        }
     }
 
-    static func isPartial(month raw: String, windowDays: Int, today: Date = Date(),
-                          calendar: Calendar = .current) -> Bool {
-        let parts = raw.split(separator: "-")
-        guard parts.count >= 2, let y = Int(parts[0]), let m = Int(parts[1]),
-              let monthStart = calendar.date(from: DateComponents(year: y, month: m, day: 1)) else { return false }
-        let todayStart = calendar.startOfDay(for: today)
-        if calendar.isDate(monthStart, equalTo: todayStart, toGranularity: .month) { return true }
-        guard let windowStart = calendar.date(byAdding: .day, value: -(windowDays - 1), to: todayStart) else { return false }
-        return monthStart < windowStart
+    private static let gregorian: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = .current
+        return c
+    }()
+
+    /// The window's last month is still accumulating ("so far").
+    static func isCurrentMonth(_ raw: String, window: Window) -> Bool {
+        raw.prefix(7) == window.end.prefix(7)
+    }
+
+    /// A month bar is partial when it is still accumulating or the window
+    /// starts after its 1st. Pure string comparison on Gregorian ISO keys. The
+    /// API's own `partial` flag guesses from the first workout's date, so a
+    /// fully covered month with no workout on the 1st would read as partial.
+    static func isPartial(month raw: String, window: Window) -> Bool {
+        guard raw.count >= 7 else { return false }
+        return isCurrentMonth(raw, window: window) || "\(raw.prefix(7))-01" < window.start
     }
 
     static func monthShort(_ raw: String) -> String {

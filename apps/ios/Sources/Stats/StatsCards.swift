@@ -98,7 +98,7 @@ struct YearOverYearCard: View {
     private var summary: String? {
         let changes = yoy.metrics.compactMap { StatsFormat.change(current: $0.current, prior: $0.prior) }
         guard !changes.isEmpty else { return nil }
-        let ahead = changes.filter(\.isUp).count
+        let ahead = changes.filter { $0.direction == .up }.count
         let prior = String(yoy.priorYear)
         if ahead == changes.count { return "Ahead of \(prior) on every measure so far." }
         if ahead == 0 { return "Behind \(prior)'s pace on every measure so far." }
@@ -216,11 +216,25 @@ private struct YoYRow: View {
 private struct DeltaBadge: View {
     let change: StatsFormat.Change
 
-    private var color: Color { change.isUp ? Theme.Palette.success : Theme.Palette.rhr }
+    private var color: Color {
+        switch change.direction {
+        case .up: return Theme.Palette.success
+        case .down: return Theme.Palette.rhr
+        case .flat: return Theme.Palette.fg2
+        }
+    }
+
+    private var icon: String {
+        switch change.direction {
+        case .up: return "arrow.up.right"
+        case .down: return "arrow.down.right"
+        case .flat: return "arrow.right"
+        }
+    }
 
     var body: some View {
         HStack(spacing: 3) {
-            Image(systemName: change.isUp ? "arrow.up.right" : "arrow.down.right")
+            Image(systemName: icon)
                 .font(.system(size: 11, weight: .bold))
             Text(change.text)
                 .font(Theme.FontStyle.mono(12, weight: .semibold))
@@ -272,34 +286,49 @@ private struct RecordRow: View {
 
     var body: some View {
         let style = style
-        HStack(spacing: 14) {
+        HStack(alignment: .top, spacing: 14) {
             Image(systemName: style.icon)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(style.tint)
                 .frame(width: 36, height: 36)
                 .background(style.tint.opacity(0.14), in: Circle())
-            VStack(alignment: .leading, spacing: 3) {
-                Text(record.label)
-                    .font(Theme.FontStyle.sans(15, weight: .medium))
-                    .foregroundStyle(Theme.Palette.fg1)
-                    .lineLimit(1)
-                if let meta = record.meta {
-                    Text(StatsFormat.sentenceCase(meta))
-                        .font(Theme.FontStyle.mono(11))
-                        .foregroundStyle(Theme.Palette.fg3)
+            // The value is the point of the row: it keeps its full width and the
+            // label/metadata truncate first. If even that can't fit (narrow
+            // phone, accessibility text), the value drops under the label.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 8) {
+                    labels
+                    Spacer(minLength: 8)
+                    valueText(tint: style.tint)
                         .lineLimit(1)
+                        .fixedSize()
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    labels
+                    valueText(tint: style.tint)
                 }
             }
-            .layoutPriority(1)
-            Spacer(minLength: 8)
-            valueText(tint: style.tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+            .frame(minHeight: 36)
         }
         .padding(.vertical, 11)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(record.label)
         .accessibilityValue([record.valueDisplay, record.meta].compactMap { $0 }.joined(separator: ", "))
+    }
+
+    private var labels: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(record.label)
+                .font(Theme.FontStyle.sans(15, weight: .medium))
+                .foregroundStyle(Theme.Palette.fg1)
+                .lineLimit(1)
+            if let meta = record.meta {
+                Text(StatsFormat.sentenceCase(meta))
+                    .font(Theme.FontStyle.mono(11))
+                    .foregroundStyle(Theme.Palette.fg3)
+                    .lineLimit(1)
+            }
+        }
     }
 
     private func valueText(tint: Color) -> Text {
@@ -436,7 +465,7 @@ struct SportBreakdownCard: View {
 
 struct MonthlyVolumeCard: View {
     let trend: [StatsPayload.TrendMonth]
-    let windowDays: Int
+    let window: StatsFormat.Window
 
     @State private var selectedMonth: String?
 
@@ -446,12 +475,12 @@ struct MonthlyVolumeCard: View {
     }
 
     private func isPartial(_ month: StatsPayload.TrendMonth) -> Bool {
-        StatsFormat.isPartial(month: month.month, windowDays: windowDays)
+        StatsFormat.isPartial(month: month.month, window: window)
     }
 
     private func partialSuffix(_ month: StatsPayload.TrendMonth) -> String {
         guard isPartial(month) else { return "" }
-        return StatsFormat.isCurrentMonth(month.month) ? " · so far" : " · partial"
+        return StatsFormat.isCurrentMonth(month.month, window: window) ? " · so far" : " · partial"
     }
 
     private var hasPartial: Bool { trend.contains(where: isPartial) }
@@ -507,6 +536,10 @@ struct MonthlyVolumeCard: View {
             )
             .clipShape(RoundedRectangle(cornerRadius: 4))
             .foregroundStyle(Theme.Palette.info.opacity(opacity(for: month)))
+            // Per-bar values so VoiceOver can reach every month's strain, not
+            // just the one selected by touch.
+            .accessibilityLabel(StatsFormat.monthLong(month.month) + partialSuffix(month))
+            .accessibilityValue(accessibilityValue(for: month))
         }
         .chartXSelection(value: $selectedMonth)
         .chartXAxis {
@@ -535,9 +568,14 @@ struct MonthlyVolumeCard: View {
         }
         .frame(height: 170)
         .sensoryFeedback(.selection, trigger: selectedMonth)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Monthly workouts")
-        .accessibilityValue(trend.map { "\(StatsFormat.monthLong($0.month)) \($0.count)" }.joined(separator: ", "))
+    }
+
+    private func accessibilityValue(for month: StatsPayload.TrendMonth) -> String {
+        var parts = ["\(month.count) workouts"]
+        if let strain = month.avgStrain {
+            parts.append("average strain \(strain.formatted(.number.precision(.fractionLength(1))))")
+        }
+        return parts.joined(separator: ", ")
     }
 
     private func opacity(for month: StatsPayload.TrendMonth) -> Double {

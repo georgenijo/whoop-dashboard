@@ -46,7 +46,12 @@ struct StatsView: View {
                 .accessibilityLabel("Loading stats")
         case .loaded(let payload):
             if payload.allTime.workouts == 0 {
-                emptyState
+                // Scrollable so pull-to-refresh can pick up a first sync.
+                ScrollView {
+                    emptyState
+                        .containerRelativeFrame(.vertical)
+                }
+                .refreshable { await load() }
             } else {
                 StatsContent(payload: payload, range: $range, loadedRange: loadedRange,
                              isRefreshing: isLoading && loadedRange != range)
@@ -54,7 +59,7 @@ struct StatsView: View {
             }
         case .error(let message):
             ScrollView {
-                InlineErrorCard(title: "Couldn't load stats", message: message) { Task { await load() } }
+                InlineErrorCard(title: "Couldn't load stats", message: message, retry: retry)
                     .padding(Theme.Spacing.md)
             }
             .refreshable { await load() }
@@ -76,6 +81,16 @@ struct StatsView: View {
                 .font(Theme.FontStyle.sans(15))
                 .foregroundStyle(Theme.Palette.fg2)
         }
+    }
+
+    /// Retry from the error card: show the loading skeleton (progress) and
+    /// ignore taps while a request is already in flight, so a double tap can't
+    /// start a second generation that discards the first one's success.
+    @MainActor
+    private func retry() {
+        guard !isLoading else { return }
+        phase = .loading
+        Task { await load() }
     }
 
     @MainActor
@@ -162,7 +177,7 @@ private struct StatsContent: View {
                             SportBreakdownCard(items: payload.bySport, days: windowDays)
                         }
                         if !payload.trend.isEmpty {
-                            MonthlyVolumeCard(trend: payload.trend, windowDays: windowDays)
+                            MonthlyVolumeCard(trend: payload.trend, window: payload.window(fallbackDays: windowDays))
                         }
                     } else {
                         QuietWindowCard(days: windowDays)

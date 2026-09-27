@@ -8,6 +8,10 @@ struct StatsPayload: Decodable {
     let records: [Record]
     let trend: [TrendMonth]
     let historyFloor: String?
+    /// Inclusive yyyy-MM-dd window of `bySport`/`trend`, resolved server-side.
+    /// Optional: older servers don't send it.
+    var windowStart: String? = nil
+    var windowEnd: String? = nil
 
     struct AllTime: Decodable {
         let workouts: Int
@@ -98,6 +102,15 @@ struct StatsPayload: Decodable {
         case records
         case trend
         case historyFloor = "history_floor"
+        case windowStart = "window_start"
+        case windowEnd = "window_end"
+    }
+
+    func window(fallbackDays days: Int) -> StatsFormat.Window {
+        if let windowStart, let windowEnd {
+            return StatsFormat.Window(start: windowStart, end: windowEnd)
+        }
+        return .fallback(days: days)
     }
 }
 
