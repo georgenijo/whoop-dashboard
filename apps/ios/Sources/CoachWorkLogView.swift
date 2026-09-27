@@ -7,43 +7,47 @@ struct CoachWorkLogView: View {
     @State private var expanded = false
 
     var body: some View {
-        DisclosureGroup(isExpanded: $expanded) {
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(Array(workLog.notes.enumerated()), id: \.offset) { _, note in
-                    Text(note)
-                        .font(Theme.FontStyle.sans(12))
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.snappy(duration: 0.25)) { expanded.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: statusSymbol)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(statusColor)
+                        .frame(width: 16)
+                    Text(summary)
+                        .font(Theme.FontStyle.sans(13, weight: .medium))
                         .foregroundStyle(Theme.Palette.fg2)
-                }
-                ForEach(workLog.tools) { tool in
-                    CoachToolActivityRow(tool: tool)
-                }
-                if workLog.tools.isEmpty && workLog.notes.isEmpty {
-                    Text("No tool calls")
-                        .font(Theme.FontStyle.mono(10.5))
+                    if let detail {
+                        Text(detail)
+                            .font(Theme.FontStyle.mono(11))
+                            .foregroundStyle(Theme.Palette.fg3)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(Theme.Palette.fg3)
+                        .rotationEffect(.degrees(expanded ? 90 : 0))
+                    Spacer(minLength: 0)
                 }
+                .frame(minHeight: 32)
+                .contentShape(Rectangle())
             }
-            .padding(.top, 8)
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: workLog.status == .complete ? "checkmark.circle" : "exclamationmark.circle")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(statusColor)
-                Text(summary)
-                    .font(Theme.FontStyle.sans(11.5, weight: .medium))
-                    .foregroundStyle(Theme.Palette.fg2)
-                Spacer(minLength: 0)
+            .buttonStyle(.plain)
+            .sensoryFeedback(.selection, trigger: expanded)
+            .accessibilityLabel(summary)
+            .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+            .accessibilityHint("Shows the steps the coach took")
+
+            if expanded {
+                WorkTimeline(notes: workLog.notes, tools: workLog.tools)
+                    .padding(.top, 4)
+                    .padding(.bottom, 6)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .tint(Theme.Palette.fg3)
-        .padding(.bottom, 8)
-        .overlay(alignment: .bottom) {
-            Rectangle()
-                .fill(Theme.Palette.borderSubtle)
-                .frame(height: 1)
-        }
+        .clipped()
     }
 
     private var summary: String {
@@ -52,6 +56,20 @@ struct CoachWorkLogView: View {
         case .complete: return "Worked for \(duration)"
         case .running: return "Working for \(duration)"
         case .error, .aborted: return "Stopped after \(duration)"
+        }
+    }
+
+    private var detail: String? {
+        let count = workLog.tools.count
+        guard count > 0 else { return nil }
+        return "· \(count) step\(count == 1 ? "" : "s")"
+    }
+
+    private var statusSymbol: String {
+        switch workLog.status {
+        case .complete: return "checkmark"
+        case .running: return "ellipsis"
+        case .error, .aborted: return "exclamationmark"
         }
     }
 
@@ -76,49 +94,139 @@ struct CoachWorkLogView: View {
     }
 }
 
+/// A thin rail joins the steps so the log reads as one sequence.
+private struct WorkTimeline: View {
+    let notes: [String]
+    let tools: [CoachToolActivity]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(Array(notes.enumerated()), id: \.offset) { _, note in
+                step(dot: Theme.Palette.fg4) {
+                    Text(note)
+                        .font(Theme.FontStyle.sans(13))
+                        .foregroundStyle(Theme.Palette.fg2)
+                        .lineSpacing(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            ForEach(tools) { tool in
+                step(dot: tool.status == "error" ? Theme.Palette.danger : Theme.Palette.success) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(LiveCoachWorkView.label(tool.name).replacingOccurrences(of: "Querying", with: "Queried"))
+                            .font(Theme.FontStyle.sans(13))
+                            .foregroundStyle(Theme.Palette.fg1)
+                        Spacer(minLength: 8)
+                        Text(meta(tool))
+                            .font(Theme.FontStyle.mono(11))
+                            .foregroundStyle(Theme.Palette.fg3)
+                    }
+                }
+            }
+            if tools.isEmpty && notes.isEmpty {
+                step(dot: Theme.Palette.fg4) {
+                    Text("Answered without looking anything up")
+                        .font(Theme.FontStyle.sans(13))
+                        .foregroundStyle(Theme.Palette.fg3)
+                }
+            }
+        }
+        .background(alignment: .leading) {
+            Rectangle()
+                .fill(Theme.Palette.borderDefault)
+                .frame(width: 1)
+                .padding(.vertical, 8)
+                .padding(.leading, 7.5)
+        }
+    }
+
+    private func step<Content: View>(dot: Color, @ViewBuilder content: () -> Content) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Circle()
+                .fill(dot)
+                .frame(width: 6, height: 6)
+                .background(Circle().fill(Theme.Palette.bg0).frame(width: 10, height: 10))
+                .alignmentGuide(.firstTextBaseline) { d in d[.bottom] + 2.5 }
+                .frame(width: 16)
+            content()
+        }
+    }
+
+    private func meta(_ tool: CoachToolActivity) -> String {
+        var parts: [String] = []
+        if tool.status == "error" { parts.append("failed") }
+        if let rows = tool.rows { parts.append("\(rows) row\(rows == 1 ? "" : "s")") }
+        if let durationMs = tool.durationMs { parts.append(CoachWorkLogView.duration(durationMs)) }
+        return parts.joined(separator: " · ")
+    }
+}
+
 struct LiveCoachWorkView: View {
     let tools: [LiveToolActivity]
 
     @State private var expanded = true
+    @State private var startedAt = Date()
 
     var body: some View {
-        DisclosureGroup(isExpanded: $expanded) {
-            if tools.isEmpty {
-                Text("Thinking…")
-                    .font(Theme.FontStyle.sans(11.5))
-                    .foregroundStyle(Theme.Palette.fg3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.top, 6)
-            } else {
-                VStack(alignment: .leading, spacing: 7) {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.snappy(duration: 0.25)) { expanded.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .tint(Theme.Palette.ai)
+                        .frame(width: 16)
+                    ShimmerText(text: headline)
+                    TimelineView(.periodic(from: startedAt, by: 1)) { context in
+                        Text("· \(Self.elapsed(since: startedAt, now: context.date))")
+                            .font(Theme.FontStyle.mono(11))
+                            .foregroundStyle(Theme.Palette.fg3)
+                            .contentTransition(.numericText())
+                    }
+                    if !tools.isEmpty {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(Theme.Palette.fg3)
+                            .rotationEffect(.degrees(expanded ? 90 : 0))
+                    }
+                    Spacer(minLength: 0)
+                }
+                .frame(minHeight: 32)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Coach is working")
+            .accessibilityValue(headline)
+
+            if expanded && !tools.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
                     ForEach(tools) { tool in
-                        HStack(spacing: 8) {
-                            Circle()
-                                .fill(Theme.Palette.warning)
-                                .frame(width: 5, height: 5)
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            PulsingDot()
+                                .alignmentGuide(.firstTextBaseline) { d in d[.bottom] + 2.5 }
+                                .frame(width: 16)
                             Text(tool.stage.map { "\(Self.label(tool.name)) · \($0)" } ?? Self.label(tool.name))
-                                .font(Theme.FontStyle.sans(11.5))
+                                .font(Theme.FontStyle.sans(13))
                                 .foregroundStyle(Theme.Palette.fg2)
                         }
+                        .transition(.opacity)
                     }
                 }
-                .padding(.top, 7)
+                .padding(.top, 4)
+                .animation(.snappy, value: tools)
             }
-        } label: {
-            HStack(spacing: 8) {
-                ProgressView()
-                    .controlSize(.mini)
-                    .tint(Theme.Palette.ai)
-                Text("Working")
-                    .font(Theme.FontStyle.sans(11.5, weight: .medium))
-                    .foregroundStyle(Theme.Palette.fg2)
-                Spacer(minLength: 0)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .tint(Theme.Palette.fg3)
-        .padding(.vertical, 4)
+    }
+
+    private var headline: String {
+        tools.isEmpty ? "Thinking" : "Working"
+    }
+
+    static func elapsed(since start: Date, now: Date) -> String {
+        let seconds = max(0, Int(now.timeIntervalSince(start)))
+        return seconds < 60 ? "\(seconds)s" : "\(seconds / 60)m \(seconds % 60)s"
     }
 
     fileprivate static func label(_ name: String) -> String {
@@ -138,26 +246,64 @@ struct LiveCoachWorkView: View {
     }
 }
 
-private struct CoachToolActivityRow: View {
-    let tool: CoachToolActivity
+private struct ShimmerText: View {
+    let text: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var phase: CGFloat = -1
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: tool.status == "error" ? "xmark.circle" : "checkmark.circle")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(tool.status == "error" ? Theme.Palette.danger : Theme.Palette.success)
-            Text(LiveCoachWorkView.label(tool.name).replacingOccurrences(of: "Querying", with: "Queried"))
-                .font(Theme.FontStyle.sans(11.5))
-                .foregroundStyle(Theme.Palette.fg2)
-            Spacer(minLength: 8)
-            if let rows = tool.rows {
-                Text("\(rows) row\(rows == 1 ? "" : "s")")
+        let label = Text(text)
+            .font(Theme.FontStyle.sans(13, weight: .medium))
+        label
+            .foregroundStyle(Theme.Palette.fg2)
+            .overlay {
+                if !reduceMotion {
+                    GeometryReader { proxy in
+                        LinearGradient(
+                            colors: [.clear, Theme.Palette.fg0, .clear],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: proxy.size.width * 0.8)
+                        .offset(x: phase * proxy.size.width * 1.4)
+                    }
+                    .mask(label)
+                    .allowsHitTesting(false)
+                }
             }
-            if let durationMs = tool.durationMs {
-                Text(CoachWorkLogView.duration(durationMs))
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) {
+                    phase = 1
+                }
             }
-        }
-        .font(Theme.FontStyle.mono(9.5))
-        .foregroundStyle(Theme.Palette.fg3)
     }
+}
+
+private struct PulsingDot: View {
+    @State private var on = false
+
+    var body: some View {
+        Circle()
+            .fill(Theme.Palette.warning)
+            .frame(width: 6, height: 6)
+            .opacity(on ? 1 : 0.35)
+            .onAppear {
+                withAnimation(.easeInOut(duration: 0.8).repeatForever()) { on = true }
+            }
+    }
+}
+
+#Preview("Work log states") {
+    VStack(alignment: .leading, spacing: 24) {
+        LiveCoachWorkView(tools: [])
+        LiveCoachWorkView(tools: [
+            LiveToolActivity(name: "query_sleep", stage: nil),
+            LiveToolActivity(name: "query_recovery", stage: "reading 30 days")
+        ])
+    }
+    .padding()
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .background(Color.black)
+    .preferredColorScheme(.dark)
 }
