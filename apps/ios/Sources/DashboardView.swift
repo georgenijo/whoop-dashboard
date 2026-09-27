@@ -70,9 +70,12 @@ struct DashboardView: View {
                 sections(Self.placeholder, interactive: false)
                     .redacted(reason: .placeholder)
                     .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
             .scrollDisabled(true)
+            .accessibilityElement(children: .ignore)
             .accessibilityLabel("Loading today")
+            .accessibilityAddTraits(.updatesFrequently)
         case .loaded(let payload):
             ScrollView {
                 sections(payload, interactive: true)

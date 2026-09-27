@@ -3,37 +3,67 @@ import Foundation
 /// Condenses the long-form markdown insight ("## Key Findings / ## Trends /
 /// ## Action Items / ## Watch Out") into a glanceable digest: one headline
 /// finding plus the first few action items, each cut to its leading clause.
+/// Text without that structure still yields a bounded preview, never the
+/// whole document.
 struct InsightDigest: Equatable {
     let headline: String?
     let actions: [String]
-    let sectionCount: Int
+    /// Extra lines shown only when there are no action items.
+    let preview: [String]
 
     static let maxActions = 3
+    static let maxPreview = 2
 
     struct Section: Equatable {
         let title: String
+        let level: Int
         let items: [String]
     }
 
     init(markdown: String) {
         let sections = Self.sections(in: markdown)
-        sectionCount = sections.filter { !$0.title.isEmpty }.count
 
-        let findings = sections.first { $0.title.lowercased().contains("finding") }
-        let actionSection = sections.first { $0.title.lowercased().contains("action") }
+        let findingsIndex = sections.firstIndex { $0.title.lowercased().contains("finding") }
+        let actionIndex = sections.firstIndex { $0.title.lowercased().contains("action") }
+        let actionRange = actionIndex.map { Self.subtree(of: $0, in: sections) }
 
-        let lead = findings?.items.first ?? sections.first(where: { $0 != actionSection })?.items.first
+        let otherItems = sections.indices
+            .filter { actionRange?.contains($0) != true }
+            .flatMap { sections[$0].items }
+        let findingItems = findingsIndex.map { Self.subtree(of: $0, in: sections).flatMap { sections[$0].items } } ?? []
+
+        let lead = findingItems.first ?? otherItems.first
         headline = lead.map { Self.leadingClause($0) }
 
-        let items = actionSection?.items ?? []
-        actions = items.prefix(Self.maxActions).map { Self.leadingClause($0) }
+        let actionItems = actionRange.map { $0.flatMap { sections[$0].items } } ?? []
+        actions = actionItems.prefix(Self.maxActions).map { Self.leadingClause($0) }
+
+        if actions.isEmpty {
+            var rest = otherItems
+            if let lead, let i = rest.firstIndex(of: lead) { rest.remove(at: i) }
+            preview = rest.prefix(Self.maxPreview).map { Self.leadingClause($0) }
+        } else {
+            preview = []
+        }
     }
 
-    var isEmpty: Bool { headline == nil && actions.isEmpty }
+    var isEmpty: Bool { headline == nil && actions.isEmpty && preview.isEmpty }
+
+    /// A section plus every following section nested deeper than it, so
+    /// "## Action Items" keeps the bullets under its "### Sleep" sub-heading.
+    static func subtree(of index: Int, in sections: [Section]) -> ClosedRange<Int> {
+        let level = sections[index].level
+        var end = index
+        while end + 1 < sections.count, sections[end + 1].level > level {
+            end += 1
+        }
+        return index...end
+    }
 
     static func sections(in markdown: String) -> [Section] {
         var result: [Section] = []
         var title = ""
+        var level = 0
         var items: [String] = []
         var paragraph: [String] = []
 
@@ -46,7 +76,7 @@ struct InsightDigest: Equatable {
         func flushSection() {
             flushParagraph()
             if !title.isEmpty || !items.isEmpty {
-                result.append(Section(title: title, items: items))
+                result.append(Section(title: title, level: level, items: items))
             }
             items = []
         }
@@ -59,6 +89,7 @@ struct InsightDigest: Equatable {
             }
             if line.hasPrefix("#") {
                 flushSection()
+                level = line.prefix(while: { $0 == "#" }).count
                 title = line.drop(while: { $0 == "#" }).trimmingCharacters(in: .whitespaces)
                     .replacingOccurrences(of: "**", with: "")
                 continue

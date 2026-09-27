@@ -29,7 +29,7 @@ final class HomeDigestTests: XCTestCase {
             "Skip or heavily reduce soccer this week",
             "Investigate the disturbances"
         ])
-        XCTAssertEqual(digest.sectionCount, 4)
+        XCTAssertTrue(digest.preview.isEmpty)
     }
 
     func testShortClauseIsNotCutTooEarly() {
@@ -65,11 +65,75 @@ final class HomeDigestTests: XCTestCase {
 
     func testDeltaLabelSplitsAndGroups() {
         let d = KPIDeltaText(KPITile.Delta(label: "↓ 35585 vs yesterday", dir: .down))
-        XCTAssertEqual(d.amount, "↓ 35,585")
+        XCTAssertEqual(d.amount, "↓ " + 35585.0.formatted(.number.precision(.fractionLength(0))))
+        XCTAssertNotEqual(d.amount, "↓ 35585")
         XCTAssertEqual(d.context, "vs yesterday")
         let flat = KPIDeltaText(KPITile.Delta(label: "— baseline", dir: .flat))
         XCTAssertEqual(flat.amount, "no change")
         let gap = KPIDeltaText(KPITile.Delta(label: "↑ 4.3 vs 2 days ago", dir: .up))
         XCTAssertEqual(gap.shortContext, "vs 2d ago")
+    }
+
+    func testSubheadingsStayInsideTheirParentSection() {
+        let md = """
+        ## Key Findings
+        - HRV is down 12% this week
+        ## Action Items
+        ### Sleep
+        - Be in bed by 10:30pm tonight
+        ### Training
+        - Keep strain under 12 today
+        ## Watch Out
+        - Nothing concerning
+        """
+        let digest = InsightDigest(markdown: md)
+        XCTAssertEqual(digest.headline, "HRV is down 12% this week")
+        XCTAssertEqual(digest.actions, ["Be in bed by 10:30pm tonight", "Keep strain under 12 today"])
+    }
+
+    func testWrapperHeadingDoesNotSwallowSections() {
+        let md = """
+        # Weekly analysis
+        ## Key Findings
+        - Recovery averaged 64% over the last week
+        ## Action Items
+        - Add an extra hour of sleep tonight
+        """
+        let digest = InsightDigest(markdown: md)
+        XCTAssertEqual(digest.headline, "Recovery averaged 64% over the last week")
+        XCTAssertEqual(digest.actions, ["Add an extra hour of sleep tonight"])
+    }
+
+    func testUnrecognisedSectionsFallBackToBoundedPreview() {
+        let md = """
+        # Analysis
+        ## Recovery
+        - Recovery is trending down this week — watch it closely
+        - HRV is holding steady around 45ms
+        ## Sleep
+        - Sleep debt has built up to roughly six hours
+        - Disturbances are elevated at 12 per night
+        - Bedtime drifted later on four of seven nights
+        """
+        let digest = InsightDigest(markdown: md)
+        XCTAssertEqual(digest.headline, "Recovery is trending down this week")
+        XCTAssertTrue(digest.actions.isEmpty)
+        XCTAssertEqual(digest.preview, [
+            "HRV is holding steady around 45ms",
+            "Sleep debt has built up to roughly six hours"
+        ])
+    }
+
+    func testThirtyDayAverageIgnoresReadingsOlderThanThirtyDays() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        let now = calendar.date(from: DateComponents(year: 2026, month: 9, day: 26, hour: 9))!
+        func day(_ offset: Int) -> String {
+            ChartDate.key(calendar.date(byAdding: .day, value: -offset, to: now)!)
+        }
+        let recent = (0..<10).map { TrendPoint(date: day($0 * 2), raw: 60, ma7: nil, ma30: nil) }
+        let old = (0..<20).map { TrendPoint(date: day(31 + $0), raw: 10, ma7: nil, ma30: nil) }
+        XCTAssertEqual(RecoveryHeroView.thirtyDayAverage(old.reversed() + recent.reversed(), now: now, calendar: calendar), 60)
+        XCTAssertNil(RecoveryHeroView.thirtyDayAverage(Array(recent.prefix(3)), now: now, calendar: calendar))
     }
 }

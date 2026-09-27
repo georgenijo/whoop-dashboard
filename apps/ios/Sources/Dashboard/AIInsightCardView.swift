@@ -16,10 +16,9 @@ struct AIInsightCardView: View {
             if let digest, !digest.isEmpty {
                 digestBody(digest)
             } else if let text = insight.text, !text.isEmpty {
-                MarkdownView(content: text)
+                Text("Open the full analysis for details.")
                     .font(Theme.FontStyle.sans(15))
-                    .foregroundStyle(Theme.Palette.fg1)
-                    .lineLimit(4)
+                    .foregroundStyle(Theme.Palette.fg2)
             } else {
                 Text("No insight yet. One is written after your next sync.")
                     .font(Theme.FontStyle.sans(15))
@@ -34,11 +33,6 @@ struct AIInsightCardView: View {
                             .font(Theme.FontStyle.sans(15, weight: .medium))
                             .foregroundStyle(Theme.Palette.fg0)
                         Spacer()
-                        if let count = digest?.sectionCount, count > 0 {
-                            Text("\(count) sections")
-                                .font(Theme.FontStyle.mono(11))
-                                .foregroundStyle(Theme.Palette.fg3)
-                        }
                         Image(systemName: "chevron.right")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(Theme.Palette.fg3)
@@ -107,6 +101,21 @@ struct AIInsightCardView: View {
                 }
             }
             .padding(.top, 2)
+        } else if !digest.preview.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(digest.preview.enumerated()), id: \.offset) { _, line in
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Circle()
+                            .fill(Theme.Palette.ai)
+                            .frame(width: 4, height: 4)
+                            .alignmentGuide(.firstTextBaseline) { $0[.bottom] + 4 }
+                        MarkdownView(content: line)
+                            .font(Theme.FontStyle.sans(15))
+                            .foregroundStyle(Theme.Palette.fg1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
         }
     }
 }

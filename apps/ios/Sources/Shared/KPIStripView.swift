@@ -9,6 +9,14 @@ struct KPIStripView: View {
     var columns: Int = 3
     var onTap: ((KPITile) -> Void)? = nil
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// Accessibility text sizes get two wide columns instead of three
+    /// narrow ones so values and deltas are never clipped.
+    private var effectiveColumns: Int {
+        dynamicTypeSize.isAccessibilitySize ? min(columns, 2) : columns
+    }
+
     static func rowSizes(count: Int, columns: Int) -> [Int] {
         guard count > 0 else { return [] }
         let cols = max(1, columns)
@@ -20,7 +28,7 @@ struct KPIStripView: View {
 
     private var rows: [[KPITile]] {
         var start = 0
-        return Self.rowSizes(count: tiles.count, columns: columns).map { size in
+        return Self.rowSizes(count: tiles.count, columns: effectiveColumns).map { size in
             defer { start += size }
             return Array(tiles[start..<start + size])
         }
@@ -110,7 +118,10 @@ private struct KPICell: View {
     let tappable: Bool
     let showContext: Bool
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     private var accent: Color { Color(hex: tile.colorHex) }
+    private var wraps: Bool { dynamicTypeSize.isAccessibilitySize }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -119,7 +130,7 @@ private struct KPICell: View {
                     .font(Theme.FontStyle.sans(11, weight: .semibold))
                     .tracking(1.2)
                     .foregroundStyle(Theme.Palette.fg2)
-                    .lineLimit(1)
+                    .lineLimit(wraps ? 2 : 1)
                     .minimumScaleFactor(0.8)
                 Spacer(minLength: 0)
                 if tappable {
@@ -173,22 +184,18 @@ private struct KPICell: View {
     private var deltaRow: some View {
         if let delta = tile.delta {
             let text = KPIDeltaText(delta)
-            HStack(spacing: 4) {
-                Text(text.amount)
-                    .foregroundStyle(deltaColor(delta.dir))
-                if showContext, !text.context.isEmpty {
-                    Text(text.shortContext)
-                        .foregroundStyle(Theme.Palette.fg3)
-                }
-            }
-            .font(Theme.FontStyle.mono(11, weight: .medium))
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
+            let context = showContext && !text.context.isEmpty ? " " + text.shortContext : ""
+            (Text(text.amount).foregroundStyle(deltaColor(delta.dir))
+                + Text(context).foregroundStyle(Theme.Palette.fg3))
+                .font(Theme.FontStyle.mono(11, weight: .medium))
+                .lineLimit(wraps ? 3 : 1)
+                .minimumScaleFactor(wraps ? 1 : 0.8)
+                .fixedSize(horizontal: false, vertical: wraps)
         } else {
             Text("no comparison")
                 .font(Theme.FontStyle.mono(11))
                 .foregroundStyle(Theme.Palette.fg4)
-                .lineLimit(1)
+                .lineLimit(wraps ? 2 : 1)
                 .minimumScaleFactor(0.8)
         }
     }

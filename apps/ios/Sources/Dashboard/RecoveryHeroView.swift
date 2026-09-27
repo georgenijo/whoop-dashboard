@@ -6,7 +6,19 @@ struct RecoveryHeroView: View {
     var onTap: (() -> Void)? = nil
 
     private var baseline: Double? {
-        let values = trend.compactMap(\.raw)
+        Self.thirtyDayAverage(trend)
+    }
+
+    /// The backend sends the last 30 *readings*, which can span far more
+    /// than 30 days when there are gaps, so keep only the last 30 calendar
+    /// days before averaging.
+    static func thirtyDayAverage(_ points: [TrendPoint], now: Date = Date(), calendar: Calendar = .current) -> Double? {
+        let today = calendar.startOfDay(for: now)
+        guard let cutoff = calendar.date(byAdding: .day, value: -29, to: today) else { return nil }
+        let values = points.compactMap { p -> Double? in
+            guard let raw = p.raw, let date = ChartDate.parse(p.date), date >= cutoff, date <= today else { return nil }
+            return raw
+        }
         guard values.count >= 7 else { return nil }
         return values.reduce(0, +) / Double(values.count)
     }
