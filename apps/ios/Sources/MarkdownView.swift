@@ -301,43 +301,29 @@ private struct MarkdownTableView: View {
         index < row.count ? row[index] : ""
     }
 
-    /// A wide table's first column is usually a value ("45%"), not a title —
-    /// without the header it reads as an orphaned number. Row labels (a date,
-    /// or plain text with no digits, e.g. a metric name) already read fine on
-    /// their own and stay plain.
+    /// A wide table's first column is usually a value ("45%" or "Low"), not a
+    /// title — without the header it reads as an orphaned cell, so always pair
+    /// it with its header label.
     @ViewBuilder
     private func firstColumnHeadline(_ row: [String]) -> some View {
-        let plain = MarkdownView.plain(cell(row, 0))
-        if MarkdownRowLabel.isRowLabel(plain) {
-            Text(plain)
+        let pair = MarkdownFirstColumn.display(header: MarkdownView.plain(header[0]), value: MarkdownView.plain(cell(row, 0)))
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(pair.label)
+                .font(Theme.FontStyle.sans(12.5))
+                .foregroundStyle(Theme.Palette.fg3)
+            Text(pair.value)
                 .font(Theme.FontStyle.sans(14, weight: .semibold))
                 .foregroundStyle(Theme.Palette.fg0)
-        } else {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(MarkdownView.plain(header[0]))
-                    .font(Theme.FontStyle.sans(12.5))
-                    .foregroundStyle(Theme.Palette.fg3)
-                Text(plain)
-                    .font(Theme.FontStyle.sans(14, weight: .semibold))
-                    .foregroundStyle(Theme.Palette.fg0)
-            }
         }
     }
 }
 
-/// Pure classifier for a wide markdown table's first column, factored out so
-/// it can be unit tested without instantiating `MarkdownTableView`.
-enum MarkdownRowLabel {
-    static func isRowLabel(_ text: String) -> Bool {
-        guard !text.isEmpty else { return true }
-        if ChartDate.parse(text) != nil { return true }
-        if text.range(
-            of: #"^[A-Za-z]{3,9}\.?\s+\d{1,2}(\s*[–—-]\s*\d{1,2})?$"#,
-            options: .regularExpression
-        ) != nil {
-            return true
-        }
-        return !text.contains { $0.isNumber }
+/// The first column of a wide table always pairs its value with the header —
+/// factored out so the "always labeled" rule (no row-label heuristic that
+/// could hide it) is testable without instantiating `MarkdownTableView`.
+enum MarkdownFirstColumn {
+    static func display(header: String, value: String) -> (label: String, value: String) {
+        (header, value)
     }
 }
 
@@ -517,6 +503,12 @@ enum MarkdownBlock: Hashable {
         var i = 0
         while i < chars.count {
             let c = chars[i]
+            if c == "\\", i + 1 < chars.count, chars[i + 1] == "\\" {
+                current.append("\\")
+                current.append("\\")
+                i += 2
+                continue
+            }
             if c == "\\", i + 1 < chars.count, chars[i + 1] == "|" {
                 current.append("|")
                 i += 2

@@ -176,9 +176,6 @@ enum CoachNumber {
     /// domain span), not the raw magnitude, so a tight domain like 100...101
     /// still prints distinct ticks instead of duplicate rounded integers.
     static func axis(_ value: Double, domain: ClosedRange<Double>) -> String {
-        if abs(value) >= 10_000 {
-            return (value / 1_000).formatted(.number.precision(.fractionLength(0))) + "k"
-        }
         let step = (domain.upperBound - domain.lowerBound) / 3
         let digits = value.rounded() == value || step >= 1 ? 0 : (step >= 0.1 ? 1 : 2)
         return value.formatted(.number.precision(.fractionLength(digits)))
@@ -216,15 +213,21 @@ enum CoachSeriesEncoding {
         Theme.Palette.respiration
     ]
 
+    /// Dash patterns for secondary series only — solid is reserved for the
+    /// primary series so a secondary line is never mistaken for it.
     static let dashes: [[CGFloat]] = [
-        [],
         [5, 3],
         [1, 3],
         [8, 3, 2, 3]
     ]
 
-    static func color(at index: Int) -> Color {
-        colors[((index % colors.count) + colors.count) % colors.count]
+    /// Picks a color for a secondary series, excluding the primary's accent
+    /// color from the candidate pool first so the first secondary series
+    /// never lands on the same color as the primary.
+    static func color(at index: Int, excluding accent: Color) -> Color {
+        let candidates = colors.filter { $0 != accent }
+        let pool = candidates.isEmpty ? colors : candidates
+        return pool[((index % pool.count) + pool.count) % pool.count]
     }
 
     static func dash(at index: Int) -> [CGFloat] {
@@ -347,7 +350,7 @@ struct CoachChartCard: View {
     }
 
     private func secondaryColor(for seriesIndex: Int) -> Color {
-        CoachSeriesEncoding.color(at: secondaryEncodingIndex(for: seriesIndex))
+        CoachSeriesEncoding.color(at: secondaryEncodingIndex(for: seriesIndex), excluding: accent)
     }
 
     private func secondaryDash(for seriesIndex: Int) -> [CGFloat] {

@@ -232,7 +232,13 @@ private struct CoachCardLabel: View {
 enum CoachUnitDisplay {
     static func shows(unit: String, displayValue: String) -> Bool {
         guard !unit.isEmpty else { return false }
-        return !displayValue.localizedCaseInsensitiveContains(unit)
+        let escaped = NSRegularExpression.escapedPattern(for: unit)
+        let pattern = "(?<!\\p{L})\(escaped)(?!\\p{L})"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return !displayValue.localizedCaseInsensitiveContains(unit)
+        }
+        let range = NSRange(displayValue.startIndex..<displayValue.endIndex, in: displayValue)
+        return regex.firstMatch(in: displayValue, options: [], range: range) == nil
     }
 }
 
