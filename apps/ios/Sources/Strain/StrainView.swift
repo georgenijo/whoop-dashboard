@@ -2,62 +2,39 @@ import SwiftUI
 
 struct StrainView: View {
     @Environment(\.api) private var api
-    @State private var range: DateRange = .d30
-    @State private var phase: Phase = .loading
+    @State private var range: DateRange
+    @State private var state = TrendsCardState<StrainPayload>()
     /// Bumped by every load (range change, pull-to-refresh, Retry); only the
     /// newest request may commit, so an older refresh can't overwrite a new range.
     @State private var loadGeneration = 0
 
-    enum Phase {
-        case loading
-        case loaded(StrainPayload)
-        case error(String)
+    init(initialRange: DateRange = .d30) {
+        _range = State(initialValue: initialRange)
     }
 
     var body: some View {
         content
-            .safeAreaInset(edge: .top, spacing: 0) {
-                RangePicker(selection: $range)
-                    .padding(.horizontal, Theme.Spacing.md)
-                    .padding(.vertical, Theme.Spacing.xs)
-                    .background(Theme.Palette.bg0.opacity(0.92))
-            }
+            .safeAreaInset(edge: .top, spacing: 0) { TrendsRangeBar(range: $range) }
             .navigationTitle("Strain")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.visible, for: .navigationBar)
             .toolbarBackground(.hidden, for: .navigationBar)
-            .task(id: range) { await load(showSpinner: true) }
-            .refreshable { await load(showSpinner: false) }
+            .task(id: range) { await load() }
+            .refreshable { await load() }
     }
 
     @ViewBuilder
     private var content: some View {
-        switch phase {
+        switch state.phase {
         case .loading:
-            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            TrendsDetailLoading(titles: ["Strain", "Activity", "Avg heart rate"])
+        case .failed(let message):
+            TrendsDetailError(title: "Strain", message: message) { Task { await load() } }
         case .loaded(let payload):
             ScrollView {
                 VStack(spacing: Theme.Spacing.sm) {
-                    StrainHeroView(score: payload.todayStrain, label: payload.rangeLabel)
-                    TodayKpisView(today: payload.today)
-                    if !payload.today.workouts.isEmpty {
-                        TodayWorkoutsListView(workouts: payload.today.workouts)
-                    }
-                    NavigationLink {
-                        WorkoutsView()
-                            .toolbarBackground(.hidden, for: .navigationBar)
-                    } label: {
-                        AllWorkoutsRow()
-                    }
-                    .buttonStyle(.plain)
-                    TrendChartView(
-                        title: "Daily strain",
-                        unit: "",
-                        colorHex: "#ffaa00",
-                        points: payload.strainTrend,
-                        style: .bars,
-                        precision: 1
-                    )
+                    StrainHeroCard(payload: payload)
+                    StrainTodayCard(today: payload.today, range: range)
                     TrendChartView(
                         title: "Avg heart rate",
                         unit: "bpm",
@@ -68,154 +45,152 @@ struct StrainView: View {
                 .padding(Theme.Spacing.md)
             }
             .scrollContentBackground(.hidden)
-        case .error(let msg):
-            VStack(spacing: 12) {
-                Text(msg)
-                    .font(Theme.FontStyle.sans(12))
-                    .foregroundStyle(Theme.Palette.fg2)
-                Button("Retry") { Task { await load(showSpinner: true) } }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Theme.Palette.brandStrain)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
-
     @MainActor
-    private func load(showSpinner: Bool) async {
+    private func load() async {
         loadGeneration += 1
         let generation = loadGeneration
-        let hadLoaded: Bool
-        if case .loaded = phase { hadLoaded = true } else { hadLoaded = false }
-        if showSpinner, !hadLoaded { phase = .loading }
+        let range = range
+        state.beginLoad()
         do {
             let payload = try await StrainService(api: api).load(range: range)
             guard generation == loadGeneration else { return }
-            phase = .loaded(payload)
-        } catch APIError.unauthorized {
-            if !hadLoaded, generation == loadGeneration { phase = .error("Session expired. Sign in again.") }
-        } catch APIError.network(let err) {
-            if !hadLoaded, generation == loadGeneration { phase = .error("Network error: \(err.localizedDescription)") }
-        } catch APIError.serverError(let code) {
-            if !hadLoaded, generation == loadGeneration { phase = .error("Server error (\(code))") }
+            state.succeed(payload, range: range)
         } catch {
-            if !hadLoaded, generation == loadGeneration { phase = .error("Could not load") }
+            guard generation == loadGeneration, !Task.isCancelled else { return }
+            state.fail(TrendsLoadError.describe(error), range: range)
         }
     }
 }
 
-private struct StrainHeroView: View {
-    let score: Double?
-    let label: String
+/// The single place the latest strain appears: headline and trend from the
+/// chart, plus where it sits on Whoop's 0–21 scale.
+private struct StrainHeroCard: View {
+    let payload: StrainPayload
+
+    private var tile: KPITile? { payload.kpi.first { $0.key == .strain } }
+    private var latestDate: String? { payload.strainTrend.last(where: { $0.raw != nil })?.date }
 
     var body: some View {
-        VStack(spacing: 6) {
-            Text("STRAIN")
-                .font(Theme.FontStyle.sans(10, weight: .semibold))
-                .tracking(1.4)
-                .foregroundStyle(Theme.Palette.fg2)
-
-            ZStack {
-                if let score {
-                    Text(String(format: "%.1f", score))
-                        .font(Theme.FontStyle.display(80, weight: .medium))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color(hex: "#ffd166"), Color(hex: "#ffaa00"), Color(hex: "#ff8800")],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .monospacedDigit()
-                } else {
-                    Text("—")
-                        .font(Theme.FontStyle.display(80, weight: .medium))
-                        .foregroundStyle(Theme.Palette.fg2)
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            MetricChart(
+                title: "Strain",
+                unit: "",
+                accent: Theme.Palette.strain,
+                points: payload.strainTrend,
+                style: .bars,
+                precision: 1,
+                yDomain: 0 ... 21,
+                height: 190
+            )
+            if let score = tile?.value {
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("\(TrendsStats.freshness(dateKey: latestDate)) · \(StrainBand.zone(score))")
+                            .font(Theme.FontStyle.sans(15, weight: .semibold))
+                            .foregroundStyle(Theme.Palette.fg1)
+                        Spacer(minLength: 0)
+                        TrendsDeltaLabel(delta: tile?.delta)
+                    }
+                    StrainBand(score: score)
+                }
+                .padding(.top, Theme.Spacing.sm)
+                .overlay(alignment: .top) {
+                    Rectangle().fill(Theme.Palette.borderSubtle).frame(height: 1)
                 }
             }
-
-            Text("OF 21")
-                .font(Theme.FontStyle.mono(10))
-                .tracking(1.4)
-                .foregroundStyle(Theme.Palette.fg3)
-
-            if let score {
-                StrainBand(score: score)
-                    .padding(.top, 14)
-            }
         }
-        .frame(maxWidth: .infinity)
-        .glassCard(tint: .strain, padding: Theme.Spacing.lg)
+        .glassCard(tint: .strain, padding: Theme.Spacing.md)
     }
 }
 
 private struct StrainBand: View {
     let score: Double
 
-    var body: some View {
-        VStack(spacing: 8) {
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [Theme.Palette.recovery, Theme.Palette.warning, Theme.Palette.danger],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(height: 6)
-
-                GeometryReader { geo in
-                    Circle()
-                        .fill(Theme.Palette.fg0)
-                        .frame(width: 14, height: 14)
-                        .shadow(color: Color.black.opacity(0.5), radius: 4, y: 2)
-                        .shadow(color: Theme.Palette.warning.opacity(0.7), radius: 6)
-                        .offset(x: max(0, min(geo.size.width - 14, geo.size.width * CGFloat(score / 21) - 7)),
-                                y: -4)
-                }
-                .frame(height: 6)
-            }
-            HStack {
-                Text("0").foregroundStyle(Theme.Palette.fg3)
-                Spacer()
-                Text("10").foregroundStyle(Theme.Palette.fg3)
-                Spacer()
-                Text("15").foregroundStyle(Theme.Palette.fg3)
-                Spacer()
-                Text("18").foregroundStyle(Theme.Palette.fg3)
-                Spacer()
-                Text("21").foregroundStyle(Theme.Palette.fg3)
-            }
-            .font(Theme.FontStyle.mono(9.5))
+    static func zone(_ score: Double) -> String {
+        switch score {
+        case ..<10: return "Light"
+        case ..<14: return "Moderate"
+        case ..<18: return "High"
+        default: return "All out"
         }
+    }
+
+    private static let knob: CGFloat = 14
+
+    /// Knob centre and tick labels share one mapping: value/21 across the
+    /// track, inset by the knob radius so both ends stay on screen.
+    private static func x(_ value: Double, width: CGFloat) -> CGFloat {
+        knob / 2 + (width - knob) * CGFloat(TrendsStrainScale.fraction(value))
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            ZStack(alignment: .topLeading) {
+                Capsule()
+                    .fill(LinearGradient(colors: [Theme.Palette.recovery, Theme.Palette.warning, Theme.Palette.danger],
+                                         startPoint: .leading, endPoint: .trailing))
+                    .frame(width: w - Self.knob, height: 6)
+                    .position(x: w / 2, y: Self.knob / 2)
+                Circle()
+                    .fill(Theme.Palette.fg0)
+                    .frame(width: Self.knob, height: Self.knob)
+                    .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
+                    .position(x: Self.x(score, width: w), y: Self.knob / 2)
+                ForEach(TrendsStrainScale.ticks, id: \.self) { tick in
+                    Text("\(Int(tick))")
+                        .font(Theme.FontStyle.mono(11))
+                        .foregroundStyle(Theme.Palette.fg3)
+                        .fixedSize()
+                        .position(x: Self.x(tick, width: w), y: Self.knob + 14)
+                }
+            }
+        }
+        .frame(height: 36)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Strain scale")
+        .accessibilityValue(String(format: "%.1f of 21", score))
     }
 }
 
-private struct AllWorkoutsRow: View {
+private struct StrainTodayCard: View {
+    let today: StrainPayload.Today
+    let range: DateRange
+
     var body: some View {
-        HStack {
-            Image(systemName: "list.bullet.rectangle")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Theme.Palette.strain)
-                .frame(width: 28)
-            Text("All workouts")
-                .font(Theme.FontStyle.sans(13.5, weight: .medium))
-                .foregroundStyle(Theme.Palette.fg0)
-            Spacer()
-            Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Theme.Palette.fg3)
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            TrendsCardLabel(TrendsStats.freshness(dateKey: today.date),
+                            trailing: "\(today.workoutCount) workout\(today.workoutCount == 1 ? "" : "s")")
+            TodayKpisView(today: today)
+            if !today.workouts.isEmpty {
+                TodayWorkoutsListView(workouts: today.workouts)
+                    .padding(.top, 4)
+                    .overlay(alignment: .top) {
+                        Rectangle().fill(Theme.Palette.borderSubtle).frame(height: 1)
+                    }
+            }
+            NavigationLink {
+                WorkoutsView(initialRange: range)
+            } label: {
+                HStack {
+                    Text("All workouts")
+                        .font(Theme.FontStyle.sans(15, weight: .medium))
+                        .foregroundStyle(Theme.Palette.fg0)
+                    Spacer()
+                    TrendsChevron()
+                }
+                .frame(minHeight: 44)
+                .padding(.horizontal, Theme.Spacing.sm)
+                .background(RoundedRectangle(cornerRadius: Theme.Radius.lg).fill(Theme.Palette.bg3.opacity(0.7)))
+                .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.lg))
+            }
+            .buttonStyle(TrendsCardPressStyle())
         }
         .glassCard(padding: Theme.Spacing.md)
     }
 }
 
-private extension StrainPayload {
-    var todayStrain: Double? {
-        kpi.first(where: { $0.key == .strain })?.value
-    }
-}
-
-#Preview { StrainView() }
+#Preview { NavigationStack { StrainView() } }

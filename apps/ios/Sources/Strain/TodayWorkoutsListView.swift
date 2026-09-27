@@ -4,91 +4,70 @@ struct TodayWorkoutsListView: View {
     let workouts: [StrainPayload.TodayWorkout]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("TODAY'S WORKOUTS")
-                .font(Theme.FontStyle.sans(10, weight: .semibold))
-                .tracking(1.4)
-                .foregroundStyle(Theme.Palette.fg2)
-                .padding(.bottom, 8)
-            VStack(spacing: 0) {
-                ForEach(workouts) { w in
-                    NavigationLink {
-                        WorkoutDetailView(id: w.id)
-                    } label: {
-                        WorkoutRow(workout: w)
-                    }
-                    .buttonStyle(.plain)
-                    if w.id != workouts.last?.id {
-                        Rectangle()
-                            .fill(Theme.Palette.borderSubtle)
-                            .frame(height: 1)
-                    }
+        VStack(spacing: 0) {
+            ForEach(workouts) { w in
+                NavigationLink {
+                    WorkoutDetailView(id: w.id)
+                } label: {
+                    WorkoutRow(workout: w)
+                }
+                .buttonStyle(TrendsCardPressStyle())
+                if w.id != workouts.last?.id {
+                    Rectangle()
+                        .fill(Theme.Palette.borderSubtle)
+                        .frame(height: 1)
+                        .padding(.leading, 48)
                 }
             }
         }
-        .glassCard(padding: Theme.Spacing.md)
     }
 }
 
 private struct WorkoutRow: View {
     let workout: StrainPayload.TodayWorkout
 
-    var body: some View {
-        HStack(spacing: 12) {
-            SportIcon(sport: workout.sport)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(workout.sport ?? "Workout")
-                    .font(Theme.FontStyle.sans(13.5, weight: .medium))
-                    .foregroundStyle(Theme.Palette.fg0)
-                if let start = workout.startTimeIso {
-                    Text(start)
-                        .font(Theme.FontStyle.mono(10.5))
-                        .foregroundStyle(Theme.Palette.fg3)
-                }
-            }
-            Spacer()
-            if let strain = workout.strain {
-                Text(String(format: "%.1f", strain))
-                    .font(Theme.FontStyle.display(18, weight: .medium))
-                    .foregroundStyle(Theme.Palette.strain)
-                    .monospacedDigit()
-            }
-            Image(systemName: "chevron.right")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Theme.Palette.fg3)
+    private var details: String {
+        var parts: [String] = []
+        if let time = TrendsFormat.timeOfDay(workout.startTimeIso) { parts.append(time) }
+        if let d = workout.durationSec { parts.append(TrendsFormat.hoursMinutes(seconds: d)) }
+        if let hr = workout.avgHr { parts.append("\(Int(hr.rounded())) bpm") }
+        if let m = workout.distanceM, m > 0 {
+            parts.append(Measurement(value: m / 1000, unit: UnitLength.kilometers)
+                .formatted(.measurement(width: .abbreviated, usage: .road)))
         }
-        .padding(.vertical, 10)
-        .contentShape(Rectangle())
+        return parts.joined(separator: " · ")
     }
-}
-
-private struct SportIcon: View {
-    let sport: String?
 
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color.white.opacity(0.04))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1)
-                )
-            Image(systemName: systemName)
+        HStack(spacing: Theme.Spacing.sm) {
+            Image(systemName: TrendsFormat.sportSymbol(workout.sport))
                 .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(Theme.Palette.fg1)
+                .frame(width: 36, height: 36)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.05)))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(TrendsFormat.sport(workout.sport))
+                    .font(Theme.FontStyle.sans(15, weight: .medium))
+                    .foregroundStyle(Theme.Palette.fg0)
+                if !details.isEmpty {
+                    Text(details)
+                        .font(Theme.FontStyle.mono(11))
+                        .foregroundStyle(Theme.Palette.fg3)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                }
+            }
+            Spacer(minLength: 8)
+            if let strain = workout.strain {
+                Text(String(format: "%.1f", strain))
+                    .font(Theme.FontStyle.mono(17, weight: .medium))
+                    .foregroundStyle(Theme.Palette.strain)
+            }
+            TrendsChevron()
         }
-        .frame(width: 36, height: 36)
-    }
-
-    private var systemName: String {
-        guard let s = sport?.lowercased() else { return "figure.run" }
-        if s.contains("run") { return "figure.run" }
-        if s.contains("cycle") || s.contains("bike") { return "bicycle" }
-        if s.contains("walk") || s.contains("hike") { return "figure.walk" }
-        if s.contains("weight") || s.contains("strength") || s.contains("lift") { return "dumbbell.fill" }
-        if s.contains("swim") { return "figure.pool.swim" }
-        if s.contains("yoga") { return "figure.yoga" }
-        if s.contains("row") { return "figure.rower" }
-        return "figure.run"
+        .padding(.vertical, 10)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 }

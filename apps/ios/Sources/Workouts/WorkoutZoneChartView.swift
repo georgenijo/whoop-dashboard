@@ -48,11 +48,11 @@ private struct ZoneRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(row.sport ?? "Workout")
+                Text(TrendsFormat.sport(row.sport))
                     .font(Theme.FontStyle.sans(12, weight: .medium))
                     .foregroundStyle(Theme.Palette.fg1)
                 Spacer()
-                Text(row.date)
+                Text(TrendsFormat.day(row.date))
                     .font(Theme.FontStyle.mono(10))
                     .foregroundStyle(Theme.Palette.fg3)
             }

@@ -1,129 +1,150 @@
 import SwiftUI
 
 struct RecoveryView: View {
+    enum Focus: Hashable { case score, hrv, rhr, spo2 }
+
     @Environment(\.api) private var api
-    @State private var range: DateRange = .d30
-    @State private var phase: Phase = .loading
+    @State private var range: DateRange
+    @State private var state = TrendsCardState<RecoveryPayload>()
     /// Bumped by every load (range change, pull-to-refresh, Retry); only the
     /// newest request may commit, so an older refresh can't overwrite a new range.
     @State private var loadGeneration = 0
+    @State private var didFocus = false
+    private let focus: Focus
 
-    enum Phase {
-        case loading
-        case loaded(RecoveryPayload)
-        case error(String)
+    init(initialRange: DateRange = .d30, focus: Focus = .score) {
+        _range = State(initialValue: initialRange)
+        self.focus = focus
     }
 
     var body: some View {
         content
-            .safeAreaInset(edge: .top, spacing: 0) {
-                RangePicker(selection: $range)
-                    .padding(.horizontal, Theme.Spacing.md)
-                    .padding(.vertical, Theme.Spacing.xs)
-                    .background(Theme.Palette.bg0.opacity(0.92))
-            }
+            .safeAreaInset(edge: .top, spacing: 0) { TrendsRangeBar(range: $range) }
             .navigationTitle("Recovery")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.visible, for: .navigationBar)
             .toolbarBackground(.hidden, for: .navigationBar)
-            .task(id: range) { await load(showSpinner: true) }
-            .refreshable { await load(showSpinner: false) }
+            .task(id: range) { await load() }
+            .refreshable { await load() }
     }
 
     @ViewBuilder
     private var content: some View {
-        switch phase {
+        switch state.phase {
         case .loading:
-            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            TrendsDetailLoading(titles: ["Recovery", "Latest signals", "HRV"])
+        case .failed(let message):
+            TrendsDetailError(title: "Recovery", message: message) { Task { await load() } }
         case .loaded(let payload):
-            ScrollView {
-                VStack(spacing: Theme.Spacing.sm) {
-                    RecoveryReceiptHeroView(
-                        score: payload.recoveryScoreFromKPI,
-                        timestampLabel: payload.rangeLabel,
-                        factors: payload.receiptFactors
-                    )
-                    TrendChartView(
-                        title: "Recovery score",
-                        unit: "%",
-                        colorHex: "#00d4aa",
-                        points: payload.recoveryTrend,
-                        yDomain: 0 ... 100
-                    )
-                    HRVTrendCardView(trend: payload.hrvTrend)
-                    TrendChartView(
-                        title: "Resting heart rate",
-                        unit: "bpm",
-                        colorHex: "#ff6b6b",
-                        points: payload.rhrTrend
-                    )
-                    if let spo2 = payload.spo2Trend {
-                        Spo2TrendCardView(trend: spo2)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(spacing: Theme.Spacing.sm) {
+                        RecoveryHeroCard(payload: payload)
+                            .id(Focus.score)
+                        RecoveryFactorsCardView(factors: payload.factors)
+                        HRVTrendCardView(trend: payload.hrvTrend)
+                            .id(Focus.hrv)
+                        TrendChartView(
+                            title: "Resting heart rate",
+                            unit: "bpm",
+                            colorHex: "#ff6b6b",
+                            points: payload.rhrTrend
+                        )
+                        .id(Focus.rhr)
+                        if let spo2 = payload.spo2Trend {
+                            Spo2TrendCardView(trend: spo2)
+                                .id(Focus.spo2)
+                        }
                     }
+                    .padding(Theme.Spacing.md)
                 }
-                .padding(Theme.Spacing.md)
+                .scrollContentBackground(.hidden)
+                .task {
+                    guard !didFocus else { return }
+                    didFocus = true
+                    guard focus != .score else { return }
+                    try? await Task.sleep(for: .milliseconds(120))
+                    withAnimation(.snappy) { proxy.scrollTo(focus, anchor: .top) }
+                }
             }
-            .scrollContentBackground(.hidden)
-        case .error(let msg):
-            VStack(spacing: 12) {
-                Text(msg)
-                    .font(Theme.FontStyle.sans(12))
-                    .foregroundStyle(Theme.Palette.fg2)
-                Button("Retry") { Task { await load(showSpinner: true) } }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Theme.Palette.brandStrain)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
-
     @MainActor
-    private func load(showSpinner: Bool) async {
+    private func load() async {
         loadGeneration += 1
         let generation = loadGeneration
-        let hadLoaded: Bool
-        if case .loaded = phase { hadLoaded = true } else { hadLoaded = false }
-        if showSpinner, !hadLoaded { phase = .loading }
+        let range = range
+        state.beginLoad()
         do {
             let payload = try await RecoveryService(api: api).load(range: range)
             guard generation == loadGeneration else { return }
-            phase = .loaded(payload)
-        } catch APIError.unauthorized {
-            if !hadLoaded, generation == loadGeneration { phase = .error("Session expired. Sign in again.") }
-        } catch APIError.network(let err) {
-            if !hadLoaded, generation == loadGeneration { phase = .error("Network error: \(err.localizedDescription)") }
-        } catch APIError.serverError(let code) {
-            if !hadLoaded, generation == loadGeneration { phase = .error("Server error (\(code))") }
+            state.succeed(payload, range: range)
         } catch {
-            if !hadLoaded, generation == loadGeneration { phase = .error("Could not load") }
+            guard generation == loadGeneration, !Task.isCancelled else { return }
+            state.fail(TrendsLoadError.describe(error), range: range)
         }
     }
 }
 
-private extension RecoveryPayload {
-    var recoveryScoreFromKPI: Double? {
-        kpi.first(where: { $0.key == .recovery })?.value
-    }
+/// The one place the recovery score appears: headline, zone, guidance, trend.
+private struct RecoveryHeroCard: View {
+    let payload: RecoveryPayload
 
-    var receiptFactors: [RecoveryReceiptHeroView.Factor] {
-        kpi.filter { $0.key != .recovery }.map { tile in
-            let direction: RecoveryReceiptHeroView.Factor.Direction = {
-                switch tile.delta?.dir {
-                case .up: return .up
-                case .down: return tile.key == .rhr ? .up : .down
-                case .flat: return .flat
-                case .none: return .neutral
+    private var today: KPITile? { payload.kpi.first { $0.key == .recovery } }
+    private var latestDate: String? { payload.recoveryTrend.last(where: { $0.raw != nil })?.date }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            MetricChart(
+                title: "Recovery",
+                unit: "%",
+                accent: Theme.Palette.recovery,
+                points: payload.recoveryTrend,
+                yDomain: 0 ... 100,
+                height: 190
+            )
+            if let score = today?.value {
+                let zone = RecoveryZone(score: score)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: Theme.Spacing.xs) {
+                        Circle()
+                            .fill(zone.color)
+                            .frame(width: 7, height: 7)
+                        Text("\(TrendsStats.freshness(dateKey: latestDate)) · \(zone.label)")
+                            .font(Theme.FontStyle.sans(15, weight: .semibold))
+                            .foregroundStyle(zone.color)
+                        Spacer(minLength: 0)
+                        TrendsDeltaLabel(delta: today?.delta)
+                    }
+                    Text(zone.guidance)
+                        .font(Theme.FontStyle.sans(15))
+                        .foregroundStyle(Theme.Palette.fg1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-            }()
-            let valueLabel: String = {
+                .padding(.top, Theme.Spacing.sm)
+                .overlay(alignment: .top) {
+                    Rectangle().fill(Theme.Palette.borderSubtle).frame(height: 1)
+                }
+            }
+        }
+        .glassCard(tint: .recovery, padding: Theme.Spacing.md)
+    }
+}
+
+private extension RecoveryPayload {
+    var factors: [RecoveryFactorsCardView.Factor] {
+        kpi.filter { $0.key != .recovery }.map { tile in
+            let direction = RecoveryFactorsCardView.Factor.Direction(api: tile.delta?.dir)
+            let value: String = {
                 guard let v = tile.value else { return "—" }
-                let formatted = String(format: "%.\(tile.precision)f", v)
+                if tile.key == .sleep { return TrendsFormat.hoursMinutes(hours: v) }
+                let formatted = v.formatted(.number.precision(.fractionLength(tile.precision)))
                 return tile.unit.isEmpty ? formatted : "\(formatted) \(tile.unit)"
             }()
-            return RecoveryReceiptHeroView.Factor(
+            return .init(
                 label: tile.label,
-                value: valueLabel,
+                value: value,
                 delta: tile.delta?.label,
                 direction: direction,
                 color: Color(hex: tile.colorHex)
@@ -132,4 +153,4 @@ private extension RecoveryPayload {
     }
 }
 
-#Preview { RecoveryView() }
+#Preview { NavigationStack { RecoveryView() } }
