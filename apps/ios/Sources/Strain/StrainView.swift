@@ -4,7 +4,6 @@ struct StrainView: View {
     @Environment(\.api) private var api
     @State private var range: DateRange = .d30
     @State private var phase: Phase = .loading
-    @State private var isLoading = false
 
     enum Phase {
         case loading
@@ -13,15 +12,19 @@ struct StrainView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                PageHeader("Strain") { rangeMenu }
-                content
+        content
+            .safeAreaInset(edge: .top, spacing: 0) {
+                RangePicker(selection: $range)
+                    .padding(.horizontal, Theme.Spacing.md)
+                    .padding(.vertical, Theme.Spacing.xs)
+                    .background(Theme.Palette.bg0.opacity(0.92))
             }
-            .toolbar(.hidden, for: .navigationBar)
+            .navigationTitle("Strain")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.visible, for: .navigationBar)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .task(id: range) { await load(showSpinner: true) }
             .refreshable { await load(showSpinner: false) }
-        }
-        .task { await load(showSpinner: true) }
     }
 
     @ViewBuilder
@@ -46,21 +49,17 @@ struct StrainView: View {
                     .buttonStyle(.plain)
                     TrendChartView(
                         title: "Daily strain",
-                        subtitle: payload.rangeLabel,
-                        unit: "score",
+                        unit: "",
                         colorHex: "#ffaa00",
                         points: payload.strainTrend,
-                        showRollingToggle: true,
-                        enableMa30: false
+                        style: .bars,
+                        precision: 1
                     )
                     TrendChartView(
                         title: "Avg heart rate",
-                        subtitle: payload.rangeLabel,
                         unit: "bpm",
                         colorHex: "#ff6b6b",
-                        points: payload.avgHrTrend,
-                        showRollingToggle: true,
-                        enableMa30: false
+                        points: payload.avgHrTrend
                     )
                 }
                 .padding(Theme.Spacing.md)
@@ -79,46 +78,24 @@ struct StrainView: View {
         }
     }
 
-    private var rangeMenu: some View {
-        Menu {
-            ForEach(DateRange.allCases) { r in
-                Button {
-                    range = r
-                    Task { await load(showSpinner: true) }
-                } label: {
-                    Label(r.label, systemImage: range == r ? "checkmark" : "")
-                }
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Text(range.label)
-                    .font(Theme.FontStyle.mono(11, weight: .medium))
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
-            }
-            .foregroundStyle(Theme.Palette.brandStrain)
-        }
-    }
 
     @MainActor
     private func load(showSpinner: Bool) async {
-        guard !isLoading else { return }
-        isLoading = true
-        defer { isLoading = false }
         let hadLoaded: Bool
         if case .loaded = phase { hadLoaded = true } else { hadLoaded = false }
         if showSpinner, !hadLoaded { phase = .loading }
         do {
             let payload = try await StrainService(api: api).load(range: range)
+            guard !Task.isCancelled else { return }
             phase = .loaded(payload)
         } catch APIError.unauthorized {
-            if !hadLoaded { phase = .error("Session expired. Sign in again.") }
+            if !hadLoaded, !Task.isCancelled { phase = .error("Session expired. Sign in again.") }
         } catch APIError.network(let err) {
-            if !hadLoaded { phase = .error("Network error: \(err.localizedDescription)") }
+            if !hadLoaded, !Task.isCancelled { phase = .error("Network error: \(err.localizedDescription)") }
         } catch APIError.serverError(let code) {
-            if !hadLoaded { phase = .error("Server error (\(code))") }
+            if !hadLoaded, !Task.isCancelled { phase = .error("Server error (\(code))") }
         } catch {
-            if !hadLoaded { phase = .error("Could not load") }
+            if !hadLoaded, !Task.isCancelled { phase = .error("Could not load") }
         }
     }
 }

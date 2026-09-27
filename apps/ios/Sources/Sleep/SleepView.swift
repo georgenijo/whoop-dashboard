@@ -4,7 +4,6 @@ struct SleepView: View {
     @Environment(\.api) private var api
     @State private var range: DateRange = .d30
     @State private var phase: Phase = .loading
-    @State private var isLoading = false
 
     enum Phase {
         case loading
@@ -13,15 +12,19 @@ struct SleepView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                PageHeader("Sleep") { rangeMenu }
-                content
+        content
+            .safeAreaInset(edge: .top, spacing: 0) {
+                RangePicker(selection: $range)
+                    .padding(.horizontal, Theme.Spacing.md)
+                    .padding(.vertical, Theme.Spacing.xs)
+                    .background(Theme.Palette.bg0.opacity(0.92))
             }
-            .toolbar(.hidden, for: .navigationBar)
+            .navigationTitle("Sleep")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.visible, for: .navigationBar)
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .task(id: range) { await load(showSpinner: true) }
             .refreshable { await load(showSpinner: false) }
-        }
-        .task { await load(showSpinner: true) }
     }
 
     @ViewBuilder
@@ -41,23 +44,19 @@ struct SleepView: View {
                     }
                     TrendChartView(
                         title: "Duration",
-                        subtitle: payload.rangeLabel,
                         unit: "h",
-                        colorHex: "#0055ff",
+                        colorHex: "#4d7cff",
                         points: payload.durationTrend.map {
                             TrendPoint(date: $0.date, raw: $0.rawHours, ma7: $0.ma7, ma30: nil)
                         },
-                        showRollingToggle: true,
-                        enableMa30: false
+                        style: .bars,
+                        precision: 1
                     )
                     TrendChartView(
                         title: "Performance",
-                        subtitle: payload.rangeLabel,
                         unit: "%",
                         colorHex: "#7b61ff",
-                        points: payload.performanceTrend,
-                        showRollingToggle: true,
-                        enableMa30: false
+                        points: payload.performanceTrend
                     )
                 }
                 .padding(Theme.Spacing.md)
@@ -76,46 +75,24 @@ struct SleepView: View {
         }
     }
 
-    private var rangeMenu: some View {
-        Menu {
-            ForEach(DateRange.allCases) { r in
-                Button {
-                    range = r
-                    Task { await load(showSpinner: true) }
-                } label: {
-                    Label(r.label, systemImage: range == r ? "checkmark" : "")
-                }
-            }
-        } label: {
-            HStack(spacing: 4) {
-                Text(range.label)
-                    .font(Theme.FontStyle.mono(11, weight: .medium))
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
-            }
-            .foregroundStyle(Theme.Palette.brandStrain)
-        }
-    }
 
     @MainActor
     private func load(showSpinner: Bool) async {
-        guard !isLoading else { return }
-        isLoading = true
-        defer { isLoading = false }
         let hadLoaded: Bool
         if case .loaded = phase { hadLoaded = true } else { hadLoaded = false }
         if showSpinner, !hadLoaded { phase = .loading }
         do {
             let payload = try await SleepService(api: api).load(range: range)
+            guard !Task.isCancelled else { return }
             phase = .loaded(payload)
         } catch APIError.unauthorized {
-            if !hadLoaded { phase = .error("Session expired. Sign in again.") }
+            if !hadLoaded, !Task.isCancelled { phase = .error("Session expired. Sign in again.") }
         } catch APIError.network(let err) {
-            if !hadLoaded { phase = .error("Network error: \(err.localizedDescription)") }
+            if !hadLoaded, !Task.isCancelled { phase = .error("Network error: \(err.localizedDescription)") }
         } catch APIError.serverError(let code) {
-            if !hadLoaded { phase = .error("Server error (\(code))") }
+            if !hadLoaded, !Task.isCancelled { phase = .error("Server error (\(code))") }
         } catch {
-            if !hadLoaded { phase = .error("Could not load") }
+            if !hadLoaded, !Task.isCancelled { phase = .error("Could not load") }
         }
     }
 }
