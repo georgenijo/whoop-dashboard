@@ -10,7 +10,7 @@ final class StatsFormatTests: XCTestCase {
 
     func testChangeEdgeCases() {
         XCTAssertEqual(StatsFormat.change(current: 5, prior: 0), .new)
-        XCTAssertNil(StatsFormat.change(current: 0, prior: 0))
+        XCTAssertEqual(StatsFormat.change(current: 0, prior: 0), .flat)
         XCTAssertNil(StatsFormat.change(current: nil, prior: 10))
         XCTAssertEqual(StatsFormat.change(current: 120, prior: 10), .multiple(12))
         XCTAssertEqual(StatsFormat.Change.percent(-52).text, "−52%")

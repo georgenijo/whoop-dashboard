@@ -80,7 +80,8 @@ enum StatsFormat {
     /// metric's own unit, not a percentage, so the ratio is derived here.
     static func change(current: Double?, prior: Double?) -> Change? {
         guard let current, let prior else { return nil }
-        if prior <= 0 { return current > 0 ? .new : nil }
+        // 0 → 0 is unchanged, not unknown: it counts as even in the summary.
+        if prior <= 0 { return current > 0 ? .new : .flat }
         let pct = (current - prior) / prior * 100
         if pct >= 900 { return .multiple(Int((current / prior).rounded())) }
         // Round only the displayed magnitude: −0.1% must not read as "+0%" ahead.
