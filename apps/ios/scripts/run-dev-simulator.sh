@@ -69,11 +69,16 @@ def base64url(value: bytes) -> str:
 
 
 def read_env_value(path: pathlib.Path, key: str) -> str:
-    # Accepts dotenv lines (KEY=value, export KEY=value) and systemd
-    # drop-in lines (Environment="KEY=value" / Environment=KEY=value).
-    pattern = re.compile(rf'^(?:export\s+|Environment="?)?{re.escape(key)}=(.*?)"?$')
+    # Accepts dotenv lines (KEY=value, export KEY=value, optionally quoted)
+    # and systemd drop-in lines (Environment="KEY=value" / Environment=KEY=value).
+    pattern = re.compile(rf"^(?:export\s+)?{re.escape(key)}=(.*)$")
     for raw_line in path.read_text().splitlines():
-        match = pattern.match(raw_line.strip())
+        line = raw_line.strip()
+        if line.startswith("Environment="):
+            line = line[len("Environment="):]
+            if len(line) >= 2 and line[0] == line[-1] == '"':
+                line = line[1:-1]
+        match = pattern.match(line)
         if not match:
             continue
         value = match.group(1).strip()

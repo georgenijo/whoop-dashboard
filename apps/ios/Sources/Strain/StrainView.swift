@@ -4,6 +4,9 @@ struct StrainView: View {
     @Environment(\.api) private var api
     @State private var range: DateRange = .d30
     @State private var phase: Phase = .loading
+    /// Bumped by every load (range change, pull-to-refresh, Retry); only the
+    /// newest request may commit, so an older refresh can't overwrite a new range.
+    @State private var loadGeneration = 0
 
     enum Phase {
         case loading
@@ -81,21 +84,23 @@ struct StrainView: View {
 
     @MainActor
     private func load(showSpinner: Bool) async {
+        loadGeneration += 1
+        let generation = loadGeneration
         let hadLoaded: Bool
         if case .loaded = phase { hadLoaded = true } else { hadLoaded = false }
         if showSpinner, !hadLoaded { phase = .loading }
         do {
             let payload = try await StrainService(api: api).load(range: range)
-            guard !Task.isCancelled else { return }
+            guard generation == loadGeneration else { return }
             phase = .loaded(payload)
         } catch APIError.unauthorized {
-            if !hadLoaded, !Task.isCancelled { phase = .error("Session expired. Sign in again.") }
+            if !hadLoaded, generation == loadGeneration { phase = .error("Session expired. Sign in again.") }
         } catch APIError.network(let err) {
-            if !hadLoaded, !Task.isCancelled { phase = .error("Network error: \(err.localizedDescription)") }
+            if !hadLoaded, generation == loadGeneration { phase = .error("Network error: \(err.localizedDescription)") }
         } catch APIError.serverError(let code) {
-            if !hadLoaded, !Task.isCancelled { phase = .error("Server error (\(code))") }
+            if !hadLoaded, generation == loadGeneration { phase = .error("Server error (\(code))") }
         } catch {
-            if !hadLoaded, !Task.isCancelled { phase = .error("Could not load") }
+            if !hadLoaded, generation == loadGeneration { phase = .error("Could not load") }
         }
     }
 }

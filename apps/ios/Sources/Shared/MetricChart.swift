@@ -94,6 +94,12 @@ struct MetricChart: View {
 
     private func focusDay(in days: [Day]) -> Day? {
         if let selectedDate {
+            // A bar spans its whole calendar day, so the finger anywhere over
+            // it selects that day; lines snap to the nearest point.
+            if style == .bars {
+                let day = Calendar.current.startOfDay(for: selectedDate)
+                return days.first { $0.date == day }
+            }
             return days.min { abs($0.date.timeIntervalSince(selectedDate)) < abs($1.date.timeIntervalSince(selectedDate)) }
         }
         return days.last(where: { $0.raw != nil })
@@ -167,7 +173,7 @@ struct MetricChart: View {
                     .foregroundStyle(Theme.Palette.borderDefault)
                 AxisValueLabel {
                     if let v = value.as(Double.self) {
-                        Text(axisLabel(v))
+                        Text(axisLabel(v, domain: domain))
                             .font(Theme.FontStyle.mono(10))
                             .foregroundStyle(Theme.Palette.fg3)
                     }
@@ -176,9 +182,6 @@ struct MetricChart: View {
         }
         .frame(height: height)
         .sensoryFeedback(.selection, trigger: focus?.date)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(title)
-        .accessibilityValue(accessibilitySummary(rawValues: rawValues, average: average))
     }
 
     @ChartContentBuilder
@@ -218,20 +221,35 @@ struct MetricChart: View {
                     .interpolationMethod(.monotone)
                     .foregroundStyle(areaGradient)
             }
-            LineMark(x: .value("Date", day.date),
-                     y: .value("7-day average", trend),
-                     series: .value("Series", "trend"))
-                .interpolationMethod(.monotone)
-                .foregroundStyle(style == .bars ? Theme.Palette.fg1 : accent)
-                .lineStyle(StrokeStyle(lineWidth: 2.25, lineCap: .round, lineJoin: .round))
+            if style == .bars {
+                LineMark(x: .value("Date", day.date, unit: .day),
+                         y: .value("7-day average", trend),
+                         series: .value("Series", "trend"))
+                    .interpolationMethod(.monotone)
+                    .foregroundStyle(Theme.Palette.fg1)
+                    .lineStyle(StrokeStyle(lineWidth: 2.25, lineCap: .round, lineJoin: .round))
+            } else {
+                LineMark(x: .value("Date", day.date),
+                         y: .value("7-day average", trend),
+                         series: .value("Series", "trend"))
+                    .interpolationMethod(.monotone)
+                    .foregroundStyle(accent)
+                    .lineStyle(StrokeStyle(lineWidth: 2.25, lineCap: .round, lineJoin: .round))
+            }
         }
     }
 
     @ChartContentBuilder
     private func selectionMarks(_ focus: Day) -> some ChartContent {
-        RuleMark(x: .value("Selected", focus.date))
-            .foregroundStyle(Theme.Palette.fg2.opacity(0.6))
-            .lineStyle(StrokeStyle(lineWidth: 1))
+        if style == .bars {
+            RuleMark(x: .value("Selected", focus.date, unit: .day))
+                .foregroundStyle(Theme.Palette.fg2.opacity(0.6))
+                .lineStyle(StrokeStyle(lineWidth: 1))
+        } else {
+            RuleMark(x: .value("Selected", focus.date))
+                .foregroundStyle(Theme.Palette.fg2.opacity(0.6))
+                .lineStyle(StrokeStyle(lineWidth: 1))
+        }
         if let raw = focus.raw, style == .line {
             PointMark(x: .value("Date", focus.date), y: .value(title, raw))
                 .symbolSize(90)
@@ -254,23 +272,24 @@ struct MetricChart: View {
         let lo = all.min() ?? 0
         let hi = all.max() ?? 1
         if style == .bars { return 0 ... max(hi * 1.08, 1) }
+        // Widen flat series symmetrically to a minimum span so the axis has
+        // distinct ticks instead of a sliver around one value.
         let span = max(hi - lo, max(abs(hi) * 0.05, 1))
-        let lower = lo - span * 0.12
-        return (lo >= 0 ? max(0, lower) : lower) ... hi + span * 0.12
+        let mid = (lo + hi) / 2
+        let lower = mid - span * 0.62
+        let upper = mid + span * 0.62
+        return (lo >= 0 ? max(0, lower) : lower) ... upper
     }
 
-    private func axisLabel(_ value: Double) -> String {
+    /// Axis precision follows tick spacing (~3 ticks), not the headline's
+    /// precision, so neighbouring ticks never print the same number.
+    private func axisLabel(_ value: Double, domain: ClosedRange<Double>) -> String {
         if abs(value) >= 10_000 {
             return (value / 1000).formatted(.number.precision(.fractionLength(0))) + "k"
         }
-        if let format { return format(value) }
-        let digits = value.rounded() == value ? 0 : precision
+        let step = (domain.upperBound - domain.lowerBound) / 3
+        let digits = value.rounded() == value || step >= 1 ? 0 : (step >= 0.1 ? 1 : 2)
         return value.formatted(.number.precision(.fractionLength(digits)))
-    }
-
-    private func accessibilitySummary(rawValues: [Double], average: Double) -> String {
-        guard let last = rawValues.last, let lo = rawValues.min(), let hi = rawValues.max() else { return "" }
-        return "Latest \(display(last)) \(unit). Average \(display(average)), range \(display(lo)) to \(display(hi))."
     }
 
     private var empty: some View {
