@@ -38,6 +38,20 @@ targets:
     sources:
       - path: Sources
       - path: Resources
+    # UIAppFonts has no INFOPLIST_KEY_* build setting, so the generated
+    # Info.plist silently dropped it and every Geist font fell back to SF.
+    # This partial plist is merged with the generated keys below.
+    info:
+      path: Info.plist
+      properties:
+        UIAppFonts:
+          - Geist-Regular.ttf
+          - Geist-Medium.ttf
+          - Geist-SemiBold.ttf
+          - Geist-Bold.ttf
+          - GeistMono-Regular.ttf
+          - GeistMono-Medium.ttf
+          - GeistMono-SemiBold.ttf
     entitlements:
       path: Coach.entitlements
       properties:
@@ -65,7 +79,6 @@ targets:
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         INFOPLIST_KEY_NSHealthShareUsageDescription: "Coach reads your workouts, heart rate, and step counts from Health to enrich your training stats."
         INFOPLIST_KEY_NSHealthUpdateUsageDescription: "Coach does not write to Health; this access is declared only because the HealthKit entitlement requires it."
-        INFOPLIST_KEY_UIAppFonts: "Geist-Regular.ttf Geist-Medium.ttf Geist-SemiBold.ttf Geist-Bold.ttf GeistMono-Regular.ttf GeistMono-Medium.ttf GeistMono-SemiBold.ttf"
   CoachTests:
     type: bundle.unit-test
     platform: iOS
