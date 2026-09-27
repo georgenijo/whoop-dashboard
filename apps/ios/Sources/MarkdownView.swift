@@ -276,9 +276,7 @@ private struct MarkdownTableView: View {
                     Divider().overlay(Theme.Palette.borderSubtle)
                 }
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(MarkdownView.plain(cell(row, 0)))
-                        .font(Theme.FontStyle.sans(14, weight: .semibold))
-                        .foregroundStyle(Theme.Palette.fg0)
+                    firstColumnHeadline(row)
                     ForEach(1..<header.count, id: \.self) { index in
                         HStack(alignment: .firstTextBaseline, spacing: 12) {
                             Text(MarkdownView.plain(header[index]))
@@ -301,6 +299,45 @@ private struct MarkdownTableView: View {
 
     private func cell(_ row: [String], _ index: Int) -> String {
         index < row.count ? row[index] : ""
+    }
+
+    /// A wide table's first column is usually a value ("45%"), not a title —
+    /// without the header it reads as an orphaned number. Row labels (a date,
+    /// or plain text with no digits, e.g. a metric name) already read fine on
+    /// their own and stay plain.
+    @ViewBuilder
+    private func firstColumnHeadline(_ row: [String]) -> some View {
+        let plain = MarkdownView.plain(cell(row, 0))
+        if MarkdownRowLabel.isRowLabel(plain) {
+            Text(plain)
+                .font(Theme.FontStyle.sans(14, weight: .semibold))
+                .foregroundStyle(Theme.Palette.fg0)
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(MarkdownView.plain(header[0]))
+                    .font(Theme.FontStyle.sans(12.5))
+                    .foregroundStyle(Theme.Palette.fg3)
+                Text(plain)
+                    .font(Theme.FontStyle.sans(14, weight: .semibold))
+                    .foregroundStyle(Theme.Palette.fg0)
+            }
+        }
+    }
+}
+
+/// Pure classifier for a wide markdown table's first column, factored out so
+/// it can be unit tested without instantiating `MarkdownTableView`.
+enum MarkdownRowLabel {
+    static func isRowLabel(_ text: String) -> Bool {
+        guard !text.isEmpty else { return true }
+        if ChartDate.parse(text) != nil { return true }
+        if text.range(
+            of: #"^[A-Za-z]{3,9}\.?\s+\d{1,2}(\s*[–—-]\s*\d{1,2})?$"#,
+            options: .regularExpression
+        ) != nil {
+            return true
+        }
+        return !text.contains { $0.isNumber }
     }
 }
 
@@ -446,18 +483,56 @@ enum MarkdownBlock: Hashable {
             !cell.isEmpty && cell.allSatisfy { $0 == "-" || $0 == ":" }
         }
         guard isSeparator, let header = cells.first, header.count >= 2 else { return nil }
-        let rows = Array(cells.dropFirst(2)).filter { !$0.isEmpty }
+        let rows = Array(cells.dropFirst(2))
+            .filter { !$0.isEmpty }
+            .map { normalizeRow($0, to: header.count) }
         guard !rows.isEmpty else { return nil }
         return .table(header: header, rows: rows)
     }
 
+    /// A row with more cells than the header must not silently drop the
+    /// overflow — merge the extra cells into the last column instead.
+    private static func normalizeRow(_ row: [String], to columnCount: Int) -> [String] {
+        guard row.count > columnCount, columnCount > 0 else { return row }
+        let head = Array(row.prefix(columnCount - 1))
+        let overflow = row[(columnCount - 1)...].joined(separator: " ")
+        return head + [overflow]
+    }
+
+    /// Splits a table row on unescaped `|` only, unescaping `\|` to a literal
+    /// pipe within cell text. A naive `components(separatedBy: "|")` split
+    /// also breaks on an author's intentionally escaped pipe.
     private static func splitRow(_ line: String) -> [String] {
-        var body = line.trimmingCharacters(in: .whitespaces)
-        if body.hasPrefix("|") { body.removeFirst() }
-        if body.hasSuffix("|") { body.removeLast() }
-        return body
-            .components(separatedBy: "|")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
+        let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+        var cells = splitOnUnescapedPipes(trimmedLine)
+        if cells.first == "" { cells.removeFirst() }
+        if cells.last == "" { cells.removeLast() }
+        return cells.map { $0.trimmingCharacters(in: .whitespaces) }
+    }
+
+    private static func splitOnUnescapedPipes(_ line: String) -> [String] {
+        var cells: [String] = []
+        var current = ""
+        let chars = Array(line)
+        var i = 0
+        while i < chars.count {
+            let c = chars[i]
+            if c == "\\", i + 1 < chars.count, chars[i + 1] == "|" {
+                current.append("|")
+                i += 2
+                continue
+            }
+            if c == "|" {
+                cells.append(current)
+                current = ""
+                i += 1
+                continue
+            }
+            current.append(c)
+            i += 1
+        }
+        cells.append(current)
+        return cells
     }
 
     private static func parseHeading(_ trimmed: String) -> (Int, String)? {

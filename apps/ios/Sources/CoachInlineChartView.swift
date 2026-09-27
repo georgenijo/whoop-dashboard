@@ -172,11 +172,72 @@ enum CoachNumber {
         return value.formatted(.number.precision(.fractionLength(0...digits)))
     }
 
-    static func axis(_ value: Double) -> String {
+    /// Mirrors `MetricChart.axisLabel`: precision follows tick spacing (the
+    /// domain span), not the raw magnitude, so a tight domain like 100...101
+    /// still prints distinct ticks instead of duplicate rounded integers.
+    static func axis(_ value: Double, domain: ClosedRange<Double>) -> String {
         if abs(value) >= 10_000 {
             return (value / 1_000).formatted(.number.precision(.fractionLength(0))) + "k"
         }
-        return format(value)
+        let step = (domain.upperBound - domain.lowerBound) / 3
+        let digits = value.rounded() == value || step >= 1 ? 0 : (step >= 0.1 ? 1 : 2)
+        return value.formatted(.number.precision(.fractionLength(digits)))
+    }
+}
+
+/// Pure helper for chart Y-domain math, factored out of `CoachChartCard` so
+/// negative-value handling can be unit tested without SwiftUI/Charts.
+enum CoachChartDomain {
+    static func range(lo: Double, hi: Double, hasBars: Bool) -> ClosedRange<Double> {
+        if hasBars {
+            let barLo = min(0, lo)
+            let barHi = max(0, hi)
+            if barLo == 0 {
+                return 0...max(barHi * 1.1, 1)
+            }
+            let span = max(barHi - barLo, 1)
+            return (barLo - span * 0.05)...(barHi + span * 0.1)
+        }
+        if lo >= 0 && lo < (hi - lo) * 0.25 {
+            return 0...max(hi * 1.1, 1)
+        }
+        let span = max(hi - lo, max(abs(hi) * 0.05, 1))
+        return (lo - span * 0.15)...(hi + span * 0.15)
+    }
+}
+
+/// Stable color/dash encodings for secondary chart series, shared by marks and legend.
+enum CoachSeriesEncoding {
+    static let colors: [Color] = [
+        Theme.Palette.info,
+        Theme.Palette.warning,
+        Theme.Palette.hrv,
+        Theme.Palette.rhr,
+        Theme.Palette.respiration
+    ]
+
+    static let dashes: [[CGFloat]] = [
+        [],
+        [5, 3],
+        [1, 3],
+        [8, 3, 2, 3]
+    ]
+
+    static func color(at index: Int) -> Color {
+        colors[((index % colors.count) + colors.count) % colors.count]
+    }
+
+    static func dash(at index: Int) -> [CGFloat] {
+        dashes[((index % dashes.count) + dashes.count) % dashes.count]
+    }
+
+    /// True when both neighbouring values are missing, so a line series would
+    /// otherwise draw nothing for this point.
+    static func isIsolated(values: [Double?], at index: Int) -> Bool {
+        guard values.indices.contains(index) else { return false }
+        let prevMissing = index == 0 || values[index - 1] == nil
+        let nextMissing = index == values.count - 1 || values[index + 1] == nil
+        return prevMissing && nextMissing
     }
 }
 
@@ -195,6 +256,9 @@ struct CoachChartCard: View {
         let index: Int
         let value: Double
         let isBar: Bool
+        /// True when both neighbouring points in the same series are missing,
+        /// so a line series would otherwise draw nothing for this value.
+        let isIsolated: Bool
         var id: String { "\(seriesId):\(index)" }
         var key: String { String(index) }
     }
@@ -255,7 +319,14 @@ struct CoachChartCard: View {
         block.series.enumerated().flatMap { seriesIndex, series in
             block.labels.indices.compactMap { index -> Mark? in
                 guard let v = value(series, index) else { return nil }
-                return Mark(series: seriesIndex, seriesId: series.id, index: index, value: v, isBar: series.kind == "bar")
+                return Mark(
+                    series: seriesIndex,
+                    seriesId: series.id,
+                    index: index,
+                    value: v,
+                    isBar: series.kind == "bar",
+                    isIsolated: CoachSeriesEncoding.isIsolated(values: series.values, at: index)
+                )
             }
         }
     }
@@ -265,11 +336,22 @@ struct CoachChartCard: View {
         let all = marks.map(\.value) + block.references.map(\.value)
         let lo = all.min() ?? 0
         let hi = all.max() ?? 1
-        if hasBars || (lo >= 0 && lo < (hi - lo) * 0.25) {
-            return 0...max(hi * 1.1, 1)
-        }
-        let span = max(hi - lo, max(abs(hi) * 0.05, 1))
-        return (lo - span * 0.15)...(hi + span * 0.15)
+        return CoachChartDomain.range(lo: lo, hi: hi, hasBars: hasBars)
+    }
+
+    /// Stable position of a non-primary series among the other series, used to
+    /// index into `CoachSeriesEncoding` so each secondary series (line or bar)
+    /// keeps the same color/dash across marks and legend.
+    private func secondaryEncodingIndex(for seriesIndex: Int) -> Int {
+        block.series.indices.filter { $0 != primaryIndex }.firstIndex(of: seriesIndex) ?? 0
+    }
+
+    private func secondaryColor(for seriesIndex: Int) -> Color {
+        CoachSeriesEncoding.color(at: secondaryEncodingIndex(for: seriesIndex))
+    }
+
+    private func secondaryDash(for seriesIndex: Int) -> [CGFloat] {
+        CoachSeriesEncoding.dash(at: secondaryEncodingIndex(for: seriesIndex))
     }
 
     // MARK: Header
@@ -400,6 +482,11 @@ struct CoachChartCard: View {
                     .interpolationMethod(.monotone)
                     .foregroundStyle(accent)
                     .lineStyle(StrokeStyle(lineWidth: 2.25, lineCap: .round, lineJoin: .round))
+                    if mark.isIsolated {
+                        PointMark(x: .value("Period", mark.key), y: .value("Value", mark.value))
+                            .symbolSize(36)
+                            .foregroundStyle(accent)
+                    }
                     if anomalies[mark.index] != nil {
                         PointMark(x: .value("Period", mark.key), y: .value("Value", mark.value))
                             .symbol(Circle().strokeBorder(lineWidth: 2))
@@ -413,8 +500,18 @@ struct CoachChartCard: View {
                         series: .value("Series", mark.seriesId)
                     )
                     .interpolationMethod(.monotone)
-                    .foregroundStyle(Theme.Palette.fg1.opacity(0.75))
-                    .lineStyle(StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                    .foregroundStyle(secondaryColor(for: mark.series))
+                    .lineStyle(StrokeStyle(
+                        lineWidth: 1.5,
+                        lineCap: .round,
+                        lineJoin: .round,
+                        dash: secondaryDash(for: mark.series)
+                    ))
+                    if mark.isIsolated {
+                        PointMark(x: .value("Period", mark.key), y: .value("Value", mark.value))
+                            .symbolSize(30)
+                            .foregroundStyle(secondaryColor(for: mark.series))
+                    }
                 }
             }
 
@@ -450,7 +547,7 @@ struct CoachChartCard: View {
                     .foregroundStyle(Theme.Palette.borderDefault)
                 AxisValueLabel {
                     if let v = value.as(Double.self) {
-                        Text(CoachNumber.axis(v))
+                        Text(CoachNumber.axis(v, domain: domain))
                             .font(Theme.FontStyle.mono(11))
                             .foregroundStyle(Theme.Palette.fg3)
                     }
@@ -480,7 +577,7 @@ struct CoachChartCard: View {
     }
 
     private func barColor(_ mark: Mark) -> Color {
-        mark.series == primaryIndex ? accent : Theme.Palette.fg2
+        mark.series == primaryIndex ? accent : secondaryColor(for: mark.series)
     }
 
     private func barOpacity(_ mark: Mark, selected: Int?, highlighted: Bool, dimmed: Bool) -> Double {
@@ -493,18 +590,19 @@ struct CoachChartCard: View {
 
     @ViewBuilder
     private var footnotes: some View {
-        let others = block.series.enumerated().filter { $0.offset != primaryIndex }.map(\.element)
+        let others = block.series.enumerated().filter { $0.offset != primaryIndex }
         let notes = anomalies.sorted { $0.key < $1.key }
         if !others.isEmpty || !notes.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
                 if !others.isEmpty, let primary {
                     HStack(spacing: 14) {
                         legendItem(primary.label, color: accent, isLine: primary.kind != "bar")
-                        ForEach(others) { series in
+                        ForEach(others, id: \.element.id) { offset, series in
                             legendItem(
                                 series.label,
-                                color: series.kind == "bar" ? Theme.Palette.fg2 : Theme.Palette.fg1.opacity(0.75),
-                                isLine: series.kind != "bar"
+                                color: secondaryColor(for: offset),
+                                isLine: series.kind != "bar",
+                                dash: secondaryDash(for: offset)
                             )
                         }
                     }
@@ -531,11 +629,20 @@ struct CoachChartCard: View {
         return label.localizedCaseInsensitiveContains(period) ? label : "\(period) · \(label)"
     }
 
-    private func legendItem(_ label: String, color: Color, isLine: Bool) -> some View {
+    private func legendItem(_ label: String, color: Color, isLine: Bool, dash: [CGFloat] = []) -> some View {
         HStack(spacing: 6) {
-            RoundedRectangle(cornerRadius: 1)
-                .fill(color)
-                .frame(width: isLine ? 12 : 8, height: isLine ? 2 : 8)
+            if isLine {
+                Path { path in
+                    path.move(to: CGPoint(x: 0, y: 1))
+                    path.addLine(to: CGPoint(x: 12, y: 1))
+                }
+                .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: dash))
+                .frame(width: 12, height: 2)
+            } else {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(color)
+                    .frame(width: 8, height: 8)
+            }
             Text(label)
                 .font(Theme.FontStyle.mono(11))
                 .foregroundStyle(Theme.Palette.fg2)
@@ -550,7 +657,7 @@ struct CoachChartCard: View {
             GridRow {
                 Text("PERIOD")
                 ForEach(block.series) { series in
-                    Text(series.label.uppercased())
+                    Text(series.unit.isEmpty ? series.label.uppercased() : "\(series.label.uppercased()) (\(series.unit))")
                         .lineLimit(2)
                         .gridColumnAlignment(.trailing)
                 }

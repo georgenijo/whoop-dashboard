@@ -227,6 +227,15 @@ private struct CoachCardLabel: View {
     }
 }
 
+/// Pure helper for the metric-strip unit-suppression rule, factored out so it
+/// can be unit tested without instantiating a SwiftUI view.
+enum CoachUnitDisplay {
+    static func shows(unit: String, displayValue: String) -> Bool {
+        guard !unit.isEmpty else { return false }
+        return !displayValue.localizedCaseInsensitiveContains(unit)
+    }
+}
+
 private enum Tone {
     static func color(_ tone: String) -> Color {
         switch tone {
@@ -313,10 +322,13 @@ private struct MetricStripView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    /// "11.9" + "strain" reads well; "4h 38m" + "sleep" or "54%" + "%" do not.
+    /// "11.9" + "strain" reads well; "54%" + "%" would double up. Suppress the
+    /// unit only when display_value already spells it out (case-insensitively,
+    /// anywhere in the string) — a whitelist of "allowed" characters wrongly
+    /// hid the unit for perfectly normal display values like "≈47 ms" or a
+    /// "39–45%" range that never actually mentions the unit text itself.
     private func showsUnit(_ metric: MetricStrip.Metric) -> Bool {
-        guard !metric.unit.isEmpty, metric.unit.count <= 8 else { return false }
-        return metric.displayValue.allSatisfy { $0.isNumber || $0 == "." || $0 == "," || $0 == "-" || $0 == "+" }
+        CoachUnitDisplay.shows(unit: metric.unit, displayValue: metric.displayValue)
     }
 }
 

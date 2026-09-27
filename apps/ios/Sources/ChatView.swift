@@ -267,10 +267,11 @@ struct ChatView: View {
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
+                    let dayLabels = Self.dayLabels(for: rows)
                     LazyVStack(spacing: 14) {
                         ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
                             VStack(alignment: .leading, spacing: 0) {
-                                if let day = dayLabel(at: index) {
+                                if let day = dayLabels[index] {
                                     ChatDayDivider(text: day)
                                         .padding(.top, index == 0 ? 0 : 14)
                                         .padding(.bottom, 16)
@@ -336,16 +337,24 @@ struct ChatView: View {
         }
     }
 
-    /// A day caption before the first message of each calendar day.
-    private func dayLabel(at index: Int) -> String? {
-        guard case .persisted(let message) = rows[index] else { return nil }
+    /// A day caption before the first message of each calendar day. Computed
+    /// once per render in a single forward pass — the old per-row lookup
+    /// rescanned the whole preceding transcript for every row, which is
+    /// quadratic over a long thread.
+    static func dayLabels(for rows: [ChatRow]) -> [Int: String] {
         let calendar = Calendar.current
-        let previous = rows[..<index].reversed().compactMap { row -> Date? in
-            if case .persisted(let m) = row { return m.createdAt }
-            return nil
-        }.first
-        if let previous, calendar.isDate(previous, inSameDayAs: message.createdAt) { return nil }
-        return Self.dayText(message.createdAt)
+        var result: [Int: String] = [:]
+        var previousDate: Date?
+        for (index, row) in rows.enumerated() {
+            guard case .persisted(let message) = row else { continue }
+            if let priorDate = previousDate, calendar.isDate(priorDate, inSameDayAs: message.createdAt) {
+                previousDate = message.createdAt
+                continue
+            }
+            result[index] = dayText(message.createdAt)
+            previousDate = message.createdAt
+        }
+        return result
     }
 
     static func dayText(_ date: Date) -> String {
