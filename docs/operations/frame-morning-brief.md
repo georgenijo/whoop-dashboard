@@ -45,6 +45,13 @@ healthy publish itself fails, it makes one best-effort `unavailable` attempt.
 The HTTP request times out after 10 seconds and never follows redirects. The
 systemd service has a 25-second outer bound.
 
+The unit keeps `/home` read-only except for the canonical `shared` database
+directory. SQLite needs to create transient `-wal`/`-shm` files there when the
+web application has no open connections. The publisher still opens the
+database with `readonly: true`; it cannot modify database records. If the
+database path changes, update both `WHOOP_DB_PATH` and this narrow
+`ReadWritePaths` exception.
+
 ## Install the example timer
 
 The tracked units are examples and are not installed by `scripts/deploy`.
