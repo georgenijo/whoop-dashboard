@@ -1,0 +1,20 @@
+[Unit]
+Description=Publish the read-only frame Morning brief to Home Assistant
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=george
+WorkingDirectory=/home/george/Documents/whoop-dashboard/apps/web
+Environment=NODE_ENV=production
+Environment=WHOOP_DB_PATH=/home/george/Documents/whoop-dashboard/shared/whoop_data.db
+EnvironmentFile=/etc/frame-morning-publisher.env
+ExecStart=/home/george/.nvm/versions/node/v20.20.2/bin/node --conditions=react-server --import tsx scripts/publish-frame-morning.mts
+TimeoutStartSec=25
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=true
+ProtectHome=read-only
+ProtectSystem=full
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

@@ -179,6 +179,7 @@ const ALLOWLIST_RELATIVE = new Set<string>([
   "src/lib/db/summary.ts",
   "src/lib/db/prs.ts",
   "src/lib/db/body.ts",
+  "src/lib/db/morning-brief.ts",
 ]);
 
 function walk(dir: string, acc: string[] = []): string[] {
