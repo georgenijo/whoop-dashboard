@@ -339,6 +339,8 @@ The Cursor latency harness is documented in
 [`scripts/BENCH.md`](scripts/BENCH.md). Production configuration and recovery
 procedures live in
 [`docs/operations/environment-and-deploy.md`](docs/operations/environment-and-deploy.md).
+The read-only Home Assistant bridge for the frame Morning page is documented
+in [`docs/operations/frame-morning-brief.md`](docs/operations/frame-morning-brief.md).
 
 ## Legacy boundaries
 

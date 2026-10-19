@@ -1,0 +1,13 @@
+[Unit]
+Description=Refresh the frame Morning brief every three minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=3min
+AccuracySec=15s
+RandomizedDelaySec=10s
+Persistent=true
+Unit=frame-morning-publisher.service
+
+[Install]
+WantedBy=timers.target
