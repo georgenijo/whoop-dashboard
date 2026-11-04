@@ -23,9 +23,12 @@ beforeEach(() => {
   anthropicCatalogMock.mockImplementation(anthropicResponse);
   settingsMock.mockImplementation((_url, init) => {
     const body = JSON.parse(init.body);
-    return Response.json(body.cursor_model_params ? {
+    const response = Response.json(body.cursor_model_params ? {
       cursor_model_params: { [body.cursor_model_params.model_id]: body.cursor_model_params.params },
     } : body);
+    // Keep Saving observable so final-state assertions cannot pass merely
+    // because the request started or the optimistic accessible name changed.
+    return new Promise<Response>((resolve) => setTimeout(() => resolve(response), 25));
   });
   fetchMock.mockImplementation((url, init) => {
     if (url === "/api/me/cursor-models") return cursorCatalogMock(url, init);
@@ -139,6 +142,14 @@ function openPicker() {
   );
 }
 
+async function expectSavedModel(name: string, label: string) {
+  await waitFor(() => {
+    const trigger = screen.getByRole("button", { name });
+    expect(trigger).toHaveTextContent(label);
+    expect(trigger).toBeEnabled();
+  });
+}
+
 describe("CoachModelPicker", () => {
   it("selects a live Anthropic model and persists its dynamic id", async () => {
     const { onSavingChange } = renderPicker();
@@ -149,7 +160,7 @@ describe("CoachModelPicker", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model_pref: "anthropic:claude-opus-live" }),
     }));
-    expect(screen.getByRole("button", { name: "Coach model: Claude Opus Live; effort high" })).toBeInTheDocument();
+    await expectSavedModel("Coach model: Claude Opus Live; effort high", "High");
     expect(onSavingChange).toHaveBeenNthCalledWith(1, true);
     await waitFor(() => expect(onSavingChange).toHaveBeenLastCalledWith(false));
   });
@@ -159,9 +170,7 @@ describe("CoachModelPicker", () => {
     renderPicker();
     openPicker();
     fireEvent.click(await screen.findByRole("button", { name: "Select GPT-5.5 High" }));
-    await waitFor(() => expect(screen.getByRole("button", {
-      name: "Coach model: GPT-5.5 High; effort medium",
-    })).toBeInTheDocument());
+    await expectSavedModel("Coach model: GPT-5.5 High; effort medium", "Medium");
   });
 
   it("keeps Anthropic usable while Cursor is still loading", async () => {
@@ -269,6 +278,7 @@ describe("CoachModelPicker", () => {
     expect(screen.getByRole("radio", { name: /High/ })).toHaveAttribute("aria-checked", "true");
     fireEvent.click(screen.getByRole("radio", { name: /None/ }));
     await waitFor(() => expect(settingsMock).toHaveBeenCalledWith("/api/settings", expect.objectContaining({ body: JSON.stringify({ coach_effort: "off" }) })));
+    await expectSavedModel("Coach model: Claude Sonnet 4.6; effort off", "None");
   });
 
   it("supports catalog-backed Extra high effort", async () => {
@@ -276,8 +286,11 @@ describe("CoachModelPicker", () => {
     openPicker();
     fireEvent.click(await screen.findByRole("button", { name: "Customize Claude Opus Live" }));
     fireEvent.click(screen.getByRole("radio", { name: /Extra high/ }));
+    const savingTrigger = screen.getByRole("button", { name: "Coach model: Claude Opus Live; effort xhigh" });
+    expect(savingTrigger).toHaveTextContent("Saving…");
+    expect(savingTrigger).toBeDisabled();
     await waitFor(() => expect(settingsMock).toHaveBeenCalledWith("/api/settings", expect.objectContaining({ body: JSON.stringify({ coach_effort: "xhigh" }) })));
-    expect(screen.getByRole("button", { name: "Coach model: Claude Opus Live; effort xhigh" })).toHaveTextContent("Extra high");
+    await expectSavedModel("Coach model: Claude Opus Live; effort xhigh", "Extra high");
   });
 
   it("hides None for Sonnet 5.5 and displays a supported effort for saved off", async () => {
@@ -309,6 +322,7 @@ describe("CoachModelPicker", () => {
     expect(screen.queryByRole("radio", { name: /Low/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("radio", { name: /Medium/ }));
     await waitFor(() => expect(settingsMock).toHaveBeenCalledWith("/api/settings", expect.objectContaining({ body: JSON.stringify({ coach_effort: "medium" }) })));
+    await expectSavedModel("Coach model: Claude Thinking; effort medium", "Medium");
   });
 
   it("refreshes both catalogs on reopen after an external key change", async () => {
@@ -342,7 +356,7 @@ describe("CoachModelPicker", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Customize GPT-5.5 High" }));
     fireEvent.click(screen.getByRole("radio", { name: /High/ }));
     await waitFor(() => expect(settingsMock).toHaveBeenCalledWith("/api/settings", expect.objectContaining({ body: JSON.stringify({ cursor_model_params: { model_id: "gpt-5.5-high", params: [{ id: "effort", value: "high" }] } }) })));
-    expect(screen.getByRole("button", { name: "Coach model: GPT-5.5 High; effort high" })).toBeInTheDocument();
+    await expectSavedModel("Coach model: GPT-5.5 High; effort high", "High");
   });
 
   it("renders boolean Cursor reasoning as a switch", async () => {
@@ -354,11 +368,7 @@ describe("CoachModelPicker", () => {
     expect(reasoning).toHaveAttribute("aria-checked", "true");
     fireEvent.click(reasoning);
     await waitFor(() => expect(settingsMock).toHaveBeenCalledWith("/api/settings", expect.objectContaining({ body: JSON.stringify({ cursor_model_params: { model_id: "claude-opus-5", params: [{ id: "thinking", value: "false" }] } }) })));
-    await waitFor(() => {
-      const trigger = screen.getByRole("button", { name: "Coach model: Opus 5; reasoning off" });
-      expect(trigger).toHaveTextContent("Reasoning off");
-      expect(trigger).toBeEnabled();
-    });
+    await expectSavedModel("Coach model: Opus 5; reasoning off", "Reasoning off");
   });
 
   it("restores keyboard focus after customization and Escape", async () => {
@@ -500,6 +510,10 @@ describe("Settings model catalog integration", () => {
     expect(select).toHaveValue("anthropic:claude-opus-live");
     fireEvent.change(select, { target: { value: "anthropic:claude-thinking" } });
     await waitFor(() => expect(settingsMock).toHaveBeenCalledWith("/api/settings", expect.objectContaining({ body: JSON.stringify({ model_pref: "anthropic:claude-thinking" }) })));
+    await waitFor(() => {
+      expect(select).toHaveValue("anthropic:claude-thinking");
+      expect(select).toBeEnabled();
+    });
   });
 
   it("keeps unavailable saved models visible and other providers usable", async () => {
