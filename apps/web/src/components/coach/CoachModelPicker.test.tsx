@@ -354,7 +354,11 @@ describe("CoachModelPicker", () => {
     expect(reasoning).toHaveAttribute("aria-checked", "true");
     fireEvent.click(reasoning);
     await waitFor(() => expect(settingsMock).toHaveBeenCalledWith("/api/settings", expect.objectContaining({ body: JSON.stringify({ cursor_model_params: { model_id: "claude-opus-5", params: [{ id: "thinking", value: "false" }] } }) })));
-    expect(screen.getByRole("button", { name: "Coach model: Opus 5; reasoning off" })).toHaveTextContent("Reasoning off");
+    await waitFor(() => {
+      const trigger = screen.getByRole("button", { name: "Coach model: Opus 5; reasoning off" });
+      expect(trigger).toHaveTextContent("Reasoning off");
+      expect(trigger).toBeEnabled();
+    });
   });
 
   it("restores keyboard focus after customization and Escape", async () => {
