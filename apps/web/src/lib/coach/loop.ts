@@ -8,6 +8,7 @@ import type {
   MessageParam,
   MessageStreamEvent,
   TextBlock,
+  Tool,
   ToolUseBlock,
 } from "@anthropic-ai/sdk/resources/messages";
 import { getUserSettings, type ChatMessageInsert } from "@/lib/db";
@@ -22,6 +23,8 @@ import type {
   CoachUserTurn,
 } from "./image-types";
 import { COACH_MODEL, buildSystemPrompt } from "./prompts";
+import { AnthropicModelCatalogError, AnthropicModelUnavailableError, listAnthropicModelsForKey } from "./anthropic-models";
+import { effectiveAnthropicEffort } from "./anthropic-model-options";
 import {
   TOOLS,
   executeToolResult,
@@ -302,7 +305,8 @@ export async function runAnthropicSdk(
   apiKey: string,
   apiKeyOrigin: ApiKeyOrigin,
   options: RunAnthropicOptions = {},
-  accumulator?: ChatMessageInsert[]
+  accumulator?: ChatMessageInsert[],
+  model: string = COACH_MODEL,
 ): Promise<{ reply: string; iterations: number; messages: ChatMessageInsert[] }> {
   // Per-turn state shared across all `executeToolResult` calls in this turn.
   // Currently used to hard-cap `trigger_whoop_sync` at one attempt per turn.
@@ -367,7 +371,27 @@ export async function runAnthropicSdk(
   // further uncached block, additive to DEFAULT_SYSTEM_PROMPT rather than a
   // replacement for it.
   const userSettings = getUserSettings(userId);
-  const coachEffort = parseCoachEffort(userSettings?.coach_effort);
+  let catalog;
+  try {
+    catalog = await listAnthropicModelsForKey(apiKey);
+  } catch (error) {
+    if (error instanceof AnthropicModelCatalogError && error.reason === "invalid_key") {
+      throw new BadApiKeyError(apiKeyOrigin);
+    }
+    throw error;
+  }
+  const modelOption = catalog.find((option) => option.id === model);
+  if (!modelOption) throw new AnthropicModelUnavailableError();
+  // Legacy Models responses can omit the ceiling; older Claude models only
+  // accept 4096 output tokens. Do not assume the modern 16K allowance.
+  const maxTokens = Math.min(MAX_OUTPUT_TOKENS, modelOption.max_tokens ?? 4096);
+  const coachEffort = effectiveAnthropicEffort(modelOption, parseCoachEffort(userSettings?.coach_effort));
+  const reasoningConfig = anthropicReasoningConfig(coachEffort, modelOption, maxTokens);
+  const tools = modelOption.strict_tools ? TOOLS : TOOLS.map((tool) => {
+    const compatible: Tool = { ...tool };
+    delete compatible.strict;
+    return compatible;
+  });
   detailState.effort = coachEffort;
   const systemPrompt = buildSystemPrompt(
     new Date(),
@@ -400,10 +424,10 @@ export async function runAnthropicSdk(
   };
 
   let response = await callModel({
-    model: COACH_MODEL,
-    ...anthropicReasoningConfig(coachEffort),
-    tools: TOOLS,
-    max_tokens: MAX_OUTPUT_TOKENS,
+    model,
+    ...reasoningConfig,
+    tools,
+    max_tokens: maxTokens,
     system: systemPrompt,
     messages: withCacheBreakpoint(conversation),
   }, optionsForFirstTurn);
@@ -496,10 +520,10 @@ export async function runAnthropicSdk(
     };
 
     response = await callModel({
-      model: COACH_MODEL,
-      ...anthropicReasoningConfig(coachEffort),
-      tools: TOOLS,
-      max_tokens: MAX_OUTPUT_TOKENS,
+      model,
+      ...reasoningConfig,
+      tools,
+      max_tokens: maxTokens,
       system: systemPrompt,
       messages: withCacheBreakpoint(conversation),
     }, optionsForTurn);

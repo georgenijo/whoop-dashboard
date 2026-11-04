@@ -70,5 +70,6 @@ export async function runCoachProviderTurn(
     input.anthropicApiKeyOrigin,
     input.options,
     input.accumulator,
+    input.selection.model,
   );
 }

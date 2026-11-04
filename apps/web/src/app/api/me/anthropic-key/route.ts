@@ -20,12 +20,21 @@ export const dynamic = "force-dynamic";
 // 401 in the Coach loop later means "Anthropic just rejected a previously-
 // valid key" (rotation/revoke), not "we wrote garbage on save".
 
-function maskedFor(userId: number): { present: boolean; masked: string | null } {
+function maskedFor(userId: number) {
   const settings = getUserSettings(userId);
   if (settings?.anthropic_key) {
-    return { present: true, masked: maskAnthropicKey(settings.anthropic_key) };
+    return {
+      present: true,
+      masked: maskAnthropicKey(settings.anthropic_key),
+      ...keySource(true),
+    };
   }
-  return { present: false, masked: null };
+  return { present: false, masked: null, ...keySource(false) };
+}
+
+function keySource(personal: boolean) {
+  const fallback = Boolean(process.env.ANTHROPIC_API_KEY);
+  return { fallback_available: fallback, source: personal ? "user" : fallback ? "env" : "none" };
 }
 
 export async function GET(req: Request) {
@@ -46,7 +55,7 @@ export async function POST(req: Request) {
     );
   }
 
-  if (typeof body.key !== "string") {
+  if (!body || typeof body.key !== "string") {
     return NextResponse.json(
       { ok: false, code: "invalid_request" },
       { status: 400 },
@@ -61,16 +70,16 @@ export async function POST(req: Request) {
   }
 
   // Probe before persist. NEVER log `trimmed` (the raw key).
-  const client = new Anthropic({ apiKey: trimmed });
+  const client = new Anthropic({ apiKey: trimmed, timeout: 15_000, maxRetries: 0 });
   try {
     await client.models.list({ limit: 1 });
   } catch (err) {
-    if (err instanceof APIError && err.status === 401) {
+    if (err instanceof APIError && (err.status === 401 || err.status === 403)) {
       return NextResponse.json({ ok: false, code: "invalid_key" });
     }
     console.warn("[byok] probe_failed", {
       user_id: user.id,
-      error: err instanceof Error ? err.message : String(err),
+      status: err instanceof APIError ? err.status : null,
     });
     return NextResponse.json({ ok: false, code: "probe_failed" });
   }
@@ -80,11 +89,12 @@ export async function POST(req: Request) {
     ok: true,
     present: true,
     masked: maskAnthropicKey(trimmed),
+    ...keySource(true),
   });
 }
 
 export async function DELETE(req: Request) {
   const { user } = await requireAuth(req);
   upsertUserSettings({ user_id: user.id, anthropic_key: null });
-  return NextResponse.json({ ok: true, present: false, masked: null });
+  return NextResponse.json({ ok: true, present: false, masked: null, ...keySource(false) });
 }

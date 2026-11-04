@@ -2,7 +2,7 @@ import { requireAuth } from "@/lib/auth";
 import { getUserSettings, upsertUserSettings } from "@/lib/db";
 import { maskCursorKey } from "@/lib/coach/key-mask";
 import { probeCursorKey } from "@/lib/coach/cursor-key";
-import { ANTHROPIC_PREF } from "@/lib/coach/provider";
+import { modelPrefForSelection, parseModelPref } from "@/lib/coach/provider";
 
 export const dynamic = "force-dynamic";
 
@@ -98,17 +98,17 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   try {
     const { user } = await requireAuth(req);
-    // A model validated against a personal key may not be available through
-    // the shared fallback. Reset at the same time the key origin changes.
+    const modelPref = modelPrefForSelection(parseModelPref(getUserSettings(user.id)?.model_pref));
+    // Keep the explicit provider choice. Switching to paid Anthropic on key
+    // removal could spend on an account the user did not choose for this turn.
     upsertUserSettings({
       user_id: user.id,
       cursor_key: null,
-      model_pref: ANTHROPIC_PREF,
       cursor_model_params: {},
     });
     return Response.json({
       ...maskedFor(user.id),
-      model_pref: ANTHROPIC_PREF,
+      model_pref: modelPref,
     });
   } catch (error) {
     if (error instanceof Response) return error;

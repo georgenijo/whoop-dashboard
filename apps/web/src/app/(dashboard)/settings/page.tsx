@@ -1,15 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity,
   BrainCircuit,
-  KeyRound,
+  ChevronDown,
+  ChevronRight,
   LogOut,
   SlidersHorizontal,
   UserRound,
 } from "lucide-react";
 import styles from "./settings.module.css";
+import type { AnthropicModelOption } from "@/lib/coach/anthropic-model-options";
 
 type LocalSetting = {
   key: string;
@@ -31,13 +33,18 @@ type WhoopConnector = {
 };
 
 type ByokState = { present: boolean; masked: string | null };
+type AnthropicByokState = ByokState & {
+  fallback_available: boolean;
+  source: "user" | "env" | "none";
+};
+type ByokCheckStatus = "loading" | "ready" | "unavailable";
 type CursorByokState = ByokState & { fallback_available: boolean };
 type CursorModel = {
   id: string;
   display_name: string;
   description: string | null;
 };
-type CursorModelCatalogStatus =
+type ModelCatalogStatus =
   | "loading"
   | "ready"
   | "not_configured"
@@ -62,12 +69,20 @@ const CONNECTOR_STATUS_COPY: Record<
   disconnected: { label: "Disconnected", tone: "statusMuted" },
 };
 
-const CURSOR_MODEL_STATUS_COPY: Record<CursorModelCatalogStatus, string> = {
-  ready: "Choose Claude directly or any model enabled for your Cursor account.",
+const CURSOR_MODEL_STATUS_COPY: Record<ModelCatalogStatus, string> = {
+  ready: "Choose any model enabled for your Cursor account.",
   loading: "Loading the models enabled for your Cursor account…",
   invalid_key: "Cursor rejected the current key. Update it below to load models.",
   unavailable: "Cursor model discovery is temporarily unavailable.",
   not_configured: "Add a Cursor key below to enable its model catalog.",
+};
+
+const ANTHROPIC_MODEL_STATUS_COPY: Record<ModelCatalogStatus, string> = {
+  ready: "Choose any model available to your Anthropic account.",
+  loading: "Loading the models available to your Anthropic account…",
+  invalid_key: "Anthropic rejected the current key. Update it below to load models.",
+  unavailable: "Anthropic model discovery is temporarily unavailable.",
+  not_configured: "Add an Anthropic key below to enable its model catalog.",
 };
 
 const LOCAL_SETTINGS: LocalSetting[] = [
@@ -150,7 +165,17 @@ export default function SettingsPage() {
   const [whoopCheckStatus, setWhoopCheckStatus] =
     useState<WhoopCheckStatus>("loading");
   const [whoopWorking, setWhoopWorking] = useState(false);
-  const [byok, setByok] = useState<ByokState>({ present: false, masked: null });
+  const [byok, setByok] = useState<AnthropicByokState>({
+    present: false,
+    masked: null,
+    fallback_available: false,
+    source: "none",
+  });
+  const [byokStatus, setByokStatus] = useState<ByokCheckStatus>("loading");
+  const [collapsedProviders, setCollapsedProviders] = useState({
+    Anthropic: false,
+    Cursor: false,
+  });
   const [byokInput, setByokInput] = useState("");
   const [byokSaving, setByokSaving] = useState(false);
   const [byokClearing, setByokClearing] = useState(false);
@@ -160,6 +185,7 @@ export default function SettingsPage() {
     masked: null,
     fallback_available: false,
   });
+  const [cursorByokStatus, setCursorByokStatus] = useState<ByokCheckStatus>("loading");
   const [cursorByokInput, setCursorByokInput] = useState("");
   const [cursorByokSaving, setCursorByokSaving] = useState(false);
   const [cursorByokClearing, setCursorByokClearing] = useState(false);
@@ -167,10 +193,14 @@ export default function SettingsPage() {
     null,
   );
   const [modelPref, setModelPref] = useState(ANTHROPIC_PREF);
-  const [cursorAvailable, setCursorAvailable] = useState(false);
+  const [anthropicModels, setAnthropicModels] = useState<AnthropicModelOption[]>([]);
+  const [anthropicModelsStatus, setAnthropicModelsStatus] =
+    useState<ModelCatalogStatus>("loading");
   const [cursorModels, setCursorModels] = useState<CursorModel[]>([]);
   const [cursorModelsStatus, setCursorModelsStatus] =
-    useState<CursorModelCatalogStatus>("loading");
+    useState<ModelCatalogStatus>("loading");
+  const anthropicCatalogRequestRef = useRef(0);
+  const cursorCatalogRequestRef = useRef(0);
   const [modelSaving, setModelSaving] = useState(false);
   const [modelError, setModelError] = useState<string | null>(null);
 
@@ -197,19 +227,42 @@ export default function SettingsPage() {
   }, []);
 
   const refreshCursorModels = useCallback(async () => {
+    const request = ++cursorCatalogRequestRef.current;
     setCursorModelsStatus("loading");
     try {
       const response = await fetch("/api/me/cursor-models");
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const data = (await response.json()) as {
-        status: Exclude<CursorModelCatalogStatus, "loading">;
+        status: Exclude<ModelCatalogStatus, "loading">;
         models: CursorModel[];
       };
+      if (request !== cursorCatalogRequestRef.current) return;
       setCursorModels(data.models);
       setCursorModelsStatus(data.status);
     } catch {
+      if (request !== cursorCatalogRequestRef.current) return;
       setCursorModels([]);
       setCursorModelsStatus("unavailable");
+    }
+  }, []);
+
+  const refreshAnthropicModels = useCallback(async () => {
+    const request = ++anthropicCatalogRequestRef.current;
+    setAnthropicModelsStatus("loading");
+    try {
+      const response = await fetch("/api/me/anthropic-models");
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = await response.json() as {
+        status: Exclude<ModelCatalogStatus, "loading">;
+        models: AnthropicModelOption[];
+      };
+      if (request !== anthropicCatalogRequestRef.current) return;
+      setAnthropicModels(data.models);
+      setAnthropicModelsStatus(data.status);
+    } catch {
+      if (request !== anthropicCatalogRequestRef.current) return;
+      setAnthropicModels([]);
+      setAnthropicModelsStatus("unavailable");
     }
   }, []);
 
@@ -242,36 +295,44 @@ export default function SettingsPage() {
           setSystemPrompt(data.system_prompt);
           setSavedSystemPrompt(data.system_prompt);
           if (data.model_pref) setModelPref(data.model_pref);
-          setCursorAvailable(Boolean(data.cursor_available));
         },
       )
       .catch(() => {});
 
     fetch("/api/me/anthropic-key")
       .then((response) =>
-        response.ok ? (response.json() as Promise<ByokState>) : null,
+        response.ok ? (response.json() as Promise<AnthropicByokState>) : null,
       )
       .then((data) => {
-        if (data) setByok(data);
+        if (!data) {
+          setByokStatus("unavailable");
+          return;
+        }
+        setByok(data);
+        setByokStatus("ready");
       })
-      .catch(() => {});
+      .catch(() => setByokStatus("unavailable"));
 
     fetch("/api/me/cursor-key")
       .then((response) =>
         response.ok ? (response.json() as Promise<CursorByokState>) : null,
       )
       .then((data) => {
-        if (!data) return;
-        setCursorByok(data);
-        if (data.present || data.fallback_available) {
-          setCursorAvailable(true);
+        if (!data) {
+          setCursorByokStatus("unavailable");
+          return;
         }
+        setCursorByok(data);
+        setCursorByokStatus("ready");
       })
-      .catch(() => {});
+      .catch(() => setCursorByokStatus("unavailable"));
     // Model discovery sets loading state immediately, so defer the initial
     // invocation for the same effect-lint reason as local preference hydration.
-    queueMicrotask(() => void refreshCursorModels());
-  }, [refreshCursorModels]);
+    queueMicrotask(() => {
+      void refreshCursorModels();
+      void refreshAnthropicModels();
+    });
+  }, [refreshCursorModels, refreshAnthropicModels]);
 
   function toggleLocal(key: string, value: boolean) {
     localStorage.setItem(key, value ? "1" : "0");
@@ -304,14 +365,16 @@ export default function SettingsPage() {
         return;
       }
       const data = (await response.json()) as
-        | { ok: true; present: true; masked: string }
+        | ({ ok: true } & AnthropicByokState)
         | {
             ok: false;
             code: "invalid_key" | "invalid_request" | "probe_failed";
       };
       if (data.ok === true) {
-        setByok({ present: data.present, masked: data.masked });
+        setByok(data);
+        setByokStatus("ready");
         setByokInput("");
+        await refreshAnthropicModels();
         return;
       }
       if (data.code === "invalid_key") {
@@ -335,7 +398,9 @@ export default function SettingsPage() {
     if (byokClearing) return;
     if (
       !confirm(
-        "Remove your personal Anthropic key? The Coach will fall back to the shared server key.",
+        byok.fallback_available
+          ? "Remove your personal Anthropic key? Coach will use the shared server key."
+          : "Remove your personal Anthropic key? Anthropic models will be unavailable until you add a key.",
       )
     ) {
       return;
@@ -353,8 +418,11 @@ export default function SettingsPage() {
         });
         return;
       }
-      setByok({ present: false, masked: null });
+      const data = await response.json() as AnthropicByokState;
+      setByok(data);
+      setByokStatus("ready");
       setByokInput("");
+      await refreshAnthropicModels();
     } catch (error) {
       setByokError({
         kind: "request_failed",
@@ -390,8 +458,8 @@ export default function SettingsPage() {
           };
       if (data.ok === true) {
         setCursorByok(data);
+        setCursorByokStatus("ready");
         setCursorByokInput("");
-        setCursorAvailable(true);
         await refreshCursorModels();
         return;
       }
@@ -438,15 +506,16 @@ export default function SettingsPage() {
         return;
       }
       const data = (await response.json()) as CursorByokState & {
-        model_pref: string;
+        model_pref?: string;
       };
       setCursorByok(data);
+      setCursorByokStatus("ready");
       setCursorByokInput("");
-      setCursorAvailable(data.fallback_available);
-      setModelPref(data.model_pref);
+      if (data.model_pref) setModelPref(data.model_pref);
       if (data.fallback_available) {
         await refreshCursorModels();
       } else {
+        cursorCatalogRequestRef.current += 1;
         setCursorModels([]);
         setCursorModelsStatus("not_configured");
       }
@@ -475,7 +544,11 @@ export default function SettingsPage() {
   }
 
   async function saveModelPref(next: string) {
-    if (next === modelPref) return;
+    if (next === modelPref || modelSaving) return;
+    if (!modelGroups.some((group) =>
+      group.status === "ready" &&
+      group.models.some((model) => `${group.prefix}:${model.id}` === next),
+    )) return;
     const previous = modelPref;
     setModelPref(next);
     setModelSaving(true);
@@ -573,14 +646,34 @@ export default function SettingsPage() {
   const promptDirty = systemPrompt !== savedSystemPrompt;
   const whoopStatus = whoop?.status ?? "disconnected";
   const whoopCopy = CONNECTOR_STATUS_COPY[whoopStatus];
-  const selectedCursorModel = modelPref.startsWith("cursor:")
-    ? modelPref.slice("cursor:".length)
-    : null;
-  const selectedCursorModelIsMissing =
-    selectedCursorModel !== null &&
-    !cursorModels.some((model) => model.id === selectedCursorModel);
-  const modelDescription =
-    modelError ?? CURSOR_MODEL_STATUS_COPY[cursorModelsStatus];
+  const modelGroups = [
+    {
+      provider: "Anthropic",
+      prefix: "anthropic",
+      status: anthropicModelsStatus,
+      models: anthropicModels,
+    },
+    {
+      provider: "Cursor",
+      prefix: "cursor",
+      status: cursorModelsStatus,
+      models: cursorModels,
+    },
+  ];
+  const selectedModelMissing = !modelGroups.some((group) =>
+    group.models.some((model) => `${group.prefix}:${model.id}` === modelPref),
+  );
+  const modelDescription = modelError ??
+    "Choose a model from a connected provider. Availability is checked with each provider.";
+  const anthropicSourceLabel = byokStatus === "loading" ? "Checking access"
+    : byokStatus === "unavailable" ? "Access unknown"
+    : byok.source === "user" ? "Personal key"
+    : byok.source === "env" ? "Shared key" : "Not configured";
+
+  const cursorSourceLabel = cursorByokStatus === "loading" ? "Checking access"
+    : cursorByokStatus === "unavailable" ? "Access unknown"
+    : cursorByok.present ? "Personal key"
+    : cursorByok.fallback_available ? "Shared key" : "Not configured";
 
   return (
     <div className={styles.settingsPage}>
@@ -712,176 +805,202 @@ export default function SettingsPage() {
                 aria-label="Coach model"
                 onChange={(event) => saveModelPref(event.target.value)}
               >
-                <option value="anthropic:claude-sonnet-4-6">
-                  Claude Sonnet 4.6
-                </option>
-                {cursorModels.map((model) => (
-                  <option key={model.id} value={`cursor:${model.id}`}>
-                    Cursor — {model.display_name}
-                  </option>
+                {modelGroups.map((group) => (
+                  <optgroup
+                    key={group.prefix}
+                    label={group.provider}
+                    disabled={group.status !== "ready"}
+                  >
+                    {group.models.map((model) => (
+                      <option
+                        key={model.id}
+                        value={`${group.prefix}:${model.id}`}
+                        disabled={group.status !== "ready"}
+                      >
+                        {model.display_name}
+                      </option>
+                    ))}
+                    {group.models.length === 0 ? (
+                      <option disabled value={`${group.prefix}:unavailable`}>
+                        {group.status === "loading" ? "Loading models…" : "No models available"}
+                      </option>
+                    ) : null}
+                  </optgroup>
                 ))}
-                {cursorAvailable && selectedCursorModelIsMissing && (
-                  <option value={`cursor:${selectedCursorModel}`}>
-                    Cursor — {selectedCursorModel} (saved)
+                {selectedModelMissing ? (
+                  <option value={modelPref} disabled>
+                    {modelPref.replace(/^(anthropic|cursor):/, "")} (saved, unavailable)
                   </option>
-                )}
+                ) : null}
               </select>
             </SettingRow>
 
             <div className={styles.divider} />
 
             <div className={styles.stackedSetting} id="coach-byok">
-              <div className={styles.stackedHeader}>
-                <div className={styles.settingCopy}>
-                  <div className={styles.labelWithIcon}>
-                    <KeyRound aria-hidden size={15} />
-                    <h3>Anthropic access</h3>
+              <button
+                type="button"
+                className={styles.providerDisclosure}
+                aria-label={`Anthropic access; ${anthropicSourceLabel}`}
+                aria-expanded={!collapsedProviders.Anthropic}
+                aria-controls="anthropic-access-settings"
+                onClick={() => setCollapsedProviders((previous) => ({ ...previous, Anthropic: !previous.Anthropic }))}
+              >
+                {collapsedProviders.Anthropic ? <ChevronRight size={15} aria-hidden /> : <ChevronDown size={15} aria-hidden />}
+                <span>Anthropic access</span>
+                <span className={styles.sourceBadge}>{anthropicSourceLabel}</span>
+              </button>
+              <div id="anthropic-access-settings" hidden={collapsedProviders.Anthropic}>
+                <div className={styles.providerContent}>
+                  <p className={styles.catalogStatus} role="status">{ANTHROPIC_MODEL_STATUS_COPY[anthropicModelsStatus]}</p>
+                  <div className={styles.stackedHeader}>
+                    <div className={styles.settingCopy}>
+                      <p>
+                        {byokStatus === "loading" ? "Checking Anthropic access…"
+                          : byokStatus === "unavailable" ? "Couldn't check Anthropic key source. Reload Settings to try again."
+                          : byok.source === "user" ? "Anthropic requests use your encrypted personal API key."
+                          : byok.source === "env" ? "Anthropic requests use the shared server key."
+                          : "Add a personal API key to enable Anthropic models."}
+                      </p>
+                    </div>
                   </div>
-                  <p>
-                    {byok.present
-                      ? "Coach is using your encrypted personal API key."
-                      : "Coach is currently using the shared server key."}
+
+                  {byok.present ? (
+                    <div className={styles.inlineControl}>
+                      <code className={styles.maskedKey}>{byok.masked}</code>
+                      <button
+                        type="button"
+                        className={styles.dangerButton}
+                        onClick={handleByokClear}
+                        disabled={byokClearing}
+                        data-track="settings:byok-clear"
+                      >
+                        {byokClearing ? "Removing…" : "Remove key"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className={styles.inlineControl}>
+                      <input
+                        className={styles.textInput}
+                        type="password"
+                        value={byokInput}
+                        onChange={(event) => {
+                          setByokInput(event.target.value);
+                          if (byokError) setByokError(null);
+                        }}
+                        placeholder="Paste sk-ant-…"
+                        aria-label="Personal Anthropic API key"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      <button
+                        type="button"
+                        className={styles.primaryButton}
+                        onClick={handleByokSave}
+                        disabled={!byokShapeValid || byokSaving}
+                        data-track="settings:byok-save"
+                      >
+                        {byokSaving ? "Verifying…" : "Use this key"}
+                      </button>
+                    </div>
+                  )}
+
+                  {byokError && (
+                    <p className={styles.errorMessage} role="alert">
+                      {byokErrorMessage("Anthropic", byokError)}
+                    </p>
+                  )}
+                  <p className={styles.privacyNote}>
+                    Your key is encrypted at rest and never shown again after it is
+                    saved.
                   </p>
                 </div>
-                <span
-                  className={`${styles.sourceBadge} ${
-                    byok.present ? styles.sourcePersonal : ""
-                  }`}
-                >
-                  {byok.present ? "Personal key" : "Shared key"}
-                </span>
               </div>
-
-              {byok.present ? (
-                <div className={styles.inlineControl}>
-                  <code className={styles.maskedKey}>{byok.masked}</code>
-                  <button
-                    type="button"
-                    className={styles.dangerButton}
-                    onClick={handleByokClear}
-                    disabled={byokClearing}
-                    data-track="settings:byok-clear"
-                  >
-                    {byokClearing ? "Removing…" : "Remove key"}
-                  </button>
-                </div>
-              ) : (
-                <div className={styles.inlineControl}>
-                  <input
-                    className={styles.textInput}
-                    type="password"
-                    value={byokInput}
-                    onChange={(event) => {
-                      setByokInput(event.target.value);
-                      if (byokError) setByokError(null);
-                    }}
-                    placeholder="Paste sk-ant-…"
-                    aria-label="Personal Anthropic API key"
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                  <button
-                    type="button"
-                    className={styles.primaryButton}
-                    onClick={handleByokSave}
-                    disabled={!byokShapeValid || byokSaving}
-                    data-track="settings:byok-save"
-                  >
-                    {byokSaving ? "Verifying…" : "Use this key"}
-                  </button>
-                </div>
-              )}
-
-              {byokError && (
-                <p className={styles.errorMessage} role="alert">
-                  {byokErrorMessage("Anthropic", byokError)}
-                </p>
-              )}
-              <p className={styles.privacyNote}>
-                Your key is encrypted at rest and never shown again after it is
-                saved.
-              </p>
             </div>
 
             <div className={styles.divider} />
 
             <div className={styles.stackedSetting} id="coach-cursor-byok">
-              <div className={styles.stackedHeader}>
-                <div className={styles.settingCopy}>
-                  <div className={styles.labelWithIcon}>
-                    <KeyRound aria-hidden size={15} />
-                    <h3>Cursor access</h3>
+              <button
+                type="button"
+                className={styles.providerDisclosure}
+                aria-label={`Cursor access; ${cursorSourceLabel}`}
+                aria-expanded={!collapsedProviders.Cursor}
+                aria-controls="cursor-access-settings"
+                onClick={() => setCollapsedProviders((previous) => ({ ...previous, Cursor: !previous.Cursor }))}
+              >
+                {collapsedProviders.Cursor ? <ChevronRight size={15} aria-hidden /> : <ChevronDown size={15} aria-hidden />}
+                <span>Cursor access</span>
+                <span className={styles.sourceBadge}>{cursorSourceLabel}</span>
+              </button>
+              <div id="cursor-access-settings" hidden={collapsedProviders.Cursor}>
+                <div className={styles.providerContent}>
+                  <p className={styles.catalogStatus} role="status">{CURSOR_MODEL_STATUS_COPY[cursorModelsStatus]}</p>
+                  <div className={styles.stackedHeader}>
+                    <div className={styles.settingCopy}>
+                      <p>
+                        {cursorByokStatus === "loading" ? "Checking Cursor access…"
+                          : cursorByokStatus === "unavailable" ? "Couldn't check Cursor key source. Reload Settings to try again."
+                          : cursorByok.present
+                          ? "Cursor requests use your encrypted personal API key."
+                          : cursorByok.fallback_available
+                            ? "Cursor requests use the shared server key."
+                            : "Add a personal API key to enable Cursor models."}
+                      </p>
+                    </div>
                   </div>
-                  <p>
-                    {cursorByok.present
-                      ? "Composer is using your encrypted personal API key."
-                      : cursorByok.fallback_available
-                        ? "Composer is currently using the shared server key."
-                        : "Add a personal key to enable Cursor Composer."}
+
+                  {cursorByok.present ? (
+                    <div className={styles.inlineControl}>
+                      <code className={styles.maskedKey}>{cursorByok.masked}</code>
+                      <button
+                        type="button"
+                        className={styles.dangerButton}
+                        onClick={handleCursorByokClear}
+                        disabled={cursorByokClearing}
+                        data-track="settings:cursor-byok-clear"
+                      >
+                        {cursorByokClearing ? "Removing…" : "Remove key"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className={styles.inlineControl}>
+                      <input
+                        className={styles.textInput}
+                        type="password"
+                        value={cursorByokInput}
+                        onChange={(event) => {
+                          setCursorByokInput(event.target.value);
+                          if (cursorByokError) setCursorByokError(null);
+                        }}
+                        placeholder="Paste Cursor API key"
+                        aria-label="Personal Cursor API key"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      <button
+                        type="button"
+                        className={styles.primaryButton}
+                        onClick={handleCursorByokSave}
+                        disabled={!cursorByokShapeValid || cursorByokSaving}
+                        data-track="settings:cursor-byok-save"
+                      >
+                        {cursorByokSaving ? "Verifying…" : "Use this key"}
+                      </button>
+                    </div>
+                  )}
+
+                  {cursorByokError && (
+                    <p className={styles.errorMessage} role="alert">
+                      {byokErrorMessage("Cursor", cursorByokError)}
+                    </p>
+                  )}
+                  <p className={styles.privacyNote}>
+                    Your key is verified without a model turn, then encrypted at
+                    rest.
                   </p>
                 </div>
-                <span
-                  className={`${styles.sourceBadge} ${
-                    cursorByok.present ? styles.sourcePersonal : ""
-                  }`}
-                >
-                  {cursorByok.present
-                    ? "Personal key"
-                    : cursorByok.fallback_available
-                      ? "Shared key"
-                      : "Not configured"}
-                </span>
               </div>
-
-              {cursorByok.present ? (
-                <div className={styles.inlineControl}>
-                  <code className={styles.maskedKey}>{cursorByok.masked}</code>
-                  <button
-                    type="button"
-                    className={styles.dangerButton}
-                    onClick={handleCursorByokClear}
-                    disabled={cursorByokClearing}
-                    data-track="settings:cursor-byok-clear"
-                  >
-                    {cursorByokClearing ? "Removing…" : "Remove key"}
-                  </button>
-                </div>
-              ) : (
-                <div className={styles.inlineControl}>
-                  <input
-                    className={styles.textInput}
-                    type="password"
-                    value={cursorByokInput}
-                    onChange={(event) => {
-                      setCursorByokInput(event.target.value);
-                      if (cursorByokError) setCursorByokError(null);
-                    }}
-                    placeholder="Paste Cursor API key"
-                    aria-label="Personal Cursor API key"
-                    autoComplete="off"
-                    spellCheck={false}
-                  />
-                  <button
-                    type="button"
-                    className={styles.primaryButton}
-                    onClick={handleCursorByokSave}
-                    disabled={!cursorByokShapeValid || cursorByokSaving}
-                    data-track="settings:cursor-byok-save"
-                  >
-                    {cursorByokSaving ? "Verifying…" : "Use this key"}
-                  </button>
-                </div>
-              )}
-
-              {cursorByokError && (
-                <p className={styles.errorMessage} role="alert">
-                  {byokErrorMessage("Cursor", cursorByokError)}
-                </p>
-              )}
-              <p className={styles.privacyNote}>
-                Your key is verified without a model turn, then encrypted at
-                rest.
-              </p>
             </div>
 
             <div className={styles.divider} />

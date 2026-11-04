@@ -56,7 +56,7 @@ same database and are scoped by `user_id` where applicable.
 | Web and API | Next.js 16.2.4 App Router · React 19.2 · TypeScript 5 · Tailwind 4 |
 | Native app | SwiftUI · iOS 17+ · Swift 5.9 · HealthKit · AuthenticationServices |
 | Charts and UI | Recharts 3.8 · Lucide · Geist |
-| Coach | Anthropic SDK 0.91 · Claude Sonnet 4.6 · Cursor model catalog and `cursor-agent` |
+| Coach | Anthropic SDK 0.91 · live Anthropic and Cursor model catalogs · `cursor-agent` |
 | Content and images | marked 18 · DOMPurify · Sharp |
 | Data | SQLite WAL via better-sqlite3 12 |
 | Auth and encryption | Sign in with Apple · JOSE · TweetNaCl secretbox |
@@ -251,6 +251,14 @@ All data access is bound to the authenticated user. The Anthropic loop is
 capped at eight tool iterations and 16,384 output tokens. Personal encrypted
 keys take precedence over shared server fallbacks; Settings can validate,
 store, mask, and remove both Anthropic and Cursor keys.
+
+To use a paid Anthropic account, open Settings → Coach → Anthropic access and
+save your API key. The web model picker and Settings load the models available
+to that key; reasoning options follow each model's advertised capabilities.
+Anthropic and Cursor groups collapse independently, and model search spans both.
+Unavailable models remain visible as saved choices but cannot be selected.
+Removing a key preserves the chosen provider and model; Coach asks for access
+instead of silently switching to another paid provider.
 
 ## Data and authentication flow
 

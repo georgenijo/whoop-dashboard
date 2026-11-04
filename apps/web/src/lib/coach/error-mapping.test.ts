@@ -5,6 +5,14 @@ vi.mock("server-only", () => ({}));
 
 import { CursorAgentError } from "./cursor-key";
 import { classifyChatError } from "./error-mapping";
+import { AnthropicModelCatalogError, AnthropicModelUnavailableError } from "./anthropic-models";
+
+it("makes unavailable Anthropic models actionable without a paid fallback", () => {
+  expect(classifyChatError(new AnthropicModelUnavailableError()))
+    .toMatchObject({ status: 422, message: expect.stringContaining("Choose a model in Settings") });
+  expect(classifyChatError(new AnthropicModelCatalogError("unavailable")))
+    .toMatchObject({ status: 503, message: expect.stringContaining("discovery is unavailable") });
+});
 
 describe("classifyChatError — Cursor key origin", () => {
   it("points a rejected personal key back to Settings", () => {

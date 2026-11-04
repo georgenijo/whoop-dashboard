@@ -10,6 +10,11 @@ import type { Message } from "@anthropic-ai/sdk/resources/messages";
 
 const streamMock = vi.hoisted(() => vi.fn());
 const getUserSettingsMock = vi.hoisted(() => vi.fn());
+const listModelsMock = vi.hoisted(() => vi.fn());
+vi.mock("./anthropic-models", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./anthropic-models")>(),
+  listAnthropicModelsForKey: listModelsMock,
+}));
 
 vi.mock("server-only", () => ({}));
 vi.mock("@anthropic-ai/sdk", () => {
@@ -23,7 +28,7 @@ vi.mock("@anthropic-ai/sdk", () => {
 });
 vi.mock("@/lib/db", () => ({ getUserSettings: getUserSettingsMock }));
 vi.mock("./tools", () => ({
-  TOOLS: [],
+  TOOLS: [{ name: "query_sleep", strict: true, input_schema: { type: "object", properties: {} } }],
   newToolTurnState: vi.fn(() => ({
     syncAttempts: 0,
     savedPlanHashes: new Map(),
@@ -33,10 +38,13 @@ vi.mock("./tools", () => ({
 
 import { runAnthropicSdk, type DetailState, type Usage } from "./loop";
 import { DEFAULT_SYSTEM_PROMPT } from "./prompts";
+import { executeToolResult } from "./tools";
+import { AnthropicModelCatalogError } from "./anthropic-models";
+import { BadApiKeyError } from "./api-key";
 
 type SystemBlock = { type: "text"; text: string; cache_control?: unknown };
 
-function fakeStream() {
+function fakeStream(overrides: Partial<Message> = {}) {
   const final = {
     id: "msg_test",
     type: "message",
@@ -51,6 +59,7 @@ function fakeStream() {
       cache_creation_input_tokens: 0,
       cache_read_input_tokens: 0,
     },
+    ...overrides,
   } as unknown as Message;
   return {
     async *[Symbol.asyncIterator]() {
@@ -95,6 +104,82 @@ async function runTurn(
 beforeEach(() => {
   streamMock.mockReset();
   getUserSettingsMock.mockReset();
+  listModelsMock.mockReset();
+  listModelsMock.mockResolvedValue([
+    { id: "claude-sonnet-4-6", thinking: "adaptive", efforts: ["off", "low", "medium", "high"], output_effort: true, max_tokens: 64000 },
+    { id: "claude-opus-4-6", thinking: "adaptive", efforts: ["off", "low", "medium", "high", "max"], output_effort: true, max_tokens: 64000 },
+  ]);
+});
+
+describe("Anthropic model execution", () => {
+  async function execute(model: string) {
+    return runAnthropicSdk(1, 42,
+      { displayText: "Check my sleep", modelText: "Check my sleep", images: [] },
+      [], [], { calls: 0, input_tokens_total: 0, output_tokens_total: 0,
+        cache_creation_input_tokens_total: 0, cache_read_input_tokens_total: 0 },
+      { iterations: 0 }, "personal-key", "user", {}, undefined, model);
+  }
+
+  it("uses the selected model and reasoning on both initial and tool-result calls", async () => {
+    getUserSettingsMock.mockReturnValue({ coach_effort: "max" });
+    streamMock.mockReturnValueOnce(fakeStream({
+      stop_reason: "tool_use",
+      content: [{ type: "tool_use", id: "tool_1", name: "query_sleep", input: {}, caller: { type: "direct" } }],
+    })).mockReturnValueOnce(fakeStream());
+    vi.mocked(executeToolResult).mockResolvedValue({ type: "tool_result", tool_use_id: "tool_1", content: "sleep data" });
+    await execute("claude-opus-4-6");
+    expect(listModelsMock).toHaveBeenCalledWith("personal-key");
+    expect(streamMock).toHaveBeenCalledTimes(2);
+    for (const [params] of streamMock.mock.calls) {
+      expect(params).toMatchObject({ model: "claude-opus-4-6", thinking: { type: "adaptive" }, output_config: { effort: "max" } });
+    }
+  });
+
+  it("clamps unsupported effort instead of sending max to Sonnet", async () => {
+    getUserSettingsMock.mockReturnValue({ coach_effort: "max" });
+    streamMock.mockReturnValue(fakeStream());
+    await execute("claude-sonnet-4-6");
+    expect(streamMock.mock.calls[0][0].output_config).toEqual({ effort: "high" });
+  });
+
+  it("omits strict tool schemas for models that do not support structured output", async () => {
+    listModelsMock.mockResolvedValue([{ id: "legacy", thinking: "none", efforts: ["off"], max_tokens: 4096, strict_tools: false }]);
+    streamMock.mockReturnValue(fakeStream());
+    await execute("legacy");
+    const params = streamMock.mock.calls[0][0];
+    expect(params.tools[0]).not.toHaveProperty("strict");
+    expect(params.tools[0].name).toBe("query_sleep");
+    expect(params).not.toHaveProperty("thinking");
+    expect(params.max_tokens).toBe(4096);
+  });
+
+  it("retains strict tool schemas when advertised by the model", async () => {
+    listModelsMock.mockResolvedValue([{ id: "strict-model", thinking: "none", efforts: ["off"], max_tokens: 4096, strict_tools: true }]);
+    streamMock.mockReturnValue(fakeStream());
+    await execute("strict-model");
+    expect(streamMock.mock.calls[0][0].tools[0].strict).toBe(true);
+  });
+
+  it("uses a conservative token cap when legacy metadata omits the ceiling", async () => {
+    listModelsMock.mockResolvedValue([{ id: "legacy", thinking: "enabled", efforts: ["off", "high"], max_tokens: null }]);
+    getUserSettingsMock.mockReturnValue({ coach_effort: "high" });
+    streamMock.mockReturnValue(fakeStream());
+    await execute("legacy");
+    expect(streamMock.mock.calls[0][0]).toMatchObject({
+      max_tokens: 4096, thinking: { type: "enabled", budget_tokens: 4095 },
+    });
+  });
+
+  it("rejects a removed model without spending on another model", async () => {
+    await expect(execute("removed-model")).rejects.toThrow("no longer available");
+    expect(streamMock).not.toHaveBeenCalled();
+  });
+
+  it("preserves the key-origin error when discovery rejects the personal key", async () => {
+    listModelsMock.mockRejectedValue(new AnthropicModelCatalogError("invalid_key"));
+    await expect(execute("claude-sonnet-4-6")).rejects.toEqual(new BadApiKeyError("user"));
+    expect(streamMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("runAnthropicSdk system prompt wiring (issue #498)", () => {
