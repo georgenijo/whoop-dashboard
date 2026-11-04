@@ -5,11 +5,11 @@ final class CoachModelSelectionTests: XCTestCase {
     func testEffortLabelsMatchSupportedServerValues() {
         XCTAssertEqual(
             CoachEffort.allCases.map(\.rawValue),
-            ["off", "low", "medium", "high", "max"]
+            ["off", "low", "medium", "high", "xhigh", "max"]
         )
         XCTAssertEqual(
             CoachEffort.allCases.map(\.label),
-            ["None", "Low", "Medium", "High", "Max"]
+            ["None", "Low", "Medium", "High", "Extra high", "Max"]
         )
     }
 
@@ -66,6 +66,27 @@ final class CoachModelSelectionTests: XCTestCase {
 
         XCTAssertEqual(selection.selectedOption, .claude)
         XCTAssertEqual(selection.triggerLabel, "Sonnet 4.6")
+    }
+
+    func testSelectedAnthropicModelKeepsItsIdentity() {
+        let selection = CoachModelSelection(
+            modelPref: "anthropic:claude-opus-4-6",
+            effort: .xhigh,
+            cursorStatus: .notConfigured,
+            cursorModels: []
+        )
+        XCTAssertEqual(selection.selectedOption.id, "anthropic:claude-opus-4-6")
+        XCTAssertEqual(selection.selectedOption.provider, .anthropic)
+        XCTAssertEqual(selection.triggerLabel, "claude-opus-4-6")
+    }
+
+    func testSettingsPayloadDecodesExtraHighEffort() throws {
+        let data = Data("""
+        {"model_pref":"anthropic:claude-opus-4-6","coach_effort":"xhigh","cursor_available":false}
+        """.utf8)
+        let payload = try JSONDecoder().decode(CoachSettingsPayload.self, from: data)
+        XCTAssertEqual(payload.modelPref, "anthropic:claude-opus-4-6")
+        XCTAssertEqual(payload.coachEffort, .xhigh)
     }
 
     func testSettingsPayloadDecodesServerFieldNames() throws {

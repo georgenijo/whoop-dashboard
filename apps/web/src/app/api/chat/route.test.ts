@@ -1,5 +1,8 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cursorProviderEnabled } from "@/lib/coach/provider";
+import { createChatThread } from "@/lib/db";
+import { runAndPersistCoachTurn } from "@/lib/coach/persistence";
 import sharp from "sharp";
 
 vi.mock("server-only", () => ({}));
@@ -55,6 +58,7 @@ vi.mock("@/lib/coach/api-key", () => ({
 }));
 
 vi.mock("@/lib/coach/provider", () => ({
+  cursorProviderEnabled: vi.fn(() => true),
   resolveCoachProvider: vi.fn(() => ({
     provider: testState.provider,
     model: testState.provider === "cursor" ? "composer-2.5" : "claude-sonnet-4-6",
@@ -206,6 +210,14 @@ afterEach(() => {
 });
 
 describe("POST /api/chat — SSE wiring", () => {
+  it("gates missing Cursor credentials before creating a thread or calling a paid fallback", async () => {
+    testState.provider = "cursor";
+    vi.mocked(cursorProviderEnabled).mockReturnValueOnce(false);
+    const res = await POST(new Request("http://localhost/api/chat", { method: "POST", body: JSON.stringify({ messages: [{ role: "user", content: "Hello" }] }) }));
+    expect(res.status).toBe(503);
+    expect(createChatThread).not.toHaveBeenCalled();
+    expect(runAndPersistCoachTurn).not.toHaveBeenCalled();
+  });
   it("relays stable tool ids, progress, and bounded results to the SSE stream", async () => {
     runAndPersistImpl = async (_uid, _t, _u, _c, _d, _s, _k, _ko, options) => {
       options.onToolUseStart?.({

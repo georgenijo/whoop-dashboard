@@ -9,9 +9,11 @@ import {
   listCursorModelsForKey,
 } from "@/lib/coach/cursor-models";
 import { resolveCursorKey } from "@/lib/coach/cursor-key";
+import { resolveApiKeyForUser } from "@/lib/coach/api-key";
+import { AnthropicModelCatalogError, listAnthropicModelsForKey } from "@/lib/coach/anthropic-models";
 import type { CursorModelParameterSelection } from "@/lib/coach/cursor-model-params";
 import {
-  ANTHROPIC_PREF,
+  anthropicProviderEnabled,
   cursorModelFromPref,
   cursorProviderEnabled,
   isCoachEffort,
@@ -33,13 +35,11 @@ function settingsPayload(userId: number) {
   );
   return {
     system_prompt: normalizeCustomInstructions(settings?.system_prompt) ?? "",
-    model_pref:
-      selection.provider === "cursor" && cursorAvailable
-        ? modelPrefForSelection(selection)
-        : ANTHROPIC_PREF,
+    model_pref: modelPrefForSelection(selection),
     coach_effort: parseCoachEffort(settings?.coach_effort),
     cursor_model_params: settings?.cursor_model_params ?? {},
     cursor_available: cursorAvailable,
+    anthropic_available: Boolean(settings?.anthropic_key || process.env.ANTHROPIC_API_KEY),
   };
 }
 
@@ -142,7 +142,28 @@ export async function POST(req: Request) {
     }
 
     if (typeof body.model_pref === "string") {
-      if (body.model_pref === ANTHROPIC_PREF) {
+      const selection = parseModelPref(body.model_pref);
+      if (modelPrefForSelection(selection) !== body.model_pref) {
+        return Response.json({ error: "invalid model_pref" }, { status: 400 });
+      }
+      if (selection.provider === "anthropic") {
+        if (!anthropicProviderEnabled(user.id)) {
+          return Response.json({ error: "Anthropic provider is not available for this user" }, { status: 400 });
+        }
+        try {
+          const { key } = resolveApiKeyForUser(user.id);
+          const models = await listAnthropicModelsForKey(key);
+          if (!models.some((model) => model.id === selection.model)) {
+            return Response.json({ error: "Anthropic model is not available for this account" }, { status: 400 });
+          }
+        } catch (error) {
+          if (error instanceof AnthropicModelCatalogError) {
+            return Response.json({ error: error.reason === "invalid_key"
+              ? "Anthropic rejected the configured API key" : "Anthropic model catalog is unavailable" },
+            { status: error.reason === "invalid_key" ? 422 : 502 });
+          }
+          throw error;
+        }
         upsertUserSettings({ user_id: user.id, model_pref: body.model_pref });
       } else {
         const cursorModel = cursorModelFromPref(body.model_pref);

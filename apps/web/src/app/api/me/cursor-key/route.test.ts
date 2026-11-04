@@ -149,23 +149,29 @@ describe("DELETE /api/me/cursor-key", () => {
     expect(upsertUserSettingsMock).toHaveBeenCalledWith({
       user_id: 1,
       cursor_key: null,
-      model_pref: "anthropic:claude-sonnet-4-6",
       cursor_model_params: {},
     });
   });
 
-  it("resets the model even when a shared Cursor fallback remains", async () => {
+  it("preserves the chosen model when a shared Cursor fallback remains", async () => {
     process.env.CURSOR_API_KEY = "key_shared";
+    getUserSettingsMock.mockReturnValue({ model_pref: "cursor:gpt-5.5" });
     const response = await DELETE(makeRequest("DELETE"));
     expect(await response.json()).toMatchObject({
       fallback_available: true,
-      model_pref: "anthropic:claude-sonnet-4-6",
+      model_pref: "cursor:gpt-5.5",
     });
     expect(upsertUserSettingsMock).toHaveBeenCalledWith({
       user_id: 1,
       cursor_key: null,
-      model_pref: "anthropic:claude-sonnet-4-6",
       cursor_model_params: {},
     });
+  });
+
+  it("does not reset a selected Anthropic model when removing an unrelated Cursor key", async () => {
+    getUserSettingsMock.mockReturnValue({ model_pref: "anthropic:claude-opus-4-6" });
+    expect(await (await DELETE(makeRequest("DELETE"))).json())
+      .toMatchObject({ model_pref: "anthropic:claude-opus-4-6" });
+    expect(upsertUserSettingsMock.mock.calls[0][0]).not.toHaveProperty("model_pref");
   });
 });

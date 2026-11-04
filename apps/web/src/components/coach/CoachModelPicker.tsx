@@ -9,7 +9,7 @@ import {
   LoaderCircle,
   Search,
 } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CoachEffort } from "@/lib/coach/provider";
 import {
   cursorBooleanParameterValues,
@@ -20,10 +20,12 @@ import {
   type CursorModelParameterDefinition,
   type CursorModelParamsByModel,
 } from "@/lib/coach/cursor-model-params";
+import {
+  effectiveAnthropicEffort,
+  type AnthropicModelOption,
+} from "@/lib/coach/anthropic-model-options";
 
-const ANTHROPIC_PREF = "anthropic:claude-sonnet-4-6";
-
-type CursorModelCatalogStatus =
+type ModelCatalogStatus =
   "loading" | "ready" | "not_configured" | "invalid_key" | "unavailable";
 
 type ModelOption = {
@@ -31,6 +33,8 @@ type ModelOption = {
   label: string;
   provider: "Anthropic" | "Cursor";
   cursorModel?: CursorModelOption;
+  anthropicModel?: AnthropicModelOption;
+  available: boolean;
 };
 
 type Props = {
@@ -50,43 +54,27 @@ const EFFORT_OPTIONS: Array<{
   { value: "low", label: "Low", description: "Fastest" },
   { value: "medium", label: "Medium", description: "Balanced" },
   { value: "high", label: "High", description: "Thorough" },
+  { value: "xhigh", label: "Extra high", description: "More thorough" },
   { value: "max", label: "Max", description: "Deepest" },
 ];
 
-const STATUS_TITLE: Record<CursorModelCatalogStatus, string> = {
-  loading: "Loading models available to your Cursor account…",
-  ready: "Choose the model for your next Coach reply.",
-  not_configured: "Add a Cursor API key in Settings to enable more models.",
-  invalid_key: "Cursor rejected the configured API key.",
-  unavailable: "Cursor model discovery is temporarily unavailable.",
-};
+function catalogCopy(provider: string, status: ModelCatalogStatus): string {
+  switch (status) {
+    case "loading": return `Checking ${provider} models…`;
+    case "ready": return `${provider} models are ready.`;
+    case "not_configured": return `Add ${provider === "Anthropic" ? "an" : "a"} ${provider} API key in Settings to enable models.`;
+    case "invalid_key": return `${provider} rejected the configured API key. Update it in Settings.`;
+    case "unavailable": return `${provider} model discovery is temporarily unavailable. Try opening this menu again.`;
+  }
+}
 
-const STATUS_DETAIL: Record<
-  Exclude<CursorModelCatalogStatus, "ready">,
-  { title: string; detail: string }
-> = {
-  loading: {
-    title: "Checking Cursor models",
-    detail: "Looking up the models available to your Cursor account.",
-  },
-  not_configured: {
-    title: "Connect Cursor for more models",
-    detail: "Add a Cursor API key to unlock its live model catalog.",
-  },
-  invalid_key: {
-    title: "Cursor key needs attention",
-    detail: "The configured key was rejected, so only Claude is available.",
-  },
-  unavailable: {
-    title: "Cursor catalog is offline",
-    detail: "Claude is available while model discovery recovers.",
-  },
-};
-
-function cursorModelId(modelPref: string): string | null {
-  return modelPref.startsWith("cursor:")
-    ? modelPref.slice("cursor:".length)
-    : null;
+function canCustomize(option: ModelOption): boolean {
+  if (!option.available) return false;
+  if (option.anthropicModel) {
+    return option.anthropicModel.thinking !== "none" &&
+      option.anthropicModel.efforts.length > 1;
+  }
+  return ((option.cursorModel?.parameters ?? []).find(isCursorReasoningParameter)?.values.length ?? 0) > 1;
 }
 
 export default function CoachModelPicker({
@@ -109,7 +97,14 @@ export default function CoachModelPicker({
   );
   const [cursorModels, setCursorModels] = useState<CursorModelOption[]>([]);
   const [catalogStatus, setCatalogStatus] =
-    useState<CursorModelCatalogStatus>("loading");
+    useState<ModelCatalogStatus>("loading");
+  const [anthropicModels, setAnthropicModels] = useState<AnthropicModelOption[]>([]);
+  const [anthropicStatus, setAnthropicStatus] = useState<ModelCatalogStatus>("loading");
+  const catalogControllerRef = useRef<AbortController | null>(null);
+  const [collapsedProviders, setCollapsedProviders] = useState({
+    Anthropic: false,
+    Cursor: false,
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -118,70 +113,94 @@ export default function CoachModelPicker({
     string | null
   >(null);
 
-  useEffect(() => {
+  const refreshCatalogs = useCallback(() => {
+    catalogControllerRef.current?.abort();
     const controller = new AbortController();
+    catalogControllerRef.current = controller;
+    setCatalogStatus("loading");
+    setAnthropicStatus("loading");
 
-    void fetch("/api/me/cursor-models", { signal: controller.signal })
-      .then(async (response) => {
+    async function load(provider: "anthropic" | "cursor") {
+      try {
+        const response = await fetch(`/api/me/${provider}-models`, { signal: controller.signal });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return (await response.json()) as {
-          status: Exclude<CursorModelCatalogStatus, "loading">;
-          models: CursorModelOption[];
+        const data = await response.json() as {
+          status: Exclude<ModelCatalogStatus, "loading">;
+          models: AnthropicModelOption[] | CursorModelOption[];
         };
-      })
-      .then((data) => {
-        setCursorModels(data.models);
-        setCatalogStatus(data.status);
-      })
-      .catch((fetchError: unknown) => {
-        if (
-          fetchError instanceof DOMException &&
-          fetchError.name === "AbortError"
-        ) {
-          return;
+        if (controller.signal.aborted) return;
+        if (provider === "anthropic") {
+          setAnthropicModels(data.models as AnthropicModelOption[]);
+          setAnthropicStatus(data.status);
+        } else {
+          setCursorModels(data.models as CursorModelOption[]);
+          setCatalogStatus(data.status);
         }
-        setCursorModels([]);
-        setCatalogStatus("unavailable");
-      });
-
-    return () => controller.abort();
+      } catch {
+        if (controller.signal.aborted) return;
+        if (provider === "anthropic") {
+          setAnthropicModels([]);
+          setAnthropicStatus("unavailable");
+        } else {
+          setCursorModels([]);
+          setCatalogStatus("unavailable");
+        }
+      }
+    }
+    void load("anthropic");
+    void load("cursor");
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => {
+      if (active && (!catalogControllerRef.current || catalogControllerRef.current.signal.aborted)) {
+        refreshCatalogs();
+      }
+    });
+    return () => {
+      active = false;
+      catalogControllerRef.current?.abort();
+    };
+  }, [refreshCatalogs]);
+
   const options = useMemo<ModelOption[]>(() => {
-    const cursorOptions: ModelOption[] = cursorModels.map((model) => ({
-      value: `cursor:${model.id}`,
-      label: model.display_name,
-      provider: "Cursor",
-      cursorModel: model,
-    }));
-    const selectedCursorId = cursorModelId(modelPref);
-    if (
-      selectedCursorId &&
-      !cursorModels.some((model) => model.id === selectedCursorId)
-    ) {
-      cursorOptions.push({
+    const discovered: ModelOption[] = [
+      ...anthropicModels.map((model) => ({
+        value: `anthropic:${model.id}`,
+        label: model.display_name,
+        provider: "Anthropic" as const,
+        anthropicModel: model,
+        available: anthropicStatus === "ready",
+      })),
+      ...cursorModels.map((model) => ({
+        value: `cursor:${model.id}`,
+        label: model.display_name,
+        provider: "Cursor" as const,
+        cursorModel: model,
+        available: catalogStatus === "ready",
+      })),
+    ];
+    if (!discovered.some((option) => option.value === modelPref)) {
+      discovered.push({
         value: modelPref,
-        label: selectedCursorId,
-        provider: "Cursor",
+        label: modelPref.replace(/^(anthropic|cursor):/, ""),
+        provider: modelPref.startsWith("cursor:") ? "Cursor" : "Anthropic",
+        available: false,
       });
     }
-    return [
-      {
-        value: ANTHROPIC_PREF,
-        label: "Claude Sonnet 4.6",
-        provider: "Anthropic",
-      },
-      ...cursorOptions,
-    ];
-  }, [cursorModels, modelPref]);
+    return discovered;
+  }, [anthropicModels, anthropicStatus, cursorModels, catalogStatus, modelPref]);
 
-  const selectedOption =
-    options.find((option) => option.value === modelPref) ?? options[0];
+  const selectedOption = options.find((option) => option.value === modelPref)!;
+  const selectedAnthropicEffort = selectedOption.anthropicModel
+    ? effectiveAnthropicEffort(selectedOption.anthropicModel, coachEffort)
+    : null;
   const filteredOptions = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return options;
     return options.filter((option) =>
-      [option.label, option.provider, option.cursorModel?.id ?? ""]
+      [option.label, option.provider, option.value]
         .join(" ")
         .toLowerCase()
         .includes(normalized),
@@ -340,6 +359,7 @@ export default function CoachModelPicker({
 
   const customizingOption =
     options.find((option) => option.value === customizingModelPref) ?? null;
+  const customizable = customizingOption && canCustomize(customizingOption);
   const customizingCursorReasoning =
     (customizingOption?.cursorModel?.parameters ?? []).find(
       isCursorReasoningParameter,
@@ -369,6 +389,7 @@ export default function CoachModelPicker({
 
   async function saveModelPref(nextModelPref: string) {
     if (nextModelPref === modelPref || saving) return;
+    if (!options.some((option) => option.value === nextModelPref && option.available)) return;
 
     const previousModelPref = modelPref;
     setModelPref(nextModelPref);
@@ -512,8 +533,8 @@ export default function CoachModelPicker({
           selectedOption.provider === "Cursor" ? "is-cursor" : ""
         }`}
         aria-label={`Coach model: ${selectedOption.label}${
-          selectedOption.provider === "Anthropic"
-            ? `; effort ${coachEffort}`
+          selectedAnthropicEffort
+            ? `; effort ${selectedAnthropicEffort}`
             : selectedCursorParameterValue
               ? selectedCursorBooleanValues
                 ? `; ${selectedCursorReasoningLabel?.toLowerCase()}`
@@ -523,22 +544,25 @@ export default function CoachModelPicker({
         aria-controls={menuId}
         aria-expanded={open}
         disabled={disabled || saving}
-        title={error ?? STATUS_TITLE[catalogStatus]}
+        title={error ?? catalogCopy(selectedOption.provider, selectedOption.provider === "Anthropic" ? anthropicStatus : catalogStatus)}
         onClick={() => {
           if (open) closeMenu();
-          else setOpen(true);
+          else {
+            refreshCatalogs();
+            setOpen(true);
+          }
         }}
       >
         <span className="coach-model-trigger-name">
           {selectedOption.label.replace(/^Claude /, "")}
         </span>
-        {selectedOption.provider === "Anthropic" ||
+        {selectedAnthropicEffort ||
         selectedCursorReasoningLabel ? (
           <span className="coach-model-trigger-effort">
             {saving
               ? "Saving…"
               : selectedOption.provider === "Anthropic"
-                ? EFFORT_OPTIONS.find((option) => option.value === coachEffort)
+                ? EFFORT_OPTIONS.find((option) => option.value === selectedAnthropicEffort)
                     ?.label
                 : selectedCursorReasoningLabel}
           </span>
@@ -562,9 +586,7 @@ export default function CoachModelPicker({
               : "Choose a model"
           }
         >
-          {customizingOption &&
-          (customizingOption.provider === "Anthropic" ||
-            (customizingOption.cursorModel && customizingCursorReasoning)) ? (
+          {customizingOption && customizable ? (
             <>
               <div className="coach-model-customization-heading">
                 <button
@@ -636,11 +658,13 @@ export default function CoachModelPicker({
                     </button>
                   ) : (
                     (customizingOption.provider === "Anthropic"
-                      ? EFFORT_OPTIONS.map((option) => ({
+                      ? EFFORT_OPTIONS.filter((option) =>
+                          customizingOption.anthropicModel?.efforts.includes(option.value),
+                        ).map((option) => ({
                           value: option.value,
                           label: option.label,
                           description: option.description,
-                          selected: coachEffort === option.value,
+                          selected: effectiveAnthropicEffort(customizingOption.anthropicModel!, coachEffort) === option.value,
                         }))
                       : (customizingCursorReasoning?.values ?? []).map(
                           (option) => {
@@ -732,7 +756,10 @@ export default function CoachModelPicker({
                   const providerOptions = filteredOptions.filter(
                     (option) => option.provider === provider,
                   );
-                  if (providerOptions.length === 0) return null;
+                  const status = provider === "Anthropic" ? anthropicStatus : catalogStatus;
+                  const expanded = Boolean(query.trim()) || !collapsedProviders[provider];
+                  const sectionId = `${menuId}-${provider}`;
+                  const catalogCount = provider === "Anthropic" ? anthropicModels.length : cursorModels.length;
 
                   return (
                     <div
@@ -741,70 +768,89 @@ export default function CoachModelPicker({
                       aria-label={`${provider} models`}
                       key={provider}
                     >
-                      <div
+                      <button
+                        type="button"
                         className="coach-model-option-group-label"
-                        aria-hidden
+                        aria-expanded={expanded}
+                        aria-label={`${provider}${selectedOption.provider === provider ? `; selected model: ${selectedOption.label}` : ""}`}
+                        aria-controls={sectionId}
+                        onClick={() => setCollapsedProviders((previous) => ({ ...previous, [provider]: !previous[provider] }))}
                       >
-                        {provider}
-                      </div>
-                      <div className="coach-model-option-group-rows">
-                        {providerOptions.map((option) => {
-                          const selected = option.value === modelPref;
-                          return (
-                            <div
-                              key={option.value}
-                              className={`coach-model-option ${
-                                selected ? "is-selected" : ""
-                              }`}
-                            >
-                              <button
-                                type="button"
-                                aria-pressed={selected}
-                                aria-label={`Select ${option.label}`}
-                                className="coach-model-option-select"
-                                onClick={() => {
-                                  closeMenu();
-                                  void saveModelPref(option.value);
-                                }}
+                        {expanded ? <ChevronDown size={13} aria-hidden /> : <ChevronRight size={13} aria-hidden />}
+                        <span>{provider}</span>
+                        {selectedOption.provider === provider ? (
+                          <small>Selected: {selectedOption.label}</small>
+                        ) : null}
+                      </button>
+                      <div id={sectionId} hidden={!expanded}>
+                        <div className="coach-model-option-group-rows">
+                          {providerOptions.map((option) => {
+                            const selected = option.value === modelPref;
+                            return (
+                              <div
+                                key={option.value}
+                                className={`coach-model-option ${
+                                  selected ? "is-selected" : ""
+                                }`}
                               >
-                                <strong>{option.label}</strong>
-                                <span
-                                  className="coach-model-option-check"
-                                  aria-hidden
-                                >
-                                  {selected ? (
-                                    <Check size={14} strokeWidth={2.2} />
-                                  ) : null}
-                                </span>
-                              </button>
-                              {option.provider === "Anthropic" ||
-                              ((option.cursorModel?.parameters ?? []).find(
-                                isCursorReasoningParameter,
-                              )?.values.length ?? 0) > 1 ? (
                                 <button
                                   type="button"
-                                  className="coach-model-customize"
-                                  data-model-pref={option.value}
-                                  aria-label={`Customize ${option.label}`}
-                                  aria-expanded={false}
+                                  aria-pressed={selected}
+                                  aria-label={`Select ${option.label}`}
+                                  className="coach-model-option-select"
+                                  disabled={!option.available || saving}
+                                  title={option.available ? undefined : "Model is unverified or unavailable. Check provider access in Settings."}
                                   onClick={() => {
-                                    lastCustomizedModelPrefRef.current =
-                                      option.value;
-                                    restoreCustomizationFocusRef.current =
-                                      false;
-                                    setCustomizingModelPref(option.value);
+                                    closeMenu();
+                                    void saveModelPref(option.value);
                                   }}
                                 >
-                                  <ChevronRight
-                                    size={15}
-                                    strokeWidth={1.8}
+                                  <strong>{option.label}{!option.available ? " (unavailable)" : ""}</strong>
+                                  <span
+                                    className="coach-model-option-check"
                                     aria-hidden
-                                  />
+                                  >
+                                    {selected ? (
+                                      <Check size={14} strokeWidth={2.2} />
+                                    ) : null}
+                                  </span>
                                 </button>
-                              ) : null}
-                            </div>
-                          );
-                        })}
+                                {canCustomize(option) ? (
+                                  <button
+                                    type="button"
+                                    className="coach-model-customize"
+                                    data-model-pref={option.value}
+                                    aria-label={`Customize ${option.label}`}
+                                    aria-expanded={false}
+                                    onClick={() => {
+                                      lastCustomizedModelPrefRef.current =
+                                        option.value;
+                                      restoreCustomizationFocusRef.current =
+                                        false;
+                                      setCustomizingModelPref(option.value);
+                                    }}
+                                  >
+                                    <ChevronRight
+                                      size={15}
+                                      strokeWidth={1.8}
+                                      aria-hidden
+                                    />
+                                  </button>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className={`coach-model-catalog-state is-${status}`}>
+                          <span className="coach-model-catalog-icon" aria-hidden>
+                            {status === "loading" ? <LoaderCircle size={15} /> : <KeyRound size={15} />}
+                          </span>
+                          <span role="status">
+                            <small>{catalogCopy(provider, status)}</small>
+                            {status === "ready" && catalogCount === 0 ? <small>No models available.</small> : null}
+                          </span>
+                          <a href={`/settings#${provider === "Anthropic" ? "coach-byok" : "coach-cursor-byok"}`}>Settings</a>
+                        </div>
                       </div>
                     </div>
                   );
@@ -815,28 +861,6 @@ export default function CoachModelPicker({
                   </div>
                 ) : null}
               </div>
-
-              {catalogStatus !== "ready" ? (
-                <div
-                  className={`coach-model-catalog-state is-${catalogStatus}`}
-                >
-                  <span className="coach-model-catalog-icon" aria-hidden>
-                    {catalogStatus === "loading" ? (
-                      <LoaderCircle size={15} strokeWidth={1.8} />
-                    ) : (
-                      <KeyRound size={15} strokeWidth={1.8} />
-                    )}
-                  </span>
-                  <span>
-                    <strong>{STATUS_DETAIL[catalogStatus].title}</strong>
-                    <small>{STATUS_DETAIL[catalogStatus].detail}</small>
-                  </span>
-                  {catalogStatus === "not_configured" ||
-                  catalogStatus === "invalid_key" ? (
-                    <a href="/settings">Manage key</a>
-                  ) : null}
-                </div>
-              ) : null}
             </>
           )}
         </div>

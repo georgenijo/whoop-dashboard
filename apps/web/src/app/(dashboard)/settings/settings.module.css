@@ -591,3 +591,51 @@
     transition: none;
   }
 }
+
+.providerDisclosure {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 0;
+  border: 0;
+  border-radius: var(--r-md);
+  color: var(--fg-0);
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 540;
+  text-align: left;
+  cursor: pointer;
+}
+
+.providerDisclosure > svg {
+  flex-shrink: 0;
+}
+
+.providerDisclosure .sourceBadge {
+  margin-left: auto;
+}
+
+.providerDisclosure:hover {
+  background: var(--bg-lift);
+}
+
+.providerDisclosure:focus-visible {
+  outline: 2px solid var(--fg-2);
+  outline-offset: 3px;
+}
+
+.providerContent {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.catalogStatus {
+  margin: 0;
+  color: var(--fg-2);
+  font-size: 11.5px;
+  line-height: 1.5;
+}

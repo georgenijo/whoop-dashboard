@@ -1,6 +1,7 @@
 import { APIError, APIConnectionError } from "@anthropic-ai/sdk";
 import { BadApiKeyError } from "./api-key";
 import { CursorAgentError, MissingCursorKeyError } from "./cursor-key";
+import { AnthropicModelCatalogError, AnthropicModelUnavailableError } from "./anthropic-models";
 
 export type ChatErrorKind =
   | "bad_api_key"
@@ -26,6 +27,12 @@ function isCreditBalanceError(err: APIError): boolean {
 }
 
 export function classifyChatError(err: unknown): ClassifiedChatError {
+  if (err instanceof AnthropicModelUnavailableError) {
+    return { status: 422, kind: "upstream_error", message: err.message };
+  }
+  if (err instanceof AnthropicModelCatalogError) {
+    return { status: 503, kind: "upstream_error", message: "Anthropic model discovery is unavailable. Try again shortly." };
+  }
   if (err instanceof MissingCursorKeyError) {
     return {
       status: 503,

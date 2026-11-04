@@ -17,6 +17,13 @@ import {
   parseModelPref,
   resolveCoachProvider,
 } from "./provider";
+import type { AnthropicModelOption } from "./anthropic-model-options";
+
+const adaptiveModel: AnthropicModelOption = {
+  id: "claude-opus-4-6", display_name: "Opus", thinking: "adaptive",
+  efforts: ["off", "low", "medium", "high", "max"], max_tokens: 64000,
+  output_effort: true,
+};
 
 describe("parseModelPref", () => {
   it("defaults null/undefined to the Anthropic default", () => {
@@ -52,6 +59,13 @@ describe("parseModelPref", () => {
     });
   });
 
+  it("preserves dynamically discovered Anthropic models", () => {
+    expect(parseModelPref("anthropic:claude-opus-4-6")).toEqual({
+      provider: "anthropic", model: "claude-opus-4-6",
+    });
+    expect(parseModelPref("anthropic: model").model).toBe("claude-sonnet-4-6");
+  });
+
   it("falls back malformed/legacy values to Anthropic", () => {
     expect(parseModelPref("garbage:x").provider).toBe("anthropic");
     expect(parseModelPref("claude-sonnet-4-6").provider).toBe("anthropic");
@@ -69,23 +83,41 @@ describe("parseCoachEffort", () => {
     expect(parseCoachEffort("medium")).toBe("medium");
     expect(parseCoachEffort("high")).toBe("high");
     expect(parseCoachEffort("max")).toBe("max");
-    expect(parseCoachEffort("xhigh")).toBe("high");
+    expect(parseCoachEffort("xhigh")).toBe("xhigh");
     expect(parseCoachEffort(null)).toBe("high");
   });
 });
 
 describe("anthropicReasoningConfig", () => {
   it("disables thinking when effort is off", () => {
-    expect(anthropicReasoningConfig("off")).toEqual({
+    expect(anthropicReasoningConfig("off", adaptiveModel, 16384)).toEqual({
       thinking: { type: "disabled" },
     });
   });
 
   it("uses adaptive thinking for active effort levels", () => {
-    expect(anthropicReasoningConfig("max")).toEqual({
+    expect(anthropicReasoningConfig("max", adaptiveModel, 16384)).toEqual({
       thinking: { type: "adaptive" },
       output_config: { effort: "max" },
     });
+  });
+
+  it("uses a supported effort when switching from Opus to Sonnet", () => {
+    const model = { ...adaptiveModel, efforts: ["off", "high"] as const };
+    expect(anthropicReasoningConfig("max", { ...model, efforts: [...model.efforts] }, 16384))
+      .toEqual({ thinking: { type: "adaptive" }, output_config: { effort: "high" } });
+  });
+
+  it("sends token budgets for older models and no thinking for unsupported models", () => {
+    expect(anthropicReasoningConfig("high", { ...adaptiveModel, thinking: "enabled" }, 8192))
+      .toEqual({ thinking: { type: "enabled", budget_tokens: 8191 } });
+    expect(anthropicReasoningConfig("high", { ...adaptiveModel, thinking: "none", efforts: ["off"] }, 4096))
+      .toEqual({});
+  });
+
+  it("omits effort when the API reports adaptive thinking without effort", () => {
+    expect(anthropicReasoningConfig("high", { ...adaptiveModel, output_effort: false }, 16384))
+      .toEqual({ thinking: { type: "adaptive" } });
   });
 });
 
@@ -127,5 +159,11 @@ describe("cursorProviderEnabled", () => {
       model: "gpt-5.5",
       parameters: [{ id: "effort", value: "high" }],
     });
+  });
+
+  it("preserves an unavailable provider instead of falling back to paid Anthropic", () => {
+    delete process.env.CURSOR_API_KEY;
+    getUserSettingsMock.mockReturnValue({ model_pref: "cursor:gpt-5.5" });
+    expect(resolveCoachProvider(1)).toEqual({ provider: "cursor", model: "gpt-5.5", parameters: [] });
   });
 });

@@ -5,6 +5,7 @@ enum CoachEffort: String, Codable, CaseIterable, Identifiable {
     case low
     case medium
     case high
+    case xhigh
     case max
 
     var id: String { rawValue }
@@ -15,6 +16,7 @@ enum CoachEffort: String, Codable, CaseIterable, Identifiable {
         case .low: return "Low"
         case .medium: return "Medium"
         case .high: return "High"
+        case .xhigh: return "Extra high"
         case .max: return "Max"
         }
     }
@@ -25,6 +27,7 @@ enum CoachEffort: String, Codable, CaseIterable, Identifiable {
         case .low: return "Fastest"
         case .medium: return "Balanced"
         case .high: return "Thorough"
+        case .xhigh: return "More thorough"
         case .max: return "Deepest"
         }
     }
@@ -258,15 +261,17 @@ struct CoachModelSelection {
             }
         )
 
-        if modelPref.hasPrefix("cursor:"),
+        if (modelPref.hasPrefix("cursor:") || modelPref.hasPrefix("anthropic:")),
             !result.contains(where: { $0.id == modelPref }) {
-            let rawID = String(modelPref.dropFirst("cursor:".count))
+            let isAnthropic = modelPref.hasPrefix("anthropic:")
+            let prefix = isAnthropic ? "anthropic:" : "cursor:"
+            let rawID = String(modelPref.dropFirst(prefix.count))
             result.append(
                 CoachModelOption(
                     id: modelPref,
                     label: rawID,
-                    detail: "Previously selected Cursor model.",
-                    provider: .cursor
+                    detail: isAnthropic ? "Previously selected Anthropic model." : "Previously selected Cursor model.",
+                    provider: isAnthropic ? .anthropic : .cursor
                 )
             )
         }

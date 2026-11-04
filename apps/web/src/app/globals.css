@@ -762,13 +762,43 @@ body {
 }
 
 .coach-model-option-group-label {
-  padding: 2px 7px 3px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 7px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
   color: var(--fg-2);
   font-family: var(--font-sans);
   font-size: 9px;
   font-weight: 550;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.coach-model-option-group-label:hover {
+  background: var(--bg-lift);
+}
+
+.coach-model-option-group-label small {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--fg-2);
+  font-size: 10px;
+  letter-spacing: normal;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.coach-model-option-group-label > svg {
+  flex-shrink: 0;
 }
 
 .coach-model-option-group-rows {
@@ -812,7 +842,7 @@ body {
   grid-column: 1 / -1;
 }
 
-.coach-model-option-select:hover {
+.coach-model-option-select:hover:not(:disabled) {
   background: rgba(255,255,255,0.055);
 }
 
@@ -831,6 +861,13 @@ body {
   white-space: nowrap;
 }
 
+.coach-model-option-select:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.coach-model-option-group-label:focus-visible,
+.coach-model-catalog-state a:focus-visible,
 .coach-model-option-select:focus-visible,
 .coach-model-customize:focus-visible,
 .coach-model-menu .coach-model-customization-heading button:focus-visible,
@@ -1907,6 +1944,10 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .coach-model-catalog-state.is-loading .coach-model-catalog-icon svg {
+    animation: none;
+  }
+
   .coach-work-disclosure.running .coach-work-heartbeat,
   .coach-tool-call.running .coach-tool-state {
     animation: none;

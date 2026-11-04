@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-11-04: Keep Coach provider choices explicit when credentials disappear
+
+**Decision:** Preserve the selected provider and model when a provider key is removed or becomes unavailable. Gate unavailable models in the web picker and Settings, and reject a turn with missing credentials instead of silently switching providers. Discover Anthropic models and reasoning capabilities using the same personal-key-first resolution as chat execution.
+
+**Rationale:** Anthropic now has an independently paid API key. Falling back from Cursor to Anthropic can spend against an account the user did not select, and a hard-coded catalog can advertise unavailable models or send unsupported reasoning settings. Model catalogs are cached briefly per credential digest and refreshed in the UI when the picker opens or a key changes.
+
+**Status:** active
+
+**References:** `apps/web/src/lib/coach/provider.ts`, `apps/web/src/lib/coach/anthropic-models.ts`, `apps/web/src/components/coach/CoachModelPicker.tsx`
+
+---
+
 ## 2026-09-26: Keep native Whoop cycle steps distinct from calendar-day steps
 
 **Decision:** Store native Whoop step counts by tenant and upstream cycle ID, retaining null counts, actual boundaries, upstream revision, and fetch time. Label each cycle by the user's local `created_at` day, falling back to its start day for older records; the label is not a midnight-to-midnight total. Source-specific queries never blend Whoop with Apple Health. Keep shipped iOS metric screens on Apple Health until the native app gains a source selector; shared Coach tools support Whoop on both clients.

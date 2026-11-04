@@ -7,6 +7,8 @@ import "server-only";
 // Anthropic default, so legacy values and unset users keep working unchanged.
 import { getUserSettings } from "@/lib/db";
 import type { CursorModelParameterSelection } from "./cursor-model-params";
+import { effectiveAnthropicEffort, type AnthropicModelOption } from "./anthropic-model-options";
+import type { MessageCreateParamsBase } from "@anthropic-ai/sdk/resources/messages";
 
 export type CoachProvider = "anthropic" | "cursor";
 export type CoachModelSelection = {
@@ -14,7 +16,7 @@ export type CoachModelSelection = {
   model: string;
   parameters?: CursorModelParameterSelection[];
 };
-export const COACH_EFFORTS = ["off", "low", "medium", "high", "max"] as const;
+export const COACH_EFFORTS = ["off", "low", "medium", "high", "xhigh", "max"] as const;
 export type CoachEffort = (typeof COACH_EFFORTS)[number];
 export type ActiveCoachEffort = Exclude<CoachEffort, "off">;
 
@@ -26,11 +28,6 @@ export const ANTHROPIC_PREF = `anthropic:${DEFAULT_ANTHROPIC_MODEL}`;
 export const CURSOR_PREF = `cursor:${CURSOR_COMPOSER_MODEL}`;
 export const DEFAULT_COACH_EFFORT: CoachEffort = "high";
 
-const KNOWN: Record<string, CoachModelSelection> = {
-  [ANTHROPIC_PREF]: { provider: "anthropic", model: DEFAULT_ANTHROPIC_MODEL },
-  [CURSOR_PREF]: { provider: "cursor", model: CURSOR_COMPOSER_MODEL },
-};
-
 const ANTHROPIC_DEFAULT: CoachModelSelection = {
   provider: "anthropic",
   model: DEFAULT_ANTHROPIC_MODEL,
@@ -40,16 +37,17 @@ const ANTHROPIC_DEFAULT: CoachModelSelection = {
 export function parseModelPref(
   pref: string | null | undefined,
 ): CoachModelSelection {
-  if (pref && KNOWN[pref]) return KNOWN[pref];
-  if (pref?.startsWith("cursor:")) {
-    const model = pref.slice("cursor:".length).trim();
+  const provider = pref?.startsWith("cursor:") ? "cursor"
+    : pref?.startsWith("anthropic:") ? "anthropic" : null;
+  if (provider && pref) {
+    const model = pref.slice(provider.length + 1);
     if (
       model &&
       !model.startsWith("-") &&
       model.length <= 200 &&
       !/[\s\x00-\x1f]/.test(model)
     ) {
-      return { provider: "cursor", model };
+      return { provider, model };
     }
   }
   return ANTHROPIC_DEFAULT;
@@ -78,20 +76,24 @@ export function parseCoachEffort(value: unknown): CoachEffort {
   return isCoachEffort(value) ? value : DEFAULT_COACH_EFFORT;
 }
 
-export function anthropicReasoningConfig(effort: CoachEffort):
-  | {
-      thinking: { type: "disabled" };
-    }
-  | {
-      thinking: { type: "adaptive" };
-      output_config: { effort: ActiveCoachEffort };
-    } {
-  return effort === "off"
-    ? { thinking: { type: "disabled" } }
-    : {
-        thinking: { type: "adaptive" },
-        output_config: { effort },
-      };
+export function anthropicReasoningConfig(
+  effort: CoachEffort,
+  model: AnthropicModelOption,
+  maxTokens: number,
+): Pick<MessageCreateParamsBase, "thinking" | "output_config"> {
+  const effective = effectiveAnthropicEffort(model, effort);
+  if (model.thinking === "none") return {};
+  if (effective === "off") return { thinking: { type: "disabled" } };
+  if (model.thinking === "enabled") {
+    const budgets = { low: 1024, medium: 4096, high: 8192, xhigh: 10240, max: 12288 };
+    const budget = Math.min(budgets[effective], maxTokens - 1);
+    return budget < 1024 ? { thinking: { type: "disabled" } }
+      : { thinking: { type: "enabled", budget_tokens: budget } };
+  }
+  return {
+    thinking: { type: "adaptive" },
+    ...(model.output_effort ? { output_config: { effort: effective } } : {}),
+  };
 }
 
 export function resolveCoachEffort(userId: number): CoachEffort {
@@ -105,21 +107,16 @@ export function cursorProviderEnabled(userId: number): boolean {
   );
 }
 
-/**
- * Resolve the provider for a coach turn. If a user selected Cursor but the
- * shared key is unset (e.g. removed from env), fall back to Anthropic rather
- * than failing the turn.
+export function anthropicProviderEnabled(userId: number): boolean {
+  return Boolean(getUserSettings(userId)?.anthropic_key || process.env.ANTHROPIC_API_KEY);
+}
+
+/** Preserve explicit provider choices, including when a credential disappears.
+ * Missing credentials must never silently route a turn to another paid provider.
  */
 export function resolveCoachProvider(userId: number): CoachModelSelection {
   const settings = getUserSettings(userId);
   const selection = parseModelPref(settings?.model_pref);
-  if (
-    selection.provider === "cursor" &&
-    !settings?.cursor_key &&
-    !process.env.CURSOR_API_KEY
-  ) {
-    return ANTHROPIC_DEFAULT;
-  }
   if (selection.provider === "cursor") {
     return {
       ...selection,

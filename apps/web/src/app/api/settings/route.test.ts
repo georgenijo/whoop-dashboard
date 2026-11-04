@@ -18,6 +18,11 @@ const db = vi.hoisted(() => ({
 }));
 const resolveCursorKeyMock = vi.fn();
 const listCursorModelsForKeyMock = vi.fn();
+const listAnthropicModelsForKeyMock = vi.fn();
+vi.mock("@/lib/coach/anthropic-models", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/coach/anthropic-models")>(),
+  listAnthropicModelsForKey: (...args: unknown[]) => listAnthropicModelsForKeyMock(...args),
+}));
 
 vi.mock("@/lib/db", () => db);
 vi.mock("@/lib/coach/cursor-key", () => ({
@@ -36,6 +41,7 @@ vi.mock("@/lib/coach/cursor-models", async (importOriginal) => {
 
 import { GET, POST } from "./route";
 import { CursorModelCatalogError } from "@/lib/coach/cursor-models";
+import { AnthropicModelCatalogError } from "@/lib/coach/anthropic-models";
 import {
   DEFAULT_SYSTEM_PROMPT,
   MAX_SYSTEM_PROMPT_LENGTH,
@@ -53,10 +59,49 @@ beforeEach(() => {
   Object.values(db).forEach((mock) => mock.mockReset());
   resolveCursorKeyMock.mockReset();
   listCursorModelsForKeyMock.mockReset();
+  listAnthropicModelsForKeyMock.mockReset();
   db.getSetting.mockReturnValue(null);
 });
 
 describe("/api/settings model preferences", () => {
+  it("returns a dynamic Anthropic preference and provider availability", async () => {
+    db.getUserSettings.mockReturnValue({ anthropic_key: "personal", model_pref: "anthropic:claude-opus-4-6" });
+    expect(await (await GET(new Request("http://localhost/api/settings"))).json())
+      .toMatchObject({ model_pref: "anthropic:claude-opus-4-6", anthropic_available: true });
+  });
+
+  it("validates and persists an account-available Anthropic model", async () => {
+    db.getUserSettings.mockReturnValue({ anthropic_key: "personal" });
+    listAnthropicModelsForKeyMock.mockResolvedValue([{ id: "claude-opus-4-6" }]);
+    const response = await POST(post({ model_pref: "anthropic:claude-opus-4-6" }));
+    expect(response.status).toBe(200);
+    expect(listAnthropicModelsForKeyMock).toHaveBeenCalledWith("personal");
+    expect(db.upsertUserSettings).toHaveBeenCalledWith({ user_id: 7, model_pref: "anthropic:claude-opus-4-6" });
+  });
+
+  it("rejects missing models, invalid keys, and catalog failures without saving", async () => {
+    db.getUserSettings.mockReturnValue({ anthropic_key: "personal" });
+    listAnthropicModelsForKeyMock.mockResolvedValue([]);
+    expect((await POST(post({ model_pref: "anthropic:removed" }))).status).toBe(400);
+    listAnthropicModelsForKeyMock.mockRejectedValue(new AnthropicModelCatalogError("invalid_key"));
+    expect((await POST(post({ model_pref: "anthropic:claude-opus-4-6" }))).status).toBe(422);
+    listAnthropicModelsForKeyMock.mockRejectedValue(new AnthropicModelCatalogError("unavailable"));
+    expect((await POST(post({ model_pref: "anthropic:claude-opus-4-6" }))).status).toBe(502);
+    expect(db.upsertUserSettings).not.toHaveBeenCalled();
+  });
+
+  it("gates even the default Anthropic model when no key is configured", async () => {
+    const original = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    try {
+      db.getUserSettings.mockReturnValue(null);
+      expect((await POST(post({ model_pref: "anthropic:claude-sonnet-4-6" }))).status).toBe(400);
+      expect(db.upsertUserSettings).not.toHaveBeenCalled();
+    } finally {
+      if (original !== undefined) process.env.ANTHROPIC_API_KEY = original;
+    }
+  });
+
   it("returns a stored dynamic Cursor model instead of collapsing to Composer", async () => {
     db.getUserSettings.mockReturnValue({
       cursor_key: "key_personal",
@@ -223,7 +268,7 @@ describe("/api/settings model preferences", () => {
       model_pref: "anthropic:claude-sonnet-4-6",
     });
 
-    const response = await POST(post({ coach_effort: "xhigh" }));
+    const response = await POST(post({ coach_effort: "ultra" }));
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({

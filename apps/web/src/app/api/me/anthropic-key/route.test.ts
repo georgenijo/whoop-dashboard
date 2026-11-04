@@ -65,10 +65,12 @@ beforeEach(() => {
   getUserSettingsMock.mockReset();
   upsertUserSettingsMock.mockReset();
   modelsListMock.mockReset();
+  vi.stubEnv("ANTHROPIC_API_KEY", "");
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
 
 describe("POST /api/me/anthropic-key — body validation", () => {
@@ -103,6 +105,7 @@ describe("POST /api/me/anthropic-key — probe outcomes", () => {
       ok: true,
       present: true,
       masked: "sk-ant-…W4nT",
+      fallback_available: false, source: "user",
     });
     expect(upsertUserSettingsMock).toHaveBeenCalledTimes(1);
     expect(upsertUserSettingsMock).toHaveBeenCalledWith({
@@ -158,15 +161,21 @@ describe("GET /api/me/anthropic-key", () => {
     getUserSettingsMock.mockReturnValue(null);
     const res = await GET(makeRequest("GET"));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ present: false, masked: null });
+    expect(await res.json()).toEqual({ present: false, masked: null, fallback_available: false, source: "none" });
   });
 });
 
 describe("DELETE /api/me/anthropic-key", () => {
+  it("reports the shared fallback after removing a personal key", async () => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "shared-secret");
+    const body = await (await DELETE(makeRequest("DELETE"))).json();
+    expect(body).toMatchObject({ present: false, fallback_available: true, source: "env" });
+    expect(JSON.stringify(body)).not.toContain("shared-secret");
+  });
   it("clears the column and returns { ok:true, present:false, masked:null }", async () => {
     const res = await DELETE(makeRequest("DELETE"));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, present: false, masked: null });
+    expect(await res.json()).toEqual({ ok: true, present: false, masked: null, fallback_available: false, source: "none" });
     expect(upsertUserSettingsMock).toHaveBeenCalledWith({
       user_id: 1,
       anthropic_key: null,

@@ -16,7 +16,7 @@ import {
   runAndPersistCoachTurn,
   titleChatThread,
 } from "@/lib/coach/persistence";
-import { resolveCoachProvider } from "@/lib/coach/provider";
+import { cursorProviderEnabled, resolveCoachProvider } from "@/lib/coach/provider";
 import { classifyChatError } from "@/lib/coach/error-mapping";
 import { deriveTitleFromText } from "@/lib/coach/title";
 import { forModule } from "@/lib/logger";
@@ -276,10 +276,13 @@ export async function POST(req: Request) {
     // Provider selection drives which key is mandatory. Anthropic (the
     // default) requires its key up front — a missing key is a configuration
     // failure surfaced as 503, which also keeps the chat_threads table free of
-    // empty "ghost" threads. The Cursor provider uses the shared
-    // CURSOR_API_KEY (already validated inside resolveCoachProvider) and only
+    // empty "ghost" threads. The Cursor provider uses a personal or shared
+    // CURSOR_API_KEY and only
     // needs an Anthropic key opportunistically, for auto-titling.
     const selection = resolveCoachProvider(user.id);
+    if (selection.provider === "cursor" && !cursorProviderEnabled(user.id)) {
+      return Response.json({ error: "No Cursor API key configured. Add a key in Settings or choose another provider." }, { status: 503 });
+    }
     let apiKey: string | null = null;
     let apiKeyOrigin: ApiKeyOrigin = "env";
     try {
