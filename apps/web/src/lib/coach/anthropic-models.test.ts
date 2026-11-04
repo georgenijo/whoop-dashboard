@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { APIError } from "@anthropic-ai/sdk";
 import type { ModelInfo } from "@anthropic-ai/sdk/resources/models";
+import { effectiveAnthropicEffort } from "./anthropic-model-options";
 
 const list = vi.hoisted(() => vi.fn());
 const construct = vi.hoisted(() => vi.fn());
@@ -78,5 +79,26 @@ describe("Anthropic model discovery", () => {
     const { anthropicModelOption } = await import("./anthropic-models");
     expect(anthropicModelOption(model("claude-haiku-4-5-20251001"))).toMatchObject({ thinking: "enabled", efforts: ["off", "low", "medium", "high"] });
     expect(anthropicModelOption(model("unknown-model"))).toMatchObject({ thinking: "none", efforts: ["off"] });
+  });
+
+  it("gates None and normalizes saved off when the model rejects disabled thinking", async () => {
+    const { anthropicModelOption } = await import("./anthropic-models");
+    const newerThinkingTypes = {
+      adaptive: { supported: true }, enabled: { supported: false },
+      disabled: { supported: false }, between_tools: { supported: true },
+    };
+    const option = anthropicModelOption(model("claude-sonnet-5-5", {
+      batch: { supported: true }, citations: { supported: true },
+      code_execution: { supported: true }, image_input: { supported: true },
+      pdf_input: { supported: true }, structured_outputs: { supported: true },
+      context_management: {
+        supported: true, clear_thinking_20251015: null,
+        clear_tool_uses_20250919: null, compact_20260112: null,
+      },
+      thinking: { supported: true, types: newerThinkingTypes },
+      effort: { supported: true, low: { supported: true }, medium: { supported: true }, high: { supported: true }, xhigh: { supported: true }, max: { supported: true } },
+    }));
+    expect(option.efforts).toEqual(["low", "medium", "high", "xhigh", "max"]);
+    expect(effectiveAnthropicEffort(option, "off")).toBe("high");
   });
 });

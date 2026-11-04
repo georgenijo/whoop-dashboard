@@ -119,6 +119,12 @@ describe("anthropicReasoningConfig", () => {
     expect(anthropicReasoningConfig("high", { ...adaptiveModel, output_effort: false }, 16384))
       .toEqual({ thinking: { type: "adaptive" } });
   });
+
+  it("avoids disabled thinking when a model advertises only active efforts", () => {
+    expect(anthropicReasoningConfig("off", {
+      ...adaptiveModel, efforts: ["low", "medium", "high", "max"],
+    }, 16384)).toEqual({ thinking: { type: "adaptive" }, output_config: { effort: "high" } });
+  });
 });
 
 describe("cursorProviderEnabled", () => {

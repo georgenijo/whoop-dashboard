@@ -44,6 +44,7 @@ import {
   chatLogToolSummaries,
   executeTool,
   newToolTurnState,
+  TOOLS,
   type ToolDetail,
 } from "./tools";
 
@@ -697,10 +698,31 @@ describe("query_workout_plans tool", () => {
 
 
 describe("query_steps source routing", () => {
+  it("keeps every strict tool enum compatible with Anthropic's scalar-type parser", () => {
+    function checkEnums(value: unknown): void {
+      if (!value || typeof value !== "object") return;
+      if (Array.isArray(value)) {
+        value.forEach(checkEnums);
+        return;
+      }
+      const schema = value as Record<string, unknown>;
+      if (Array.isArray(schema.enum)) {
+        expect(typeof schema.type).toBe("string");
+        for (const member of schema.enum) {
+          expect(schema.type).toBe(member === null ? "null" : typeof member);
+        }
+      }
+      Object.values(schema).forEach(checkEnums);
+    }
+    TOOLS.forEach((tool) => checkEnums(tool.input_schema));
+  });
+
   it("defaults to native Whoop and honors explicit Apple Health", async () => {
     const { querySteps } = await import("./steps");
     const opts = { userId: 2, turnState: newToolTurnState() };
     await executeTool("query_steps", { start_date: "2026-09-24", end_date: "2026-09-26" }, opts);
+    expect(querySteps).toHaveBeenLastCalledWith(2, "2026-09-24", "2026-09-26", "whoop", undefined);
+    await executeTool("query_steps", { start_date: "2026-09-24", end_date: "2026-09-26", source: null }, opts);
     expect(querySteps).toHaveBeenLastCalledWith(2, "2026-09-24", "2026-09-26", "whoop", undefined);
     await executeTool("query_steps", { start_date: "2026-09-24", end_date: "2026-09-26", source: "apple_health" }, opts);
     expect(querySteps).toHaveBeenLastCalledWith(2, "2026-09-24", "2026-09-26", "apple_health", undefined);

@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import Anthropic, { APIError } from "@anthropic-ai/sdk";
-import type { ModelInfo } from "@anthropic-ai/sdk/resources/models";
+import type { CapabilitySupport, ModelInfo, ThinkingTypes } from "@anthropic-ai/sdk/resources/models";
 import type { AnthropicModelOption } from "./anthropic-model-options";
 import type { CoachEffort } from "./provider";
 
@@ -56,6 +56,14 @@ export function anthropicModelOption(model: ModelInfo): AnthropicModelOption {
       thinking = "enabled";
       efforts = ["off", "low", "medium", "high"];
     }
+  }
+  // Newer Models API responses report whether disabled thinking is legal.
+  // Sonnet 5.5 rejects it; omit None from the UI and normalize saved off
+  // preferences to a supported effort. Older SDK typings lack this field.
+  const thinkingTypes = capabilities?.thinking.types as
+    (ThinkingTypes & { disabled?: CapabilitySupport }) | undefined;
+  if (thinking !== "none" && thinkingTypes?.disabled?.supported === false) {
+    efforts = efforts.filter((effort) => effort !== "off");
   }
   return {
     id: model.id,

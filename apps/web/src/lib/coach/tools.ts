@@ -248,7 +248,15 @@ export const TOOLS: ToolSchema[] = [
       ...DATE_RANGE_SCHEMA,
       properties: {
         ...DATE_RANGE_SCHEMA.properties,
-        source: { type: ["string", "null"], enum: ["whoop", "apple_health", null], description: "WHOOP by default; Apple Health only when requested." },
+        source: {
+          // Anthropic strict tools reject enums whose declared type is an
+          // array. Keep the nullable default in its own schema alternative.
+          anyOf: [
+            { type: "string", enum: ["whoop", "apple_health"] },
+            { type: "null" },
+          ],
+          description: "WHOOP by default; Apple Health only when requested.",
+        },
       },
       required: ["start_date", "end_date", "source"],
     },
