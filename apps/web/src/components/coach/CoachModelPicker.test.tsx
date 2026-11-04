@@ -280,6 +280,19 @@ describe("CoachModelPicker", () => {
     expect(screen.getByRole("button", { name: "Coach model: Claude Opus Live; effort xhigh" })).toHaveTextContent("Extra high");
   });
 
+  it("hides None for Sonnet 5.5 and displays a supported effort for saved off", async () => {
+    anthropicCatalogMock.mockImplementation(() => Response.json({ status: "ready", models: [{
+      id: "claude-sonnet-5-5", display_name: "Claude Sonnet 5.5", thinking: "adaptive",
+      efforts: ["low", "medium", "high", "xhigh", "max"], max_tokens: 128000,
+    }] }));
+    renderPicker({ initialModelPref: "anthropic:claude-sonnet-5-5", initialCoachEffort: "off" });
+    openPicker();
+    fireEvent.click(await screen.findByRole("button", { name: "Customize Claude Sonnet 5.5" }));
+    expect(screen.queryByRole("radio", { name: /None/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /^High/ })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("button", { name: "Coach model: Claude Sonnet 5.5; effort high" })).toBeInTheDocument();
+  });
+
   it("hides reasoning customization for models without thinking", async () => {
     renderPicker({ initialModelPref: "anthropic:claude-legacy" });
     openPicker();
