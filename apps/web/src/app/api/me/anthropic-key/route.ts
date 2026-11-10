@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Anthropic, { APIError } from "@anthropic-ai/sdk";
 import { requireAuth } from "@/lib/auth";
 import { getUserSettings, upsertUserSettings } from "@/lib/db";
+import { clearGenerationFailure } from "@/lib/db/ai-generation";
 import { maskAnthropicKey } from "@/lib/coach/key-mask";
 
 export const dynamic = "force-dynamic";
@@ -85,6 +86,8 @@ export async function POST(req: Request) {
   }
 
   upsertUserSettings({ user_id: user.id, anthropic_key: trimmed });
+  clearGenerationFailure(user.id, "insight");
+  clearGenerationFailure(user.id, "title");
   return NextResponse.json({
     ok: true,
     present: true,
@@ -96,5 +99,7 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   const { user } = await requireAuth(req);
   upsertUserSettings({ user_id: user.id, anthropic_key: null });
+  clearGenerationFailure(user.id, "insight");
+  clearGenerationFailure(user.id, "title");
   return NextResponse.json({ ok: true, present: false, masked: null, ...keySource(false) });
 }

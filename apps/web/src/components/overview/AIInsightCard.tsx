@@ -1,10 +1,11 @@
+import AIInsightRefreshWatcher from "./AIInsightRefreshWatcher";
+import type { GenerationErrorClass } from "@/lib/db/ai-generation";
 import { marked } from "marked";
 import Link from "next/link";
 import type { InsightRow } from "@/lib/db";
 import { sanitizeHtml } from "@/lib/sanitize-html";
 
-function formatInsightDate(date: string): string {
-  const todayStr = new Date().toLocaleDateString("en-CA");
+function formatInsightDate(date: string, todayStr = new Date().toLocaleDateString("en-CA")): string {
   const diff = Math.round(
     (new Date(todayStr).getTime() - new Date(date).getTime()) / (1000 * 60 * 60 * 24)
   );
@@ -17,18 +18,22 @@ export default function AIInsightCard({
   hasData,
   insight,
   refreshing,
+  errorClass = null,
+  today,
 }: {
   hasData: boolean;
+  today?: string;
   insight: InsightRow | null;
   refreshing: boolean;
+  errorClass?: GenerationErrorClass | null;
 }) {
   return (
     <div className="ai-card" aria-label="AI insight">
       <div className="ai-head">
         <span className="ai-tag">Coach</span>
-        {refreshing ? <span className="ai-refreshing">Refreshing...</span> : null}
+        {hasData ? <AIInsightRefreshWatcher key={`${refreshing}:${errorClass}`} active={refreshing} errorClass={errorClass} /> : null}
         <span className="ai-when">
-          {insight ? formatInsightDate(insight.date) : hasData ? "Not yet generated" : "No data"}
+          {insight ? formatInsightDate(insight.date, today) : hasData ? "Not yet generated" : "No data"}
         </span>
       </div>
       {insight ? (

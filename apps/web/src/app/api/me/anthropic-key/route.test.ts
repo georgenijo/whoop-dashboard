@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/lib/db/ai-generation", () => ({ clearGenerationFailure: vi.fn() }));
 
 vi.mock("@/lib/auth", () => ({
   requireAuth: vi.fn(async () => ({
@@ -51,6 +52,7 @@ vi.mock("@anthropic-ai/sdk", async () => {
   };
 });
 
+import { clearGenerationFailure } from "@/lib/db/ai-generation";
 import { DELETE, GET, POST } from "./route";
 
 function makeRequest(method: "GET" | "POST" | "DELETE", body?: unknown): Request {
@@ -108,6 +110,8 @@ describe("POST /api/me/anthropic-key — probe outcomes", () => {
       fallback_available: false, source: "user",
     });
     expect(upsertUserSettingsMock).toHaveBeenCalledTimes(1);
+    expect(clearGenerationFailure).toHaveBeenCalledWith(1, "insight");
+    expect(clearGenerationFailure).toHaveBeenCalledWith(1, "title");
     expect(upsertUserSettingsMock).toHaveBeenCalledWith({
       user_id: 1,
       anthropic_key: "sk-ant-test-key-AAAAAAAAAAAA-W4nT",
@@ -176,6 +180,8 @@ describe("DELETE /api/me/anthropic-key", () => {
     const res = await DELETE(makeRequest("DELETE"));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, present: false, masked: null, fallback_available: false, source: "none" });
+    expect(clearGenerationFailure).toHaveBeenCalledWith(1, "insight");
+    expect(clearGenerationFailure).toHaveBeenCalledWith(1, "title");
     expect(upsertUserSettingsMock).toHaveBeenCalledWith({
       user_id: 1,
       anthropic_key: null,

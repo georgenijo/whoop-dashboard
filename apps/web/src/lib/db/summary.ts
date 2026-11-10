@@ -5,7 +5,6 @@ import {
   hasTable,
   openWrite,
   safeDays,
-  safeQuery,
 } from "./connection";
 import { forUser } from "./scoped";
 import {
@@ -135,31 +134,46 @@ export function getLatestWhoopDataTimestamp(userId: number): string | null {
   });
 }
 
-export function getLatestInsight(): InsightRow | null {
-  // Insights are a global table (no user_id today). Phase E follow-up if
-  // per-user insights are needed.
-  return safeQuery((db) => {
-    if (!hasTable(db, "insights")) return null;
-    const createdAt = hasColumn(db, "insights", "created_at")
-      ? "created_at"
-      : "NULL AS created_at";
-    const row = db
-      .prepare(`SELECT date, insight, ${createdAt} FROM insights ORDER BY date DESC LIMIT 1`)
-      .get() as InsightRow | undefined;
-    return row ?? null;
+export function getLatestInsight(userId: number): InsightRow | null {
+  return forUser(userId).read((db, uid) => {
+    // A read before the first lazy write must never expose global legacy rows.
+    if (!hasTable(db, "insights") || !hasColumn(db, "insights", "user_id")) return null;
+    return db.prepare(
+      "SELECT date, insight, created_at FROM insights WHERE user_id = ? ORDER BY date DESC LIMIT 1",
+    ).get(uid) as InsightRow | undefined ?? null;
   });
 }
 
-export function saveInsight(date: string, insight: string): void {
+export function saveInsight(userId: number, date: string, insight: string): void {
   const db = openWrite();
-  if (!db) return;
+  if (!db) throw new Error("Database unavailable");
   try {
     db.prepare(
-      "INSERT INTO insights (date, insight, created_at) VALUES (?, ?, ?) ON CONFLICT(date) DO UPDATE SET insight = excluded.insight, created_at = excluded.created_at"
-    ).run(date, insight, new Date().toISOString());
+      `INSERT INTO insights (user_id, date, insight, created_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT(user_id, date) DO UPDATE SET insight = excluded.insight, created_at = excluded.created_at`,
+    ).run(userId, date, insight, new Date().toISOString());
   } finally {
     db.close();
   }
+}
+
+/** Stored onboarding timezone first, then account timezone, then UTC. */
+export function getInsightTimezone(userId: number): string {
+  return forUser(userId).read((db, uid) => {
+    const settings = hasTable(db, "user_settings")
+      ? db.prepare("SELECT tz, timezone FROM user_settings WHERE user_id = ?").get(uid) as
+        { tz: string | null; timezone: string | null } | undefined
+      : undefined;
+    const user = db.prepare("SELECT timezone FROM users WHERE id = ?").get(uid) as
+      { timezone: string | null } | undefined;
+    for (const tz of [settings?.tz, settings?.timezone, user?.timezone]) {
+      if (!tz) continue;
+      try {
+        return new Intl.DateTimeFormat("en-US", { timeZone: tz }).resolvedOptions().timeZone;
+      } catch { /* Try the next stored value. */ }
+    }
+    return "UTC";
+  }) ?? "UTC";
 }
 
 export function getDailySummary(

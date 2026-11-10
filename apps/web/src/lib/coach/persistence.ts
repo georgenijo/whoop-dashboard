@@ -21,7 +21,11 @@ import { resolveCoachProvider } from "./provider";
 import { runCoachProviderTurn } from "./provider-runner";
 import { CoachWorkLogCollector } from "./work-log";
 import type { CoachWorkLog } from "./work-log-types";
-import { forModule } from "@/lib/logger";
+import {
+  acquireGenerationLock, classifyGenerationError, clearGenerationFailure,
+  GENERATION_CLIENT_OPTIONS, GENERATION_DEADLINE_MS, recordGenerationFailure,
+} from "@/lib/ai-generation";
+import { releaseSettingLock } from "@/lib/db/settings";
 import type {
   CoachConversationMessage,
   CoachUserTurn,
@@ -31,8 +35,6 @@ import {
   extractCoachPresentation,
   type CoachPresentationBlock,
 } from "./presentation";
-
-const log = forModule("coach.persistence");
 
 export type CoachTurnHandle = {
   readonly accumulator: ChatMessageInsert[];
@@ -192,6 +194,7 @@ export async function runAndPersistCoachTurn(
 }
 
 export async function titleChatThread(
+  userId: number,
   threadId: number,
   firstUserText: string,
   apiKey: string,
@@ -199,8 +202,14 @@ export async function titleChatThread(
   // Prefer an LLM-generated title; fall back to a derived one so a thread is
   // always named even when Anthropic is unavailable. Never throws.
   let title = "";
+  const lock = acquireGenerationLock(userId, "title", apiKey);
+  if (!lock) {
+    const fallback = deriveTitleFromText(firstUserText);
+    if (fallback) setChatThreadTitle(threadId, fallback);
+    return;
+  }
   try {
-    const client = new Anthropic({ apiKey });
+    const client = new Anthropic({ apiKey, ...GENERATION_CLIENT_OPTIONS });
     const response = await client.messages.create({
       model: TITLE_MODEL,
       max_tokens: 30,
@@ -211,19 +220,17 @@ export async function titleChatThread(
           content: `Title this conversation: "${firstUserText}"`,
         },
       ],
-    });
+    }, { signal: AbortSignal.timeout(GENERATION_DEADLINE_MS) });
     title = textFromContent(response.content)
       .replace(/^['"`]+|['"`]+$/g, "")
       .trim()
       .slice(0, 80);
+    if (!title) throw new Error("Empty title response");
+    clearGenerationFailure(userId, "title");
   } catch (err) {
-    log.warn(
-      {
-        thread_id: threadId,
-        err: err instanceof Error ? err.message : String(err),
-      },
-      "title_failed",
-    );
+    recordGenerationFailure(userId, "title", classifyGenerationError(err), apiKey);
+  } finally {
+    releaseSettingLock(lock);
   }
   if (!title) title = deriveTitleFromText(firstUserText);
   if (title) {

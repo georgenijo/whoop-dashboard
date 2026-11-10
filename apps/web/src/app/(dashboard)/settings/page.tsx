@@ -160,6 +160,7 @@ export default function SettingsPage() {
   const [systemPrompt, setSystemPrompt] = useState("");
   const [savedSystemPrompt, setSavedSystemPrompt] = useState("");
   const [saving, setSaving] = useState(false);
+  const [backgroundFailure, setBackgroundFailure] = useState<string | null>(null);
   const [promptError, setPromptError] = useState<string | null>(null);
   const [whoop, setWhoop] = useState<WhoopConnector | null>(null);
   const [whoopCheckStatus, setWhoopCheckStatus] =
@@ -279,6 +280,17 @@ export default function SettingsPage() {
     // a synchronous state update (react-hooks/set-state-in-effect).
     queueMicrotask(() => setLocalValues(loaded));
 
+    fetch("/api/insights/status", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : null)
+      .then((status) => {
+        const reasons = [status?.errorClass, status?.titleErrorClass];
+        const reason = reasons.includes("bad_key") ? "bad_key" : reasons.includes("provider_error") ? "provider_error" : reasons.includes("no_key") ? "no_key" : null;
+        if (reason === "bad_key") setBackgroundFailure("Anthropic rejected the current key. Update it below to restore insights and conversation titles.");
+        else if (reason === "provider_error") setBackgroundFailure("Anthropic could not generate an insight or conversation title. Check your account credits and try again later.");
+        else if (reason === "no_key") setBackgroundFailure("Add an Anthropic key below to enable insights and conversation titles.");
+      })
+      .catch(() => {});
+
     fetch("/api/settings")
       .then((response) =>
         response.ok
@@ -372,6 +384,7 @@ export default function SettingsPage() {
       };
       if (data.ok === true) {
         setByok(data);
+        setBackgroundFailure(null);
         setByokStatus("ready");
         setByokInput("");
         await refreshAnthropicModels();
@@ -420,6 +433,7 @@ export default function SettingsPage() {
       }
       const data = await response.json() as AnthropicByokState;
       setByok(data);
+      setBackgroundFailure(null);
       setByokStatus("ready");
       setByokInput("");
       await refreshAnthropicModels();
@@ -837,6 +851,7 @@ export default function SettingsPage() {
 
             <div className={styles.divider} />
 
+            {backgroundFailure ? <p role="alert">{backgroundFailure}</p> : null}
             <div className={styles.stackedSetting} id="coach-byok">
               <button
                 type="button"

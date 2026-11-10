@@ -115,6 +115,8 @@ export function optionalUserFkTables(db: DB): string[] {
  * duplicate row.
  */
 export const USER_FK_CONFLICT_TABLES = [
+  "insights",
+  "ai_generation_state",
   "integrations",
   "user_settings",
   "device_tokens",

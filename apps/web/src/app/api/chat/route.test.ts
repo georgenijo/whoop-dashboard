@@ -300,6 +300,7 @@ describe("POST /api/chat — SSE wiring", () => {
 
     await testState.afterCallbacks[0]();
     expect(titleChatThread).toHaveBeenCalledWith(
+      1,
       42,
       "  Compare   my recovery\nthis month  ",
       "test-key",
