@@ -124,34 +124,39 @@ export class CursorAcpSessionRegistry {
       threadId: number;
       historyFingerprint: string;
     },
-  ): Promise<RegistryEntry> {
+  ): Promise<{ entry: RegistryEntry; reused: boolean }> {
     const baseKey = `${input.userId}:${input.threadId}`;
     const signature = `${baseKey}:${input.credentialFingerprint}:${input.promptFingerprint}`;
-    const reservation = await this.withLifecycleLock(async () => {
-      if (this.closed) throw this.closedError();
-      const existing = this.entries.get(baseKey);
-      if (
-        existing &&
-        existing.signature === signature &&
-        existing.runtime.isHealthy() &&
-        (!existing.runtime.hasPrompted ||
-          existing.runtime.historyFingerprint === input.historyFingerprint)
-      ) {
-        existing.lastUsedAt = Date.now();
-        this.scheduleIdle(existing);
-        return { entry: existing, start: null };
-      }
-      if (existing) await this.evict(baseKey, existing.runtime);
+    const reservation = await this.withLifecycleLock(
+      async (): Promise<{
+        entry: RegistryEntry | null;
+        start: Promise<CursorAcpRuntime> | null;
+      }> => {
+        if (this.closed) throw this.closedError();
+        const existing = this.entries.get(baseKey);
+        if (
+          existing &&
+          existing.signature === signature &&
+          existing.runtime.isHealthy() &&
+          (!existing.runtime.hasPrompted ||
+            existing.runtime.historyFingerprint === input.historyFingerprint)
+        ) {
+          existing.lastUsedAt = Date.now();
+          this.scheduleIdle(existing);
+          return { entry: existing, start: null };
+        }
+        if (existing) await this.evict(baseKey, existing.runtime);
 
-      let start = this.starting.get(signature);
-      if (!start) {
-        await this.enforceCapacity(baseKey);
-        start = this.factory(input);
-        this.starting.set(signature, start);
-      }
-      return { entry: null, start };
-    });
-    if (reservation.entry) return reservation.entry;
+        let start = this.starting.get(signature);
+        if (!start) {
+          await this.enforceCapacity(baseKey);
+          start = this.factory(input);
+          this.starting.set(signature, start);
+        }
+        return { entry: null, start };
+      },
+    );
+    if (reservation.entry) return { entry: reservation.entry, reused: true };
 
     const start = reservation.start;
     if (!start) throw this.closedError();
@@ -167,7 +172,7 @@ export class CursorAcpSessionRegistry {
       throw error;
     }
 
-    return this.withLifecycleLock(async () => {
+    const entry = await this.withLifecycleLock(async () => {
       if (this.starting.get(signature) === start) {
         this.starting.delete(signature);
       }
@@ -178,17 +183,18 @@ export class CursorAcpSessionRegistry {
       if (ready && ready.signature === signature && ready.runtime === runtime) {
         return ready;
       }
-      const entry: RegistryEntry = {
+      const created: RegistryEntry = {
         baseKey,
         signature,
         runtime,
         lastUsedAt: Date.now(),
         busy: 0,
       };
-      this.entries.set(baseKey, entry);
-      this.scheduleIdle(entry);
-      return entry;
+      this.entries.set(baseKey, created);
+      this.scheduleIdle(created);
+      return created;
     });
+    return { entry, reused: false };
   }
 
   async run<T>(
@@ -196,7 +202,10 @@ export class CursorAcpSessionRegistry {
       threadId: number;
       historyFingerprint: string;
     },
-    operation: (runtime: CursorAcpRuntime) => Promise<T>,
+    operation: (
+      runtime: CursorAcpRuntime,
+      session: { reused: boolean },
+    ) => Promise<T>,
   ): Promise<T> {
     if (this.closed) throw this.closedError();
     const baseKey = `${input.userId}:${input.threadId}`;
@@ -209,10 +218,11 @@ export class CursorAcpSessionRegistry {
     await previous;
     let entry: RegistryEntry | undefined;
     try {
-      entry = await this.getOrCreate(input);
+      const acquired = await this.getOrCreate(input);
+      entry = acquired.entry;
       entry.busy += 1;
       entry.lastUsedAt = Date.now();
-      return await operation(entry.runtime);
+      return await operation(entry.runtime, { reused: acquired.reused });
     } finally {
       if (entry) {
         entry.busy -= 1;

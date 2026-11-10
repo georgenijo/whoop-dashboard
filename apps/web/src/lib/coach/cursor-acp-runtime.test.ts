@@ -79,6 +79,77 @@ describe("CursorAcpRuntime", () => {
     });
   });
 
+  it("detects model and parameter drift against the live session", async () => {
+    const runtime = await start();
+
+    expect(
+      runtime.sessionConfigMatches("gpt-5.6-luna", [
+        { id: "reasoning", value: "low" },
+      ]),
+    ).toBe(true);
+    expect(
+      runtime.sessionConfigMatches("grok-4.6", [
+        { id: "reasoning", value: "low" },
+      ]),
+    ).toBe(false);
+    expect(
+      runtime.sessionConfigMatches("gpt-5.6-luna", [
+        { id: "reasoning", value: "high" },
+      ]),
+    ).toBe(false);
+
+    await runtime.applyModel("gpt-5.6-luna", [
+      { id: "reasoning", value: "high" },
+    ]);
+    expect(
+      runtime.sessionConfigMatches("gpt-5.6-luna", [
+        { id: "reasoning", value: "high" },
+      ]),
+    ).toBe(true);
+  });
+
+  it("picks up config the agent changed mid-turn before deciding to skip", async () => {
+    const runtime = await start("config-update");
+    await runtime.applyModel("gpt-5.6-luna", [
+      { id: "reasoning", value: "low" },
+    ]);
+    const firstChunks: string[] = [];
+    await runtime.prompt("first", undefined, (notification) => {
+      const update = notification.update;
+      if (
+        update.sessionUpdate === "agent_message_chunk" &&
+        update.content.type === "text"
+      ) {
+        firstChunks.push(update.content.text);
+      }
+    });
+
+    // The agent moved reasoning to high during the turn. A next-turn request
+    // for the original value must not look like a match, or applyModel would
+    // be skipped and the session would silently keep high while logging low.
+    expect(firstChunks.join("")).toContain("(high)");
+    expect(
+      runtime.sessionConfigMatches("gpt-5.6-luna", [
+        { id: "reasoning", value: "low" },
+      ]),
+    ).toBe(false);
+
+    await runtime.applyModel("gpt-5.6-luna", [
+      { id: "reasoning", value: "low" },
+    ]);
+    const secondChunks: string[] = [];
+    await runtime.prompt("second", undefined, (notification) => {
+      const update = notification.update;
+      if (
+        update.sessionUpdate === "agent_message_chunk" &&
+        update.content.type === "text"
+      ) {
+        secondChunks.push(update.content.text);
+      }
+    });
+    expect(secondChunks.join("")).toContain("(low)");
+  });
+
   it("sends a real session cancellation and retires the now-divergent session", async () => {
     const runtime = await start("slow");
     await runtime.applyModel("gpt-5.6-luna", []);

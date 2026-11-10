@@ -46,6 +46,25 @@ type LogDetails = {
     calls?: number;
   };
   thread_id?: number;
+  timing?: {
+    persistence_ms?: number | null;
+    first_text_ms?: number | null;
+  };
+  cursor?: {
+    timing?: {
+      preload_ms?: number | null;
+      session_acquire_ms?: number | null;
+      prepare_turn_ms?: number | null;
+      apply_model_ms?: number | null;
+      first_text_ms?: number | null;
+      first_tool_ms?: number | null;
+      audit_drain_ms?: number | null;
+      turn_ms?: number | null;
+    };
+    acp?: {
+      session_reused?: boolean | null;
+    };
+  };
 };
 
 type ThreadGroup = {
@@ -64,6 +83,49 @@ function fmtDuration(ms: number): { text: string; color: string } {
   else if (s < 15) color = "#ffaa00";
   else color = "#ff6b6b";
   return { text: s < 1 ? `${ms}ms` : `${s.toFixed(1)}s`, color };
+}
+
+function fmtMs(value?: number | null): string {
+  return value == null ? "-" : `${value}ms`;
+}
+
+function timingMetrics(
+  details: LogDetails | null,
+): Array<{ label: string; value: string }> {
+  if (!details) return [];
+  const timing = details.timing;
+  const cursor = details.cursor?.timing;
+  const metrics: Array<{ label: string; value: string }> = [];
+  const firstText = timing?.first_text_ms ?? cursor?.first_text_ms;
+  if (firstText != null) {
+    metrics.push({ label: "First text", value: fmtMs(firstText) });
+  }
+  if (cursor?.preload_ms != null) {
+    metrics.push({ label: "Preload", value: fmtMs(cursor.preload_ms) });
+  }
+  if (cursor?.session_acquire_ms != null) {
+    metrics.push({
+      label: "Session acquire",
+      value: fmtMs(cursor.session_acquire_ms),
+    });
+  }
+  const reused = details.cursor?.acp?.session_reused;
+  if (reused != null) {
+    metrics.push({ label: "Session", value: reused ? "reused" : "cold" });
+  }
+  if (cursor?.prepare_turn_ms != null) {
+    metrics.push({ label: "Prepare turn", value: fmtMs(cursor.prepare_turn_ms) });
+  }
+  if (cursor?.apply_model_ms != null) {
+    metrics.push({ label: "Apply model", value: fmtMs(cursor.apply_model_ms) });
+  }
+  if (cursor?.first_tool_ms != null) {
+    metrics.push({ label: "First tool", value: fmtMs(cursor.first_tool_ms) });
+  }
+  if (cursor?.audit_drain_ms != null) {
+    metrics.push({ label: "Audit drain", value: fmtMs(cursor.audit_drain_ms) });
+  }
+  return metrics;
 }
 
 function fmtTime(iso: string): string {
@@ -250,6 +312,7 @@ function LogRow({ log }: { log: ChatLogRow }) {
   const hasDetails = details !== null;
   const dur = fmtDuration(log.duration_ms);
   const usage = details?.usage;
+  const timings = useMemo(() => timingMetrics(details), [details]);
   const detailsId = `chat-details-${log.id}`;
 
   return (
@@ -337,6 +400,19 @@ function LogRow({ log }: { log: ChatLogRow }) {
                 <DetailMetric label="Cache create" value={usage?.cache_creation_input_tokens_total ?? 0} />
                 <DetailMetric label="Cache read" value={usage?.cache_read_input_tokens_total ?? 0} />
               </div>
+
+              {timings.length > 0 && (
+                <div>
+                  <div style={{ color: "var(--fg-3)", fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                    Timing
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                    {timings.map((metric) => (
+                      <DetailMetric key={metric.label} label={metric.label} value={metric.value} />
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <div style={{ color: "var(--fg-3)", fontFamily: "var(--font-mono)", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>

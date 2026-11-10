@@ -493,6 +493,26 @@ export class CursorAcpRuntime {
     );
   }
 
+  // True when this session already has the requested model and every requested
+  // parameter. Used to skip redundant `session/set_config_option` round-trips
+  // on a warm session (issue #585).
+  sessionConfigMatches(
+    model: string,
+    parameters: CursorModelParameterSelection[],
+  ): boolean {
+    const modelOption = findCursorAcpModelOption(this.configOptions);
+    if (!modelOption || modelOption.type !== "select") return false;
+    if (modelOption.currentValue !== model) return false;
+    for (const selection of parameters) {
+      const option = findCursorAcpConfigOption(this.configOptions, selection);
+      if (!option) return false;
+      const requested = cursorAcpConfigValue(option, selection.value);
+      if (requested === null) return false;
+      if (String(option.currentValue) !== String(requested)) return false;
+    }
+    return true;
+  }
+
   async applyModel(
     model: string,
     parameters: CursorModelParameterSelection[],
@@ -683,6 +703,14 @@ export class CursorAcpRuntime {
           if (message.kind === "stop") return message.response;
           if (this.diagnostics.timing.firstEventMs === null) {
             this.diagnostics.timing.firstEventMs = Date.now() - promptStarted;
+          }
+          // The agent can change session configuration mid-turn. Keep the
+          // cache authoritative so the next turn does not wrongly skip
+          // applyModel based on a stale selection.
+          if (message.notification.update.sessionUpdate === "config_option_update") {
+            this.configOptions = [
+              ...message.notification.update.configOptions,
+            ];
           }
           onUpdate(message.notification);
         }

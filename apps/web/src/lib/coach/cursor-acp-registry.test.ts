@@ -68,6 +68,25 @@ describe("CursorAcpSessionRegistry", () => {
     await registry.disposeAll();
   });
 
+  it("reports whether the session was reused or cold-started", async () => {
+    const registry = new CursorAcpSessionRegistry(
+      vi.fn(async () => fakeRuntime()),
+      60_000,
+      4,
+    );
+    const sessions: boolean[] = [];
+
+    await registry.run(input(), async (_runtime, session) => {
+      sessions.push(session.reused);
+    });
+    await registry.run(input(), async (_runtime, session) => {
+      sessions.push(session.reused);
+    });
+
+    expect(sessions).toEqual([false, true]);
+    await registry.disposeAll();
+  });
+
   it("replaces a session when credentials change", async () => {
     const first = fakeRuntime();
     const second = fakeRuntime();

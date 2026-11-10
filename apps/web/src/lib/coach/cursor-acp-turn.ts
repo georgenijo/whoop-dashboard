@@ -339,6 +339,13 @@ export async function runCursorAcpTurn(
         spawn_to_early_exit_ms: null,
         cleanup_ms: 0,
         turn_ms: 0,
+        preload_ms: prefetchMs,
+        session_acquire_ms: null,
+        prepare_turn_ms: null,
+        apply_model_ms: null,
+        first_text_ms: null,
+        first_tool_ms: null,
+        audit_drain_ms: null,
       },
       transport: "acp",
       acp: {
@@ -346,6 +353,7 @@ export async function runCursorAcpTurn(
         agent_name: null,
         agent_version: null,
         session_id: null,
+        session_reused: null,
         applied_parameters: [],
         process: {
           exit_code: null,
@@ -357,7 +365,8 @@ export async function runCursorAcpTurn(
     };
   detailState.cursor = cursorDetail;
 
-  const result = await cursorAcpSessions.run(
+  const sessionAcquireStartedAt = Date.now();
+  const pendingTurn = cursorAcpSessions.run(
     {
       userId,
       threadId,
@@ -368,12 +377,50 @@ export async function runCursorAcpTurn(
       withMcp: true,
       historyFingerprint,
     },
-    async (runtime) => {
+    async (runtime, session) => {
       try {
-        const workspaceStartedAt = Date.now();
-        const turnEpoch = await runtime.prepareTurn(imageContext.images);
-        cursorDetail.timing.workspace_prep_ms = Date.now() - workspaceStartedAt;
-        await runtime.applyModel(model, modelParameters);
+        cursorDetail.timing.session_acquire_ms =
+          Date.now() - sessionAcquireStartedAt;
+        cursorDetail.acp!.session_reused = session.reused;
+
+        const prepareStartedAt = Date.now();
+        let turnEpoch: string;
+        try {
+          turnEpoch = await runtime.prepareTurn(imageContext.images);
+        } finally {
+          cursorDetail.timing.prepare_turn_ms =
+            Date.now() - prepareStartedAt;
+          cursorDetail.timing.workspace_prep_ms =
+            cursorDetail.timing.prepare_turn_ms;
+        }
+
+        const applyModelStartedAt = Date.now();
+        try {
+          if (runtime.sessionConfigMatches(model, modelParameters)) {
+            // The session already holds this selection. Keep diagnostics in
+            // sync with the applied state so /logs stays truthful without
+            // paying for redundant set_config_option round-trips.
+            runtime.diagnostics.requestedModel = model;
+            runtime.diagnostics.resolvedModel = model;
+            runtime.diagnostics.appliedParameters = modelParameters.map(
+              (parameter) => ({ ...parameter }),
+            );
+          } else {
+            await runtime.applyModel(model, modelParameters);
+          }
+        } finally {
+          cursorDetail.timing.apply_model_ms =
+            Date.now() - applyModelStartedAt;
+        }
+
+        const markFirstText = () => {
+          cursorDetail.timing.first_text_ms ??= Date.now() - turnStartedAt;
+          detailState.first_text_ms ??= cursorDetail.timing.first_text_ms;
+        };
+        const markFirstTool = () => {
+          cursorDetail.timing.first_tool_ms ??= Date.now() - turnStartedAt;
+        };
+
         const promptStartedAt = Date.now();
         const prompt = buildCursorPrompt(
           userId,
@@ -511,6 +558,7 @@ export async function runCursorAcpTurn(
           const previous = tools.get(update.toolCallId);
           const state = mergeToolState(previous, update);
           tools.set(state.id, state);
+          markFirstTool();
           const tracked = trackedToolName(state);
           if (tracked && !state.startedEmitted) {
             state.startedEmitted = true;
@@ -567,6 +615,7 @@ export async function runCursorAcpTurn(
             exactAuditStarts += 1;
             exactTools.set(event.call_id, event);
             enforceToolCap(exactAuditStarts);
+            markFirstTool();
             emitToolStart(event.call_id, event.tool_name, event.input);
             return;
           }
@@ -599,6 +648,7 @@ export async function runCursorAcpTurn(
               switch (update.sessionUpdate) {
                 case "agent_message_chunk":
                   if (update.content.type === "text") {
+                    markFirstText();
                     const delta = visibleText.append(update.content.text);
                     if (delta) {
                       if (!pendingAssistant) {
@@ -633,7 +683,9 @@ export async function runCursorAcpTurn(
           if (toolCapError) throw toolCapError;
           throw error;
         } finally {
+          const auditDrainStartedAt = Date.now();
           await auditListener.drainAndStop();
+          cursorDetail.timing.audit_drain_ms = Date.now() - auditDrainStartedAt;
         }
         if (exactAuditStarts === 0) {
           if (providerFallbackStarts > 0) {
@@ -723,6 +775,7 @@ export async function runCursorAcpTurn(
           agent_name: runtime.diagnostics.agentName,
           agent_version: runtime.diagnostics.agentVersion,
           session_id: runtime.diagnostics.sessionId,
+          session_reused: cursorDetail.acp?.session_reused ?? null,
           applied_parameters: runtime.diagnostics.appliedParameters,
           process: {
             exit_code: runtime.diagnostics.process.exitCode,
@@ -734,6 +787,15 @@ export async function runCursorAcpTurn(
       }
     },
   );
+
+  let result: Awaited<typeof pendingTurn>;
+  try {
+    result = await pendingTurn;
+  } catch (error) {
+    cursorDetail.timing.session_acquire_ms ??=
+      Date.now() - sessionAcquireStartedAt;
+    throw error;
+  }
 
   if (result.response.stopReason === "refusal") {
     throw new Error("Cursor refused the request");

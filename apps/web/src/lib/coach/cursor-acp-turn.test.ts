@@ -71,6 +71,7 @@ const runtime = vi.hoisted(() => ({
       drainAndStop: vi.fn(async () => {}),
     })),
   applyModel: vi.fn(async () => {}),
+  sessionConfigMatches: vi.fn(() => false),
   cancelActiveTurn: vi.fn(async () => {}),
   usageDelta: vi.fn(() => ({
     totalTokens: 15,
@@ -120,11 +121,40 @@ vi.mock("./cursor-acp-registry", () => ({
   cursorCredentialFingerprint: vi.fn(() => "credential"),
   cursorPromptFingerprint: vi.fn(() => "prompt"),
   cursorAcpSessions: {
-    run: vi.fn(async (_input, operation) => operation(runtime)),
+    run: vi.fn(async (_input, operation) =>
+      operation(runtime, { reused: false }),
+    ),
   },
 }));
 
 import { runCursorAcpTurn } from "./cursor-acp-turn";
+import { cursorAcpSessions } from "./cursor-acp-registry";
+import type { DetailState } from "./loop";
+
+function baseArgs(
+  detailState: DetailState,
+  overrides: Partial<Parameters<typeof runCursorAcpTurn>[0]> = {},
+): Parameters<typeof runCursorAcpTurn>[0] {
+  return {
+    userId: 7,
+    threadId: 150,
+    model: "gpt-5.6-luna",
+    modelParameters: [{ id: "reasoning", value: "low" }],
+    turn: { displayText: "How is my recovery?", modelText: "How is my recovery?", images: [] },
+    conversation: [],
+    toolDetails: [],
+    usage: {
+      input_tokens_total: 0,
+      output_tokens_total: 0,
+      cache_creation_input_tokens_total: 0,
+      cache_read_input_tokens_total: 0,
+      calls: 0,
+    },
+    detailState,
+    options: {},
+    ...overrides,
+  };
+}
 
 describe("runCursorAcpTurn", () => {
   beforeEach(() => {
@@ -132,6 +162,7 @@ describe("runCursorAcpTurn", () => {
     runtime.prepareTurn.mockClear();
     runtime.listenForMcpAudit.mockClear();
     runtime.applyModel.mockClear();
+    runtime.sessionConfigMatches.mockClear();
     runtime.cancelActiveTurn.mockClear();
     runtime.prompt.mockClear();
   });
@@ -203,6 +234,106 @@ describe("runCursorAcpTurn", () => {
         acp: { session_id: "session-1" },
       },
     });
+  });
+
+  it("records every ACP phase timing on a successful turn", async () => {
+    const detailState: DetailState = { iterations: 0 };
+
+    await runCursorAcpTurn(baseArgs(detailState));
+
+    const timing = detailState.cursor!.timing;
+    expect(typeof timing.preload_ms).toBe("number");
+    expect(typeof timing.session_acquire_ms).toBe("number");
+    expect(typeof timing.prepare_turn_ms).toBe("number");
+    expect(typeof timing.apply_model_ms).toBe("number");
+    expect(typeof timing.first_text_ms).toBe("number");
+    expect(typeof timing.first_tool_ms).toBe("number");
+    expect(typeof timing.audit_drain_ms).toBe("number");
+    expect(detailState.first_text_ms).toBe(timing.first_text_ms);
+    expect(detailState.cursor!.acp!.session_reused).toBe(false);
+    expect(timing.first_tool_ms!).toBeLessThanOrEqual(timing.turn_ms);
+    expect(timing.first_text_ms!).toBeLessThanOrEqual(timing.turn_ms);
+  });
+
+  it("records the phases that ran when the provider turn fails", async () => {
+    runtime.prompt.mockImplementationOnce(async (_text, _signal, onUpdate) => {
+      onUpdate({
+        sessionId: "session-1",
+        update: {
+          sessionUpdate: "tool_call",
+          toolCallId: "tool-1",
+          title: "Query recovery",
+          status: "in_progress",
+          rawInput: {},
+        },
+      });
+      onUpdate({
+        sessionId: "session-1",
+        update: {
+          sessionUpdate: "agent_message_chunk",
+          content: { type: "text", text: "Partial" },
+        },
+      });
+      throw new Error("provider failed");
+    });
+    const detailState: DetailState = { iterations: 0 };
+
+    await expect(
+      runCursorAcpTurn(baseArgs(detailState)),
+    ).rejects.toThrow("provider failed");
+
+    const timing = detailState.cursor!.timing;
+    expect(typeof timing.preload_ms).toBe("number");
+    expect(typeof timing.session_acquire_ms).toBe("number");
+    expect(typeof timing.prepare_turn_ms).toBe("number");
+    expect(typeof timing.apply_model_ms).toBe("number");
+    expect(typeof timing.first_text_ms).toBe("number");
+    expect(typeof timing.first_tool_ms).toBe("number");
+    expect(typeof timing.audit_drain_ms).toBe("number");
+  });
+
+  it("records session_acquire_ms when acquisition rejects before the callback", async () => {
+    vi.mocked(cursorAcpSessions.run).mockImplementationOnce(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      throw new Error("acquisition failed");
+    });
+    const detailState: DetailState = { iterations: 0 };
+
+    await expect(
+      runCursorAcpTurn(baseArgs(detailState)),
+    ).rejects.toThrow("acquisition failed");
+
+    const sessionAcquireMs = detailState.cursor!.timing.session_acquire_ms;
+    expect(typeof sessionAcquireMs).toBe("number");
+    expect(sessionAcquireMs!).toBeGreaterThanOrEqual(5);
+  });
+
+  it("skips applyModel when the warm session already matches", async () => {
+    runtime.sessionConfigMatches.mockReturnValueOnce(true);
+    const detailState: DetailState = { iterations: 0 };
+
+    await runCursorAcpTurn(baseArgs(detailState, { model: "grok-4.6" }));
+
+    expect(runtime.sessionConfigMatches).toHaveBeenCalledWith("grok-4.6", [
+      { id: "reasoning", value: "low" },
+    ]);
+    expect(runtime.applyModel).not.toHaveBeenCalled();
+    expect(detailState.cursor!.resolved_model).toBe("grok-4.6");
+    expect(detailState.cursor!.acp!.applied_parameters).toEqual([
+      { id: "reasoning", value: "low" },
+    ]);
+    expect(typeof detailState.cursor!.timing.apply_model_ms).toBe("number");
+  });
+
+  it("applies the model when the session does not match", async () => {
+    runtime.sessionConfigMatches.mockReturnValueOnce(false);
+    const detailState: DetailState = { iterations: 0 };
+
+    await runCursorAcpTurn(baseArgs(detailState));
+
+    expect(runtime.applyModel).toHaveBeenCalledWith("gpt-5.6-luna", [
+      { id: "reasoning", value: "low" },
+    ]);
   });
 
   it("keeps pre-tool narration live but out of persisted chat history", async () => {
