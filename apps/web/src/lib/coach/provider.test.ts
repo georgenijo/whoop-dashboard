@@ -17,7 +17,7 @@ import {
   parseModelPref,
   resolveCoachProvider,
 } from "./provider";
-import type { AnthropicModelOption } from "./anthropic-model-options";
+import { effectiveAnthropicEffort, type AnthropicModelOption } from "./anthropic-model-options";
 
 const adaptiveModel: AnthropicModelOption = {
   id: "claude-opus-4-6", display_name: "Opus", thinking: "adaptive",
@@ -77,14 +77,31 @@ describe("parseModelPref", () => {
 });
 
 describe("parseCoachEffort", () => {
-  it("accepts supported levels and defaults invalid values to high", () => {
+  it("accepts supported levels and defaults invalid values to medium", () => {
     expect(parseCoachEffort("off")).toBe("off");
     expect(parseCoachEffort("low")).toBe("low");
     expect(parseCoachEffort("medium")).toBe("medium");
     expect(parseCoachEffort("high")).toBe("high");
     expect(parseCoachEffort("max")).toBe("max");
     expect(parseCoachEffort("xhigh")).toBe("xhigh");
-    expect(parseCoachEffort(null)).toBe("high");
+    expect(parseCoachEffort(null)).toBe("medium");
+    expect(parseCoachEffort(undefined)).toBe("medium");
+    expect(parseCoachEffort("bogus")).toBe("medium");
+  });
+
+  it("keeps an explicit user choice unchanged", () => {
+    expect(parseCoachEffort("low")).toBe("low");
+    expect(parseCoachEffort("max")).toBe("max");
+  });
+
+  it("clamps the default to a level the selected model supports", () => {
+    const model = { ...adaptiveModel, efforts: ["off", "high"] as const };
+    expect(
+      effectiveAnthropicEffort(
+        { ...model, efforts: [...model.efforts] },
+        parseCoachEffort(null),
+      ),
+    ).toBe("high");
   });
 });
 

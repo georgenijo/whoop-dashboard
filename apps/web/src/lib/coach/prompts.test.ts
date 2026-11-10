@@ -68,6 +68,20 @@ describe("buildSystemPrompt", () => {
     expect(prompt[1].text).toBe(DEFAULT_SYSTEM_PROMPT);
   });
 
+  it("keeps the cached system block byte-stable between turns", () => {
+    const monday = buildSystemPrompt(new Date("2026-05-04T12:00:00Z"));
+    const tuesday = buildSystemPrompt(new Date("2026-05-05T12:00:00Z"));
+
+    expect(monday[1]).toEqual(tuesday[1]);
+    expect(monday[1].cache_control).toEqual({
+      type: "ephemeral",
+      ttl: "1h",
+    });
+    // Per-turn content (the date) lives only in the uncached first block.
+    expect(monday[1].text).not.toMatch(/Today's date/);
+    expect(monday[0].text).not.toBe(tuesday[0].text);
+  });
+
   it("silently drops unknown goal IDs", () => {
     const prompt = buildSystemPrompt(
       new Date("2026-05-02T00:00:00Z"),
@@ -318,6 +332,21 @@ describe("DEFAULT_SYSTEM_PROMPT", () => {
     expect(DEFAULT_SYSTEM_PROMPT).toMatch(/every turn must start with text/i);
     expect(DEFAULT_SYSTEM_PROMPT).toMatch(/under 12 words/i);
     expect(DEFAULT_SYSTEM_PROMPT).toMatch(/never emit a tool_use block as the first content/i);
+  });
+
+  it("states the narration rule once", () => {
+    expect(DEFAULT_SYSTEM_PROMPT.match(/under 12 words/gi)).toHaveLength(1);
+    expect(DEFAULT_SYSTEM_PROMPT).not.toMatch(/## Tool call narration/i);
+    expect(DEFAULT_SYSTEM_PROMPT).not.toMatch(/## Reminder/i);
+  });
+
+  it("routes greetings and small talk to a direct answer without tools", () => {
+    expect(DEFAULT_SYSTEM_PROMPT).toMatch(
+      /greetings[\s\S]*answered directly[\s\S]*do not call tools/i,
+    );
+    expect(CURSOR_SYSTEM_PROMPT).toMatch(
+      /greetings and small talk directly[\s\S]*without tools/i,
+    );
   });
 
   it("tells the model to surface a concrete cooldown duration from next_sync_allowed_at", () => {

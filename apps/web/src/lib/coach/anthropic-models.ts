@@ -19,12 +19,16 @@ export class AnthropicModelUnavailableError extends Error {
   }
 }
 
-const CACHE_TTL_MS = 60_000;
+const CACHE_TTL_MS = 10 * 60_000;
 const MAX_CACHE_ENTRIES = 64;
-const cache = new Map<string, {
+type CacheEntry = {
   expiresAt: number;
   models: Promise<AnthropicModelOption[]>;
-}>();
+};
+const cache = new Map<string, CacheEntry>();
+// One background refresh per credential. Multiple turns that arrive after the
+// freshness window share the in-flight probe instead of each paying for one.
+const refreshing = new Set<string>();
 
 export function anthropicModelOption(model: ModelInfo): AnthropicModelOption {
   const capabilities = model.capabilities;
@@ -76,14 +80,8 @@ export function anthropicModelOption(model: ModelInfo): AnthropicModelOption {
   };
 }
 
-/** Account-scoped, paginated discovery. Cache identities never contain keys. */
-export async function listAnthropicModelsForKey(apiKey: string): Promise<AnthropicModelOption[]> {
-  const identity = createHash("sha256").update(apiKey).digest("hex");
-  const existing = cache.get(identity);
-  if (existing && existing.expiresAt > Date.now()) return existing.models;
-  cache.delete(identity);
-  while (cache.size >= MAX_CACHE_ENTRIES) cache.delete(cache.keys().next().value!);
-  const models = (async () => {
+function probeCatalog(apiKey: string): Promise<AnthropicModelOption[]> {
+  return (async () => {
     try {
       const client = new Anthropic({ apiKey, timeout: 15_000, maxRetries: 0 });
       const result: AnthropicModelOption[] = [];
@@ -99,9 +97,50 @@ export async function listAnthropicModelsForKey(apiKey: string): Promise<Anthrop
       );
     }
   })();
-  cache.set(identity, { expiresAt: Date.now() + CACHE_TTL_MS, models });
+}
+
+function remember(identity: string, entry: CacheEntry): void {
+  if (!cache.has(identity)) {
+    while (cache.size >= MAX_CACHE_ENTRIES) cache.delete(cache.keys().next().value!);
+  }
+  cache.set(identity, entry);
+}
+
+/**
+ * Account-scoped, paginated discovery. Cache identities never contain keys.
+ *
+ * Entries stay fresh for ten minutes. After that the stale catalog is served
+ * immediately and a background refresh runs, so a turn after a pause never
+ * waits on an extra Models API round trip. A failed probe is never retained;
+ * if a background refresh fails, the previous catalog keeps serving until the
+ * next attempt.
+ */
+export async function listAnthropicModelsForKey(apiKey: string): Promise<AnthropicModelOption[]> {
+  const identity = createHash("sha256").update(apiKey).digest("hex");
+  const existing = cache.get(identity);
+  if (existing) {
+    if (existing.expiresAt > Date.now()) return existing.models;
+    if (!refreshing.has(identity)) {
+      refreshing.add(identity);
+      const refreshed = probeCatalog(apiKey);
+      refreshed
+        .then(() => {
+          if (cache.get(identity) === existing) {
+            remember(identity, { expiresAt: Date.now() + CACHE_TTL_MS, models: refreshed });
+          }
+        })
+        .catch(() => {
+          // Serve the stale catalog; never retain a failed probe.
+        })
+        .finally(() => refreshing.delete(identity));
+    }
+    return existing.models;
+  }
+  const models = probeCatalog(apiKey);
+  const entry: CacheEntry = { expiresAt: Date.now() + CACHE_TTL_MS, models };
+  remember(identity, entry);
   void models.catch(() => {
-    if (cache.get(identity)?.models === models) cache.delete(identity);
+    if (cache.get(identity) === entry) cache.delete(identity);
   });
   return models;
 }
