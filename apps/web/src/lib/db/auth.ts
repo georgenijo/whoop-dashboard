@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import { hasColumn, hasTable, openWrite, safeWriteQuery, type DB } from "./connection";
+import { hasColumn, hasTable, openWrite, safeReadQuery, type DB } from "./connection";
 
 export type User = {
   id: number;
@@ -149,7 +149,7 @@ export const USER_FK_CONFLICT_TABLES = [
 export const KNOWN_UNMERGED_USER_FK_TABLES: readonly string[] = [];
 
 export function getUserById(id: number): User | null {
-  return safeWriteQuery((db) => {
+  return safeReadQuery((db) => {
     const row = db
       .prepare("SELECT id, email, name, apple_sub, timezone FROM users WHERE id = ? LIMIT 1")
       .get(id) as User | undefined;
@@ -158,7 +158,7 @@ export function getUserById(id: number): User | null {
 }
 
 export function getSessionByToken(token: string): Session | null {
-  return safeWriteQuery((db) => {
+  return safeReadQuery((db) => {
     const row = db
       .prepare("SELECT id, user_id, token, expires_at FROM sessions WHERE token = ? LIMIT 1")
       .get(token) as Session | undefined;
@@ -184,7 +184,7 @@ export function createSession(userId: number): { token: string; expiresAt: strin
 }
 
 export function getUserByAppleSub(appleSub: string): User | null {
-  return safeWriteQuery((db) => {
+  return safeReadQuery((db) => {
     const row = db
       .prepare("SELECT id, email, name, apple_sub, timezone FROM users WHERE apple_sub = ? LIMIT 1")
       .get(appleSub) as User | undefined;
@@ -195,7 +195,7 @@ export function getUserByAppleSub(appleSub: string): User | null {
 export function getUserByEmail(email: string): User | null {
   const normalized = email.trim().toLowerCase();
   if (!normalized) return null;
-  return safeWriteQuery((db) => {
+  return safeReadQuery((db) => {
     const row = db
       .prepare(
         "SELECT id, email, name, apple_sub, timezone FROM users WHERE LOWER(email) = ? LIMIT 1"

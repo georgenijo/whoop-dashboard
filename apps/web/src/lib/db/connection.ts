@@ -1,5 +1,5 @@
 import "server-only";
-import { existsSync } from "node:fs";
+import { statSync } from "node:fs";
 import path from "node:path";
 import Database, { type Database as DB } from "better-sqlite3";
 import { MAX_SYSTEM_PROMPT_LENGTH } from "@/lib/coach/prompts";
@@ -12,14 +12,189 @@ export function dbPath(): string {
   return path.resolve(process.cwd(), "..", "..", "shared", "whoop_data.db");
 }
 
-export function openWrite(): DB | null {
-  const p = dbPath();
-  if (!existsSync(p)) return null;
-  let db: DB | null = null;
+// ---------------------------------------------------------------------------
+// Issue #589 — connection reuse + migrate-once.
+//
+// Before this, every openWrite() call opened a brand-new connection and
+// re-ran the whole schema bootstrap (~20 CREATE TABLE IF NOT EXISTS, ~15
+// PRAGMA table_info checks, INSERT OR IGNORE INTO users, ...), and every
+// open() call opened a brand-new read-only connection. One Overview render
+// made ~39 opens.
+//
+// Now the process holds at most ONE read-write handle and ONE read-only handle
+// (for the DB file currently named by WHOOP_DB_PATH), and the schema
+// bootstrap runs once per DB file. Both are handed out through openWrite() /
+// open() exactly as before, so the ~60 existing call sites keep working
+// unchanged, including their `finally { db.close() }`: close() on a shared
+// handle is a deliberate no-op (see adopt()). Use closeConnections() to really
+// close them.
+//
+// Rules this relies on:
+//   - better-sqlite3 is synchronous, so two callers can never interleave
+//     statements on the shared handle. Nobody may hold a transaction open
+//     across an `await` (nothing does; transactions are db.transaction()).
+//   - A caller that nests openWrite() inside its own transaction now gets the
+//     same handle (and so joins that transaction) instead of a second
+//     connection that would fail with SQLITE_BUSY against the first's lock.
+// ---------------------------------------------------------------------------
+
+/** How long a statement waits on another connection's lock before failing. */
+export const BUSY_TIMEOUT_MS = 5000;
+
+type Slot = {
+  path: string;
+  /** dev:ino:birthtime of the file the handles were opened on. */
+  identity: string;
+  write: DB | null;
+  read: DB | null;
+};
+
+type Pool = {
+  slot: Slot | null;
+  /** DB path -> identity of the file whose schema bootstrap already ran. */
+  migrated: Map<string, string>;
+  closeAll: () => void;
+};
+
+// Held on globalThis (not a module-level variable) so every copy of this
+// module — separately bundled route entries, dev HMR reloads, vi.resetModules
+// — shares one pool instead of each leaking its own pair of connections.
+const POOL_KEY = Symbol.for("whoop-dashboard.db.connection-pool");
+const REAL_CLOSE = Symbol.for("whoop-dashboard.db.real-close");
+
+function pool(): Pool {
+  const g = globalThis as unknown as Record<symbol, Pool | undefined>;
+  const existing = g[POOL_KEY];
+  if (existing) return existing;
+  const created: Pool = {
+    slot: null,
+    migrated: new Map(),
+    closeAll() {
+      closeSlot(created.slot);
+      created.slot = null;
+      created.migrated.clear();
+    },
+  };
+  g[POOL_KEY] = created;
+  return created;
+}
+
+/** Make `db.close()` a no-op so the legacy `finally { db.close() }` at every
+ *  call site cannot tear down the shared handle. The real close is kept under
+ *  a symbol and used only by the pool. */
+function adopt(db: DB): DB {
+  const realClose = db.close.bind(db);
+  (db as unknown as Record<symbol, () => void>)[REAL_CLOSE] = () => {
+    realClose();
+  };
+  db.close = () => db;
+  return db;
+}
+
+function release(db: DB | null): void {
+  if (!db) return;
   try {
-    db = new Database(p, { fileMustExist: true });
-    db.pragma("foreign_keys = ON");
-    db.pragma("journal_mode = WAL");
+    (db as unknown as Record<symbol, (() => void) | undefined>)[REAL_CLOSE]?.();
+  } catch {
+    // Already closed.
+  }
+}
+
+function closeSlot(slot: Slot | null): void {
+  if (!slot) return;
+  release(slot.write);
+  release(slot.read);
+  slot.write = null;
+  slot.read = null;
+}
+
+function fileIdentity(p: string): string | null {
+  try {
+    const s = statSync(p);
+    return `${s.dev}:${s.ino}:${s.birthtimeMs}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The handle slot for the DB file WHOOP_DB_PATH currently points at, or null
+ * if that file doesn't exist. Keyed on path AND file identity, so tests that
+ * switch WHOOP_DB_PATH between files (or delete and recreate a file at the
+ * same path) never see a handle or a "migrated" flag from the previous file.
+ * Switching files closes the previous file's handles, so at most one pair is
+ * ever open and nothing keeps a deleted temp DB alive.
+ */
+function currentSlot(): Slot | null {
+  const p = dbPath();
+  const identity = fileIdentity(p);
+  const state = pool();
+  if (identity === null) {
+    if (state.slot?.path === p) {
+      closeSlot(state.slot);
+      state.slot = null;
+    }
+    state.migrated.delete(p);
+    return null;
+  }
+  const current = state.slot;
+  if (current && current.path === p && current.identity === identity) return current;
+  closeSlot(current);
+  const next: Slot = { path: p, identity, write: null, read: null };
+  state.slot = next;
+  return next;
+}
+
+/** Really close the shared handles and forget which DB files were migrated
+ *  (the next openWrite() re-runs the bootstrap). For tests and shutdown. */
+export function closeConnections(): void {
+  pool().closeAll();
+}
+
+/**
+ * The shared read-write handle. Runs the schema bootstrap/migration the first
+ * time it is called for a given DB file, never again for that file. Returns
+ * null if the file doesn't exist or the bootstrap fails (logged).
+ */
+export function openWrite(): DB | null {
+  const slot = currentSlot();
+  if (!slot) return null;
+  let db = slot.write;
+  if (!db) {
+    try {
+      db = adopt(new Database(slot.path, { fileMustExist: true, timeout: BUSY_TIMEOUT_MS }));
+      slot.write = db;
+      db.pragma("foreign_keys = ON");
+      db.pragma("journal_mode = WAL");
+    } catch (err) {
+      console.error("[openWrite] failed to open database:", err);
+      release(db);
+      slot.write = null;
+      return null;
+    }
+  }
+  const state = pool();
+  if (state.migrated.get(slot.path) !== slot.identity) {
+    try {
+      migrateSchema(db);
+      state.migrated.set(slot.path, slot.identity);
+    } catch {
+      // migrateSchema already logged. Drop the handle so the next call starts
+      // from a clean connection and retries the bootstrap.
+      release(db);
+      slot.write = null;
+      return null;
+    }
+  }
+  return db;
+}
+
+/**
+ * Schema bootstrap + every lazy migration. Run once per DB file by
+ * openWrite(); call it directly only from tests.
+ */
+function migrateSchema(db: DB): void {
+  try {
     db.exec(`
       -- KEEP IN SYNC WITH streamlit/whoop/db.py:22-101 (Python init_db schema)
       CREATE TABLE IF NOT EXISTS recovery (
@@ -421,11 +596,7 @@ export function openWrite(): DB | null {
       }
     }
     // route_logs — issue #505: bootstrap + every lazy ALTER for this table
-    // live in one place (migrateRouteLogsSchema) shared with logs.ts's
-    // openRouteLogWrite(), instead of being hand-duplicated across the two
-    // connections. See that function's doc comment for why route_logs still
-    // gets its own connection in logs.ts rather than routing every call
-    // through openWrite().
+    // live in one place (migrateRouteLogsSchema).
     migrateRouteLogsSchema(db);
     const insightCols = db.prepare("PRAGMA table_info(insights)").all() as { name: string }[];
     if (!insightCols.some((c) => c.name === "created_at")) {
@@ -605,11 +776,10 @@ export function openWrite(): DB | null {
       db.exec("ALTER TABLE user_settings ADD COLUMN system_prompt TEXT");
     }
     // Issue #493 follow-up (fable review) — one-time migration off the
-    // legacy app-global system_prompt row. Runs on every openWrite() call,
-    // so the steady-state (post-migration) path must be cheap: app_settings
-    // is keyed on `key TEXT PRIMARY KEY`, so this is a single indexed point
-    // lookup, not a table scan — once the row is deleted below, every
-    // subsequent call short-circuits here.
+    // legacy app-global system_prompt row. Runs once per DB file per process
+    // (see openWrite()). app_settings is keyed on `key TEXT PRIMARY KEY`, so
+    // this is a single indexed point lookup, not a table scan — and once the
+    // row is deleted below, every later process short-circuits here.
     if (hasTable(db, "app_settings") && hasTable(db, "user_settings")) {
       const legacyPrompt = db
         .prepare("SELECT value FROM app_settings WHERE key = 'system_prompt'")
@@ -725,30 +895,68 @@ export function openWrite(): DB | null {
         ON whoop_cycle_steps(user_id, date DESC, cycle_start DESC);
     `);
 
-    return db;
   } catch (err) {
     // Surfacing the error is critical: silent null returns hide schema
     // migration bugs (e.g. ALTER ADD COLUMN with FK + non-NULL DEFAULT
-    // under foreign_keys=ON). Log to stderr; callers still get null and
-    // can decide what to do.
+    // under foreign_keys=ON). Log to stderr; openWrite() still returns null
+    // and callers can decide what to do.
     console.error("[openWrite] migration failed:", err);
-    db?.close();
+    throw err;
+  }
+}
+
+/**
+ * The shared read-only handle. Returns null if the file doesn't exist yet.
+ * Does NOT run the schema bootstrap: a table may not exist yet on a DB that
+ * openWrite() has never touched, so callers either guard with hasTable() or
+ * use openRead()/safeReadQuery().
+ */
+export function open(): DB | null {
+  const slot = currentSlot();
+  if (!slot) return null;
+  if (slot.read) return slot.read;
+  try {
+    // No `foreign_keys = ON` here — SQLite ignores FK pragmas on read-only
+    // handles, so it would just be cargo-culted noise.
+    slot.read = adopt(
+      new Database(slot.path, { readonly: true, fileMustExist: true, timeout: BUSY_TIMEOUT_MS }),
+    );
+    return slot.read;
+  } catch {
     return null;
   }
 }
 
-/** Open the DB read-only. Returns null if the file doesn't exist yet. */
-export function open(): DB | null {
-  const p = dbPath();
-  if (!existsSync(p)) return null;
-  try {
-    // No `foreign_keys = ON` here — SQLite ignores FK pragmas on read-only
-    // handles, so it would just be cargo-culted noise.
-    const db = new Database(p, { readonly: true, fileMustExist: true });
-    return db;
-  } catch {
-    return null;
+/**
+ * The shared read-only handle, with the schema guaranteed to be migrated.
+ * For pure reads of tables that openWrite() owns (users, sessions,
+ * user_settings, chat_*): the one-time bootstrap runs on first use (it needs
+ * the write handle exactly once per DB file), and after that the read itself
+ * runs on the read-only connection and never takes SQLite's write lock.
+ */
+export function openRead(): DB | null {
+  return openWrite() ? open() : null;
+}
+
+const STATEMENT_CACHE_LIMIT = 256;
+const statementCaches = new WeakMap<DB, Map<string, Database.Statement>>();
+
+/** db.prepare() with a per-handle cache. Only for handles from open() /
+ *  openWrite(); the cache dies with the handle. Bounded so dynamically built
+ *  SQL can't grow it without limit. */
+export function prepareCached(db: DB, sql: string): Database.Statement {
+  let cache = statementCaches.get(db);
+  if (!cache) {
+    cache = new Map();
+    statementCaches.set(db, cache);
   }
+  let stmt = cache.get(sql);
+  if (!stmt) {
+    if (cache.size >= STATEMENT_CACHE_LIMIT) cache.clear();
+    stmt = db.prepare(sql);
+    cache.set(sql, stmt);
+  }
+  return stmt;
 }
 
 export function hasTable(db: DB, name: string): boolean {
@@ -786,6 +994,8 @@ export function safeDays(days: number): number {
   return Math.min(n, 3650);
 }
 
+/** Run `fn` on the shared read-only handle. Null if the DB is missing or `fn`
+ *  throws. No schema bootstrap — see open(). */
 export function safeQuery<T>(fn: (db: DB) => T): T | null {
   const db = open();
   if (!db) return null;
@@ -793,11 +1003,24 @@ export function safeQuery<T>(fn: (db: DB) => T): T | null {
     return fn(db);
   } catch {
     return null;
-  } finally {
-    db.close();
   }
 }
 
+/** Run `fn` on the shared read-only handle after the one-time schema
+ *  bootstrap. Use for pure reads of tables openWrite() owns; same null-on-
+ *  failure contract as safeWriteQuery. Never takes the write lock. */
+export function safeReadQuery<T>(fn: (db: DB) => T): T | null {
+  const db = openRead();
+  if (!db) return null;
+  try {
+    return fn(db);
+  } catch {
+    return null;
+  }
+}
+
+/** Run `fn` on the shared read-write handle. Only for callbacks that write;
+ *  pure reads belong in safeReadQuery. */
 export function safeWriteQuery<T>(fn: (db: DB) => T): T | null {
   const db = openWrite();
   if (!db) return null;
@@ -805,8 +1028,6 @@ export function safeWriteQuery<T>(fn: (db: DB) => T): T | null {
     return fn(db);
   } catch {
     return null;
-  } finally {
-    db.close();
   }
 }
 
@@ -860,8 +1081,8 @@ function addUserIdColumnAndClaimLegacyRows(db: DB, table: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Issue #505 — route_logs bootstrap + migration, shared by openWrite() and
-// logs.ts's openRouteLogWrite()
+// Issue #505 — route_logs bootstrap + migration (called from the one-time
+// openWrite() migration pass)
 // ---------------------------------------------------------------------------
 
 const ROUTE_LOGS_INDEX_NAME = "idx_route_logs_user";
@@ -890,44 +1111,20 @@ function normalizeIndexSql(sql: string): string {
 
 /**
  * Full route_logs schema: CREATE TABLE, every lazy ALTER (issue #296 perf
- * columns, issue #499 user_id + index). Single source of truth for both
- * openWrite() (called above, unconditionally, on every write call) and
- * logs.ts's openRouteLogWrite() (called once per process, cached — see
- * below), so the two can no longer drift the way they did before #505, when
- * this whole block was hand-copied into logs.ts and kept in sync "by
- * comment."
+ * columns, issue #499 user_id + index). Called from migrateSchema(), so it
+ * runs once per DB file per process via openWrite(); tests also call it
+ * directly.
  *
- * route_logs still gets bootstrapped from a SEPARATE better-sqlite3
- * connection in logs.ts rather than every write simply calling openWrite().
- * That split is deliberate, not an accident, and the reason is cost:
- * route_logs is written on literally every page render — see the `after()`
- * hook in `apps/web/src/app/(dashboard)/layout.tsx`, which fires for every
- * route in the app — making it the single hottest write path in this
- * codebase, far hotter than chat_logs (once per chat turn) or sync_logs
- * (rate-limited to roughly once per 5 minutes).
- *
- * openWrite() has no memoization: every call re-execs the ~20-table bootstrap
- * string and re-runs every ALTER guard via a fresh PRAGMA table_info per
- * table. Benchmarked against an already-migrated DB (apps/web, 2026-08,
- * better-sqlite3, warm FS cache, 2000 iterations): openWrite() cost ~0.81ms/
- * call versus ~0.23ms/call for logs.ts's cached fast path (open a raw
- * connection, skip migration entirely once `routeLogsSchemaReady` is true) —
- * roughly 3.5x, ~0.6ms of pure avoidable overhead on every single page
- * request. It runs inside `after()` so it doesn't add to response latency,
- * but it still holds the sole SQLite writer lock for that much longer on
- * every request, which is real contention against chat/sync writes under
- * concurrent load. logs.ts's module-level `routeLogsSchemaReady` flag makes
- * this a one-time cost per process instead of a per-request one.
+ * History (issues #505, #589): route_logs is written on every page render
+ * (the `after()` hook in `apps/web/src/app/(dashboard)/layout.tsx`), and
+ * openWrite() used to re-run the whole ~20-table bootstrap on every call, so
+ * logs.ts kept its own connection and its own `routeLogsSchemaReady` latch to
+ * avoid that tax. openWrite() now migrates once and shares one handle, so
+ * logs.ts simply calls openWrite() and that separate path is gone.
  *
  * Precondition: `users` must already exist (addUserIdColumnAndClaimLegacyRows
- * below does `SELECT id FROM users`). openWrite() satisfies this by
+ * below does `SELECT id FROM users`). migrateSchema() satisfies this by
  * construction (users is created and seeded earlier in the same function).
- * logs.ts's openRouteLogWrite() checks for `users` before calling this and
- * falls back to a one-time, full openWrite() bootstrap if it's missing —
- * that's the issue #505 edge case: a DB file where openWrite() has never run
- * has no `users` table yet, so calling this function directly would throw,
- * get swallowed by openRouteLogWrite()'s catch, and silently leave
- * route_logs created without `user_id`.
  *
  * Cost note (post-review correction): the index step at the bottom of this
  * function is gated on the CURRENT stored index definition (sqlite_master),
@@ -935,14 +1132,12 @@ function normalizeIndexSql(sql: string): string {
  * recreated idx_route_logs_user on every single call — cheap on an empty
  * table but a full table-scan rebuild on a populated one, so it got more
  * expensive, without bound, as route_logs grew (measured on a 20k-row table:
- * openWrite() cost ~16.9ms/call unconditional vs ~0.9ms/call gated, i.e. the
- * unconditional version regressed openWrite() to roughly 18x its cost on
- * `main` and undid essentially all of the ~0.81ms/~0.23ms benchmark above,
- * which was only ever valid on an already-migrated, effectively-empty table).
- * With the gate, the DROP+CREATE only fires the one time the stored
- * definition actually differs from ROUTE_LOGS_INDEX_DEFINITION — migrating a
- * legacy 2-column index, or bootstrapping a fresh DB — and every call after
- * that is a single indexed sqlite_master lookup plus a string compare.
+ * ~16.9ms/call unconditional vs ~0.9ms/call gated). With the gate, the
+ * DROP+CREATE only fires the one time the stored definition actually differs
+ * from ROUTE_LOGS_INDEX_DEFINITION — migrating a legacy 2-column index, or
+ * bootstrapping a fresh DB — and every call after that is a single indexed
+ * sqlite_master lookup plus a string compare. That gate still matters for
+ * direct callers and for the once-per-process run against a large table.
  */
 export function migrateRouteLogsSchema(db: DB): void {
   db.exec(`
@@ -996,7 +1191,7 @@ export function migrateRouteLogsSchema(db: DB): void {
   //
   // Gated on the index's CURRENT stored definition, not run unconditionally.
   // DROP+CREATE INDEX rebuilds the whole b-tree with a full table scan, and
-  // this function runs on every openWrite() call — unconditionally
+  // this function runs on every migration pass — unconditionally
   // dropping/recreating here would mean every write after the first pays a
   // full route_logs table scan just to rebuild an index that hasn't
   // changed. route_logs grows on every page view, so that cost is

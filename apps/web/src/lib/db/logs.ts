@@ -1,78 +1,11 @@
 import "server-only";
-import { existsSync } from "node:fs";
-import Database, { type Database as DB } from "better-sqlite3";
-import {
-  dbPath,
-  hasColumn,
-  hasTable,
-  migrateRouteLogsSchema,
-  openWrite,
-  safeQuery,
-} from "./connection";
+import { hasColumn, hasTable, openWrite, safeQuery } from "./connection";
 
-let routeLogsSchemaReady = false;
-
-/**
- * Opens its own raw better-sqlite3 connection instead of going through
- * openWrite() — deliberately, not by accident. See migrateRouteLogsSchema()'s
- * doc comment in connection.ts (issue #505) for the full cost rationale:
- * route_logs is written on every page render, and openWrite() re-derives the
- * whole app's schema state on every call with no caching, so routing this
- * hot path through it would be a real, measured per-request tax. The
- * `routeLogsSchemaReady` flag below makes the migration a one-time cost per
- * process instead.
- */
-function openRouteLogWrite(): DB | null {
-  const p = dbPath();
-  if (!existsSync(p)) return null;
-  try {
-    const db = new Database(p, { fileMustExist: true });
-    try {
-      db.pragma("journal_mode = WAL");
-      if (!routeLogsSchemaReady) {
-        if (!hasTable(db, "users")) {
-          // Issue #505 edge case: nothing has ever called openWrite() against
-          // this DB file, so `users` doesn't exist yet and
-          // migrateRouteLogsSchema()'s user_id step (SELECT id FROM users)
-          // would throw. That throw used to be swallowed by the catch below,
-          // silently dropping the log line and leaving route_logs created
-          // without user_id until the next openWrite() call.
-          //
-          // Rather than duplicate app-wide bootstrap here, delegate this
-          // one-time case to the real thing: openWrite() creates `users` and
-          // migrates every table, including route_logs, in one shot. This
-          // only runs once per process (routeLogsSchemaReady latches true
-          // right after), so it doesn't reintroduce the per-request cost
-          // this function exists to avoid.
-          db.close();
-          const bootstrapped = openWrite();
-          if (!bootstrapped) return null;
-          bootstrapped.close();
-          const reopened = new Database(p, { fileMustExist: true });
-          try {
-            reopened.pragma("journal_mode = WAL");
-          } catch {
-            // `db` (the outer try's connection) is already closed above —
-            // closing it again here would be a no-op on the wrong handle.
-            // `reopened` is the live connection that needs cleanup.
-            reopened.close();
-            return null;
-          }
-          routeLogsSchemaReady = true;
-          return reopened;
-        }
-        migrateRouteLogsSchema(db);
-        routeLogsSchemaReady = true;
-      }
-      return db;
-    } catch {
-      db.close();
-      return null;
-    }
-  } catch {
-    return null;
-  }
-}
+// route_logs rows are written through the shared process-wide write handle
+// (#589). The schema bootstrap — including route_logs' user_id migration and the
+// never-migrated-file edge case from #505 — now runs once per process per DB
+// file inside openWrite(), so this hot path no longer needs its own
+// connection or latch.
 
 export type ChatLog = {
   id: number;
@@ -348,7 +281,7 @@ export type RouteLog = {
  *  authenticated user for this request (issue #499, same shape as
  *  addSyncLog). */
 export function addRouteLog(log: Omit<RouteLog, "id">): void {
-  const db = openRouteLogWrite();
+  const db = openWrite();
   if (!db) return;
   try {
     db.prepare(

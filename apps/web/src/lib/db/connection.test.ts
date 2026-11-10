@@ -324,6 +324,10 @@ describe("Phase D — domain tables carry user_id", () => {
     const file = newDbFile();
     process.env.WHOOP_DB_PATH = file;
     conn.openWrite()?.close();
+    // Drop the per-process migration latch so the second open genuinely
+    // re-runs the whole migration against the already-migrated file (as a
+    // fresh process would), instead of just returning the cached handle.
+    conn.closeConnections();
     // Second open should not throw and should preserve the composite PK.
     const db = conn.openWrite();
     try {
@@ -395,7 +399,9 @@ describe("Phase D — domain tables carry user_id", () => {
     const file = newDbFile();
     process.env.WHOOP_DB_PATH = file;
     conn.openWrite()?.close();
+    conn.closeConnections();
     conn.openWrite()?.close();
+    conn.closeConnections();
     const db = conn.openWrite();
     try {
       expect(columns(db!, "user_settings")).toContain("system_prompt");
@@ -490,8 +496,12 @@ describe("Phase D — domain tables carry user_id", () => {
 
     // First open migrates; the row is gone, so subsequent opens must be
     // cheap no-ops that don't throw and don't disturb the migrated value.
+    // closeConnections() between passes clears the once-per-process migration
+    // latch so each pass really re-runs the full migration.
     conn.openWrite()?.close();
+    conn.closeConnections();
     conn.openWrite()?.close();
+    conn.closeConnections();
     const db = conn.openWrite();
     try {
       const row = db!
@@ -1145,9 +1155,14 @@ describe("Phase D — domain tables carry user_id", () => {
       .run("2026-06-01T00:00:00Z", 10);
     raw.close();
 
-    // Several more opens — each one used to re-run the claim.
+    // Several more opens — each one used to re-run the claim. Reset the
+    // migration latch between them so each really re-runs the full migration
+    // (a fresh process would), not just the cached handle.
+    conn.closeConnections();
     conn.openWrite()?.close();
+    conn.closeConnections();
     conn.openWrite()?.close();
+    conn.closeConnections();
     const db = conn.openWrite();
     try {
       const row = db!
@@ -1172,7 +1187,10 @@ describe("Phase D — domain tables carry user_id", () => {
       .run("2026-06-01T00:00:00Z", "orphan");
     raw.close();
 
+    // Reset the migration latch so these reopens genuinely re-run it.
+    conn.closeConnections();
     conn.openWrite()?.close();
+    conn.closeConnections();
     const db = conn.openWrite();
     try {
       const row = db!
@@ -1217,9 +1235,12 @@ describe("Phase D — domain tables carry user_id", () => {
     raw.close();
     process.env.WHOOP_DB_PATH = file;
 
-    // Three opens: first migrates, the rest must be clean no-ops.
+    // Three opens: first migrates, the rest must be clean no-ops. The latch is
+    // reset between them so each pass really re-runs the full migration.
     conn.openWrite()?.close();
+    conn.closeConnections();
     conn.openWrite()?.close();
+    conn.closeConnections();
     const db = conn.openWrite();
     expect(db).not.toBeNull();
     try {

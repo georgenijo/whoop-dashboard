@@ -82,8 +82,12 @@ describe("users.timezone migration", () => {
   it("is idempotent across repeated openWrite() calls", () => {
     // Calling openWrite() again must not throw (the ALTER would error if it
     // re-ran). The PRAGMA-gated check guarantees a no-op on the second pass.
+    // closeConnections() resets the once-per-process migration latch, so the
+    // second pass genuinely re-runs the whole migration on the already-migrated
+    // file (as a fresh process would) rather than returning the cached handle.
     const a = connection.openWrite();
     a?.close();
+    connection.closeConnections();
     const b = connection.openWrite();
     b?.close();
     const cols = listUserColumns();
