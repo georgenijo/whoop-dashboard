@@ -6,6 +6,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 
 vi.mock("server-only", () => ({}));
 
+import { buildAnthropicConversation } from "@/lib/coach/conversation";
+
 // WHOOP_DB_PATH must be set before importing the module under test — connection.ts
 // reads it via dbPath() which lazy-creates the schema on first openWrite().
 const tmpRoot = mkdtempSync(path.join(tmpdir(), "coach-db-"));
@@ -363,6 +365,55 @@ describe("chat message work logs", () => {
       },
     ],
   };
+
+  it("preserves tool pairing when stored narration matches a final work-log note", () => {
+    const threadId = insertThread(1);
+    const note = workLog.notes[0];
+    const toolUse = {
+      type: "tool_use",
+      id: "tool-1",
+      name: "query_recovery",
+      input: {},
+    };
+    const toolResult = {
+      type: "tool_result",
+      tool_use_id: "tool-1",
+      content: "[]",
+    };
+    coach.addChatMessages(threadId, [
+      { role: "user", content: "How is my recovery?" },
+      {
+        role: "assistant",
+        content: note,
+        blocks: [{ type: "text", text: note }, toolUse],
+      },
+      { role: "user", content: "[tool_result]", blocks: [toolResult] },
+      {
+        role: "assistant",
+        content: "Recovery is 81%.",
+        blocks: [{ type: "text", text: "Recovery is 81%." }],
+        work_log: workLog,
+      },
+    ]);
+    const storedBefore = helperDb.prepare("SELECT * FROM chat_messages").all();
+
+    const messages = buildAnthropicConversation(
+      coach.getChatThreadConversation(1, threadId),
+      { displayText: "And sleep?", modelText: "And sleep?", images: [] },
+    );
+
+    expect(messages).toEqual([
+      { role: "user", content: [{ type: "text", text: "How is my recovery?" }] },
+      { role: "assistant", content: [{ type: "text", text: note }, toolUse] },
+      { role: "user", content: [toolResult] },
+      { role: "assistant", content: [{ type: "text", text: "Recovery is 81%." }] },
+      { role: "user", content: [{ type: "text", text: "And sleep?" }] },
+    ]);
+    expect(coach.getChatThreadMessages(1, threadId).map((message) => message.content))
+      .toEqual(["How is my recovery?", "Recovery is 81%."]);
+    // Repair happens at read time, without migrating or rewriting the thread.
+    expect(helperDb.prepare("SELECT * FROM chat_messages").all()).toEqual(storedBefore);
+  });
 
   it("round-trips a receipt and leaves old NULL rows unchanged", () => {
     const threadId = insertThread(1);

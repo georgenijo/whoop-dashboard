@@ -10,6 +10,9 @@ import {
   type CoachUserTurn,
   MAX_ACTIVE_IMAGES,
 } from "./image-types";
+import { forModule } from "@/lib/logger";
+
+const log = forModule("coach.conversation");
 
 export const OMITTED_IMAGE_MARKER =
   "[An earlier attached image is outside the active image context. Ask the user to reattach it before making a fresh visual analysis.]";
@@ -81,12 +84,64 @@ function messageBlocks(
   ];
 }
 
+type BlockMessage = { role: MessageParam["role"]; content: ContentBlockParam[] };
+
+function withoutBrokenToolPairs(messages: BlockMessage[]): MessageParam[] {
+  const pairedIds = messages.map(() => new Set<string>());
+  // Inspect original neighbours before removing empty messages: a tool result
+  // separated from its call by another turn must never become a valid pair.
+  for (let index = 0; index < messages.length - 1; index += 1) {
+    const assistant = messages[index];
+    const user = messages[index + 1];
+    if (assistant.role !== "assistant" || user.role !== "user") continue;
+    const uses = assistant.content.filter((block) => block.type === "tool_use");
+    const results = user.content.filter((block) => block.type === "tool_result");
+    for (const use of uses) {
+      if (
+        typeof use.id === "string" && use.id.length > 0 &&
+        uses.filter((block) => block.id === use.id).length === 1 &&
+        results.filter((block) => block.tool_use_id === use.id).length === 1
+      ) {
+        pairedIds[index].add(use.id);
+        pairedIds[index + 1].add(use.id);
+      }
+    }
+  }
+
+  let droppedToolUses = 0;
+  let droppedToolResults = 0;
+  const repaired = messages.map((message, index) => ({
+    ...message,
+    content: message.content.filter((block) => {
+      if (block.type === "tool_use") {
+        const keep = message.role === "assistant" && pairedIds[index].has(block.id);
+        if (!keep) droppedToolUses += 1;
+        return keep;
+      }
+      if (block.type === "tool_result") {
+        const keep = message.role === "user" && pairedIds[index].has(block.tool_use_id);
+        if (!keep) droppedToolResults += 1;
+        return keep;
+      }
+      return true;
+    }),
+  })).filter((message) => message.content.length > 0);
+
+  if (droppedToolUses > 0 || droppedToolResults > 0) {
+    log.warn(
+      { dropped_tool_uses: droppedToolUses, dropped_tool_results: droppedToolResults },
+      "Dropped unpaired tool blocks from conversation history",
+    );
+  }
+  return repaired;
+}
+
 export function buildAnthropicConversation(
   conversation: CoachConversationMessage[],
   turn: CoachUserTurn,
 ): MessageParam[] {
   const { activeIds } = selectActiveImageContext(conversation, turn);
-  const messages: MessageParam[] = conversation.map((message) => ({
+  const messages: BlockMessage[] = conversation.map((message) => ({
     role: message.role,
     content: messageBlocks(message, activeIds),
   }));
@@ -97,7 +152,7 @@ export function buildAnthropicConversation(
       textBlock(turn.modelText),
     ],
   });
-  return messages;
+  return withoutBrokenToolPairs(messages);
 }
 
 function blockText(blocks: unknown[]): string {

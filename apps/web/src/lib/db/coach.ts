@@ -89,7 +89,19 @@ function visibleChatPreviewClause(alias: string): string {
 type MessageWithWorkLog = Pick<
   ChatMessage,
   "id" | "role" | "content" | "work_log"
->;
+> & { blocks?: string | null };
+
+function hasToolUse(blocks: string | null | undefined): boolean {
+  if (!blocks) return false;
+  try {
+    const parsed: unknown = JSON.parse(blocks);
+    return Array.isArray(parsed) && parsed.some(
+      (block) => block?.type === "tool_use",
+    );
+  } catch {
+    return false;
+  }
+}
 
 function withoutDuplicatedWorkNotes<T extends MessageWithWorkLog>(
   messages: T[],
@@ -111,6 +123,9 @@ function withoutDuplicatedWorkNotes<T extends MessageWithWorkLog>(
       if (
         candidate.role === "assistant" &&
         candidate.work_log === null &&
+        // Model history must retain tool calls even when their narration is
+        // already shown in the final receipt. UI rows omit blocks entirely.
+        !hasToolUse(candidate.blocks) &&
         notes.has(candidate.content.trim())
       ) {
         duplicateIds.add(candidate.id);
