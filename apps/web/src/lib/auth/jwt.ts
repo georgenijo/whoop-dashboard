@@ -4,8 +4,10 @@ import { SignJWT, jwtVerify } from "jose";
 const ISSUER = "coach-api";
 const ALG = "HS256";
 const EXPIRY_SECONDS = 30 * 24 * 60 * 60; // 30 days
+let cachedSigningKey: Uint8Array | null = null;
 
 function signingKey(): Uint8Array {
+  if (cachedSigningKey) return cachedSigningKey;
   const raw = process.env.JWT_SIGNING_KEY;
   if (!raw) {
     throw new Error("JWT_SIGNING_KEY not configured");
@@ -19,7 +21,8 @@ function signingKey(): Uint8Array {
   if (bytes.length < 32) {
     throw new Error("JWT_SIGNING_KEY must decode to at least 32 bytes");
   }
-  return new Uint8Array(bytes);
+  cachedSigningKey = new Uint8Array(bytes);
+  return cachedSigningKey;
 }
 
 export type SignedSession = {
