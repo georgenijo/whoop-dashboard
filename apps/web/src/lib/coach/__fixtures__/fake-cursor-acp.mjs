@@ -9,6 +9,7 @@ let fast = false;
 let totalInput = 0;
 let totalOutput = 0;
 let pendingPrompt = null;
+let configUpdateSent = false;
 const scenario = process.env.FAKE_CURSOR_ACP_SCENARIO ?? "normal";
 
 if (scenario === "startup-error") {
@@ -113,7 +114,7 @@ function finishPrompt(id, prompt) {
   } else {
     sessionUpdate({
       sessionUpdate: "agent_message_chunk",
-      content: { type: "text", text: `ACP answer from ${model}.` },
+      content: { type: "text", text: `ACP answer from ${model} (${reasoning}).` },
     });
   }
   totalInput += 10;
@@ -222,6 +223,14 @@ async function handle(message) {
       } else if (scenario === "slow") {
         pendingPrompt = { id, prompt };
       } else {
+        if (scenario === "config-update" && !configUpdateSent) {
+          configUpdateSent = true;
+          reasoning = "high";
+          sessionUpdate({
+            sessionUpdate: "config_option_update",
+            configOptions: configOptions(),
+          });
+        }
         finishPrompt(id, prompt);
       }
       return;

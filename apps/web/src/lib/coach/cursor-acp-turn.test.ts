@@ -128,6 +128,7 @@ vi.mock("./cursor-acp-registry", () => ({
 }));
 
 import { runCursorAcpTurn } from "./cursor-acp-turn";
+import { cursorAcpSessions } from "./cursor-acp-registry";
 import type { DetailState } from "./loop";
 
 function baseArgs(
@@ -289,6 +290,22 @@ describe("runCursorAcpTurn", () => {
     expect(typeof timing.first_text_ms).toBe("number");
     expect(typeof timing.first_tool_ms).toBe("number");
     expect(typeof timing.audit_drain_ms).toBe("number");
+  });
+
+  it("records session_acquire_ms when acquisition rejects before the callback", async () => {
+    vi.mocked(cursorAcpSessions.run).mockImplementationOnce(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      throw new Error("acquisition failed");
+    });
+    const detailState: DetailState = { iterations: 0 };
+
+    await expect(
+      runCursorAcpTurn(baseArgs(detailState)),
+    ).rejects.toThrow("acquisition failed");
+
+    const sessionAcquireMs = detailState.cursor!.timing.session_acquire_ms;
+    expect(typeof sessionAcquireMs).toBe("number");
+    expect(sessionAcquireMs!).toBeGreaterThanOrEqual(5);
   });
 
   it("skips applyModel when the warm session already matches", async () => {

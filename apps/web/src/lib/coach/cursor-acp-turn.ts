@@ -366,7 +366,7 @@ export async function runCursorAcpTurn(
   detailState.cursor = cursorDetail;
 
   const sessionAcquireStartedAt = Date.now();
-  const result = await cursorAcpSessions.run(
+  const pendingTurn = cursorAcpSessions.run(
     {
       userId,
       threadId,
@@ -787,6 +787,15 @@ export async function runCursorAcpTurn(
       }
     },
   );
+
+  let result: Awaited<typeof pendingTurn>;
+  try {
+    result = await pendingTurn;
+  } catch (error) {
+    cursorDetail.timing.session_acquire_ms ??=
+      Date.now() - sessionAcquireStartedAt;
+    throw error;
+  }
 
   if (result.response.stopReason === "refusal") {
     throw new Error("Cursor refused the request");

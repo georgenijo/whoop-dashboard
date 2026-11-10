@@ -704,6 +704,14 @@ export class CursorAcpRuntime {
           if (this.diagnostics.timing.firstEventMs === null) {
             this.diagnostics.timing.firstEventMs = Date.now() - promptStarted;
           }
+          // The agent can change session configuration mid-turn. Keep the
+          // cache authoritative so the next turn does not wrongly skip
+          // applyModel based on a stale selection.
+          if (message.notification.update.sessionUpdate === "config_option_update") {
+            this.configOptions = [
+              ...message.notification.update.configOptions,
+            ];
+          }
           onUpdate(message.notification);
         }
       };
