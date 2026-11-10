@@ -2,7 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import KPIStrip from "@/components/overview/KPIStrip";
 import TrendChart from "@/components/charts/TrendChart";
-import { getOverview, getStepsTrend, getLatestSteps, getPreviousSteps, getUserSettings, resolveStepsSource } from "@/lib/db";
+import { getOverviewSnapshot, getStepsTrend, getUserSettings, resolveStepsSource } from "@/lib/db";
 import { requireAuthOrSignin } from "@/lib/auth";
 import { resolveRangeWindow } from "@/lib/range";
 import { parseDate } from "@/lib/whoop/upsert";
@@ -24,13 +24,12 @@ export default async function StepsPage({
   const tz = getUserSettings(user.id)?.tz ?? "UTC";
   const window = resolveRangeWindow(range, parseDate(new Date().toISOString(), tz));
   const formatTime = (value: string) => new Date(/^\d{4}-\d{2}-\d{2} \d{2}:/.test(value) ? value.replace(" ", "T") + "Z" : value).toLocaleString("en-US", { timeZone: tz, month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-  const overview = getOverview(user.id, window.days);
+  const overview = getOverviewSnapshot(user.id, source);
   const trend = getStepsTrend(user.id, window.start, window.end, source);
 
   const completed = trend.filter((row) => !row.is_partial);
   const completedAverage = completed.length ? Math.round(completed.reduce((sum, row) => sum + row.steps, 0) / completed.length) : null;
-  const latest = getLatestSteps(user.id, source);
-  const previous = getPreviousSteps(user.id, source);
+  const { latestSteps: latest, previousSteps: previous } = overview;
 
   return (
     <>
@@ -43,9 +42,6 @@ export default async function StepsPage({
         previousSleep={overview.previousSleep}
         latestSteps={latest}
         previousSteps={previous}
-        recoveryTrend={overview.recoveryTrend}
-        strainTrend={overview.strainTrend}
-        sleepTrend={overview.sleepTrend}
       />
 
       <div className="card" style={{ marginTop: "var(--s6)", paddingTop: 0 }}>

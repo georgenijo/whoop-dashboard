@@ -5,7 +5,7 @@ import WorkoutDistanceChart from "@/components/charts/WorkoutDistanceChart";
 import Zone2Tracker from "@/components/charts/Zone2Tracker";
 import CardiacDriftCard from "@/components/charts/CardiacDriftCard";
 import WorkoutsTable from "@/components/workouts/WorkoutsTable";
-import { getWorkoutsRange, getWorkoutRowsRange, getBodyMeasurements } from "@/lib/db";
+import { capWorkoutRows, getWorkoutRowsRange, getBodyMeasurements } from "@/lib/db";
 import { requireAuthOrSignin } from "@/lib/auth";
 import { computeCardiacDrift } from "@/lib/analytics/cardiacDrift";
 import { resolveRangeWindow } from "@/lib/range";
@@ -25,8 +25,9 @@ export default async function WorkoutsPage({
   const { range } = await searchParams;
   const today = localToday();
   const window = resolveRangeWindow(range, today);
-  const rangeResult = getWorkoutsRange(user.id, window.start, window.end);
+  // One uncapped query; the table's capped view is derived from it.
   const rangeRows = getWorkoutRowsRange(user.id, window.start, window.end);
+  const rangeResult = capWorkoutRows(rangeRows);
   const rangeLabel = window.label;
   const body = getBodyMeasurements(user.id);
   const maxHR = body?.max_heart_rate ?? null;

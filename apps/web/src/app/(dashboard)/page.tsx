@@ -11,8 +11,8 @@ import SetupCard from "@/components/overview/SetupCard";
 import NeedsReconnectBanner from "@/components/overview/NeedsReconnectBanner";
 import TzBackfill from "@/components/onboarding/TzBackfill";
 import {
-  getDailySummary,
-  getOverview,
+  getDailySummaryForDates,
+  getOverviewSnapshot,
   getPRStats,
   getRecoveryRange,
   getUserSettings,
@@ -59,9 +59,12 @@ export default async function OverviewPage({
 
   const { range } = await searchParams;
   const window = resolveRangeWindow(range, localToday());
-  const data = getOverview(user.id, window.days);
+  const data = getOverviewSnapshot(user.id);
   const summaryByDate = new Map(
-    getDailySummary(user.id, "0000-01-01", "9999-12-31")
+    getDailySummaryForDates(user.id, [
+      ...(data.latestRecovery ? [data.latestRecovery.date] : []),
+      ...(data.previousRecovery ? [data.previousRecovery.date] : []),
+    ])
       .filter((r) => r.recovery_score != null)
       .map((r) => [r.date, r] as const)
   );
@@ -77,7 +80,7 @@ export default async function OverviewPage({
     data.latestRecovery !== null || data.latestCycle !== null || data.latestSleep !== null;
   return (
     <>
-      <TzBackfill />
+      <TzBackfill userId={user.id} />
       {!whoopStatus.exists ? (
         <SetupCard />
       ) : whoopStatus.needs_reauth ? (
@@ -104,9 +107,6 @@ export default async function OverviewPage({
         previousSleep={data.previousSleep}
         latestSteps={data.latestSteps}
         previousSteps={data.previousSteps}
-        recoveryTrend={data.recoveryTrend}
-        strainTrend={data.strainTrend}
-        sleepTrend={data.sleepTrend}
       />
 
       <div className="grid-main">

@@ -1,5 +1,5 @@
 import "server-only";
-import { dateRangeClause, safeDays } from "./connection";
+import { TREND_MAX_POINTS, dateRangeClause, safeDays, sampledTrendSql } from "./connection";
 import { forUser } from "./scoped";
 
 export type RecoveryRow = {
@@ -33,6 +33,22 @@ export function getRecoveryTrend(userId: number, days: number): RecoveryRow[] {
     `SELECT ${RECOVERY_COLUMNS} FROM recovery WHERE user_id = ? ORDER BY date DESC LIMIT ${limit}`,
   );
   return rows.reverse();
+}
+
+/** Same rows as `getRecoveryTrend`, downsampled in SQL to ~`maxPoints` (latest two kept). */
+export function getRecoveryTrendSampled(
+  userId: number,
+  days: number,
+  maxPoints: number = TREND_MAX_POINTS,
+): RecoveryRow[] {
+  const limit = safeDays(days);
+  return forUser(userId).all<RecoveryRow>(
+    sampledTrendSql(
+      RECOVERY_COLUMNS,
+      `SELECT ${RECOVERY_COLUMNS} FROM recovery WHERE user_id = ? ORDER BY date DESC LIMIT ${limit}`,
+      maxPoints,
+    ),
+  );
 }
 
 export function getRecoveryRange(

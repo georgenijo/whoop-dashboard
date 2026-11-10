@@ -6,13 +6,13 @@ import TodayKpis from "@/components/strain/TodayKpis";
 import TodayWorkouts from "@/components/strain/TodayWorkouts";
 import FreshnessBanner from "@/components/strain/FreshnessBanner";
 import {
-  getOverview,
+  getOverviewSnapshot,
   getStrainRange,
   getTodayStrainAggregate,
   getTodayWorkouts,
 } from "@/lib/db";
 import { requireAuthOrSignin } from "@/lib/auth";
-import { resolveRangeWindow, shiftDate } from "@/lib/range";
+import { resolveRangeWindow, rowsInWindow, shiftDate } from "@/lib/range";
 import { localToday } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
@@ -29,13 +29,15 @@ export default async function StrainPage({
   const { range } = await searchParams;
   const today = localToday();
   const window = resolveRangeWindow(range, today);
-  const { days, label: rangeLabel } = window;
-  const data = getOverview(user.id, days);
-  const trend = getStrainRange(user.id, window.start, window.end);
+  const { label: rangeLabel } = window;
+  const data = getOverviewSnapshot(user.id);
+  // The TSB curve needs ~180 days of history before the window. That wider
+  // fetch also contains the window itself, so the strain range is queried once.
   const tsbStart = window.start === "0000-01-01"
     ? window.start
     : shiftDate(window.start, -180);
   const tsbTrend = getStrainRange(user.id, tsbStart, window.end);
+  const trend = rowsInWindow(tsbTrend, window.start, window.end);
 
   const strainData = trend.map((r) => ({ date: r.date, value: r.strain }));
   const hrData = trend.map((r) => ({ date: r.date, value: r.avg_hr }));
@@ -57,9 +59,6 @@ export default async function StrainPage({
         previousSleep={data.previousSleep}
         latestSteps={data.latestSteps}
         previousSteps={data.previousSteps}
-        recoveryTrend={data.recoveryTrend}
-        strainTrend={data.strainTrend}
-        sleepTrend={data.sleepTrend}
       />
 
       <TodayKpis

@@ -1,6 +1,7 @@
 import "server-only";
 import { forUser } from "./scoped";
 import { SLEEP_DEDUP_WHERE } from "./sleep";
+import { dbPath } from "./connection";
 
 export type PRValue = { value: number; date: string } | null;
 export type PRStreak = {
@@ -18,6 +19,7 @@ export type PRStats = {
 };
 
 const MS_PER_DAY = 86_400_000;
+const statsCache = new Map<string, PRStats>();
 
 function parseDate(s: string): number {
   const [y, m, d] = s.split("-").map(Number);
@@ -108,13 +110,49 @@ export function getStreaks(userId: number): {
   };
 }
 
+/**
+ * The tenant's PR-stats change counter, bumped by triggers on every insert,
+ * edit or delete in `recovery` / `sleep` (see `migrateSchema`). `null` when the
+ * triggers are not known to exist (a DB `openWrite()` has not migrated yet, or
+ * no app_settings table): callers must not cache then.
+ */
+function prStatsVersion(userId: number): number | null {
+  return (
+    forUser(userId).read((db, uid) => {
+      try {
+        const rows = db
+          .prepare(
+            "SELECT key, value FROM app_settings WHERE key IN (?, 'pr_stats_triggers')",
+          )
+          .all(`pr_stats_version:${uid}`) as { key: string; value: string | null }[];
+        if (!rows.some((r) => r.key === "pr_stats_triggers")) return null;
+        const own = rows.find((r) => r.key !== "pr_stats_triggers");
+        return own ? Number(own.value) : 0;
+      } catch {
+        return null;
+      }
+    }) ?? null
+  );
+}
+
 export function getPRStats(userId: number): PRStats {
+  const version = prStatsVersion(userId);
+  const cacheKey = `${dbPath()}\u0000${userId}:${version}`;
+  const cached = version === null ? undefined : statsCache.get(cacheKey);
+  if (cached) return cached;
   const streaks = getStreaks(userId);
-  return {
+  const stats = {
     bestHRV: getBestHRV(userId),
     lowestRHR: getLowestRHR(userId),
     recoveryStreak: streaks.recoveryStreak,
     sleepPerfStreak: streaks.sleepPerfStreak,
     loggingStreak: streaks.loggingStreak,
   };
+  if (version !== null) {
+    // Bound this process-local cache: only the current key per DB+user is useful.
+    const prefix = `${dbPath()}\u0000${userId}:`;
+    for (const key of statsCache.keys()) if (key.startsWith(prefix) && key !== cacheKey) statsCache.delete(key);
+    statsCache.set(cacheKey, stats);
+  }
+  return stats;
 }

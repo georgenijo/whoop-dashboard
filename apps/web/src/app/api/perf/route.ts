@@ -50,15 +50,9 @@ function takeToken(userId: number): boolean {
   return true;
 }
 
-type Payload = {
-  source?: unknown;
-  metric?: unknown;
-  value?: unknown;
-  rating?: unknown;
-  path?: unknown;
-  navigation_type?: unknown;
-  app_version?: unknown;
-};
+function isObject(x: unknown): x is Record<string, unknown> {
+  return typeof x === "object" && x !== null && !Array.isArray(x);
+}
 
 function isString(x: unknown): x is string {
   return typeof x === "string";
@@ -74,44 +68,55 @@ export async function POST(req: Request) {
   }
   const userId = auth.user.id;
 
-  if (!takeToken(userId)) {
-    return Response.json({ ok: false, error: "rate_limited" }, { status: 429 });
-  }
-
-  let body: Payload;
+  let payload: unknown;
   try {
-    body = (await req.json()) as Payload;
+    payload = await req.json();
   } catch {
     return Response.json({ ok: false, error: "bad_json" }, { status: 400 });
   }
 
-  if (!isString(body.source) || !VALID_SOURCES.includes(body.source as PerfSource)) {
-    return Response.json({ ok: false, error: "bad_source" }, { status: 400 });
+  // The body must be a JSON object. `null`, numbers, strings and arrays are
+  // valid JSON but not a metric or a batch, and `"metrics" in null` would throw.
+  if (!isObject(payload)) {
+    return Response.json({ ok: false, error: "bad_payload" }, { status: 400 });
   }
-  if (!isString(body.metric) || !VALID_METRICS.has(body.metric)) {
-    return Response.json({ ok: false, error: "bad_metric" }, { status: 400 });
-  }
-  if (typeof body.value !== "number" || !Number.isFinite(body.value) || body.value < 0) {
-    return Response.json({ ok: false, error: "bad_value" }, { status: 400 });
-  }
+
+  // Older clients post one metric. New clients send the whole page-load batch.
+  const metrics: unknown = "metrics" in payload ? payload.metrics : [payload];
   if (
-    body.rating !== undefined &&
-    body.rating !== null &&
-    !(isString(body.rating) && VALID_RATINGS.includes(body.rating as PerfRating))
+    !Array.isArray(metrics) ||
+    metrics.length === 0 ||
+    metrics.length > 10 ||
+    !metrics.every(isObject)
   ) {
-    return Response.json({ ok: false, error: "bad_rating" }, { status: 400 });
+    return Response.json({ ok: false, error: "bad_batch" }, { status: 400 });
+  }
+  if (!takeToken(userId)) {
+    return Response.json({ ok: false, error: "rate_limited" }, { status: 429 });
+  }
+
+  for (const body of metrics) {
+    if (!isString(body.source) || !VALID_SOURCES.includes(body.source as PerfSource)) {
+      return Response.json({ ok: false, error: "bad_source" }, { status: 400 });
+    }
+    if (!isString(body.metric) || !VALID_METRICS.has(body.metric)) {
+      return Response.json({ ok: false, error: "bad_metric" }, { status: 400 });
+    }
+    if (typeof body.value !== "number" || !Number.isFinite(body.value) || body.value < 0) {
+      return Response.json({ ok: false, error: "bad_value" }, { status: 400 });
+    }
+    if (body.rating !== undefined && body.rating !== null && !(isString(body.rating) && VALID_RATINGS.includes(body.rating as PerfRating))) {
+      return Response.json({ ok: false, error: "bad_rating" }, { status: 400 });
+    }
   }
 
   try {
-    insertPerfMetric({
-      source: body.source as PerfSource,
-      metric: body.metric as PerfMetricName,
-      value: body.value,
+    for (const body of metrics) insertPerfMetric({
+      source: body.source as PerfSource, metric: body.metric as PerfMetricName, value: body.value as number,
       rating: isString(body.rating) ? (body.rating as PerfRating) : null,
       path: isString(body.path) ? body.path : null,
       navigation_type: isString(body.navigation_type) ? body.navigation_type : null,
-      user_id: userId,
-      user_agent: req.headers.get("user-agent"),
+      user_id: userId, user_agent: req.headers.get("user-agent"),
       app_version: isString(body.app_version) ? body.app_version : null,
     });
   } catch (err) {

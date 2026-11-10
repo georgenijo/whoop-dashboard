@@ -193,6 +193,10 @@ export function openWrite(): DB | null {
  * Schema bootstrap + every lazy migration. Run once per DB file by
  * openWrite(); call it directly only from tests.
  */
+/** Trigger body that bumps a tenant's PR-stats change counter; `$ROW` is NEW or OLD. */
+const PR_STATS_BUMP_SQL = `INSERT INTO app_settings (key, value) VALUES ('pr_stats_version:' || $ROW.user_id, '1')
+            ON CONFLICT(key) DO UPDATE SET value = CAST(COALESCE(value, '0') AS INTEGER) + 1;`;
+
 function migrateSchema(db: DB): void {
   try {
     db.exec(`
@@ -895,6 +899,42 @@ function migrateSchema(db: DB): void {
         ON whoop_cycle_steps(user_id, date DESC, cycle_start DESC);
     `);
 
+    // Per-tenant change counter for the PR-stats cache (issue #591). PR stats
+    // are derived from the recovery and sleep tables only, and any insert,
+    // edit or delete of one of a tenant's rows there - from sync, webhook,
+    // backfill, HealthKit ingest or a manual repair - bumps that tenant's
+    // `pr_stats_version:<user_id>` counter in app_settings, so a cached result
+    // can never outlive the rows it came from. Triggers (not write-path hooks)
+    // so no writer can forget to invalidate. The counter lives in the generic
+    // app_settings key/value table on purpose: a new table with a user_id
+    // column would need its own account-merge strategy (auth.ts).
+    // `pr_stats_triggers` marks that the triggers exist; readers refuse to
+    // cache without it. KEEP THIS LAST: the table rebuilds above DROP/RENAME
+    // recovery and sleep, which would silently take their triggers with them.
+    for (const table of ["recovery", "sleep"]) {
+      for (const [event, ref] of [["INSERT", "NEW"], ["UPDATE", "NEW"], ["DELETE", "OLD"]] as const) {
+        db.exec(`
+          CREATE TRIGGER IF NOT EXISTS trg_pr_stats_version_${table}_${event.toLowerCase()}
+          AFTER ${event} ON ${table}
+          BEGIN
+            ${PR_STATS_BUMP_SQL.replaceAll("$ROW", ref)}
+          END;
+        `);
+      }
+      // An UPDATE that moves a row to another tenant changes both tenants: the
+      // trigger above bumps the new owner, this one bumps the old one.
+      db.exec(`
+        CREATE TRIGGER IF NOT EXISTS trg_pr_stats_version_${table}_update_old
+        AFTER UPDATE OF user_id ON ${table} WHEN OLD.user_id IS NOT NEW.user_id
+        BEGIN
+          ${PR_STATS_BUMP_SQL.replaceAll("$ROW", "OLD")}
+        END;
+      `);
+    }
+    db.exec(
+      "INSERT OR IGNORE INTO app_settings (key, value) VALUES ('pr_stats_triggers', '1')",
+    );
+
   } catch (err) {
     // Surfacing the error is critical: silent null returns hide schema
     // migration bugs (e.g. ALTER ADD COLUMN with FK + non-NULL DEFAULT
@@ -992,6 +1032,33 @@ export function safeDays(days: number): number {
   const n = Math.floor(days);
   if (n <= 0) return 30;
   return Math.min(n, 3650);
+}
+
+/** Most points a SQL-downsampled trend returns (see `sampledTrendSql`). */
+export const TREND_MAX_POINTS = 365;
+
+/**
+ * Downsample a newest-first trend in SQL instead of shipping every row to JS.
+ *
+ * `inner` is the caller's own "newest first, LIMIT n" SELECT (it keeps its
+ * `user_id = ?` placeholder as the only `?`, so the forUser() binding
+ * convention still holds). Rows are numbered newest-first and every
+ * `ceil(n / maxPoints)`-th row is kept. The two newest rows are always kept so
+ * "latest" and "previous" readings derived from the tail stay exact. When the
+ * trend already has `maxPoints` rows or fewer, the stride is 1 and the result
+ * is identical to the un-sampled query. Output is oldest-first, like
+ * `getRecoveryTrend` and friends.
+ */
+export function sampledTrendSql(
+  columns: string,
+  inner: string,
+  maxPoints: number = TREND_MAX_POINTS,
+): string {
+  const m = Math.max(2, Math.floor(maxPoints));
+  return `SELECT ${columns} FROM (
+    SELECT ${columns}, ROW_NUMBER() OVER (ORDER BY date DESC) AS rn, COUNT(*) OVER () AS n
+    FROM (${inner})
+  ) WHERE rn <= 2 OR (rn - 1) % ((n + ${m} - 1) / ${m}) = 0 ORDER BY date ASC`;
 }
 
 /** Run `fn` on the shared read-only handle. Null if the DB is missing or `fn`

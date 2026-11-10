@@ -1,5 +1,5 @@
 import "server-only";
-import { dateRangeClause, safeDays } from "./connection";
+import { TREND_MAX_POINTS, dateRangeClause, safeDays, sampledTrendSql } from "./connection";
 import { forUser } from "./scoped";
 
 export type SleepRow = {
@@ -89,6 +89,22 @@ export function getSleepTrend(userId: number, days: number): SleepRow[] {
     `SELECT ${SLEEP_COLUMNS} FROM sleep s WHERE COALESCE(s.nap, 0) = 0 AND ${SLEEP_DEDUP_WHERE} AND s.user_id = ? ORDER BY s.date DESC LIMIT ${limit}`,
   );
   return rows.reverse();
+}
+
+/** Same rows as `getSleepTrend`, downsampled in SQL to ~`maxPoints` (latest two kept). */
+export function getSleepTrendSampled(
+  userId: number,
+  days: number,
+  maxPoints: number = TREND_MAX_POINTS,
+): SleepRow[] {
+  const limit = safeDays(days);
+  return forUser(userId).all<SleepRow>(
+    sampledTrendSql(
+      SLEEP_COLUMNS,
+      `SELECT ${SLEEP_COLUMNS} FROM sleep s WHERE COALESCE(s.nap, 0) = 0 AND ${SLEEP_DEDUP_WHERE} AND s.user_id = ? ORDER BY s.date DESC LIMIT ${limit}`,
+      maxPoints,
+    ),
+  );
 }
 
 export function getSleepRange(

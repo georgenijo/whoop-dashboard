@@ -5,29 +5,27 @@ import {
   hasTable,
   openWrite,
   safeDays,
+  TREND_MAX_POINTS,
 } from "./connection";
 import { forUser } from "./scoped";
 import {
   type RecoveryRow,
-  getLatestRecovery,
-  getPreviousRecovery,
   getRecoveryTrend,
+  getRecoveryTrendSampled,
 } from "./recovery";
 import {
   type CycleRow,
-  getLatestCycle,
-  getPreviousCycle,
   getStrainTrend,
+  getStrainTrendSampled,
 } from "./strain";
 import {
   type SleepRow,
-  getLatestSleep,
-  getPreviousSleep,
   getSleepTrend,
+  getSleepTrendSampled,
   SLEEP_DEDUP_WHERE,
 } from "./sleep";
 import { type WorkoutRow } from "./workouts";
-import { type StepsRow, type StepsSource, getLatestSteps, getPreviousSteps } from "./steps";
+import { type StepsRow, type StepsSource, getStepsPair } from "./steps";
 
 export type DailySummaryRow = {
   date: string;
@@ -196,26 +194,78 @@ export function getDailySummary(
   );
 }
 
-export function getOverview(userId: number, days = 30, stepsSource: StepsSource = "auto"): Overview {
-  const recoveryTrend = getRecoveryTrend(userId, days);
-  const strainTrend = getStrainTrend(userId, days);
-  const sleepTrend = getSleepTrend(userId, days);
-  const latestRecovery = getLatestRecovery(userId);
-  const latestCycle = getLatestCycle(userId);
-  const latestSleep = getLatestSleep(userId);
+/** Fetch only the requested dates; used by overview's recovery enrichment. */
+export function getDailySummaryForDates(userId: number, dates: string[]): DailySummaryRow[] {
+  const unique = [...new Set(dates)];
+  if (unique.length === 0) return [];
+  const placeholders = unique.map(() => "?").join(", ");
+  return forUser(userId).all<DailySummaryRow>(
+    `SELECT date, recovery_score, hrv_ms, resting_hr, sleep_hours, sleep_efficiency, sleep_performance, day_strain, max_hr, avg_hr, kilojoules, workouts_count, computed_at FROM daily_summary WHERE date IN (${placeholders}) AND user_id = ? ORDER BY date ASC`,
+    ...unique,
+  );
+}
+
+/** Overview without the trend arrays: latest/previous readings + steps. */
+export type OverviewSnapshot = Omit<Overview, "recoveryTrend" | "strainTrend" | "sleepTrend">;
+
+function buildSnapshot(
+  recoveryTail: RecoveryRow[],
+  strainTail: CycleRow[],
+  sleepTail: SleepRow[],
+  latestSteps: StepsRow | null,
+  previousSteps: StepsRow | null,
+): OverviewSnapshot {
+  const latestRecovery = recoveryTail.at(-1) ?? null;
+  const latestCycle = strainTail.at(-1) ?? null;
+  const latestSleep = sleepTail.at(-1) ?? null;
   return {
     latestRecovery,
-    previousRecovery: getPreviousRecovery(userId),
+    previousRecovery: recoveryTail.at(-2) ?? null,
     latestCycle,
-    previousCycle: getPreviousCycle(userId),
+    previousCycle: strainTail.at(-2) ?? null,
     latestSleep,
-    previousSleep: getPreviousSleep(userId),
-    recoveryTrend,
-    strainTrend,
-    sleepTrend,
-    latestSteps: getLatestSteps(userId, stepsSource),
-    previousSteps: getPreviousSteps(userId, stepsSource),
+    previousSleep: sleepTail.at(-2) ?? null,
+    latestSteps,
+    previousSteps,
     hasData: Boolean(latestRecovery || latestCycle || latestSleep),
+  };
+}
+
+/**
+ * KPI strip data: the latest and previous reading per metric, from one
+ * two-row query per table, plus steps from one source-resolved query. No
+ * trend arrays — pages that render their own range chart should use this
+ * instead of `getOverview` so they do not fetch the history twice.
+ */
+export function getOverviewSnapshot(userId: number, stepsSource: StepsSource = "auto"): OverviewSnapshot {
+  const [latestSteps, previousSteps] = getStepsPair(userId, stepsSource);
+  return buildSnapshot(
+    getRecoveryTrend(userId, 2),
+    getStrainTrend(userId, 2),
+    getSleepTrend(userId, 2),
+    latestSteps,
+    previousSteps,
+  );
+}
+
+export function getOverview(userId: number, days = 30, stepsSource: StepsSource = "auto"): Overview {
+  // The KPI's latest/previous values are the two newest rows of each trend, so
+  // one fetch per table serves both. Windows wider than TREND_MAX_POINTS (the
+  // all-time range, up to 3650 rows per table) are downsampled in SQL; the two
+  // newest rows are always kept, and anything at or under the cap is returned
+  // exactly. A one-day view still gets two rows for its previous-value delta.
+  const n = safeDays(days);
+  const exact = n <= TREND_MAX_POINTS;
+  const trendDays = Math.max(n, 2);
+  const recoveryTail = exact ? getRecoveryTrend(userId, trendDays) : getRecoveryTrendSampled(userId, days);
+  const strainTail = exact ? getStrainTrend(userId, trendDays) : getStrainTrendSampled(userId, days);
+  const sleepTail = exact ? getSleepTrend(userId, trendDays) : getSleepTrendSampled(userId, days);
+  const [latestSteps, previousSteps] = getStepsPair(userId, stepsSource);
+  return {
+    ...buildSnapshot(recoveryTail, strainTail, sleepTail, latestSteps, previousSteps),
+    recoveryTrend: exact ? recoveryTail.slice(-n) : recoveryTail,
+    strainTrend: exact ? strainTail.slice(-n) : strainTail,
+    sleepTrend: exact ? sleepTail.slice(-n) : sleepTail,
   };
 }
 

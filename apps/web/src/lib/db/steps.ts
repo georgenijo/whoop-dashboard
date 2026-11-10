@@ -79,6 +79,20 @@ export function getPreviousSteps(userId: number, source: StepsSource = "auto"): 
   return row ? (resolved === "whoop" ? withPartial(row) : row) : null;
 }
 
+/** Latest and previous steps from a single resolved source and one query. */
+export function getStepsPair(userId: number, source: StepsSource = "auto"): [StepsRow | null, StepsRow | null] {
+  const resolved = resolveStepsSource(userId, source);
+  if (resolved === "whoop" && !nativeTableAvailable(userId)) return [null, null];
+  const rows = resolved === "whoop"
+    ? forUser(userId).all<StepsRow>(
+      `SELECT ${WHOOP_COLUMNS} FROM whoop_cycle_steps WHERE step_count IS NOT NULL AND user_id = ? ORDER BY date DESC, cycle_start DESC, cycle_id DESC LIMIT 2`,
+    ).map(withPartial)
+    : forUser(userId).all<StepsRow>(
+      `SELECT ${APPLE_COLUMNS} FROM daily_steps WHERE source = 'apple_health' AND user_id = ? ORDER BY date DESC LIMIT 2`,
+    );
+  return [rows[0] ?? null, rows[1] ?? null];
+}
+
 export function getStepsRange(
   userId: number,
   startDate: string,

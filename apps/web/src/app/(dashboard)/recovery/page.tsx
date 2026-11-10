@@ -10,7 +10,7 @@ import IllnessSignalCard from "@/components/recovery/IllnessSignalCard";
 import SkinTempDeviationCard from "@/components/recovery/SkinTempDeviationCard";
 import Spo2TrendCard from "@/components/recovery/Spo2TrendCard";
 import {
-  getOverview,
+  getOverviewSnapshot,
   getRecoveryByDayOfWeek,
   getRecoveryRange,
   getSleepRange,
@@ -19,7 +19,7 @@ import {
 import { requireAuthOrSignin } from "@/lib/auth";
 import { computeIllnessSignal } from "@/lib/analytics/illness";
 import { computeRebound } from "@/lib/analytics/rebound";
-import { resolveRangeWindow, shiftDate } from "@/lib/range";
+import { resolveRangeWindow, rowsInWindow, shiftDate } from "@/lib/range";
 import { localToday } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
@@ -42,11 +42,19 @@ export default async function RecoveryPage({
   );
   const { range } = await searchParams;
   const window = resolveRangeWindow(range, localToday());
-  const { days, label: rangeLabel } = window;
-  const data = getOverview(user.id, days);
-  const trend = getRecoveryRange(user.id, window.start, window.end);
+  const { label: rangeLabel } = window;
+  const data = getOverviewSnapshot(user.id);
+  // Illness signal needs ~14 days of pre-window history for the baseline, plus
+  // the current display window. That one wider fetch also serves the window
+  // itself, so the recovery and sleep ranges are each queried once.
+  const baselineStart = window.start === "0000-01-01"
+    ? window.start
+    : shiftDate(window.start, -14);
+  const illnessRecovery = getRecoveryRange(user.id, baselineStart, window.end);
+  const illnessSleep = getSleepRange(user.id, baselineStart, window.end);
+  const trend = rowsInWindow(illnessRecovery, window.start, window.end);
+  const sleepTrend = rowsInWindow(illnessSleep, window.start, window.end);
   const strainTrend = getStrainRange(user.id, window.start, window.end);
-  const sleepTrend = getSleepRange(user.id, window.start, window.end);
   const otsRecovery = trend.slice(-OTS_LOOKBACK_DAYS);
   const otsCycles = strainTrend.slice(-OTS_LOOKBACK_DAYS);
 
@@ -60,13 +68,6 @@ export default async function RecoveryPage({
   }));
   const spo2Series = trend.map((r) => ({ date: r.date, spo2: r.spo2 }));
 
-  // Illness signal needs ~14 days of pre-window history for the baseline,
-  // plus the current display window.
-  const baselineStart = window.start === "0000-01-01"
-    ? window.start
-    : shiftDate(window.start, -14);
-  const illnessRecovery = getRecoveryRange(user.id, baselineStart, window.end);
-  const illnessSleep = getSleepRange(user.id, baselineStart, window.end);
   const illnessRows = computeIllnessSignal(illnessRecovery, illnessSleep)
     .filter((row) => row.date >= window.start && row.date <= window.end);
   const dowRecovery = getRecoveryByDayOfWeek(user.id, window.start, window.end);
@@ -102,9 +103,6 @@ export default async function RecoveryPage({
         previousSleep={data.previousSleep}
         latestSteps={data.latestSteps}
         previousSteps={data.previousSteps}
-        recoveryTrend={data.recoveryTrend}
-        strainTrend={data.strainTrend}
-        sleepTrend={data.sleepTrend}
       />
 
       <OvertrainingCard recovery={otsRecovery} cycles={otsCycles} />
