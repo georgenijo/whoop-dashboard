@@ -134,13 +134,15 @@ export function getLatestWhoopDataTimestamp(userId: number): string | null {
   });
 }
 
-export function getLatestInsight(userId: number): InsightRow | null {
+export function getLatestInsight(userId: number, today?: string): InsightRow | null {
   return forUser(userId).read((db, uid) => {
     // A read before the first lazy write must never expose global legacy rows.
     if (!hasTable(db, "insights") || !hasColumn(db, "insights", "user_id")) return null;
+    // Legacy rows used UTC dates. Exclude future local days so they cannot
+    // outrank a newly generated insight for today; keep older advice as fallback.
     return db.prepare(
-      "SELECT date, insight, created_at FROM insights WHERE user_id = ? ORDER BY date DESC LIMIT 1",
-    ).get(uid) as InsightRow | undefined ?? null;
+      "SELECT date, insight, created_at FROM insights WHERE date <= ? AND user_id = ? ORDER BY date DESC LIMIT 1",
+    ).get(today ?? getInsightToday(uid), uid) as InsightRow | undefined ?? null;
   });
 }
 
@@ -155,6 +157,12 @@ export function saveInsight(userId: number, date: string, insight: string): void
   } finally {
     db.close();
   }
+}
+
+export function getInsightToday(userId: number): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: getInsightTimezone(userId), year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
 }
 
 /** Stored onboarding timezone first, then account timezone, then UTC. */

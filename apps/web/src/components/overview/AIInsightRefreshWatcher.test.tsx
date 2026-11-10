@@ -37,6 +37,8 @@ describe("AIInsightRefreshWatcher", () => {
     await advance(300_000);
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(fetchStatus).toHaveBeenCalledTimes(3);
+    expect(screen.getByRole("status")).not.toHaveTextContent("Insight unavailable");
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("shows a failed generation in the card without refreshing or retrying generation", async () => {
@@ -47,6 +49,8 @@ describe("AIInsightRefreshWatcher", () => {
     await advance(300_000);
     expect(fetchStatus).toHaveBeenCalledTimes(1);
     expect(refresh).not.toHaveBeenCalled();
+    expect(screen.getByRole("status")).toHaveTextContent("Insight unavailable (bad key)");
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("stops checking after the five-minute regeneration window", async () => {
@@ -58,6 +62,24 @@ describe("AIInsightRefreshWatcher", () => {
     await advance(300_000);
     expect(fetchStatus).toHaveBeenCalledTimes(count);
     expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it("aborts a never-settling status request at the independent five-minute deadline", async () => {
+    // Deliberately ignores abort: the UI deadline must work even if fetch never settles.
+    fetchStatus.mockImplementation(() => new Promise(() => {}));
+    render(<AIInsightRefreshWatcher />);
+    await advance(2_000);
+    const signal = fetchStatus.mock.calls[0][1].signal;
+    await advance(297_999);
+    expect(signal.aborted).toBe(false);
+    expect(screen.getByRole("status")).toHaveTextContent("Refreshing...");
+    await advance(1);
+    expect(signal.aborted).toBe(true);
+    expect(screen.getByRole("status")).toHaveTextContent("Insight unavailable (provider error)");
+    await advance(300_000);
+    expect(fetchStatus).toHaveBeenCalledTimes(1);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("retries transient polling failures with backoff and stops on expired auth", async () => {

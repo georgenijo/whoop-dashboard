@@ -6,7 +6,7 @@ import {
   getLatestWhoopDataTimestamp,
   type InsightRow,
 } from "@/lib/db";
-import { getInsightTimezone, saveInsight } from "@/lib/db/summary";
+import { getInsightToday as insightToday, saveInsight } from "@/lib/db/summary";
 import { getGenerationFailure, type GenerationErrorClass } from "@/lib/db/ai-generation";
 import { isSettingLockActive, releaseSettingLock, type SettingLock } from "@/lib/db/settings";
 import {
@@ -57,11 +57,7 @@ export type InsightStatus = {
   nextRetryAt: string | null;
 };
 
-export function insightToday(userId: number): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: getInsightTimezone(userId), year: "numeric", month: "2-digit", day: "2-digit",
-  }).format(new Date());
-}
+export { insightToday };
 
 function parseTime(value: string | null): number | null {
   if (!value) return null;
@@ -82,9 +78,9 @@ function needsRegeneration(insight: InsightRow | null, latestDataAt: string | nu
 }
 
 export function getInsightStatus(userId: number, hasData: boolean): InsightStatus {
-  const insight = getLatestInsight(userId);
-  const failure = getGenerationFailure(userId, "insight");
   const today = insightToday(userId);
+  const insight = getLatestInsight(userId, today);
+  const failure = getGenerationFailure(userId, "insight");
   const latestDataAt = hasData ? getLatestWhoopDataTimestamp(userId) : null;
   return {
     userId,

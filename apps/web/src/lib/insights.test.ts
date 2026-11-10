@@ -84,6 +84,47 @@ describe("insights migration and isolation", () => {
     expect(getLatestInsight(2)?.insight).toBe("real user's update");
   });
 
+  it("replaces a migrated UTC-dated insight once across the UTC/local-day boundary", async () => {
+    sql((db) => db.exec(`
+      CREATE TABLE users (id INTEGER PRIMARY KEY, apple_sub TEXT UNIQUE, email TEXT, name TEXT, timezone TEXT, created_at TEXT);
+      INSERT INTO users (id) VALUES (1);
+      INSERT INTO users (id, apple_sub, timezone) VALUES (2, 'real-user', 'America/New_York');
+      CREATE TABLE insights (date TEXT PRIMARY KEY, insight TEXT, created_at TEXT);
+      INSERT INTO insights VALUES ('2026-11-10', 'Legacy UTC advice', '2026-11-10T03:00:00Z');
+    `));
+    bootstrap();
+    sdk.create.mockResolvedValue({ content: [{ type: "text", text: "Fresh local-day advice" }] });
+
+    for (let load = 0; load < 3; load++) await pageLoad();
+
+    expect(sdk.create).toHaveBeenCalledTimes(1);
+    expect(getLatestInsight(2)).toMatchObject({ date: "2026-11-09", insight: "Fresh local-day advice" });
+    expect(getInsightStatus(2, true)).toMatchObject({
+      today: "2026-11-09", isStale: false, isRegenerating: false,
+      insight: { date: "2026-11-09", insight: "Fresh local-day advice" },
+    });
+    // The authenticated polling route must also observe successful completion.
+    vi.stubEnv("JWT_SIGNING_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
+    const { signSessionToken } = await import("./auth/jwt");
+    const { GET } = await import("@/app/api/insights/status/route");
+    const { token } = await signSessionToken(2);
+    const response = await GET(new Request("http://localhost/api/insights/status", {
+      headers: { authorization: `Bearer ${token}` },
+    }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ ready: true, isRegenerating: false });
+  });
+
+  it("excludes future local dates and prefers today over the most recent older insight", () => {
+    bootstrap();
+    saveInsight(2, "2026-11-10", "Future UTC advice");
+    expect(getLatestInsight(2)).toBeNull();
+    saveInsight(2, "2026-11-08", "Older advice");
+    expect(getLatestInsight(2)?.insight).toBe("Older advice");
+    saveInsight(2, "2026-11-09", "Today's advice");
+    expect(getLatestInsight(2)?.insight).toBe("Today's advice");
+  });
+
   it("keeps ambiguous legacy ownership invisible", () => {
     sql((db) => db.exec(`
       CREATE TABLE users (id INTEGER PRIMARY KEY, apple_sub TEXT UNIQUE, email TEXT, name TEXT, timezone TEXT, created_at TEXT);

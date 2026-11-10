@@ -30,6 +30,18 @@ export default function AIInsightRefreshWatcher({
     let timer: ReturnType<typeof setTimeout>;
     const deadline = Date.now() + POLL_WINDOW_MS;
     const controller = new AbortController();
+    const stop = () => {
+      stopped = true;
+      controller.abort();
+      clearTimeout(timer);
+      clearTimeout(deadlineTimer);
+    };
+    const fail = (reason: GenerationErrorClass) => {
+      stop();
+      setPollError(reason);
+    };
+    // This timer runs even if fetch (or response.json) never settles.
+    const deadlineTimer = setTimeout(() => fail("provider_error"), POLL_WINDOW_MS);
 
     const schedule = () => {
       timer = setTimeout(() => void poll(), delay);
@@ -38,7 +50,7 @@ export default function AIInsightRefreshWatcher({
     const poll = async () => {
       if (stopped) return;
       if (Date.now() >= deadline) {
-        setPollError("provider_error");
+        fail("provider_error");
         return;
       }
       try {
@@ -48,7 +60,7 @@ export default function AIInsightRefreshWatcher({
         if (stopped) return;
         if (!response.ok) {
           if (response.status === 401) {
-            setPollError("provider_error");
+            fail("provider_error");
             return;
           }
           throw new Error("Status unavailable");
@@ -57,11 +69,12 @@ export default function AIInsightRefreshWatcher({
         if (stopped) return;
         if (status.ready) {
           // Exactly one page refresh after successful completion.
+          stop();
           refresh();
           return;
         }
         if (!status.isRegenerating) {
-          setPollError(status.errorClass ?? "provider_error");
+          fail(status.errorClass ?? "provider_error");
           return;
         }
       } catch {
@@ -70,11 +83,7 @@ export default function AIInsightRefreshWatcher({
       schedule();
     };
     schedule();
-    return () => {
-      stopped = true;
-      controller.abort();
-      clearTimeout(timer);
-    };
+    return stop;
   }, [active, refresh]);
 
   const failure = pollError ?? errorClass;
