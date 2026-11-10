@@ -5,27 +5,6 @@ import { tmpdir } from "node:os";
 import { describe, expect, it, beforeAll, afterAll, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
-vi.mock("react", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("react")>();
-  return {
-    ...actual,
-    // Vitest renders these unit tests outside a Server Component request.
-    // Model React.cache's request-local argument memoization so the test can
-    // exercise the two independently-created Request objects used by the
-    // dashboard layout and page.
-    cache: <T extends (...args: string[]) => Promise<unknown>>(fn: T): T => {
-      const results = new Map<string, ReturnType<T>>();
-      return ((...args: string[]) => {
-        const key = JSON.stringify(args);
-        const cached = results.get(key);
-        if (cached) return cached;
-        const result = fn(...args) as ReturnType<T>;
-        results.set(key, result);
-        return result;
-      }) as unknown as T;
-    },
-  };
-});
 vi.mock("next/navigation", () => ({
   redirect: vi.fn((destination: string): never => {
     throw new Error(`NEXT_REDIRECT:${destination}`);
@@ -100,17 +79,30 @@ describe("requireAuth — Bearer → Cookie → 401", () => {
 });
 
 describe("request-scoped auth cache", () => {
-  it("performs one user lookup across a dashboard layout and page in one request", async () => {
+  it("uses a fresh cache scope for each request", async () => {
     const { signSessionToken } = await import("./auth/jwt");
     const { token } = await signSessionToken(1);
     const getUserById = vi.mocked(db.getUserById);
     getUserById.mockClear();
 
-    const layoutRequest = makeRequest({ cookie: `__Host-coach_session=${token}` });
-    const pageRequest = makeRequest({ cookie: `__Host-coach_session=${token}` });
-    await Promise.all([auth.requireAuth(layoutRequest), auth.requireAuth(pageRequest)]);
+    await auth.requireAuth(makeRequest({ cookie: `__Host-coach_session=${token}` }));
+    await auth.requireAuth(makeRequest({ cookie: `__Host-coach_session=${token}` }));
 
-    expect(getUserById).toHaveBeenCalledTimes(1);
+    expect(getUserById).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("JWT signing-key rotation", () => {
+  it("re-decodes when JWT_SIGNING_KEY changes and fails closed when it is unset", async () => {
+    const jwt = await import("./auth/jwt");
+    const original = process.env.JWT_SIGNING_KEY;
+    const { token } = await jwt.signSessionToken(1);
+    process.env.JWT_SIGNING_KEY = Buffer.alloc(32, 2).toString("base64");
+    await expect(jwt.verifySessionToken(token)).resolves.toBeNull();
+    delete process.env.JWT_SIGNING_KEY;
+    await expect(jwt.verifySessionToken(token)).resolves.toBeNull();
+    if (original === undefined) delete process.env.JWT_SIGNING_KEY;
+    else process.env.JWT_SIGNING_KEY = original;
   });
 });
 

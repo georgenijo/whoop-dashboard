@@ -226,13 +226,13 @@ function PRStatsSkeleton() {
   return (
     <section className="overview-detail animate-pulse" aria-label="Loading personal records" aria-busy="true">
       <span className="overview-kicker">Detail</span>
-      <div className="overview-disclosure mt-2 p-4">
-        <div className="h-4 w-32 rounded bg-white/10" />
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="h-16 rounded bg-white/[0.05]" />
-          <div className="h-16 rounded bg-white/[0.05]" />
-        </div>
-      </div>
+      <details className="overview-disclosure">
+        <summary>
+          <span>Personal records</span>
+          <span className="overview-disclosure-meta">Loading…</span>
+          <span className="overview-disclosure-chevron" aria-hidden />
+        </summary>
+      </details>
     </section>
   );
 }
