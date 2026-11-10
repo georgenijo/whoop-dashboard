@@ -18,9 +18,12 @@ async function sent(): Promise<Array<{ metrics: Array<Record<string, unknown>> }
   );
 }
 const emit = (m: Record<string, unknown>) => callbacks.at(-1)!(m);
-const hide = () => {
-  Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
-  document.dispatchEvent(new Event("visibilitychange"));
+const setVisibility = (v: "hidden" | "visible") =>
+  Object.defineProperty(document, "visibilityState", { configurable: true, get: () => v });
+// Like the browser's own event: fired at `document`, and it bubbles to `window`.
+const hide = (init: EventInit = { bubbles: true }) => {
+  setVisibility("hidden");
+  document.dispatchEvent(new Event("visibilitychange", init));
 };
 
 beforeEach(() => {
@@ -35,7 +38,7 @@ afterEach(() => {
   cleanup(); // unmount flushes whatever is left
   vi.useRealTimers();
   vi.unstubAllGlobals();
-  Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "visible" });
+  setVisibility("visible");
 });
 
 describe("WebVitalsReporter", () => {
@@ -123,5 +126,58 @@ describe("WebVitalsReporter", () => {
     emit({ id: "a", name: "LCP", value: 1, rating: "good" });
     hide();
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("includes a metric finalized by a listener registered AFTER the reporter's own (Next installs CLS's late)", async () => {
+    render(<WebVitalsReporter />);
+    emit({ id: "fcp", name: "FCP", value: 10, rating: "good" });
+    // Stand-in for Next's CLS finalization: a document listener added after ours.
+    const lateCls = () => {
+      if (document.visibilityState === "hidden") emit({ id: "cls", name: "CLS", value: 0.2, rating: "poor" });
+    };
+    document.addEventListener("visibilitychange", lateCls);
+    hide();
+    document.removeEventListener("visibilitychange", lateCls);
+    const bodies = await sent();
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0].metrics.map((m) => m.metric)).toEqual(["FCP", "CLS"]);
+    vi.advanceTimersByTime(1000);
+    window.dispatchEvent(new Event("pagehide"));
+    expect(await sent()).toHaveLength(1);
+  });
+
+  it("still flushes, once, when the hidden event does not bubble (document listener defers to the next task)", async () => {
+    render(<WebVitalsReporter />);
+    emit({ id: "a", name: "FCP", value: 10, rating: "good" });
+    hide({ bubbles: false });
+    expect(sendBeacon).not.toHaveBeenCalled();
+    emit({ id: "b", name: "CLS", value: 0.2, rating: "poor" }); // finalized later in the same dispatch
+    vi.advanceTimersByTime(0);
+    const bodies = await sent();
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0].metrics.map((m) => m.metric)).toEqual(["FCP", "CLS"]);
+  });
+
+  it("sends a metric that finalizes while the page is already hidden, coalescing metrics from the same task", async () => {
+    render(<WebVitalsReporter />);
+    hide();
+    expect(sendBeacon).not.toHaveBeenCalled(); // nothing pending yet
+    emit({ id: "l", name: "LCP", value: 2000, rating: "good" });
+    emit({ id: "i", name: "INP", value: 150, rating: "good" });
+    expect(sendBeacon).not.toHaveBeenCalled(); // deferred to the next task, not one beacon each
+    vi.advanceTimersByTime(0);
+    const bodies = await sent();
+    expect(bodies).toHaveLength(1);
+    expect(bodies[0].metrics.map((m) => m.metric)).toEqual(["LCP", "INP"]);
+  });
+
+  it("does not send a second beacon for a lifecycle that was already flushed", async () => {
+    render(<WebVitalsReporter />);
+    emit({ id: "a", name: "FCP", value: 10, rating: "good" });
+    hide();
+    vi.advanceTimersByTime(1000);
+    window.dispatchEvent(new Event("pagehide"));
+    hide();
+    expect(await sent()).toHaveLength(1);
   });
 });

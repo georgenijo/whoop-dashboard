@@ -71,30 +71,67 @@ function handleMetric(metric: WebVitalMetric): void {
     // the time the batch is flushed.
     path: typeof window === "undefined" ? "" : window.location.pathname,
   });
+  // A metric that finalizes after the page is already hidden (a late observer
+  // callback) has no later lifecycle event to ride on: send it on the next task.
+  // Coalesced, so metrics finalized together still share one beacon.
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") scheduleFlush();
+}
+
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleFlush(): void {
+  if (flushTimer !== null) return;
+  flushTimer = setTimeout(() => {
+    flushTimer = null;
+    flush();
+  }, 0);
 }
 
 // Send everything collected so far in as few beacons as the server cap allows
 // (one, for a normal page load).
 function flush(): void {
+  if (flushTimer !== null) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
   if (pending.size === 0) return;
   const samples = [...pending.values()];
   pending.clear();
   for (let i = 0; i < samples.length; i += MAX_BATCH) send(samples.slice(i, i + MAX_BATCH));
 }
 
-function onVisibilityChange(): void {
+// Next's `useReportWebVitals` finalizes CLS (and the other "report on hide"
+// metrics) inside its own `visibilitychange` listeners, and for CLS that
+// listener is installed only after the asynchronous first-contentful-paint
+// observation, i.e. AFTER any listener this component registers on `document`.
+// Flushing from a `document` listener would therefore send the batch without
+// CLS, then a second beacon for it. Two things make the flush land after every
+// finalization callback:
+//   1. `visibilitychange` bubbles from `document` to `window`, and a bubble-phase
+//      `window` listener runs after all `document`-level listeners whatever order
+//      they were registered in, synchronously (no timer that a freezing tab
+//      might never run);
+//   2. a `document` listener that defers to the next task, as a net for events
+//      that do not bubble and for finalization that lands asynchronously.
+function onDocumentVisibilityChange(): void {
+  if (document.visibilityState === "hidden") scheduleFlush();
+}
+
+function onWindowVisibilityChange(): void {
   if (document.visibilityState === "hidden") flush();
 }
 
 export default function WebVitalsReporter() {
   useReportWebVitals(handleMetric);
   useEffect(() => {
-    // The page is going away or being backgrounded (the last reliable moment
-    // to send): flush the whole lifecycle's metrics in one beacon.
-    document.addEventListener("visibilitychange", onVisibilityChange);
+    document.addEventListener("visibilitychange", onDocumentVisibilityChange);
+    window.addEventListener("visibilitychange", onWindowVisibilityChange);
+    // Some browsers fire only pagehide when a visible page is closed: send what
+    // we have rather than risk losing it.
     window.addEventListener("pagehide", flush);
     return () => {
-      document.removeEventListener("visibilitychange", onVisibilityChange);
+      document.removeEventListener("visibilitychange", onDocumentVisibilityChange);
+      window.removeEventListener("visibilitychange", onWindowVisibilityChange);
       window.removeEventListener("pagehide", flush);
       flush();
     };
