@@ -18,10 +18,16 @@ vi.mock("@/lib/auth", () => ({
 
 const getUserSettingsMock = vi.fn();
 const upsertUserSettingsMock = vi.fn();
+const getAnthropicKeyRejectedAtMock = vi.fn();
+const clearAnthropicKeyRejectedMock = vi.fn();
 
 vi.mock("@/lib/db", () => ({
   getUserSettings: (...args: unknown[]) => getUserSettingsMock(...args),
   upsertUserSettings: (...args: unknown[]) => upsertUserSettingsMock(...args),
+  getAnthropicKeyRejectedAt: (...args: unknown[]) =>
+    getAnthropicKeyRejectedAtMock(...args),
+  clearAnthropicKeyRejected: (...args: unknown[]) =>
+    clearAnthropicKeyRejectedMock(...args),
 }));
 
 // Stub the Anthropic SDK at module-construction time. The route imports
@@ -64,6 +70,9 @@ function makeRequest(method: "GET" | "POST" | "DELETE", body?: unknown): Request
 beforeEach(() => {
   getUserSettingsMock.mockReset();
   upsertUserSettingsMock.mockReset();
+  getAnthropicKeyRejectedAtMock.mockReset();
+  getAnthropicKeyRejectedAtMock.mockReturnValue(null);
+  clearAnthropicKeyRejectedMock.mockReset();
   modelsListMock.mockReset();
   vi.stubEnv("ANTHROPIC_API_KEY", "");
 });
@@ -105,6 +114,7 @@ describe("POST /api/me/anthropic-key — probe outcomes", () => {
       ok: true,
       present: true,
       masked: "sk-ant-…W4nT",
+      key_rejected_at: null,
       fallback_available: false, source: "user",
     });
     expect(upsertUserSettingsMock).toHaveBeenCalledTimes(1);
@@ -112,6 +122,7 @@ describe("POST /api/me/anthropic-key — probe outcomes", () => {
       user_id: 1,
       anthropic_key: "sk-ant-test-key-AAAAAAAAAAAA-W4nT",
     });
+    expect(clearAnthropicKeyRejectedMock).toHaveBeenCalledWith(1);
   });
 
   it("on probe 401, does NOT persist and returns ok:false invalid_key", async () => {
@@ -161,7 +172,13 @@ describe("GET /api/me/anthropic-key", () => {
     getUserSettingsMock.mockReturnValue(null);
     const res = await GET(makeRequest("GET"));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ present: false, masked: null, fallback_available: false, source: "none" });
+    expect(await res.json()).toEqual({
+      present: false,
+      masked: null,
+      key_rejected_at: null,
+      fallback_available: false,
+      source: "none",
+    });
   });
 });
 
@@ -175,7 +192,14 @@ describe("DELETE /api/me/anthropic-key", () => {
   it("clears the column and returns { ok:true, present:false, masked:null }", async () => {
     const res = await DELETE(makeRequest("DELETE"));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, present: false, masked: null, fallback_available: false, source: "none" });
+    expect(await res.json()).toEqual({
+      ok: true,
+      present: false,
+      masked: null,
+      key_rejected_at: null,
+      fallback_available: false,
+      source: "none",
+    });
     expect(upsertUserSettingsMock).toHaveBeenCalledWith({
       user_id: 1,
       anthropic_key: null,

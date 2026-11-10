@@ -124,6 +124,11 @@ export const USER_FK_CONFLICT_TABLES = [
   "daily_summary",
   "daily_steps",
   "whoop_cycle_steps",
+  // Issue #588 — per-user AI insight content (PK (user_id, date)) and its
+  // generation state (user_id is the PK). Both are tenant data, so the
+  // survivor-wins merge handles colliding dates instead of a bare repoint.
+  "insights",
+  "insight_state",
 ] as const;
 
 /**

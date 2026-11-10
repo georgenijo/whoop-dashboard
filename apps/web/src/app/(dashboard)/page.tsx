@@ -25,6 +25,7 @@ import { resolveApiKeyForUser } from "@/lib/coach/api-key";
 import {
   acquireInsightRegenerationLock,
   getInsightStatus,
+  insightUnavailableReason,
   regenerateInsight,
 } from "@/lib/insights";
 import { resolveRangeWindow } from "@/lib/range";
@@ -89,8 +90,16 @@ export default async function OverviewPage({
   } catch {
     insightApiKey = null;
   }
-  const insightLock = acquireInsightRegenerationLock(insightStatus, insightApiKey);
+  const insightLock = acquireInsightRegenerationLock(
+    user.id,
+    insightStatus,
+    insightApiKey,
+  );
   const insightRefreshing = insightStatus.isRegenerating || insightLock !== null;
+  const insightUnavailable = insightUnavailableReason(
+    insightStatus,
+    insightApiKey !== null,
+  );
 
   if (insightLock !== null && insightApiKey !== null) {
     const keyForAfter = insightApiKey;
@@ -116,6 +125,7 @@ export default async function OverviewPage({
           hasData={hasInsightData}
           insight={insightStatus.insight}
           refreshing={insightRefreshing}
+          unavailableReason={insightUnavailable}
         />
       </div>
       {insightStatus.isStale && insightRefreshing ? <AIInsightRefreshWatcher /> : null}

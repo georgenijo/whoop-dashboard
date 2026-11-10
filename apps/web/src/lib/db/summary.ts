@@ -5,7 +5,6 @@ import {
   hasTable,
   openWrite,
   safeDays,
-  safeQuery,
 } from "./connection";
 import { forUser } from "./scoped";
 import {
@@ -50,6 +49,16 @@ export type InsightRow = {
   date: string;
   insight: string;
   created_at: string | null;
+};
+
+/** Why the last insight generation failed. `no_key` is surfaced from the
+ *  resolver at render time and is never persisted. */
+export type InsightErrorClass = "bad_key" | "provider_error";
+
+export type InsightFailureState = {
+  last_failed_at: string;
+  last_error_class: InsightErrorClass;
+  failure_count: number;
 };
 
 /** Convenience: 30-day sparklines for each KPI. Missing values become nulls. */
@@ -135,28 +144,91 @@ export function getLatestWhoopDataTimestamp(userId: number): string | null {
   });
 }
 
-export function getLatestInsight(): InsightRow | null {
-  // Insights are a global table (no user_id today). Phase E follow-up if
-  // per-user insights are needed.
-  return safeQuery((db) => {
-    if (!hasTable(db, "insights")) return null;
-    const createdAt = hasColumn(db, "insights", "created_at")
-      ? "created_at"
-      : "NULL AS created_at";
-    const row = db
-      .prepare(`SELECT date, insight, ${createdAt} FROM insights ORDER BY date DESC LIMIT 1`)
-      .get() as InsightRow | undefined;
-    return row ?? null;
-  });
+export function getLatestInsight(userId: number): InsightRow | null {
+  return (
+    forUser(userId).read((db, uid) => {
+      if (!hasTable(db, "insights")) return null;
+      const createdAt = hasColumn(db, "insights", "created_at")
+        ? "created_at"
+        : "NULL AS created_at";
+      const row = db
+        .prepare(
+          `SELECT date, insight, ${createdAt} FROM insights
+           WHERE user_id = ? AND insight IS NOT NULL
+           ORDER BY date DESC LIMIT 1`,
+        )
+        .get(uid) as InsightRow | undefined;
+      return row ?? null;
+    }) ?? null
+  );
 }
 
-export function saveInsight(date: string, insight: string): void {
+export function getInsightFailureState(
+  userId: number,
+): InsightFailureState | null {
+  return (
+    forUser(userId).read((db, uid) => {
+      if (!hasTable(db, "insight_state")) return null;
+      const row = db
+        .prepare(
+          `SELECT last_failed_at, last_error_class, failure_count
+           FROM insight_state
+           WHERE user_id = ? AND last_failed_at IS NOT NULL`,
+        )
+        .get(uid) as InsightFailureState | undefined;
+      return row ?? null;
+    }) ?? null
+  );
+}
+
+export function recordInsightFailure(
+  userId: number,
+  errorClass: InsightErrorClass,
+  at: string = new Date().toISOString(),
+): void {
   const db = openWrite();
   if (!db) return;
   try {
     db.prepare(
-      "INSERT INTO insights (date, insight, created_at) VALUES (?, ?, ?) ON CONFLICT(date) DO UPDATE SET insight = excluded.insight, created_at = excluded.created_at"
-    ).run(date, insight, new Date().toISOString());
+      `INSERT INTO insight_state
+         (user_id, last_failed_at, last_error_class, failure_count, updated_at)
+       VALUES (?, ?, ?, 1, ?)
+       ON CONFLICT(user_id) DO UPDATE SET
+         last_failed_at = excluded.last_failed_at,
+         last_error_class = excluded.last_error_class,
+         failure_count = insight_state.failure_count + 1,
+         updated_at = excluded.updated_at`,
+    ).run(userId, at, errorClass, at);
+  } finally {
+    db.close();
+  }
+}
+
+export function clearInsightFailure(userId: number): void {
+  const db = openWrite();
+  if (!db) return;
+  try {
+    db.prepare("DELETE FROM insight_state WHERE user_id = ?").run(userId);
+  } finally {
+    db.close();
+  }
+}
+
+export function saveInsight(userId: number, date: string, insight: string): void {
+  const db = openWrite();
+  if (!db) return;
+  try {
+    const tx = db.transaction(() => {
+      db.prepare(
+        `INSERT INTO insights (user_id, date, insight, created_at)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(user_id, date) DO UPDATE SET
+           insight = excluded.insight,
+           created_at = excluded.created_at`,
+      ).run(userId, date, insight, new Date().toISOString());
+      db.prepare("DELETE FROM insight_state WHERE user_id = ?").run(userId);
+    });
+    tx();
   } finally {
     db.close();
   }

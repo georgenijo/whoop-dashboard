@@ -13,20 +13,39 @@ function formatInsightDate(date: string): string {
   return `${diff}d ago`;
 }
 
+const UNAVAILABLE_COPY: Record<
+  "no_key" | "bad_key" | "provider_error",
+  string
+> = {
+  no_key: "no Anthropic key configured",
+  bad_key: "Anthropic rejected the API key",
+  provider_error: "the provider call failed",
+};
+
 export default function AIInsightCard({
   hasData,
   insight,
   refreshing,
+  unavailableReason,
 }: {
   hasData: boolean;
   insight: InsightRow | null;
   refreshing: boolean;
+  unavailableReason: "no_key" | "bad_key" | "provider_error" | null;
 }) {
+  const unavailable = unavailableReason
+    ? UNAVAILABLE_COPY[unavailableReason]
+    : null;
   return (
     <div className="ai-card" aria-label="AI insight">
       <div className="ai-head">
         <span className="ai-tag">Coach</span>
         {refreshing ? <span className="ai-refreshing">Refreshing...</span> : null}
+        {!refreshing && unavailable ? (
+          <span className="ai-unavailable" role="status">
+            Insight unavailable — {unavailable}
+          </span>
+        ) : null}
         <span className="ai-when">
           {insight ? formatInsightDate(insight.date) : hasData ? "Not yet generated" : "No data"}
         </span>
@@ -46,7 +65,13 @@ export default function AIInsightCard({
         </>
       ) : hasData ? (
         <>
-          <p>{refreshing ? "Generating your latest insight..." : "No insight generated yet."}</p>
+          <p>
+            {refreshing
+              ? "Generating your latest insight..."
+              : unavailable
+                ? `Insight unavailable — ${unavailable}.`
+                : "No insight generated yet."}
+          </p>
         </>
       ) : (
         <>

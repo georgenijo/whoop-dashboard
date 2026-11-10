@@ -1,9 +1,11 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
+import Anthropic, { APIError } from "@anthropic-ai/sdk";
 import type { AuthSource } from "@/lib/auth";
 import {
   addChatLog,
   addChatMessages,
+  getAnthropicKeyRejectedAt,
+  markAnthropicKeyRejected,
   setChatThreadTitle,
   type ChatMessageInsert,
 } from "@/lib/db";
@@ -192,38 +194,65 @@ export async function runAndPersistCoachTurn(
 }
 
 export async function titleChatThread(
+  userId: number,
   threadId: number,
   firstUserText: string,
   apiKey: string,
 ): Promise<void> {
   // Prefer an LLM-generated title; fall back to a derived one so a thread is
   // always named even when Anthropic is unavailable. Never throws.
+  //
+  // Once a key has been rejected (401/403), stop calling the provider for
+  // every new thread: the marker is surfaced once in Settings, and titles
+  // fall back to the deterministic derivation until the key is replaced.
   let title = "";
-  try {
-    const client = new Anthropic({ apiKey });
-    const response = await client.messages.create({
-      model: TITLE_MODEL,
-      max_tokens: 30,
-      system: TITLE_SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: `Title this conversation: "${firstUserText}"`,
-        },
-      ],
-    });
-    title = textFromContent(response.content)
-      .replace(/^['"`]+|['"`]+$/g, "")
-      .trim()
-      .slice(0, 80);
-  } catch (err) {
-    log.warn(
-      {
-        thread_id: threadId,
-        err: err instanceof Error ? err.message : String(err),
-      },
-      "title_failed",
-    );
+  if (getAnthropicKeyRejectedAt(userId) === null) {
+    try {
+      const client = new Anthropic({ apiKey, timeout: 15_000, maxRetries: 0 });
+      const response = await client.messages.create({
+        model: TITLE_MODEL,
+        max_tokens: 30,
+        system: TITLE_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user",
+            content: `Title this conversation: "${firstUserText}"`,
+          },
+        ],
+      });
+      title = textFromContent(response.content)
+        .replace(/^['"`]+|['"`]+$/g, "")
+        .trim()
+        .slice(0, 80);
+    } catch (err) {
+      const badKey =
+        err instanceof APIError && (err.status === 401 || err.status === 403);
+      if (badKey) {
+        // Only the first rejection is worth an error log; subsequent titles
+        // short-circuit above instead of failing silently one thread at a time.
+        if (markAnthropicKeyRejected(userId)) {
+          log.error(
+            {
+              user_id: userId,
+              thread_id: threadId,
+              error_class: "bad_key",
+              err: err instanceof Error ? err.message : String(err),
+            },
+            "title_failed",
+          );
+        }
+      } else {
+        log.error(
+          {
+            user_id: userId,
+            thread_id: threadId,
+            error_class: "provider_error",
+            err: err instanceof Error ? err.message : String(err),
+          },
+          "title_failed",
+        );
+      }
+    }
   }
   if (!title) title = deriveTitleFromText(firstUserText);
   if (title) {

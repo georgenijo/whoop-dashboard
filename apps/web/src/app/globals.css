@@ -399,6 +399,11 @@ body {
   padding: 3px 7px; border: 1px solid rgba(123,97,255,0.24);
   border-radius: var(--radius-pill); background: rgba(123,97,255,0.08);
 }
+.ai-unavailable {
+  font-family: var(--font-mono); font-size: 10px; color: var(--warning);
+  padding: 3px 7px; border: 1px solid var(--warning-surface, rgba(245,158,11,0.3));
+  border-radius: var(--radius-pill); background: var(--warning-surface, rgba(245,158,11,0.08));
+}
 .ai-when { margin-left: auto; font-family: var(--font-mono); font-size: 10px; color: var(--fg-3); }
 .ai-card h3 {
   font-family: var(--font-sans); font-size: 10.5px; font-weight: 600;

@@ -11,6 +11,7 @@ describe("AIInsightCard", () => {
       <AIInsightCard
         hasData
         refreshing={false}
+        unavailableReason={null}
         insight={{
           date: "2026-08-12",
           created_at: null,
@@ -31,6 +32,7 @@ describe("AIInsightCard", () => {
       <AIInsightCard
         hasData
         refreshing={false}
+        unavailableReason={null}
         insight={{
           date: "2026-08-12",
           created_at: null,
@@ -43,5 +45,19 @@ describe("AIInsightCard", () => {
     expect(html).toContain("<strong>Great sleep</strong>");
     expect(html).toContain("<li>HRV up</li>");
     expect(html).toContain('href="https://example.com"');
+  });
+
+  it("shows the unavailable reason for a stale insight", () => {
+    const html = renderToString(
+      <AIInsightCard
+        hasData
+        refreshing={false}
+        insight={null}
+        unavailableReason="bad_key"
+      />,
+    );
+
+    expect(html).toContain("Insight unavailable");
+    expect(html).toContain("Anthropic rejected the API key");
   });
 });

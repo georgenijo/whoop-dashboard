@@ -191,9 +191,22 @@ export function openWrite(): DB | null {
         value TEXT
       );
       CREATE TABLE IF NOT EXISTS insights (
-        date TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id) DEFAULT 1,
+        date TEXT NOT NULL,
         insight TEXT,
-        created_at TEXT
+        created_at TEXT,
+        PRIMARY KEY (user_id, date)
+      );
+      -- Per-user generation state for the Overview insight (issue #588).
+      -- Kept separate from insights so a failed generation never creates a
+      -- row that a tenant could mistake for content; failure_count drives
+      -- the 1m/5m/30m retry backoff.
+      CREATE TABLE IF NOT EXISTS insight_state (
+        user_id INTEGER PRIMARY KEY REFERENCES users(id),
+        last_failed_at TEXT,
+        last_error_class TEXT,
+        failure_count INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL
       );
       CREATE TABLE IF NOT EXISTS sync_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -273,6 +286,7 @@ export function openWrite(): DB | null {
         onboarded_at TEXT,
         tz TEXT,
         system_prompt TEXT,
+        anthropic_key_rejected_at TEXT,
         updated_at TEXT NOT NULL
       );
       -- APNs device tokens for push notifications. Composite PK on
@@ -431,6 +445,16 @@ export function openWrite(): DB | null {
     if (!insightCols.some((c) => c.name === "created_at")) {
       db.exec("ALTER TABLE insights ADD COLUMN created_at TEXT");
     }
+    // Issue #588 — insights is tenant data. Old DBs keyed on `date` alone;
+    // rebuild to the composite (user_id, date) PK, claiming legacy rows for
+    // the sole real account. Gated on the column so the migration is one-shot;
+    // a fresh DB already has the new shape from the bootstrap CREATE above.
+    if (!insightCols.some((c) => c.name === "user_id")) {
+      rebuildInsightsForUserId(db);
+    }
+    db.exec(
+      "CREATE INDEX IF NOT EXISTS idx_insights_user_date ON insights(user_id, date DESC)"
+    );
     const chatCols = db.prepare("PRAGMA table_info(chat_messages)").all() as {
       name: string;
     }[];
@@ -567,6 +591,12 @@ export function openWrite(): DB | null {
     // simply add nothing beyond DEFAULT_SYSTEM_PROMPT for that user.
     if (!userSettingsCols.some((c) => c.name === "system_prompt")) {
       db.exec("ALTER TABLE user_settings ADD COLUMN system_prompt TEXT");
+    }
+    // Issue #588 — remember a provider-rejected Anthropic key once, so
+    // Settings can surface it and title generation stops retrying every new
+    // thread with a key we already know is dead.
+    if (!userSettingsCols.some((c) => c.name === "anthropic_key_rejected_at")) {
+      db.exec("ALTER TABLE user_settings ADD COLUMN anthropic_key_rejected_at TEXT");
     }
     // Issue #493 follow-up (fable review) — one-time migration off the
     // legacy app-global system_prompt row. Runs on every openWrite() call,
@@ -975,6 +1005,52 @@ export function migrateRouteLogsSchema(db: DB): void {
   if (!indexUpToDate) {
     db.exec(`DROP INDEX IF EXISTS ${ROUTE_LOGS_INDEX_NAME}`);
     db.exec(`CREATE INDEX IF NOT EXISTS ${ROUTE_LOGS_INDEX_NAME} ON route_logs(user_id, started_at DESC, id DESC)`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Issue #588 — insights tenant migration
+// ---------------------------------------------------------------------------
+
+/**
+ * Rebuild `insights` from its pre-#588 `date`-only PK to the composite
+ * `(user_id, date)` PK. Runs only when `user_id` is absent (PRAGMA gate in
+ * openWrite), so it is a one-shot migration.
+ *
+ * Legacy rows have no tenant information. Production had exactly one real
+ * account when this shipped, so claim them for the sole users row. On a
+ * multi-user DB there is no defensible owner — fall back to the historical
+ * bootstrap account id 1 rather than inventing an attribution, matching the
+ * Phase D domain-table rebuilds.
+ */
+function rebuildInsightsForUserId(db: DB): void {
+  const users = db.prepare("SELECT id FROM users ORDER BY id").all() as {
+    id: number;
+  }[];
+  const legacyOwner = users.length === 1 ? users[0].id : 1;
+
+  db.pragma("foreign_keys = OFF");
+  try {
+    const tx = db.transaction(() => {
+      db.exec(`
+        CREATE TABLE insights_new (
+          user_id INTEGER NOT NULL REFERENCES users(id) DEFAULT 1,
+          date TEXT NOT NULL,
+          insight TEXT,
+          created_at TEXT,
+          PRIMARY KEY (user_id, date)
+        )
+      `);
+      db.prepare(
+        `INSERT INTO insights_new (user_id, date, insight, created_at)
+         SELECT ?, date, insight, created_at FROM insights`,
+      ).run(legacyOwner);
+      db.exec("DROP TABLE insights");
+      db.exec("ALTER TABLE insights_new RENAME TO insights");
+    });
+    tx();
+  } finally {
+    db.pragma("foreign_keys = ON");
   }
 }
 

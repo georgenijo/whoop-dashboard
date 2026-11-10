@@ -36,6 +36,7 @@ type ByokState = { present: boolean; masked: string | null };
 type AnthropicByokState = ByokState & {
   fallback_available: boolean;
   source: "user" | "env" | "none";
+  key_rejected_at: string | null;
 };
 type ByokCheckStatus = "loading" | "ready" | "unavailable";
 type CursorByokState = ByokState & { fallback_available: boolean };
@@ -170,6 +171,7 @@ export default function SettingsPage() {
     masked: null,
     fallback_available: false,
     source: "none",
+    key_rejected_at: null,
   });
   const [byokStatus, setByokStatus] = useState<ByokCheckStatus>("loading");
   const [collapsedProviders, setCollapsedProviders] = useState({
@@ -667,6 +669,7 @@ export default function SettingsPage() {
     "Choose a model from a connected provider. Availability is checked with each provider.";
   const anthropicSourceLabel = byokStatus === "loading" ? "Checking access"
     : byokStatus === "unavailable" ? "Access unknown"
+    : byok.key_rejected_at ? "Key rejected"
     : byok.source === "user" ? "Personal key"
     : byok.source === "env" ? "Shared key" : "Not configured";
 
@@ -864,6 +867,13 @@ export default function SettingsPage() {
                       </p>
                     </div>
                   </div>
+
+                  {byok.key_rejected_at ? (
+                    <p className={styles.errorMessage} role="alert">
+                      Anthropic rejected the current key. Add a valid key below
+                      to resume AI insights and thread titles.
+                    </p>
+                  ) : null}
 
                   {byok.present ? (
                     <div className={styles.inlineControl}>

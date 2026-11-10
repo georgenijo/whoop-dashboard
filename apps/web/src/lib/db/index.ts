@@ -99,10 +99,19 @@ export { getWorkoutPlans, saveWorkoutPlan } from "./plans";
 export type { BodyMeasurementRow } from "./body";
 export { getBodyMeasurements } from "./body";
 
-export type { DailySummaryRow, InsightRow, Overview } from "./summary";
+export type {
+  DailySummaryRow,
+  InsightRow,
+  InsightErrorClass,
+  InsightFailureState,
+  Overview,
+} from "./summary";
 export {
   getDailySummary,
   getLatestInsight,
+  getInsightFailureState,
+  recordInsightFailure,
+  clearInsightFailure,
   saveInsight,
   getLatestWhoopDataTimestamp,
   getOverview,
@@ -175,6 +184,9 @@ export {
   setCoachGoals,
   markOnboarded,
   setTzIfUnset,
+  getAnthropicKeyRejectedAt,
+  markAnthropicKeyRejected,
+  clearAnthropicKeyRejected,
 } from "./user_settings";
 
 export type { WebhookEventRow, WebhookEventStatus, InsertWebhookEventInput } from "./webhook";

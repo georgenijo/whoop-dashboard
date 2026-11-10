@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import Anthropic, { APIError } from "@anthropic-ai/sdk";
 import { requireAuth } from "@/lib/auth";
-import { getUserSettings, upsertUserSettings } from "@/lib/db";
+import { clearAnthropicKeyRejected, getAnthropicKeyRejectedAt, getUserSettings, upsertUserSettings } from "@/lib/db";
 import { maskAnthropicKey } from "@/lib/coach/key-mask";
 
 export const dynamic = "force-dynamic";
@@ -22,14 +22,16 @@ export const dynamic = "force-dynamic";
 
 function maskedFor(userId: number) {
   const settings = getUserSettings(userId);
+  const keyRejectedAt = getAnthropicKeyRejectedAt(userId);
   if (settings?.anthropic_key) {
     return {
       present: true,
       masked: maskAnthropicKey(settings.anthropic_key),
+      key_rejected_at: keyRejectedAt,
       ...keySource(true),
     };
   }
-  return { present: false, masked: null, ...keySource(false) };
+  return { present: false, masked: null, key_rejected_at: keyRejectedAt, ...keySource(false) };
 }
 
 function keySource(personal: boolean) {
@@ -85,10 +87,12 @@ export async function POST(req: Request) {
   }
 
   upsertUserSettings({ user_id: user.id, anthropic_key: trimmed });
+  clearAnthropicKeyRejected(user.id);
   return NextResponse.json({
     ok: true,
     present: true,
     masked: maskAnthropicKey(trimmed),
+    key_rejected_at: null,
     ...keySource(true),
   });
 }
@@ -96,5 +100,12 @@ export async function POST(req: Request) {
 export async function DELETE(req: Request) {
   const { user } = await requireAuth(req);
   upsertUserSettings({ user_id: user.id, anthropic_key: null });
-  return NextResponse.json({ ok: true, present: false, masked: null, ...keySource(false) });
+  clearAnthropicKeyRejected(user.id);
+  return NextResponse.json({
+    ok: true,
+    present: false,
+    masked: null,
+    key_rejected_at: null,
+    ...keySource(false),
+  });
 }

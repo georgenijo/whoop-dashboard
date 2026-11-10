@@ -36,6 +36,7 @@ export type UserSettings = {
   onboarded_at: string | null;
   tz: string | null;
   system_prompt: string | null;
+  anthropic_key_rejected_at: string | null;
   updated_at: string;
 };
 
@@ -104,6 +105,7 @@ function ensureUserSettingsTable(db: DB): void {
       onboarded_at TEXT,
       tz TEXT,
       system_prompt TEXT,
+      anthropic_key_rejected_at TEXT,
       updated_at TEXT NOT NULL
     );
   `);
@@ -131,6 +133,7 @@ type UserSettingsRowRaw = {
   onboarded_at: string | null;
   tz: string | null;
   system_prompt: string | null;
+  anthropic_key_rejected_at: string | null;
   updated_at: string;
 };
 
@@ -153,7 +156,8 @@ export function getUserSettings(user_id: number): UserSettings | null {
         SELECT user_id, anthropic_key, anthropic_key_version, cursor_key,
                cursor_key_version, model_pref, coach_effort, cursor_model_params,
                timezone, monthly_token_cap,
-               coach_goals, onboarded_at, tz, system_prompt, updated_at
+               coach_goals, onboarded_at, tz, system_prompt,
+               anthropic_key_rejected_at, updated_at
         FROM user_settings
         WHERE user_id = ?
         `
@@ -244,6 +248,7 @@ export function getUserSettings(user_id: number): UserSettings | null {
       onboarded_at: row.onboarded_at,
       tz: row.tz,
       system_prompt: row.system_prompt,
+      anthropic_key_rejected_at: row.anthropic_key_rejected_at,
       updated_at: row.updated_at,
     };
   } finally {
@@ -499,6 +504,69 @@ export function setTzIfUnset(user_id: number, tz: string): boolean {
       )
       .run(tz, now, user_id);
     return result.changes === 1;
+  } finally {
+    db.close();
+  }
+}
+
+/** Timestamp of the first provider rejection of the user's Anthropic key, or
+ *  null when no rejection has been recorded. */
+export function getAnthropicKeyRejectedAt(user_id: number): string | null {
+  const db = openWrite();
+  if (!db) return null;
+  try {
+    if (!hasTable(db, "user_settings")) return null;
+    const row = db
+      .prepare(
+        "SELECT anthropic_key_rejected_at FROM user_settings WHERE user_id = ?",
+      )
+      .get(user_id) as { anthropic_key_rejected_at: string | null } | undefined;
+    return row?.anthropic_key_rejected_at ?? null;
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * Record the first Anthropic key rejection for a user. Idempotent: returns
+ * true only when this call actually set the marker, so the caller can log /
+ * surface it once instead of on every failed title or insight.
+ */
+export function markAnthropicKeyRejected(
+  user_id: number,
+  at: string = new Date().toISOString(),
+): boolean {
+  const db = openWrite();
+  if (!db) return false;
+  try {
+    ensureUserSettingsTable(db);
+    if (!userExists(db, user_id)) return false;
+    db.prepare(
+      "INSERT OR IGNORE INTO user_settings (user_id, updated_at) VALUES (?, ?)",
+    ).run(user_id, at);
+    const result = db
+      .prepare(
+        `UPDATE user_settings
+         SET anthropic_key_rejected_at = ?, updated_at = ?
+         WHERE user_id = ? AND anthropic_key_rejected_at IS NULL`,
+      )
+      .run(at, at, user_id);
+    return result.changes === 1;
+  } finally {
+    db.close();
+  }
+}
+
+/** Clear the rejection marker after a key is replaced/removed or a call with
+ *  it succeeds. */
+export function clearAnthropicKeyRejected(user_id: number): void {
+  const db = openWrite();
+  if (!db) return;
+  try {
+    if (!hasTable(db, "user_settings")) return;
+    db.prepare(
+      "UPDATE user_settings SET anthropic_key_rejected_at = NULL WHERE user_id = ?",
+    ).run(user_id);
   } finally {
     db.close();
   }
