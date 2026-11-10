@@ -2,10 +2,25 @@ import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 import AIInsightCard from "./AIInsightCard";
 
 describe("AIInsightCard", () => {
+  it("labels today using the same user-local day as generation", () => {
+    const html = renderToString(<AIInsightCard hasData refreshing={false} today="2026-11-09"
+      insight={{ date: "2026-11-09", insight: "Local-day advice", created_at: null }} />);
+    expect(html).toContain("Today");
+  });
+
+  it.each(["no_key", "bad_key", "provider_error"] as const)("shows %s failures alongside a cached insight", (errorClass) => {
+    const html = renderToString(<AIInsightCard hasData refreshing={false} errorClass={errorClass}
+      insight={{ date: "2026-11-09", insight: "Cached advice", created_at: null }} />);
+    expect(html).toContain("Insight unavailable");
+    expect(html).toContain(errorClass.replaceAll("_", " "));
+    expect(html).toContain("Cached advice");
+  });
+
   it("strips script tags and event-handler attributes from LLM-generated insight markdown", () => {
     const html = renderToString(
       <AIInsightCard

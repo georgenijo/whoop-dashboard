@@ -132,6 +132,8 @@ describe("forUser wrapper", () => {
 // ---------------------------------------------------------------------------
 
 const DOMAIN_TABLES = [
+  "insights",
+  "ai_generation_state",
   "recovery",
   "cycles",
   "sleep",
@@ -177,6 +179,7 @@ const ALLOWLIST_RELATIVE = new Set<string>([
   "src/lib/db/strain.ts",
   "src/lib/db/workouts.ts",
   "src/lib/db/summary.ts",
+  "src/lib/db/ai-generation.ts",
   "src/lib/db/prs.ts",
   "src/lib/db/body.ts",
   "src/lib/db/morning-brief.ts",

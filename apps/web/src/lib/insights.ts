@@ -1,21 +1,27 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import {
-  acquireSettingLock,
   getHealthContext,
   getLatestInsight,
   getLatestWhoopDataTimestamp,
-  isSettingLockActive,
-  releaseSettingLock,
-  saveInsight,
   type InsightRow,
-  type SettingLock,
 } from "@/lib/db";
+import { getInsightToday as insightToday, saveInsight } from "@/lib/db/summary";
+import { getGenerationFailure, type GenerationErrorClass } from "@/lib/db/ai-generation";
+import { isSettingLockActive, releaseSettingLock, type SettingLock } from "@/lib/db/settings";
+import {
+  acquireGenerationLock,
+  classifyGenerationError,
+  clearGenerationFailure,
+  generationLockKey,
+  GENERATION_CLIENT_OPTIONS,
+  GENERATION_DEADLINE_MS,
+  recordGenerationFailure,
+  retryAt,
+} from "@/lib/ai-generation";
 
 const INSIGHT_MODEL = "claude-sonnet-4-6";
 const INSIGHT_DAYS = 30;
-const INSIGHT_LOCK_KEY = "insight_regen_in_flight";
-const INSIGHT_LOCK_TTL_MS = 5 * 60 * 1000;
 
 const SYSTEM_PROMPT = `You are a personal health and performance analyst reviewing Whoop biometric data.
 
@@ -42,14 +48,16 @@ Format your response as:
 Keep total response under 300 words.`;
 
 export type InsightStatus = {
+  userId: number;
+  today: string;
   insight: InsightRow | null;
   isStale: boolean;
   isRegenerating: boolean;
+  errorClass: GenerationErrorClass | null;
+  nextRetryAt: string | null;
 };
 
-function todayUtc(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+export { insightToday };
 
 function parseTime(value: string | null): number | null {
   if (!value) return null;
@@ -57,10 +65,10 @@ function parseTime(value: string | null): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
-function needsRegeneration(insight: InsightRow | null, latestDataAt: string | null): boolean {
+function needsRegeneration(insight: InsightRow | null, latestDataAt: string | null, today: string): boolean {
   if (!latestDataAt) return false;
   if (!insight) return true;
-  if (insight.date !== todayUtc()) return true;
+  if (insight.date !== today) return true;
 
   const insightCreatedMs = parseTime(insight.created_at);
   const latestDataMs = parseTime(latestDataAt);
@@ -70,12 +78,18 @@ function needsRegeneration(insight: InsightRow | null, latestDataAt: string | nu
 }
 
 export function getInsightStatus(userId: number, hasData: boolean): InsightStatus {
-  const insight = getLatestInsight();
+  const today = insightToday(userId);
+  const insight = getLatestInsight(userId, today);
+  const failure = getGenerationFailure(userId, "insight");
   const latestDataAt = hasData ? getLatestWhoopDataTimestamp(userId) : null;
   return {
+    userId,
+    today,
     insight,
-    isStale: hasData && needsRegeneration(insight, latestDataAt),
-    isRegenerating: isSettingLockActive(INSIGHT_LOCK_KEY),
+    isStale: hasData && needsRegeneration(insight, latestDataAt, today),
+    isRegenerating: isSettingLockActive(generationLockKey(userId, "insight")),
+    errorClass: failure?.error_class ?? null,
+    nextRetryAt: failure ? retryAt(failure) : null,
   };
 }
 
@@ -84,8 +98,7 @@ export function acquireInsightRegenerationLock(
   apiKey: string | null,
 ): SettingLock | null {
   if (!status.isStale) return null;
-  if (apiKey === null) return null;
-  return acquireSettingLock(INSIGHT_LOCK_KEY, INSIGHT_LOCK_TTL_MS);
+  return acquireGenerationLock(status.userId, "insight", apiKey);
 }
 
 export async function regenerateInsight(
@@ -94,8 +107,9 @@ export async function regenerateInsight(
   lock: SettingLock,
 ): Promise<void> {
   try {
+    const date = insightToday(userId);
     const context = getHealthContext(userId, INSIGHT_DAYS);
-    const client = new Anthropic({ apiKey });
+    const client = new Anthropic({ apiKey, ...GENERATION_CLIENT_OPTIONS });
     const response = await client.messages.create({
       model: INSIGHT_MODEL,
       thinking: { type: "adaptive" },
@@ -107,20 +121,18 @@ export async function regenerateInsight(
           content: `Analyze my Whoop data and give me insights:\n\n${context}`,
         },
       ],
-    });
+    }, { signal: AbortSignal.timeout(GENERATION_DEADLINE_MS) });
     const insight = response.content
       .filter((block) => block.type === "text")
       .map((block) => block.text)
       .join("")
       .trim();
 
-    if (insight) {
-      saveInsight(todayUtc(), insight);
-    }
+    if (!insight) throw new Error("Empty insight response");
+    saveInsight(userId, date, insight);
+    clearGenerationFailure(userId, "insight");
   } catch (err) {
-    console.warn("[insight] regeneration_failed", {
-      error: err instanceof Error ? err.message : String(err),
-    });
+    recordGenerationFailure(userId, "insight", classifyGenerationError(err), apiKey);
   } finally {
     releaseSettingLock(lock);
   }

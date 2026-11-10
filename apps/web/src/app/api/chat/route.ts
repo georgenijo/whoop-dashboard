@@ -250,6 +250,7 @@ function persistDeterministicTitle(threadId: number, firstUserText: string): voi
 }
 
 function registerTitleRefinement(
+  userId: number,
   threadId: number,
   firstUserText: string,
   apiKey: string | null,
@@ -262,7 +263,7 @@ function registerTitleRefinement(
   let enabled = false;
   after(() => {
     if (!enabled) return;
-    return titleChatThread(threadId, firstUserText, apiKey);
+    return titleChatThread(userId, threadId, firstUserText, apiKey);
   });
   return () => {
     enabled = true;
@@ -325,6 +326,7 @@ export async function POST(req: Request) {
       : "Image analysis.";
     const enableTitleRefinement = shouldAutoTitle
       ? registerTitleRefinement(
+          user.id,
           thread.id,
           titleSeed,
           turn.displayText.trim() ? apiKey : null,

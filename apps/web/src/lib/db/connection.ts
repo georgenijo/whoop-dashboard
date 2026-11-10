@@ -431,6 +431,42 @@ export function openWrite(): DB | null {
     if (!insightCols.some((c) => c.name === "created_at")) {
       db.exec("ALTER TABLE insights ADD COLUMN created_at TEXT");
     }
+    // #588: rebuild the legacy date-only key once, preserving its sole owner.
+    if (!insightCols.some((c) => c.name === "user_id")) {
+      db.transaction(() => {
+        const identityWhere = hasColumn(db!, "users", "apple_sub")
+          ? "apple_sub IS NOT NULL OR email IS NOT NULL"
+          : "email IS NOT NULL";
+        const realUsers = db!.prepare(`SELECT id FROM users WHERE ${identityWhere}`).all() as { id: number }[];
+        const allUsers = db!.prepare("SELECT id FROM users").all() as { id: number }[];
+        const owner = realUsers.length === 1 ? realUsers[0].id
+          : allUsers.length === 1 ? allUsers[0].id : null;
+        // An ambiguous legacy owner stays NULL and invisible to every tenant.
+        db!.exec(`
+          CREATE TABLE insights_scoped (
+            user_id INTEGER REFERENCES users(id),
+            date TEXT NOT NULL,
+            insight TEXT,
+            created_at TEXT,
+            PRIMARY KEY (user_id, date)
+          );
+        `);
+        db!.prepare(`INSERT INTO insights_scoped (user_id, date, insight, created_at)
+          SELECT ?, date, insight, created_at FROM insights`).run(owner);
+        db!.exec("DROP TABLE insights; ALTER TABLE insights_scoped RENAME TO insights");
+      }).immediate();
+    }
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS ai_generation_state (
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        kind TEXT NOT NULL,
+        last_failed_at TEXT NOT NULL,
+        error_class TEXT NOT NULL,
+        failure_count INTEGER NOT NULL,
+        key_hash TEXT,
+        PRIMARY KEY (user_id, kind)
+      );
+    `);
     const chatCols = db.prepare("PRAGMA table_info(chat_messages)").all() as {
       name: string;
     }[];

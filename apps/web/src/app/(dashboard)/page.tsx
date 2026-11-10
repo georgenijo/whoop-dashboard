@@ -5,7 +5,6 @@ import RecoveryHero from "@/components/overview/RecoveryHero";
 import KPIStrip from "@/components/overview/KPIStrip";
 import RecoveryTrend from "@/components/overview/RecoveryTrend";
 import AIInsightCard from "@/components/overview/AIInsightCard";
-import AIInsightRefreshWatcher from "@/components/overview/AIInsightRefreshWatcher";
 import PRsCard from "@/components/overview/PRsCard";
 import SetupCard from "@/components/overview/SetupCard";
 import NeedsReconnectBanner from "@/components/overview/NeedsReconnectBanner";
@@ -77,12 +76,10 @@ export default async function OverviewPage({
   );
   const hasInsightData =
     data.latestRecovery !== null || data.latestCycle !== null || data.latestSleep !== null;
-  const insightStatus = getInsightStatus(user.id, hasInsightData);
+  let insightStatus = getInsightStatus(user.id, hasInsightData);
 
-  // BYOK-aware regen. If neither personal nor env key exists, skip
-  // regeneration silently — the rest of the overview still renders. The
-  // resolver throws MissingApiKeyError when both sources are empty; catch
-  // and treat as "no key", same shape acquireInsightRegenerationLock expects.
+  // Resolve BYOK before scheduling; missing credentials are persisted as a
+  // visible failure by the same retry gate as provider failures.
   let insightApiKey: string | null = null;
   try {
     insightApiKey = resolveApiKeyForUser(user.id).key;
@@ -90,6 +87,7 @@ export default async function OverviewPage({
     insightApiKey = null;
   }
   const insightLock = acquireInsightRegenerationLock(insightStatus, insightApiKey);
+  insightStatus = getInsightStatus(user.id, hasInsightData);
   const insightRefreshing = insightStatus.isRegenerating || insightLock !== null;
 
   if (insightLock !== null && insightApiKey !== null) {
@@ -116,9 +114,10 @@ export default async function OverviewPage({
           hasData={hasInsightData}
           insight={insightStatus.insight}
           refreshing={insightRefreshing}
+          errorClass={insightStatus.errorClass}
+          today={insightStatus.today}
         />
       </div>
-      {insightStatus.isStale && insightRefreshing ? <AIInsightRefreshWatcher /> : null}
 
       <KPIStrip
         latestRecovery={latestRecovery}
