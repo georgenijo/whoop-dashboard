@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Bell, RefreshCw } from "lucide-react";
 
@@ -52,6 +52,7 @@ export default function TopBar() {
   const subtitle = useMemo(() => formatToday(), []);
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [isRangePending, startRangeTransition] = useTransition();
   const messageTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -69,7 +70,9 @@ export default function TopBar() {
   function setRange(r: Range) {
     const params = new URLSearchParams(searchParams.toString());
     params.set("range", r);
-    router.push(`${pathname}?${params.toString()}`);
+    startRangeTransition(() => {
+      router.push(`${pathname}?${params.toString()}`);
+    });
   }
 
   async function handleSync() {
@@ -112,7 +115,7 @@ export default function TopBar() {
       </div>
       <div className="right">
         {showRangePicker && (
-          <div className="range" role="tablist" aria-label="Time range">
+          <div className="range" role="tablist" aria-label="Time range" aria-busy={isRangePending}>
             {RANGES.map((r) => (
               <button
                 key={r}
@@ -121,10 +124,20 @@ export default function TopBar() {
                 type="button"
                 role="tab"
                 aria-selected={range === r}
+                disabled={isRangePending}
+                style={{ opacity: isRangePending ? 0.55 : undefined, cursor: isRangePending ? "wait" : undefined }}
               >
                 {r}
               </button>
             ))}
+            {isRangePending ? (
+              <span
+                role="status"
+                style={{ fontSize: 11, color: "var(--fg-2)", marginLeft: 4, whiteSpace: "nowrap" }}
+              >
+                Updating…
+              </span>
+            ) : null}
           </div>
         )}
         {syncMessage && (

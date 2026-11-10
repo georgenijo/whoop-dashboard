@@ -5,6 +5,15 @@ import { tmpdir } from "node:os";
 import { describe, expect, it, beforeAll, afterAll, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn((destination: string): never => {
+    throw new Error(`NEXT_REDIRECT:${destination}`);
+  }),
+}));
+vi.mock("./db", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./db")>();
+  return { ...actual, getUserById: vi.fn(actual.getUserById) };
+});
 
 const tmpRoot = mkdtempSync(path.join(tmpdir(), "auth-test-"));
 const dbFile = path.join(tmpRoot, "test.db");
@@ -15,10 +24,12 @@ process.env.JWT_SIGNING_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="; //
 type AuthModule = typeof import("./auth");
 type ConnectionModule = typeof import("./db/connection");
 let auth: AuthModule;
+let db: typeof import("./db");
 
 beforeAll(async () => {
   const connection: ConnectionModule = await import("./db/connection");
   connection.openWrite()?.close();
+  db = await import("./db");
   auth = await import("./auth");
 });
 
@@ -64,5 +75,41 @@ describe("requireAuth — Bearer → Cookie → 401", () => {
     await expect(
       auth.requireAuth(makeRequest({ cookie: "__Host-coach_session=garbage" }))
     ).rejects.toMatchObject({ status: 401 });
+  });
+});
+
+describe("request-scoped auth cache", () => {
+  it("uses a fresh cache scope for each request", async () => {
+    const { signSessionToken } = await import("./auth/jwt");
+    const { token } = await signSessionToken(1);
+    const getUserById = vi.mocked(db.getUserById);
+    getUserById.mockClear();
+
+    await auth.requireAuth(makeRequest({ cookie: `__Host-coach_session=${token}` }));
+    await auth.requireAuth(makeRequest({ cookie: `__Host-coach_session=${token}` }));
+
+    expect(getUserById).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("JWT signing-key rotation", () => {
+  it("re-decodes when JWT_SIGNING_KEY changes and fails closed when it is unset", async () => {
+    const jwt = await import("./auth/jwt");
+    const original = process.env.JWT_SIGNING_KEY;
+    const { token } = await jwt.signSessionToken(1);
+    process.env.JWT_SIGNING_KEY = Buffer.alloc(32, 2).toString("base64");
+    await expect(jwt.verifySessionToken(token)).resolves.toBeNull();
+    delete process.env.JWT_SIGNING_KEY;
+    await expect(jwt.verifySessionToken(token)).resolves.toBeNull();
+    if (original === undefined) delete process.env.JWT_SIGNING_KEY;
+    else process.env.JWT_SIGNING_KEY = original;
+  });
+});
+
+describe("requireAuthOrSignin", () => {
+  it("redirects unauthenticated page requests to /signin", async () => {
+    const { redirect } = await import("next/navigation");
+    await expect(auth.requireAuthOrSignin(makeRequest())).rejects.toThrow("NEXT_REDIRECT:/signin");
+    expect(redirect).toHaveBeenCalledWith("/signin");
   });
 });

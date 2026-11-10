@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
+import { Suspense } from "react";
 import RecoveryHero from "@/components/overview/RecoveryHero";
 import KPIStrip from "@/components/overview/KPIStrip";
 import RecoveryTrend from "@/components/overview/RecoveryTrend";
@@ -59,8 +60,6 @@ export default async function OverviewPage({
   const { range } = await searchParams;
   const window = resolveRangeWindow(range, localToday());
   const data = getOverview(user.id, window.days);
-  const trend = getRecoveryRange(user.id, window.start, window.end);
-  const prStats = getPRStats(user.id);
   const summaryByDate = new Map(
     getDailySummary(user.id, "0000-01-01", "9999-12-31")
       .filter((r) => r.recovery_score != null)
@@ -76,25 +75,6 @@ export default async function OverviewPage({
   );
   const hasInsightData =
     data.latestRecovery !== null || data.latestCycle !== null || data.latestSleep !== null;
-  let insightStatus = getInsightStatus(user.id, hasInsightData);
-
-  // Resolve BYOK before scheduling; missing credentials are persisted as a
-  // visible failure by the same retry gate as provider failures.
-  let insightApiKey: string | null = null;
-  try {
-    insightApiKey = resolveApiKeyForUser(user.id).key;
-  } catch {
-    insightApiKey = null;
-  }
-  const insightLock = acquireInsightRegenerationLock(insightStatus, insightApiKey);
-  insightStatus = getInsightStatus(user.id, hasInsightData);
-  const insightRefreshing = insightStatus.isRegenerating || insightLock !== null;
-
-  if (insightLock !== null && insightApiKey !== null) {
-    const keyForAfter = insightApiKey;
-    after(() => regenerateInsight(user.id, keyForAfter, insightLock));
-  }
-
   return (
     <>
       <TzBackfill />
@@ -110,13 +90,9 @@ export default async function OverviewPage({
           rhr={latestRecovery?.rhr ?? null}
           updatedAt={latestRecovery?.date ?? null}
         />
-        <AIInsightCard
-          hasData={hasInsightData}
-          insight={insightStatus.insight}
-          refreshing={insightRefreshing}
-          errorClass={insightStatus.errorClass}
-          today={insightStatus.today}
-        />
+        <Suspense key={`insight:${window.start}:${window.end}`} fallback={<InsightSkeleton />}>
+          <InsightSection userId={user.id} hasInsightData={hasInsightData} />
+        </Suspense>
       </div>
 
       <KPIStrip
@@ -135,12 +111,129 @@ export default async function OverviewPage({
 
       <div className="grid-main">
         <div className="col">
-          <RecoveryTrend rows={trend} rangeLabel={window.label} />
-          <PRsCard stats={prStats} />
+          <Suspense key={`trend:${window.start}:${window.end}`} fallback={<TrendSkeleton />}>
+            <TrendSection
+              userId={user.id}
+              start={window.start}
+              end={window.end}
+              rangeLabel={window.label}
+            />
+          </Suspense>
+          <Suspense key={`prs:${window.start}:${window.end}`} fallback={<PRStatsSkeleton />}>
+            <PRStatsSection userId={user.id} />
+          </Suspense>
         </div>
         <div className="col">{/* Phase 2 */}</div>
       </div>
     </>
+  );
+}
+
+async function InsightSection({
+  userId,
+  hasInsightData,
+}: {
+  userId: number;
+  hasInsightData: boolean;
+}) {
+  await yieldToStream();
+  let insightStatus = getInsightStatus(userId, hasInsightData);
+
+  // Resolve BYOK before scheduling; missing credentials are persisted as a
+  // visible failure by the same retry gate as provider failures.
+  let insightApiKey: string | null = null;
+  try {
+    insightApiKey = resolveApiKeyForUser(userId).key;
+  } catch {
+    insightApiKey = null;
+  }
+  const insightLock = acquireInsightRegenerationLock(insightStatus, insightApiKey);
+  insightStatus = getInsightStatus(userId, hasInsightData);
+  const insightRefreshing = insightStatus.isRegenerating || insightLock !== null;
+
+  if (insightLock !== null && insightApiKey !== null) {
+    const keyForAfter = insightApiKey;
+    after(() => regenerateInsight(userId, keyForAfter, insightLock));
+  }
+
+  return (
+    <AIInsightCard
+      hasData={hasInsightData}
+      insight={insightStatus.insight}
+      refreshing={insightRefreshing}
+      errorClass={insightStatus.errorClass}
+      today={insightStatus.today}
+    />
+  );
+}
+
+async function TrendSection({
+  userId,
+  start,
+  end,
+  rangeLabel,
+}: {
+  userId: number;
+  start: string;
+  end: string;
+  rangeLabel: string;
+}) {
+  await yieldToStream();
+  return <RecoveryTrend rows={getRecoveryRange(userId, start, end)} rangeLabel={rangeLabel} />;
+}
+
+async function PRStatsSection({ userId }: { userId: number }) {
+  await yieldToStream();
+  return <PRsCard stats={getPRStats(userId)} />;
+}
+
+// The SQLite driver is synchronous. Yield once before each slow section so
+// React can flush the surrounding Suspense fallbacks, then perform the query
+// in the following event-loop turn. Without this boundary, an `async`
+// component with only synchronous work would still block the entire stream.
+function yieldToStream(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+function InsightSkeleton() {
+  return (
+    <div className="ai-card animate-pulse" aria-label="Loading AI insight" aria-busy="true">
+      <div className="ai-head">
+        <span className="ai-tag">Coach</span>
+        <span className="ai-when">Loading…</span>
+      </div>
+      <div className="h-3 w-4/5 rounded bg-white/10" />
+      <div className="mt-3 h-3 w-3/5 rounded bg-white/10" />
+    </div>
+  );
+}
+
+function TrendSkeleton() {
+  return (
+    <div className="card animate-pulse" aria-label="Loading recovery trend" aria-busy="true">
+      <div className="card-head">
+        <div>
+          <div className="h-4 w-28 rounded bg-white/10" />
+          <div className="mt-2 h-3 w-36 rounded bg-white/10" />
+        </div>
+      </div>
+      <div className="chart-body rounded bg-white/[0.03]" />
+    </div>
+  );
+}
+
+function PRStatsSkeleton() {
+  return (
+    <section className="overview-detail animate-pulse" aria-label="Loading personal records" aria-busy="true">
+      <span className="overview-kicker">Detail</span>
+      <details className="overview-disclosure">
+        <summary>
+          <span>Personal records</span>
+          <span className="overview-disclosure-meta">Loading…</span>
+          <span className="overview-disclosure-chevron" aria-hidden />
+        </summary>
+      </details>
+    </section>
   );
 }
 

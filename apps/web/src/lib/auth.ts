@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import {
   getSessionByToken,
   getUserById,
@@ -177,29 +178,17 @@ export type AuthResult = {
 };
 
 /**
- * Look up a single cookie value out of a `Cookie:` header. Hand-rolled to
- * keep `requireAuth` dependency-free at the edge — the standard library
- * doesn't expose a cookie parser. RFC 6265 says values can't contain commas
- * or semicolons, so a naive split-on-`;` is sufficient here.
+ * Request-scoped auth resolution. React resets this cache for every Server
+ * Component render, so matching cookie/bearer credentials are deduplicated
+ * between the dashboard layout and its page without sharing auth state across
+ * requests.
  */
-function readCookie(header: string | null, name: string): string | null {
-  if (!header) return null;
-  for (const part of header.split(";")) {
-    const idx = part.indexOf("=");
-    if (idx < 0) continue;
-    const key = part.slice(0, idx).trim();
-    if (key !== name) continue;
-    return part.slice(idx + 1).trim();
-  }
-  return null;
-}
-
-// Precedence: Bearer > Cookie > 401. Don't flip without auditing all routes.
-export async function requireAuth(req: Request): Promise<AuthResult> {
-  const header = req.headers.get("authorization");
-
-  if (header) {
-    const bearerMatch = header.match(/^Bearer\s+(.+)$/i);
+const resolveAuth = cache(async (
+  authorization: string | null,
+  cookie: string | null,
+): Promise<AuthResult> => {
+  if (authorization) {
+    const bearerMatch = authorization.match(/^Bearer\s+(.+)$/i);
     if (bearerMatch) {
       const token = bearerMatch[1].trim();
       const claims = await verifySessionToken(token);
@@ -226,8 +215,7 @@ export async function requireAuth(req: Request): Promise<AuthResult> {
 
   // Cookie auth (web). Only the `__Host-coach_session` cookie is recognised
   // — issued by /api/auth/apple-web/callback after a verified SIWA round-trip.
-  const cookieHeader = req.headers.get("cookie");
-  const sessionCookie = readCookie(cookieHeader, COACH_SESSION_COOKIE);
+  const sessionCookie = readCookie(cookie, COACH_SESSION_COOKIE);
   if (sessionCookie) {
     const claims = await verifySessionToken(sessionCookie);
     if (claims) {
@@ -238,6 +226,32 @@ export async function requireAuth(req: Request): Promise<AuthResult> {
   }
 
   throw new Response("Unauthorized", { status: 401 });
+});
+
+/**
+ * Look up a single cookie value out of a `Cookie:` header. Hand-rolled to
+ * keep `requireAuth` dependency-free at the edge — the standard library
+ * doesn't expose a cookie parser. RFC 6265 says values can't contain commas
+ * or semicolons, so a naive split-on-`;` is sufficient here.
+ */
+function readCookie(header: string | null, name: string): string | null {
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const idx = part.indexOf("=");
+    if (idx < 0) continue;
+    const key = part.slice(0, idx).trim();
+    if (key !== name) continue;
+    return part.slice(idx + 1).trim();
+  }
+  return null;
+}
+
+// Precedence: Bearer > Cookie > 401. Don't flip without auditing all routes.
+export async function requireAuth(req: Request): Promise<AuthResult> {
+  return resolveAuth(
+    req.headers.get("authorization"),
+    req.headers.get("cookie"),
+  );
 }
 
 /**
@@ -251,12 +265,18 @@ export async function requireAuth(req: Request): Promise<AuthResult> {
  */
 export async function requireAuthOrSignin(req: Request): Promise<AuthResult> {
   const { redirect } = await import("next/navigation");
+  let isUnauthorized = false;
   try {
     return await requireAuth(req);
   } catch (err) {
     if (err instanceof Response && err.status === 401) {
-      redirect("/signin");
+      isUnauthorized = true;
+    } else {
+      throw err;
     }
-    throw err;
   }
+  // `redirect()` deliberately stays outside the auth try/catch: it throws a
+  // framework control-flow error that must never be caught as an auth failure.
+  if (isUnauthorized) redirect("/signin");
+  throw new Error("Unreachable auth state");
 }
