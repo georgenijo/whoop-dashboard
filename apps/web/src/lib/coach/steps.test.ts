@@ -38,6 +38,11 @@ function staleRow(overrides: Partial<StepsRow> = {}): StepsRow {
   return storedRow({ updated_at: fetchedAt, fetched_at: fetchedAt, ...overrides });
 }
 
+function daysAgo(days: number): string {
+  const date = new Date(Date.parse(`${today()}T00:00:00Z`) - days * 86_400_000);
+  return date.toISOString().slice(0, 10);
+}
+
 const getStepsRangeMock = vi.mocked(getStepsRange);
 const whoopGetMock = vi.mocked(whoopGet);
 
@@ -104,19 +109,84 @@ describe("native steps refresh", () => {
     expect(result._meta).toMatchObject({ refresh: "updated", source: "whoop", steps_stale: false });
   });
 
-  it("returns stored data with steps_stale when the refresh times out", async () => {
-    const stale = staleRow();
-    getStepsRangeMock.mockReturnValue([stale]);
-    whoopGetMock.mockRejectedValueOnce(
-      new DOMException("The operation was aborted due to timeout", "TimeoutError"),
-    );
+  it("refreshes when a fresh historical row masks an old today row", async () => {
+    const yesterday = daysAgo(1);
+    const historical = storedRow({ date: yesterday });
+    const todayRow = staleRow();
+    const refreshedToday = storedRow();
+    getStepsRangeMock
+      .mockReturnValueOnce([historical, todayRow])
+      .mockReturnValueOnce([historical, refreshedToday]);
+    whoopGetMock.mockResolvedValueOnce({
+      records: [{ id: 3, start: "2026-09-25T02:09:00Z", step_count: 999 }],
+    });
 
-    const result = await querySteps(2, today(), today(), "whoop");
+    const result = await querySteps(2, yesterday, today(), "whoop");
 
-    expect(result.rows).toEqual([stale]);
-    expect(result._meta).toMatchObject({ refresh: "failed", steps_stale: true });
-    expect(result._meta.error).toMatch(/timed out/i);
-    expect(upsertCyclesAndRecompute).not.toHaveBeenCalled();
+    expect(whoopGetMock).toHaveBeenCalledTimes(1);
+    expect(result.rows).toEqual([historical, refreshedToday]);
+    expect(result._meta).toMatchObject({ refresh: "updated", steps_stale: false });
+  });
+
+  it("refreshes when a fresh historical row exists but today has no stored row", async () => {
+    const yesterday = daysAgo(1);
+    const historical = storedRow({ date: yesterday });
+    const refreshedToday = storedRow();
+    getStepsRangeMock
+      .mockReturnValueOnce([historical])
+      .mockReturnValueOnce([historical, refreshedToday]);
+    whoopGetMock.mockResolvedValueOnce({
+      records: [{ id: 4, start: "2026-09-25T02:09:00Z", step_count: 1200 }],
+    });
+
+    const result = await querySteps(2, yesterday, today(), "whoop");
+
+    expect(whoopGetMock).toHaveBeenCalledTimes(1);
+    expect(result.rows).toEqual([historical, refreshedToday]);
+    expect(result._meta).toMatchObject({ refresh: "updated", steps_stale: false });
+  });
+
+  it("ignores historical rows when today's row is fresh", async () => {
+    const yesterday = daysAgo(1);
+    const rows = [staleRow({ date: yesterday }), storedRow()];
+    getStepsRangeMock.mockReturnValue(rows);
+
+    const result = await querySteps(2, yesterday, today(), "whoop");
+
+    expect(whoopGetMock).not.toHaveBeenCalled();
+    expect(result._meta).toMatchObject({ refresh: "not_requested", steps_stale: false });
+  });
+
+  it("enforces the 3 s deadline across token acquisition and skips late writes", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const stale = staleRow();
+      getStepsRangeMock.mockReturnValue([stale]);
+      whoopGetMock.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            setTimeout(
+              () => resolve({ records: [{ id: 5, start: "2026-09-25T02:09:00Z", step_count: 4321 }] }),
+              3_400,
+            );
+          }),
+      );
+
+      const pending = querySteps(2, today(), today(), "whoop");
+      await vi.advanceTimersByTimeAsync(3_000);
+      const result = await pending;
+
+      expect(result.rows).toEqual([stale]);
+      expect(result._meta).toMatchObject({ refresh: "failed", steps_stale: true });
+      expect(result._meta.error).toMatch(/timed out/i);
+      expect(upsertCyclesAndRecompute).not.toHaveBeenCalled();
+
+      // The slow WHOOP response lands after the deadline; it must not write.
+      await vi.advanceTimersByTimeAsync(500);
+      expect(upsertCyclesAndRecompute).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("returns saved data with explicit failure, without exposing upstream bodies", async () => {
