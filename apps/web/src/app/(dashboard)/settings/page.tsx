@@ -204,6 +204,10 @@ export default function SettingsPage() {
   // the picker stays disabled and shows no model, so an interim — possibly
   // overridden — selection can neither display wrong nor be saved.
   const [modelPrefLoaded, setModelPrefLoaded] = useState(false);
+  // A failed settings load is explicit and retryable rather than an eternal
+  // "Loading your saved model…" with no explanation or recovery path.
+  const [modelPrefLoadFailed, setModelPrefLoadFailed] = useState(false);
+  const [modelPrefReloading, setModelPrefReloading] = useState(false);
   const [anthropicModels, setAnthropicModels] = useState<AnthropicModelOption[]>([]);
   const [anthropicModelsStatus, setAnthropicModelsStatus] =
     useState<ModelCatalogStatus>("loading");
@@ -277,6 +281,36 @@ export default function SettingsPage() {
     }
   }, []);
 
+  // Load the effective Coach-model selection (saved preference or the
+  // server-resolved COACH_DEFAULT_MODEL default) plus the raw instructions.
+  // Failure is explicit and retryable (Retry control): the picker stays
+  // fail-closed — disabled, selection unknown — while the payload is
+  // unavailable, instead of loading forever or saving an unknown selection.
+  const loadSettings = useCallback(async (): Promise<void> => {
+    setModelPrefReloading(true);
+    try {
+      const response = await fetch("/api/settings");
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = (await response.json()) as {
+        system_prompt: string;
+        model_pref?: string;
+        cursor_available?: boolean;
+      };
+      if (data === null || typeof data !== "object" || typeof data.model_pref !== "string") {
+        throw new Error("malformed settings payload");
+      }
+      setSystemPrompt(data.system_prompt);
+      setSavedSystemPrompt(data.system_prompt);
+      setModelPref(data.model_pref);
+      setModelPrefLoaded(true);
+      setModelPrefLoadFailed(false);
+    } catch {
+      setModelPrefLoadFailed(true);
+    } finally {
+      setModelPrefReloading(false);
+    }
+  }, []);
+
   useEffect(() => {
     refreshWhoop();
   }, [refreshWhoop]);
@@ -301,26 +335,8 @@ export default function SettingsPage() {
       })
       .catch(() => {});
 
-    fetch("/api/settings")
-      .then((response) =>
-        response.ok
-          ? (response.json() as Promise<{
-              system_prompt: string;
-              model_pref?: string;
-              cursor_available?: boolean;
-            }>)
-          : null,
-      )
-      .then(
-        (data) => {
-          if (!data) return;
-          setSystemPrompt(data.system_prompt);
-          setSavedSystemPrompt(data.system_prompt);
-          if (data.model_pref) setModelPref(data.model_pref);
-          setModelPrefLoaded(true);
-        },
-      )
-      .catch(() => {});
+    // Retryable; keeps the model picker fail-closed until this lands.
+    queueMicrotask(() => { void loadSettings(); });
 
     fetch("/api/me/anthropic-key")
       .then((response) =>
@@ -355,7 +371,7 @@ export default function SettingsPage() {
       void refreshCursorModels();
       void refreshAnthropicModels();
     });
-  }, [refreshCursorModels, refreshAnthropicModels]);
+  }, [refreshCursorModels, refreshAnthropicModels, loadSettings]);
 
   function toggleLocal(key: string, value: boolean) {
     localStorage.setItem(key, value ? "1" : "0");
@@ -837,7 +853,7 @@ export default function SettingsPage() {
               >
                 {!modelPrefLoaded ? (
                   <option value="" disabled>
-                    Loading your saved model…
+                    {modelPrefLoadFailed ? "Unavailable" : "Loading your saved model…"}
                   </option>
                 ) : null}
                 {modelGroups.map((group) => (
@@ -869,6 +885,21 @@ export default function SettingsPage() {
                 ) : null}
               </select>
             </SettingRow>
+            {modelPrefLoadFailed ? (
+              <div className={styles.inlineControl} data-testid="model-load-error">
+                <p className={styles.catalogStatus} role="alert">
+                  Couldn&apos;t load your saved model.
+                </p>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  disabled={modelPrefReloading}
+                  onClick={() => { void loadSettings(); }}
+                >
+                  Retry
+                </button>
+              </div>
+            ) : null}
 
             <div className={styles.divider} />
 
