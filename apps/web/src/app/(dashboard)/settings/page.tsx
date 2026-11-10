@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import styles from "./settings.module.css";
 import type { AnthropicModelOption } from "@/lib/coach/anthropic-model-options";
-import { FALLBACK_CHAT_MODEL } from "@/lib/coach/model-defaults";
 
 type LocalSetting = {
   key: string;
@@ -56,13 +55,12 @@ type ByokError =
   | { kind: "probe_failed" }
   | { kind: "request_failed"; message: string };
 
-// Issue #587 — the initial selection must hydrate identically on the server
-// and in the browser. COACH_DEFAULT_MODEL is server-only, so it cannot take
-// part in this initial value; the shipped fallback constant is rendered on
-// both sides, and the effective server default (override included) is applied
-// right after mount from GET /api/settings, which resolves parseModelPref's
-// env-aware response server-side.
-const ANTHROPIC_PREF = `anthropic:${FALLBACK_CHAT_MODEL}`;
+// Issue #587 — the Coach-model selection (a saved preference or the
+// COACH_DEFAULT_MODEL override, both resolved server-side) is only known to
+// GET /api/settings. COACH_DEFAULT_MODEL is server-only, so it can never be
+// part of an initial client render: until that response lands, the picker
+// renders an identical disabled placeholder on server and client — showing no
+// model, and not interactively saveable — then adopts the effective selection.
 
 const CONNECTOR_STATUS_COPY: Record<
   WhoopConnectorStatus,
@@ -200,7 +198,12 @@ export default function SettingsPage() {
   const [cursorByokError, setCursorByokError] = useState<ByokError | null>(
     null,
   );
-  const [modelPref, setModelPref] = useState(ANTHROPIC_PREF);
+  const [modelPref, setModelPref] = useState("");
+  // False until the effective selection (saved preference or the server-side
+  // COACH_DEFAULT_MODEL default) arrives from GET /api/settings. While false
+  // the picker stays disabled and shows no model, so an interim — possibly
+  // overridden — selection can neither display wrong nor be saved.
+  const [modelPrefLoaded, setModelPrefLoaded] = useState(false);
   const [anthropicModels, setAnthropicModels] = useState<AnthropicModelOption[]>([]);
   const [anthropicModelsStatus, setAnthropicModelsStatus] =
     useState<ModelCatalogStatus>("loading");
@@ -314,6 +317,7 @@ export default function SettingsPage() {
           setSystemPrompt(data.system_prompt);
           setSavedSystemPrompt(data.system_prompt);
           if (data.model_pref) setModelPref(data.model_pref);
+          setModelPrefLoaded(true);
         },
       )
       .catch(() => {});
@@ -533,6 +537,10 @@ export default function SettingsPage() {
       setCursorByokStatus("ready");
       setCursorByokInput("");
       if (data.model_pref) setModelPref(data.model_pref);
+      // The Cursor-key route resolves the effective selection server-side
+      // (parseModelPref), so it counts as a loaded selection even if the
+      // settings request had not landed yet.
+      setModelPrefLoaded(true);
       if (data.fallback_available) {
         await refreshCursorModels();
       } else {
@@ -589,6 +597,7 @@ export default function SettingsPage() {
       } else {
         const data = (await response.json()) as { model_pref?: string };
         if (data.model_pref) setModelPref(data.model_pref);
+        setModelPrefLoaded(true);
       }
     } catch (error) {
       setModelPref(previous);
@@ -821,11 +830,16 @@ export default function SettingsPage() {
             >
               <select
                 className={styles.select}
-                value={modelPref}
-                disabled={modelSaving}
+                value={modelPrefLoaded ? modelPref : ""}
+                disabled={modelSaving || !modelPrefLoaded}
                 aria-label="Coach model"
                 onChange={(event) => saveModelPref(event.target.value)}
               >
+                {!modelPrefLoaded ? (
+                  <option value="" disabled>
+                    Loading your saved model…
+                  </option>
+                ) : null}
                 {modelGroups.map((group) => (
                   <optgroup
                     key={group.prefix}
@@ -848,7 +862,7 @@ export default function SettingsPage() {
                     ) : null}
                   </optgroup>
                 ))}
-                {selectedModelMissing ? (
+                {modelPrefLoaded && selectedModelMissing ? (
                   <option value={modelPref} disabled>
                     {modelPref.replace(/^(anthropic|cursor):/, "")} (saved, unavailable)
                   </option>

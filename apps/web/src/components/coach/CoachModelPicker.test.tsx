@@ -501,6 +501,29 @@ describe("Settings model catalog integration", () => {
     vi.stubGlobal("confirm", vi.fn(() => true));
   });
 
+  it("holds the Coach model picker behind the loaded selection", async () => {
+    // Hold GET /api/settings unresolved so the effective saved/default
+    // selection (possibly the COACH_DEFAULT_MODEL override, server-side)
+    // has not landed while catalogs are already ready.
+    let releaseSettings!: (response: Response) => void;
+    settingsMock.mockImplementation((_url, init) => init?.method === "POST"
+      ? Response.json(JSON.parse(init.body))
+      : new Promise<Response>((resolve) => { releaseSettings = resolve; }));
+    render(<SettingsPage />);
+    const select = screen.getByRole("combobox", { name: "Coach model" });
+    await within(select).findByRole("option", { name: "Claude Opus Live" });
+    // Before settings load: disabled, no wrong model displayed or selectable.
+    expect(select).toBeDisabled();
+    expect(within(select).getByText("Loading your saved model…")).toBeInTheDocument();
+    expect(select).toHaveValue("");
+    // After the effective selection arrives: real value enabled and applied.
+    await act(async () => releaseSettings(
+      Response.json({ system_prompt: "", model_pref: "anthropic:claude-opus-live" }),
+    ));
+    expect(select).toBeEnabled();
+    expect(select).toHaveValue("anthropic:claude-opus-live");
+  });
+
   it("groups the live models by provider", async () => {
     render(<SettingsPage />);
     const select = screen.getByRole("combobox", { name: "Coach model" });
