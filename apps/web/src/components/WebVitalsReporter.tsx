@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { useReportWebVitals } from "next/web-vitals";
 
 // Frontend performance telemetry collector. Reports Core Web Vitals to
@@ -18,17 +19,17 @@ type WebVitalMetric = {
 // metrics so the table stays a known shape (matches PERF_METRICS server-side).
 const TRACKED = new Set(["LCP", "INP", "CLS", "FCP", "TTFB", "FID"]);
 
-function report(metric: WebVitalMetric): void {
+function send(metrics: WebVitalMetric[]): void {
   if (typeof window === "undefined") return;
-  if (!TRACKED.has(metric.name)) return;
-
   const body = JSON.stringify({
-    source: "web",
-    metric: metric.name,
-    value: metric.value,
-    rating: metric.rating,
-    path: window.location.pathname,
-    navigation_type: metric.navigationType,
+    metrics: metrics.map((metric) => ({
+      source: "web",
+      metric: metric.name,
+      value: metric.value,
+      rating: metric.rating,
+      path: window.location.pathname,
+      navigation_type: metric.navigationType,
+    })),
   });
 
   try {
@@ -49,6 +50,25 @@ function report(metric: WebVitalMetric): void {
 }
 
 export default function WebVitalsReporter() {
-  useReportWebVitals(report);
+  const queue = useRef<WebVitalMetric[]>([]);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flush = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    const metrics = queue.current.splice(0);
+    if (metrics.length) send(metrics);
+  };
+  useReportWebVitals((metric) => {
+    if (!TRACKED.has(metric.name)) return;
+    queue.current.push(metric);
+    if (!timer.current) timer.current = setTimeout(flush, 250);
+  });
+  useEffect(() => {
+    window.addEventListener("pagehide", flush);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      flush();
+    };
+  });
   return null;
 }

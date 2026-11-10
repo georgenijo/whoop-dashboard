@@ -9,25 +9,19 @@ import {
 import { forUser } from "./scoped";
 import {
   type RecoveryRow,
-  getLatestRecovery,
-  getPreviousRecovery,
   getRecoveryTrend,
 } from "./recovery";
 import {
   type CycleRow,
-  getLatestCycle,
-  getPreviousCycle,
   getStrainTrend,
 } from "./strain";
 import {
   type SleepRow,
-  getLatestSleep,
-  getPreviousSleep,
   getSleepTrend,
   SLEEP_DEDUP_WHERE,
 } from "./sleep";
 import { type WorkoutRow } from "./workouts";
-import { type StepsRow, type StepsSource, getLatestSteps, getPreviousSteps } from "./steps";
+import { type StepsRow, type StepsSource, getStepsPair } from "./steps";
 
 export type DailySummaryRow = {
   date: string;
@@ -196,25 +190,44 @@ export function getDailySummary(
   );
 }
 
+/** Fetch only the requested dates; used by overview's recovery enrichment. */
+export function getDailySummaryForDates(userId: number, dates: string[]): DailySummaryRow[] {
+  const unique = [...new Set(dates)];
+  if (unique.length === 0) return [];
+  const placeholders = unique.map(() => "?").join(", ");
+  return forUser(userId).all<DailySummaryRow>(
+    `SELECT date, recovery_score, hrv_ms, resting_hr, sleep_hours, sleep_efficiency, sleep_performance, day_strain, max_hr, avg_hr, kilojoules, workouts_count, computed_at FROM daily_summary WHERE date IN (${placeholders}) AND user_id = ? ORDER BY date ASC`,
+    ...unique,
+  );
+}
+
 export function getOverview(userId: number, days = 30, stepsSource: StepsSource = "auto"): Overview {
-  const recoveryTrend = getRecoveryTrend(userId, days);
-  const strainTrend = getStrainTrend(userId, days);
-  const sleepTrend = getSleepTrend(userId, days);
-  const latestRecovery = getLatestRecovery(userId);
-  const latestCycle = getLatestCycle(userId);
-  const latestSleep = getLatestSleep(userId);
+  // The KPI's latest/previous values are the two tail rows of these trends.
+  // Request at least two rows so a one-day view preserves its previous-value
+  // comparison without separate full-history lookups.
+  const trendDays = Math.max(days, 2);
+  const recoveryTail = getRecoveryTrend(userId, trendDays);
+  const strainTail = getStrainTrend(userId, trendDays);
+  const sleepTail = getSleepTrend(userId, trendDays);
+  const recoveryTrend = recoveryTail.slice(-days);
+  const strainTrend = strainTail.slice(-days);
+  const sleepTrend = sleepTail.slice(-days);
+  const latestRecovery = recoveryTail.at(-1) ?? null;
+  const latestCycle = strainTail.at(-1) ?? null;
+  const latestSleep = sleepTail.at(-1) ?? null;
+  const [latestSteps, previousSteps] = getStepsPair(userId, stepsSource);
   return {
     latestRecovery,
-    previousRecovery: getPreviousRecovery(userId),
+    previousRecovery: recoveryTail.at(-2) ?? null,
     latestCycle,
-    previousCycle: getPreviousCycle(userId),
+    previousCycle: strainTail.at(-2) ?? null,
     latestSleep,
-    previousSleep: getPreviousSleep(userId),
+    previousSleep: sleepTail.at(-2) ?? null,
     recoveryTrend,
     strainTrend,
     sleepTrend,
-    latestSteps: getLatestSteps(userId, stepsSource),
-    previousSteps: getPreviousSteps(userId, stepsSource),
+    latestSteps,
+    previousSteps,
     hasData: Boolean(latestRecovery || latestCycle || latestSleep),
   };
 }

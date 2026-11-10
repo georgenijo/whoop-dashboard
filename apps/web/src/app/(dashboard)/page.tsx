@@ -11,7 +11,7 @@ import SetupCard from "@/components/overview/SetupCard";
 import NeedsReconnectBanner from "@/components/overview/NeedsReconnectBanner";
 import TzBackfill from "@/components/onboarding/TzBackfill";
 import {
-  getDailySummary,
+  getDailySummaryForDates,
   getOverview,
   getPRStats,
   getRecoveryRange,
@@ -61,7 +61,10 @@ export default async function OverviewPage({
   const window = resolveRangeWindow(range, localToday());
   const data = getOverview(user.id, window.days);
   const summaryByDate = new Map(
-    getDailySummary(user.id, "0000-01-01", "9999-12-31")
+    getDailySummaryForDates(user.id, [
+      ...(data.latestRecovery ? [data.latestRecovery.date] : []),
+      ...(data.previousRecovery ? [data.previousRecovery.date] : []),
+    ])
       .filter((r) => r.recovery_score != null)
       .map((r) => [r.date, r] as const)
   );

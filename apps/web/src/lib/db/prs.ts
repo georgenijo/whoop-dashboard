@@ -1,6 +1,7 @@
 import "server-only";
 import { forUser } from "./scoped";
 import { SLEEP_DEDUP_WHERE } from "./sleep";
+import { getLatestWhoopDataTimestamp } from "./summary";
 
 export type PRValue = { value: number; date: string } | null;
 export type PRStreak = {
@@ -18,6 +19,7 @@ export type PRStats = {
 };
 
 const MS_PER_DAY = 86_400_000;
+const statsCache = new Map<string, PRStats>();
 
 function parseDate(s: string): number {
   const [y, m, d] = s.split("-").map(Number);
@@ -109,12 +111,21 @@ export function getStreaks(userId: number): {
 }
 
 export function getPRStats(userId: number): PRStats {
+  // The data timestamp is tenant-scoped and changes with a sync/webhook
+  // upsert. Including it in the key means writes cannot serve prior stats.
+  const cacheKey = `${userId}:${getLatestWhoopDataTimestamp(userId) ?? "empty"}`;
+  const cached = statsCache.get(cacheKey);
+  if (cached) return cached;
   const streaks = getStreaks(userId);
-  return {
+  const stats = {
     bestHRV: getBestHRV(userId),
     lowestRHR: getLowestRHR(userId),
     recoveryStreak: streaks.recoveryStreak,
     sleepPerfStreak: streaks.sleepPerfStreak,
     loggingStreak: streaks.loggingStreak,
   };
+  // Bound this process-local cache: only the current key per user is useful.
+  for (const key of statsCache.keys()) if (key.startsWith(`${userId}:`) && key !== cacheKey) statsCache.delete(key);
+  statsCache.set(cacheKey, stats);
+  return stats;
 }

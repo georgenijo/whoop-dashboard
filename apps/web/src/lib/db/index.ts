@@ -81,6 +81,7 @@ export {
   resolveStepsSource,
   getLatestSteps,
   getPreviousSteps,
+  getStepsPair,
   getStepsRange,
   getStepsTrend,
 } from "./steps";
@@ -102,6 +103,7 @@ export { getBodyMeasurements } from "./body";
 export type { DailySummaryRow, InsightRow, Overview } from "./summary";
 export {
   getDailySummary,
+  getDailySummaryForDates,
   getLatestInsight,
   saveInsight,
   getLatestWhoopDataTimestamp,

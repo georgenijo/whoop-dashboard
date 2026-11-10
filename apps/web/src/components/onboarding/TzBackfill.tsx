@@ -16,13 +16,20 @@ export default function TzBackfill() {
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (!tz) return;
+      const key = "whoop-dashboard:timezone";
+      try {
+        if (window.localStorage.getItem(key) === tz) return;
+      } catch {
+        // Storage can be unavailable (private mode or a restrictive browser).
+        // Continue with the best-effort request in that case.
+      }
       void fetch("/api/me/tz", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ tz }),
-      }).catch(() => {
-        // best-effort — nothing user-visible depends on success.
-      });
+      }).then(() => {
+        try { window.localStorage.setItem(key, tz); } catch { /* best-effort */ }
+      }).catch(() => { /* best-effort — nothing user-visible depends on success. */ });
     } catch {
       // Intl unavailable; skip silently.
     }
