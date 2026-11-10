@@ -48,9 +48,6 @@ type Props = {
   previousSleep: SleepRow | null;
   latestSteps: StepsRow | null;
   previousSteps: StepsRow | null;
-  recoveryTrend: RecoveryRow[];
-  strainTrend: CycleRow[];
-  sleepTrend: SleepRow[];
 };
 
 export default function KPIStrip(p: Props) {

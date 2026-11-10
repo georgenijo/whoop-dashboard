@@ -18,9 +18,8 @@ import NapRecoveryScatter from "@/components/charts/NapRecoveryScatter";
 import DeepSleepEfficiencyCard from "@/components/charts/DeepSleepEfficiencyCard";
 import { headers } from "next/headers";
 import {
-  getOverview,
+  getOverviewSnapshot,
   getRecoveryRange,
-  getLatestSleep,
   getSleepRange,
   getNaps,
   getStrainRange,
@@ -47,13 +46,14 @@ export default async function SleepPage({
   );
   const { range } = await searchParams;
   const window = resolveRangeWindow(range, localToday());
-  const { days, label: rangeLabel } = window;
-  const data = getOverview(user.id, days);
+  const { label: rangeLabel } = window;
+  const data = getOverviewSnapshot(user.id);
   const trend = getSleepRange(user.id, window.start, window.end);
   const recoveryTrend = getRecoveryRange(user.id, window.start, window.end);
   const apneaRows = computeApneaSignal(trend, recoveryTrend);
 
-  const latestSleep = getLatestSleep(user.id);
+  // Same row getLatestSleep returns (non-nap, deduped, newest date).
+  const latestSleep = data.latestSleep;
   const naps = getNaps(user.id, window.start, window.end);
   const napsWithHour = withStartHour(naps);
   const bedtimeRecoveryResult = computeBedtimeRecoveryCorr(trend, recoveryTrend);
@@ -82,9 +82,6 @@ export default async function SleepPage({
         previousSleep={data.previousSleep}
         latestSteps={data.latestSteps}
         previousSteps={data.previousSteps}
-        recoveryTrend={data.recoveryTrend}
-        strainTrend={data.strainTrend}
-        sleepTrend={data.sleepTrend}
       />
 
       <div className="grid-main">

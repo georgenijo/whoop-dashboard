@@ -16,8 +16,8 @@ vi.mock("@/lib/auth", () => ({
   requireAuthOrSignin: vi.fn(async () => ({ user: { id: 1 }, source: "web" })),
 }));
 vi.mock("@/lib/db", () => ({
-  getDailySummary: vi.fn(() => []),
-  getOverview: vi.fn(),
+  getDailySummaryForDates: vi.fn(() => []),
+  getOverviewSnapshot: vi.fn(),
   getPRStats: vi.fn(),
   getRecoveryRange: vi.fn(),
   getUserSettings: vi.fn(() => null),

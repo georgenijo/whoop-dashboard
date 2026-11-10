@@ -1,5 +1,5 @@
 import "server-only";
-import { dateRangeClause, safeDays } from "./connection";
+import { TREND_MAX_POINTS, dateRangeClause, safeDays, sampledTrendSql } from "./connection";
 import { forUser } from "./scoped";
 
 export type CycleRow = {
@@ -32,6 +32,22 @@ export function getStrainTrend(userId: number, days: number): CycleRow[] {
     `SELECT ${CYCLE_COLUMNS} FROM cycles WHERE user_id = ? ORDER BY date DESC LIMIT ${limit}`,
   );
   return rows.reverse();
+}
+
+/** Same rows as `getStrainTrend`, downsampled in SQL to ~`maxPoints` (latest two kept). */
+export function getStrainTrendSampled(
+  userId: number,
+  days: number,
+  maxPoints: number = TREND_MAX_POINTS,
+): CycleRow[] {
+  const limit = safeDays(days);
+  return forUser(userId).all<CycleRow>(
+    sampledTrendSql(
+      CYCLE_COLUMNS,
+      `SELECT ${CYCLE_COLUMNS} FROM cycles WHERE user_id = ? ORDER BY date DESC LIMIT ${limit}`,
+      maxPoints,
+    ),
+  );
 }
 
 export function getStrainRange(

@@ -47,3 +47,17 @@ export function resolveRangeWindow(
     label: formatRangeLabel(normalized),
   };
 }
+
+/**
+ * Rows of an ascending, date-keyed list that fall inside the inclusive window.
+ * Lets a page fetch one wide range (e.g. window plus a baseline) and derive the
+ * narrower one instead of querying again; equals the SQL
+ * `date >= start AND date <= end` filter on ISO dates.
+ */
+export function rowsInWindow<T extends { date: string }>(
+  rows: T[],
+  start: string,
+  end: string,
+): T[] {
+  return rows.filter((r) => r.date >= start && r.date <= end);
+}

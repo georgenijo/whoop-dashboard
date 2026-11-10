@@ -5,19 +5,23 @@ import {
   hasTable,
   openWrite,
   safeDays,
+  TREND_MAX_POINTS,
 } from "./connection";
 import { forUser } from "./scoped";
 import {
   type RecoveryRow,
   getRecoveryTrend,
+  getRecoveryTrendSampled,
 } from "./recovery";
 import {
   type CycleRow,
   getStrainTrend,
+  getStrainTrendSampled,
 } from "./strain";
 import {
   type SleepRow,
   getSleepTrend,
+  getSleepTrendSampled,
   SLEEP_DEDUP_WHERE,
 } from "./sleep";
 import { type WorkoutRow } from "./workouts";
@@ -201,21 +205,19 @@ export function getDailySummaryForDates(userId: number, dates: string[]): DailyS
   );
 }
 
-export function getOverview(userId: number, days = 30, stepsSource: StepsSource = "auto"): Overview {
-  // The KPI's latest/previous values are the two tail rows of these trends.
-  // Request at least two rows so a one-day view preserves its previous-value
-  // comparison without separate full-history lookups.
-  const trendDays = Math.max(days, 2);
-  const recoveryTail = getRecoveryTrend(userId, trendDays);
-  const strainTail = getStrainTrend(userId, trendDays);
-  const sleepTail = getSleepTrend(userId, trendDays);
-  const recoveryTrend = recoveryTail.slice(-days);
-  const strainTrend = strainTail.slice(-days);
-  const sleepTrend = sleepTail.slice(-days);
+/** Overview without the trend arrays: latest/previous readings + steps. */
+export type OverviewSnapshot = Omit<Overview, "recoveryTrend" | "strainTrend" | "sleepTrend">;
+
+function buildSnapshot(
+  recoveryTail: RecoveryRow[],
+  strainTail: CycleRow[],
+  sleepTail: SleepRow[],
+  latestSteps: StepsRow | null,
+  previousSteps: StepsRow | null,
+): OverviewSnapshot {
   const latestRecovery = recoveryTail.at(-1) ?? null;
   const latestCycle = strainTail.at(-1) ?? null;
   const latestSleep = sleepTail.at(-1) ?? null;
-  const [latestSteps, previousSteps] = getStepsPair(userId, stepsSource);
   return {
     latestRecovery,
     previousRecovery: recoveryTail.at(-2) ?? null,
@@ -223,12 +225,47 @@ export function getOverview(userId: number, days = 30, stepsSource: StepsSource 
     previousCycle: strainTail.at(-2) ?? null,
     latestSleep,
     previousSleep: sleepTail.at(-2) ?? null,
-    recoveryTrend,
-    strainTrend,
-    sleepTrend,
     latestSteps,
     previousSteps,
     hasData: Boolean(latestRecovery || latestCycle || latestSleep),
+  };
+}
+
+/**
+ * KPI strip data: the latest and previous reading per metric, from one
+ * two-row query per table, plus steps from one source-resolved query. No
+ * trend arrays — pages that render their own range chart should use this
+ * instead of `getOverview` so they do not fetch the history twice.
+ */
+export function getOverviewSnapshot(userId: number, stepsSource: StepsSource = "auto"): OverviewSnapshot {
+  const [latestSteps, previousSteps] = getStepsPair(userId, stepsSource);
+  return buildSnapshot(
+    getRecoveryTrend(userId, 2),
+    getStrainTrend(userId, 2),
+    getSleepTrend(userId, 2),
+    latestSteps,
+    previousSteps,
+  );
+}
+
+export function getOverview(userId: number, days = 30, stepsSource: StepsSource = "auto"): Overview {
+  // The KPI's latest/previous values are the two newest rows of each trend, so
+  // one fetch per table serves both. Windows wider than TREND_MAX_POINTS (the
+  // all-time range, up to 3650 rows per table) are downsampled in SQL; the two
+  // newest rows are always kept, and anything at or under the cap is returned
+  // exactly. A one-day view still gets two rows for its previous-value delta.
+  const n = safeDays(days);
+  const exact = n <= TREND_MAX_POINTS;
+  const trendDays = Math.max(n, 2);
+  const recoveryTail = exact ? getRecoveryTrend(userId, trendDays) : getRecoveryTrendSampled(userId, days);
+  const strainTail = exact ? getStrainTrend(userId, trendDays) : getStrainTrendSampled(userId, days);
+  const sleepTail = exact ? getSleepTrend(userId, trendDays) : getSleepTrendSampled(userId, days);
+  const [latestSteps, previousSteps] = getStepsPair(userId, stepsSource);
+  return {
+    ...buildSnapshot(recoveryTail, strainTail, sleepTail, latestSteps, previousSteps),
+    recoveryTrend: exact ? recoveryTail.slice(-n) : recoveryTail,
+    strainTrend: exact ? strainTail.slice(-n) : strainTail,
+    sleepTrend: exact ? sleepTail.slice(-n) : sleepTail,
   };
 }
 

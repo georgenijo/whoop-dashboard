@@ -15,6 +15,7 @@ export {
   getLatestRecovery,
   getPreviousRecovery,
   getRecoveryTrend,
+  getRecoveryTrendSampled,
   getRecoveryRange,
   getRecoveryByDayOfWeek,
 } from "./recovery";
@@ -24,6 +25,7 @@ export {
   getLatestCycle,
   getPreviousCycle,
   getStrainTrend,
+  getStrainTrendSampled,
   getStrainRange,
 } from "./strain";
 
@@ -32,6 +34,7 @@ export {
   getLatestSleep,
   getPreviousSleep,
   getSleepTrend,
+  getSleepTrendSampled,
   getSleepRange,
   getSleepRangeRaw,
   getFullSleepTrend,
@@ -56,6 +59,8 @@ export type {
 export {
   getWorkouts,
   getWorkoutById,
+  getWorkoutDetail,
+  capWorkoutRows,
   getWorkoutHrSeries,
   getWorkoutSource,
   getWorkoutsRange,
@@ -100,7 +105,7 @@ export { getWorkoutPlans, saveWorkoutPlan } from "./plans";
 export type { BodyMeasurementRow } from "./body";
 export { getBodyMeasurements } from "./body";
 
-export type { DailySummaryRow, InsightRow, Overview } from "./summary";
+export type { DailySummaryRow, InsightRow, Overview, OverviewSnapshot } from "./summary";
 export {
   getDailySummary,
   getDailySummaryForDates,
@@ -108,6 +113,7 @@ export {
   saveInsight,
   getLatestWhoopDataTimestamp,
   getOverview,
+  getOverviewSnapshot,
   getHealthContext,
 } from "./summary";
 

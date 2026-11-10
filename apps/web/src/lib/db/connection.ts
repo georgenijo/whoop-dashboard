@@ -994,6 +994,33 @@ export function safeDays(days: number): number {
   return Math.min(n, 3650);
 }
 
+/** Most points a SQL-downsampled trend returns (see `sampledTrendSql`). */
+export const TREND_MAX_POINTS = 365;
+
+/**
+ * Downsample a newest-first trend in SQL instead of shipping every row to JS.
+ *
+ * `inner` is the caller's own "newest first, LIMIT n" SELECT (it keeps its
+ * `user_id = ?` placeholder as the only `?`, so the forUser() binding
+ * convention still holds). Rows are numbered newest-first and every
+ * `ceil(n / maxPoints)`-th row is kept. The two newest rows are always kept so
+ * "latest" and "previous" readings derived from the tail stay exact. When the
+ * trend already has `maxPoints` rows or fewer, the stride is 1 and the result
+ * is identical to the un-sampled query. Output is oldest-first, like
+ * `getRecoveryTrend` and friends.
+ */
+export function sampledTrendSql(
+  columns: string,
+  inner: string,
+  maxPoints: number = TREND_MAX_POINTS,
+): string {
+  const m = Math.max(2, Math.floor(maxPoints));
+  return `SELECT ${columns} FROM (
+    SELECT ${columns}, ROW_NUMBER() OVER (ORDER BY date DESC) AS rn, COUNT(*) OVER () AS n
+    FROM (${inner})
+  ) WHERE rn <= 2 OR (rn - 1) % ((n + ${m} - 1) / ${m}) = 0 ORDER BY date ASC`;
+}
+
 /** Run `fn` on the shared read-only handle. Null if the DB is missing or `fn`
  *  throws. No schema bootstrap — see open(). */
 export function safeQuery<T>(fn: (db: DB) => T): T | null {

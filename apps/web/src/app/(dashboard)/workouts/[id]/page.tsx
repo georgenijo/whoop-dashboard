@@ -3,9 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import {
-  getWorkoutById,
-  getWorkoutHrSeries,
-  getWorkoutSource,
+  getWorkoutDetail,
+  type WorkoutRow,
   getBodyMeasurements,
   getRecoveryTrend,
 } from "@/lib/db";
@@ -130,21 +129,22 @@ export default async function WorkoutDetailPage({
   );
   const { id } = await params;
 
-  const workout = getWorkoutById(user.id, id);
-  if (!workout) {
-    // Unknown id, or a workout owned by another user — both 404 (getWorkoutById
-    // is tenant-scoped, so cross-user ids resolve to undefined).
+  // One scoped read for the row, its HR stream and its provenance.
+  const detail = getWorkoutDetail(user.id, id);
+  if (!detail) {
+    // Unknown id, or a workout owned by another user — both 404 (the read is
+    // tenant-scoped, so cross-user ids resolve to undefined).
     notFound();
   }
+  const { workout } = detail;
 
   // hr_series is added by the HealthKit ingest migration (T1); read tolerates a
   // missing column and returns null. The page renders the full HR-curve +
   // derived-metrics layout when present, and a tasteful fallback otherwise.
-  const rawSeries = getWorkoutHrSeries(user.id, id);
-  const series = parseHrSeries(rawSeries);
+  const series = parseHrSeries(detail.hrSeries);
   const hasSignal = !!series && series.bpm.some((b) => b != null);
   // Provenance: HealthKit-only rows (no Whoop parent) must not claim "Whoop".
-  const isHealthKitOnly = getWorkoutSource(user.id, id) === "healthkit";
+  const isHealthKitOnly = detail.source === "healthkit";
 
   // Profile max HR drives zone boundaries, the curve y-scale, time-above-90% and
   // TRIMP. Prefer the measured profile max, fall back to this workout's own peak.
@@ -742,7 +742,7 @@ function ZonesCard({
   zonesPresent,
   maxHr,
 }: {
-  workout: NonNullable<ReturnType<typeof getWorkoutById>>;
+  workout: WorkoutRow;
   totalZoneMs: number;
   zonesPresent: boolean;
   maxHr: number | null;
@@ -1016,7 +1016,7 @@ function SessionSummaryCard({
   workout,
   kcal,
 }: {
-  workout: NonNullable<ReturnType<typeof getWorkoutById>>;
+  workout: WorkoutRow;
   kcal: number | null;
 }) {
   const rows: { label: string; value: string }[] = [

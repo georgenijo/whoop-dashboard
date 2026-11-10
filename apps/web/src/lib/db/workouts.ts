@@ -190,6 +190,59 @@ export function getWorkoutSource(userId: number, id: string): string | null {
   );
 }
 
+export type WorkoutDetail = {
+  workout: WorkoutRow;
+  hrSeries: WorkoutHrSeries | null;
+  /** `'whoop'`, `'healthkit'`, or `null` before the `source` column exists. */
+  source: string | null;
+};
+
+/**
+ * Everything the workout detail page needs for one row, in one scoped read:
+ * the row, its parsed HR stream and its provenance. Replaces three separate
+ * calls (`getWorkoutById` + `getWorkoutHrSeries` + `getWorkoutSource`) that each
+ * re-read the same row. Same semantics as those: `undefined` when the id is
+ * unknown or owned by another user; `hr_series` / `source` degrade to `null`
+ * when their column is missing (pre-migration schema) or unusable.
+ */
+export function getWorkoutDetail(
+  userId: number,
+  id: string,
+): WorkoutDetail | undefined {
+  return (
+    forUser(userId).read((db, uid) => {
+      const cols = new Set(
+        (db.prepare("PRAGMA table_info(workouts)").all() as { name: string }[]).map(
+          (c) => c.name,
+        ),
+      );
+      const extra = [
+        cols.has("hr_series") ? "hr_series" : "NULL AS hr_series",
+        cols.has("source") ? "source" : "NULL AS source",
+      ].join(", ");
+      const row = db
+        .prepare(
+          `SELECT ${WORKOUT_COLUMNS}, ${extra} FROM workouts WHERE id = ? AND user_id = ?`,
+        )
+        .get(id, uid) as
+        | (WorkoutRow & { hr_series: string | null; source: string | null })
+        | undefined;
+      if (!row) return undefined;
+      const { hr_series, source, ...workout } = row;
+      let hrSeries: WorkoutHrSeries | null = null;
+      if (hr_series) {
+        try {
+          const parsed = JSON.parse(hr_series) as WorkoutHrSeries;
+          if (parsed && Array.isArray(parsed.bpm)) hrSeries = parsed;
+        } catch {
+          hrSeries = null;
+        }
+      }
+      return { workout, hrSeries, source: source ?? null };
+    }) ?? undefined
+  );
+}
+
 export type WorkoutsRangeResult = {
   rows: WorkoutRow[];
   truncated: boolean;
@@ -207,6 +260,19 @@ export function getWorkoutRowsRange(
     `SELECT ${WORKOUT_COLUMNS} FROM workouts WHERE ${range.clause} AND user_id = ? ORDER BY date DESC`,
     ...range.params,
   );
+}
+
+/**
+ * Cap an already-fetched, uncapped range (`getWorkoutRowsRange`) the way
+ * `getWorkoutsRange` does, without a second query. The input is complete, so
+ * `total_count` is exact.
+ */
+export function capWorkoutRows(rows: WorkoutRow[]): WorkoutsRangeResult {
+  return {
+    rows: rows.length <= MAX_WORKOUTS_LIMIT ? rows : rows.slice(0, MAX_WORKOUTS_LIMIT),
+    truncated: rows.length > MAX_WORKOUTS_LIMIT,
+    total_count: rows.length,
+  };
 }
 
 // Caps Coach `query_workouts` payloads. Without this, a 5-year range from the

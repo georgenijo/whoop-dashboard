@@ -12,7 +12,7 @@ import NeedsReconnectBanner from "@/components/overview/NeedsReconnectBanner";
 import TzBackfill from "@/components/onboarding/TzBackfill";
 import {
   getDailySummaryForDates,
-  getOverview,
+  getOverviewSnapshot,
   getPRStats,
   getRecoveryRange,
   getUserSettings,
@@ -59,7 +59,7 @@ export default async function OverviewPage({
 
   const { range } = await searchParams;
   const window = resolveRangeWindow(range, localToday());
-  const data = getOverview(user.id, window.days);
+  const data = getOverviewSnapshot(user.id);
   const summaryByDate = new Map(
     getDailySummaryForDates(user.id, [
       ...(data.latestRecovery ? [data.latestRecovery.date] : []),
@@ -107,9 +107,6 @@ export default async function OverviewPage({
         previousSleep={data.previousSleep}
         latestSteps={data.latestSteps}
         previousSteps={data.previousSteps}
-        recoveryTrend={data.recoveryTrend}
-        strainTrend={data.strainTrend}
-        sleepTrend={data.sleepTrend}
       />
 
       <div className="grid-main">
