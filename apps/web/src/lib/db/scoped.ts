@@ -1,5 +1,5 @@
 import "server-only";
-import { open, type DB } from "./connection";
+import { open, prepareCached, type DB } from "./connection";
 
 // ---------------------------------------------------------------------------
 // Phase D — per-user query wrapper.
@@ -61,34 +61,26 @@ export function forUser(userId: number): ScopedDb {
     throw new Error(`[scoped] invalid userId: ${userId}`);
   }
   return {
+    // The handle is the process-wide shared read-only connection (#589):
+    // there is nothing to close here, and the tenant binding below is
+    // unchanged — every statement still gets `userId` as its trailing
+    // placeholder.
     read<T>(fn: (db: DB, uid: number) => T): T | null {
       const db = open();
       if (!db) return null;
-      try {
-        return fn(db, userId);
-      } finally {
-        db.close();
-      }
+      return fn(db, userId);
     },
     all<T>(sql: string, ...params: unknown[]): T[] {
       assertUserIdPlaceholder(sql);
       const db = open();
       if (!db) return [];
-      try {
-        return db.prepare(sql).all(...params, userId) as T[];
-      } finally {
-        db.close();
-      }
+      return prepareCached(db, sql).all(...params, userId) as T[];
     },
     get<T>(sql: string, ...params: unknown[]): T | undefined {
       assertUserIdPlaceholder(sql);
       const db = open();
       if (!db) return undefined;
-      try {
-        return db.prepare(sql).get(...params, userId) as T | undefined;
-      } finally {
-        db.close();
-      }
+      return prepareCached(db, sql).get(...params, userId) as T | undefined;
     },
   };
 }

@@ -1,5 +1,5 @@
 import "server-only";
-import { type DB, hasTable, openWrite, safeWriteQuery } from "./connection";
+import { type DB, hasTable, openRead, openWrite, safeReadQuery, safeWriteQuery } from "./connection";
 import {
   type ChatAttachment,
   type ChatAttachmentInsert,
@@ -186,7 +186,7 @@ function attachmentImage(row: AttachmentRow): CoachImage {
 
 export function getChatThreads(userId: number): ChatThreadSummary[] {
   return (
-    safeWriteQuery((db) => {
+    safeReadQuery((db) => {
       if (!hasTable(db, "chat_threads")) return [] as ChatThreadSummary[];
       const visibleM = visibleChatMessageClause("m");
       const previewM2 = visibleChatPreviewClause("m2");
@@ -224,7 +224,7 @@ export function getChatThreads(userId: number): ChatThreadSummary[] {
 
 export function getLatestChatThread(userId: number): ChatThread | null {
   return (
-    safeWriteQuery((db) => {
+    safeReadQuery((db) => {
       if (!hasTable(db, "chat_threads")) return null;
       const row = db
         .prepare(
@@ -238,7 +238,7 @@ export function getLatestChatThread(userId: number): ChatThread | null {
 
 export function getChatThreadById(userId: number, threadId: number): ChatThread | null {
   return (
-    safeWriteQuery((db) => {
+    safeReadQuery((db) => {
       if (!hasTable(db, "chat_threads")) return null;
       const row = db
         .prepare(
@@ -338,7 +338,7 @@ export function getOrCreateChatThread(userId: number): ChatThread | null {
 
 export function getChatThreadSummary(userId: number, threadId: number): ChatThreadSummary | null {
   return (
-    safeWriteQuery((db) => {
+    safeReadQuery((db) => {
       if (!hasTable(db, "chat_threads")) return null;
       const visibleM = visibleChatMessageClause("m");
       const previewM2 = visibleChatPreviewClause("m2");
@@ -379,7 +379,7 @@ export function getChatThreadSummary(userId: number, threadId: number): ChatThre
 
 export function getChatThreadMessages(userId: number, threadId: number): ChatMessage[] {
   return (
-    safeWriteQuery((db) => {
+    safeReadQuery((db) => {
       if (!hasTable(db, "chat_messages") || !hasTable(db, "chat_threads")) {
         return [] as ChatMessage[];
       }
@@ -430,7 +430,7 @@ export function getChatThreadConversation(
   threadId: number
 ): CoachConversationMessage[] {
   return (
-    safeWriteQuery((db) => {
+    safeReadQuery((db) => {
       if (!hasTable(db, "chat_messages") || !hasTable(db, "chat_threads")) {
         return [] as CoachConversationMessage[];
       }
@@ -648,7 +648,7 @@ export function getChatAttachmentForUser(
   userId: number,
   attachmentId: string,
 ): (ChatAttachment & { bytes: Buffer; sha256: string }) | null {
-  const db = openWrite();
+  const db = openRead();
   if (!db) return null;
   try {
     if (!hasTable(db, "chat_attachments")) return null;
