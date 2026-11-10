@@ -91,8 +91,33 @@ type MessageWithWorkLog = Pick<
   "id" | "role" | "content" | "work_log"
 >;
 
+/**
+ * Derive whether a stored row carries a `tool_use` block. Such rows must stay
+ * in model input even when their text duplicates a work-log note: the paired
+ * `tool_result` in the next row would otherwise be orphaned and Anthropic
+ * rejects the whole request.
+ */
+function storedBlocksContainToolUse(blocks: string | null): boolean {
+  if (!blocks) return false;
+  try {
+    const parsed: unknown = JSON.parse(blocks);
+    return (
+      Array.isArray(parsed) &&
+      parsed.some(
+        (block) =>
+          typeof block === "object" &&
+          block !== null &&
+          (block as { type?: unknown }).type === "tool_use",
+      )
+    );
+  } catch {
+    return false;
+  }
+}
+
 function withoutDuplicatedWorkNotes<T extends MessageWithWorkLog>(
   messages: T[],
+  carriesToolUse: (message: T) => boolean = () => false,
 ): T[] {
   const duplicateIds = new Set<number>();
   for (let finalIndex = 0; finalIndex < messages.length; finalIndex += 1) {
@@ -111,6 +136,7 @@ function withoutDuplicatedWorkNotes<T extends MessageWithWorkLog>(
       if (
         candidate.role === "assistant" &&
         candidate.work_log === null &&
+        !carriesToolUse(candidate) &&
         notes.has(candidate.content.trim())
       ) {
         duplicateIds.add(candidate.id);
@@ -439,6 +465,7 @@ export function getChatThreadConversation(
           ...row,
           work_log: parseCoachWorkLog(row.work_log),
         })),
+        (row) => storedBlocksContainToolUse(row.blocks),
       );
       const imageMap = new Map<number, CoachImage[]>();
       const unavailableImageMessages = new Set<number>();

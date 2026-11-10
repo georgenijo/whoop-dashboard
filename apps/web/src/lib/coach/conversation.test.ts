@@ -79,3 +79,86 @@ describe("provider-neutral image context", () => {
     expect(transcript).toContain("call view_chat_image");
   });
 });
+
+describe("Anthropic tool pairing guard", () => {
+  const emptyTurn: CoachUserTurn = {
+    displayText: "next",
+    modelText: "next",
+    images: [],
+  };
+
+  function textMessage(
+    role: "user" | "assistant",
+    text: string,
+  ): CoachConversationMessage {
+    return { role, contentBlocks: [{ type: "text", text }], images: [] };
+  }
+
+  function toolUseMessage(id: string): CoachConversationMessage {
+    return {
+      role: "assistant",
+      contentBlocks: [
+        { type: "text", text: "Checking." },
+        { type: "tool_use", id, name: "query_recovery", input: {} },
+      ],
+      images: [],
+    };
+  }
+
+  function toolResultMessage(id: string): CoachConversationMessage {
+    return {
+      role: "user",
+      contentBlocks: [{ type: "tool_result", tool_use_id: id, content: "[]" }],
+      images: [],
+    };
+  }
+
+  it("drops an orphaned tool_result with no preceding tool_use", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const history = [
+      textMessage("user", "hello"),
+      toolResultMessage("toolu_orphan"),
+    ];
+
+    const messages = buildAnthropicConversation(history, emptyTurn);
+
+    expect(messages.map((message) => message.role)).toEqual(["user", "user"]);
+    expect(JSON.stringify(messages)).not.toContain("toolu_orphan");
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("drops an orphaned tool_use with no matching tool_result", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const history = [
+      textMessage("user", "hello"),
+      toolUseMessage("toolu_orphan"),
+      textMessage("user", "after"),
+    ];
+
+    const messages = buildAnthropicConversation(history, emptyTurn);
+
+    expect(JSON.stringify(messages)).not.toContain("toolu_orphan");
+    expect(messages.map((message) => message.role)).toEqual([
+      "user",
+      "user",
+      "user",
+    ]);
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("keeps a matched tool_use and tool_result pair", () => {
+    const history = [
+      textMessage("user", "hello"),
+      toolUseMessage("toolu_ok"),
+      toolResultMessage("toolu_ok"),
+      textMessage("assistant", "done"),
+    ];
+
+    const messages = buildAnthropicConversation(history, emptyTurn);
+
+    expect(messages).toHaveLength(5);
+    expect(JSON.stringify(messages)).toContain("toolu_ok");
+  });
+});

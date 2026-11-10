@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import Database from "better-sqlite3";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildAnthropicConversation } from "@/lib/coach/conversation";
 
 vi.mock("server-only", () => ({}));
 
@@ -439,6 +440,59 @@ describe("chat message work logs", () => {
         .prepare("SELECT COUNT(*) AS count FROM chat_messages WHERE thread_id = ?")
         .get(threadId),
     ).toEqual({ count: 8 });
+  });
+
+  it("keeps a narration row that carries tool_use so its tool_result stays paired", () => {
+    const threadId = insertThread(1);
+    const note = "Pulling your recovery now.";
+    insertMessage(threadId, "user", "How is my recovery?", [
+      { type: "text", text: "How is my recovery?" },
+    ]);
+    insertMessage(threadId, "assistant", note, [
+      { type: "text", text: note },
+      { type: "tool_use", id: "tool-1", name: "query_recovery", input: {} },
+    ]);
+    insertMessage(threadId, "user", "[tool_result]", [
+      { type: "tool_result", tool_use_id: "tool-1", content: "[]" },
+    ]);
+    coach.addChatMessages(threadId, [
+      {
+        role: "assistant",
+        content: "Recovery is 81%.",
+        blocks: [{ type: "text", text: "Recovery is 81%." }],
+        work_log: { ...workLog, notes: [note] },
+      },
+    ]);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const history = coach.getChatThreadConversation(1, threadId);
+    expect(history).toHaveLength(4);
+    expect(history[1].contentBlocks).toEqual([
+      { type: "text", text: note },
+      { type: "tool_use", id: "tool-1", name: "query_recovery", input: {} },
+    ]);
+
+    const messages = buildAnthropicConversation(history, {
+      displayText: "And sleep?",
+      modelText: "And sleep?",
+      images: [],
+    });
+
+    expect(messages.map((message) => message.role)).toEqual([
+      "user",
+      "assistant",
+      "user",
+      "assistant",
+      "user",
+    ]);
+    expect(JSON.stringify(messages[1].content)).toContain("tool-1");
+    expect(JSON.stringify(messages[2].content)).toContain("tool-1");
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+
+    expect(
+      coach.getChatThreadMessages(1, threadId).map((message) => message.content),
+    ).toEqual(["How is my recovery?", "Recovery is 81%."]);
   });
 
   it("does not hide matching text from an earlier user turn", () => {

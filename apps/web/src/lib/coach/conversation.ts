@@ -35,6 +35,80 @@ function normalizedBlocks(blocks: unknown[]): ContentBlockParam[] {
   );
 }
 
+function toolUseIds(content: MessageParam["content"]): Set<string> {
+  const ids = new Set<string>();
+  if (!Array.isArray(content)) return ids;
+  for (const block of content) {
+    if (typeof block === "object" && block !== null && block.type === "tool_use") {
+      ids.add(block.id);
+    }
+  }
+  return ids;
+}
+
+function toolResultIds(content: MessageParam["content"]): Set<string> {
+  const ids = new Set<string>();
+  if (!Array.isArray(content)) return ids;
+  for (const block of content) {
+    if (typeof block === "object" && block !== null && block.type === "tool_result") {
+      ids.add(block.tool_use_id);
+    }
+  }
+  return ids;
+}
+
+function sameIds(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {
+  if (a.size !== b.size) return false;
+  for (const id of a) {
+    if (!b.has(id)) return false;
+  }
+  return true;
+}
+
+/**
+ * Anthropic rejects a `tool_result` that has no matching `tool_use` in the
+ * immediately preceding assistant message (and an unfulfilled `tool_use`).
+ * Threads can contain such rows — e.g. history truncated by the row cap, or
+ * the old work-log de-dup dropping a narration row that carried the tool_use.
+ * Drop both sides of a broken pair instead of sending an invalid request.
+ */
+function dropBrokenToolPairs(messages: MessageParam[]): MessageParam[] {
+  const keep = messages.map(() => true);
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = messages[index];
+    if (message.role === "assistant") {
+      const uses = toolUseIds(message.content);
+      if (uses.size === 0) continue;
+      const next = messages[index + 1];
+      const results =
+        next?.role === "user" ? toolResultIds(next.content) : new Set<string>();
+      if (sameIds(uses, results)) continue;
+      keep[index] = false;
+      if (next?.role === "user" && results.size > 0) keep[index + 1] = false;
+      console.warn("[coach] dropping assistant tool_use without matching tool_result", {
+        tool_use_ids: [...uses],
+        tool_result_ids: [...results],
+      });
+      continue;
+    }
+    const results = toolResultIds(message.content);
+    if (results.size === 0) continue;
+    const previous = messages[index - 1];
+    const uses =
+      previous?.role === "assistant"
+        ? toolUseIds(previous.content)
+        : new Set<string>();
+    if (sameIds(uses, results)) continue;
+    keep[index] = false;
+    if (previous?.role === "assistant" && uses.size > 0) keep[index - 1] = false;
+    console.warn("[coach] dropping user tool_result without matching tool_use", {
+      tool_use_ids: [...uses],
+      tool_result_ids: [...results],
+    });
+  }
+  return messages.filter((_, index) => keep[index]);
+}
+
 export type ActiveImageContext = {
   images: CoachImage[];
   activeIds: ReadonlySet<string>;
@@ -97,7 +171,7 @@ export function buildAnthropicConversation(
       textBlock(turn.modelText),
     ],
   });
-  return messages;
+  return dropBrokenToolPairs(messages);
 }
 
 function blockText(blocks: unknown[]): string {
