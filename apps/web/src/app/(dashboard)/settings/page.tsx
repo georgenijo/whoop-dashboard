@@ -164,6 +164,9 @@ export default function SettingsPage() {
   const [localValues, setLocalValues] = useState<Record<string, boolean>>({});
   const [systemPrompt, setSystemPrompt] = useState("");
   const [savedSystemPrompt, setSavedSystemPrompt] = useState("");
+  // Mirrors savedSystemPrompt so loadSettings (a stable callback) can tell
+  // whether the draft was edited since the last baseline without a stale closure.
+  const savedSystemPromptRef = useRef("");
   const [saving, setSaving] = useState(false);
   const [backgroundFailure, setBackgroundFailure] = useState<string | null>(null);
   const [promptError, setPromptError] = useState<string | null>(null);
@@ -299,7 +302,15 @@ export default function SettingsPage() {
       if (data === null || typeof data !== "object" || typeof data.model_pref !== "string") {
         throw new Error("malformed settings payload");
       }
-      setSystemPrompt(data.system_prompt);
+      // Never clobber an edited draft (e.g. typed while the first load had
+      // failed, then Retry): adopt the server text only when the draft still
+      // equals the previous baseline. The baseline itself always refreshes, so
+      // a kept draft correctly stays "Unsaved changes" against the new one.
+      const previousBaseline = savedSystemPromptRef.current;
+      setSystemPrompt((draft) =>
+        draft === previousBaseline ? data.system_prompt : draft,
+      );
+      savedSystemPromptRef.current = data.system_prompt;
       setSavedSystemPrompt(data.system_prompt);
       setModelPref(data.model_pref);
       setModelPrefLoaded(true);
@@ -644,6 +655,7 @@ export default function SettingsPage() {
       }
       const data = (await response.json()) as { system_prompt: string };
       setSystemPrompt(data.system_prompt);
+      savedSystemPromptRef.current = data.system_prompt;
       setSavedSystemPrompt(data.system_prompt);
     } catch (error) {
       setPromptError(
