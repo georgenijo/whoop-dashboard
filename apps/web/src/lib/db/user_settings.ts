@@ -21,7 +21,7 @@ import {
   type CursorModelParamsByModel,
 } from "@/lib/coach/cursor-model-params";
 import { MAX_SYSTEM_PROMPT_LENGTH } from "@/lib/coach/prompts";
-import { hasTable, openWrite, type DB } from "./connection";
+import { hasTable, openRead, openWrite, type DB } from "./connection";
 
 export type UserSettings = {
   user_id: number;
@@ -143,7 +143,7 @@ type UserSettingsRowRaw = {
  * independently valid keys still surface. Errors are logged server-side.
  */
 export function getUserSettings(user_id: number): UserSettings | null {
-  const db = openWrite();
+  const db = openRead();
   if (!db) return null;
   try {
     if (!hasTable(db, "user_settings")) return null;
