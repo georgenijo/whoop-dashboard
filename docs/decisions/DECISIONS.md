@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-11-10: Scope Whoop disconnect to the authenticated user's integration
+
+**Decision:** A Whoop disconnect request may revoke credentials and delete the integration only for the authenticated user. Remove the additional delete for user 1; retain the response's `legacy_removed` field as `false` for client compatibility. Do not add automatic legacy cleanup without evidence that it is still needed; any future cleanup must be a one-time `app_settings`-guarded migration that requires user 1 to have neither sessions nor an Apple identity.
+
+**Rationale:** The 2026-05-11 migration entry identifies user 1 as the historical bootstrap placeholder and records moving its domain data to user 2; `migrate-uid1-to-uid2.ts` moves domain rows, not identities or integrations. The 2026-05-12 entry retires bootstrap authentication, but `upsertUserByAppleSub` can still bind an Apple identity to user 1 and `requireAuth` accepts its valid sessions. Historical placeholder status cannot authorize another user to delete its credentials. The remaining `connection.ts` NULL-to-1 domain backfills still assume legacy ownership and can misattribute rows whose true owner differs; reviewing or repairing those migrations is separate from disconnect authorization.
+
+**Status:** active
+
+**References:** #595, `apps/web/src/app/api/auth/whoop/disconnect/route.ts`, `apps/web/src/app/api/auth/whoop/disconnect/route.test.ts`, `apps/web/scripts/migrate-uid1-to-uid2.ts`, `apps/web/src/lib/db/connection.ts`, `apps/web/src/lib/db/auth.ts`, Decisions Log entries 2026-05-11 and 2026-05-12
+
+---
+
 ## 2026-11-04: Keep Coach provider choices explicit when credentials disappear
 
 **Decision:** Preserve the selected provider and model when a provider key is removed or becomes unavailable. Gate unavailable models in the web picker and Settings, and reject a turn with missing credentials instead of silently switching providers. Discover Anthropic models and reasoning capabilities using the same personal-key-first resolution as chat execution.

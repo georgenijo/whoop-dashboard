@@ -9,24 +9,18 @@ export const dynamic = "force-dynamic";
 
 const WHOOP_PROVIDER = "whoop";
 const WHOOP_REVOKE_URL = "https://api.prod.whoop.com/oauth/oauth2/revoke";
-// Legacy maintainer/bootstrap user id. Pre-Phase-D + pre-SIWA installs landed
-// tokens here regardless of which Apple sub signed in (#313 root cause). On
-// disconnect we wipe both the signed-in user's row AND this one so a stale
-// row from the legacy world can't keep syncing in the background.
-const LEGACY_DEFAULT_USER_ID = 1;
 
 /**
- * POST /api/auth/whoop/disconnect — full Whoop credential nuke.
+ * POST /api/auth/whoop/disconnect — disconnect the signed-in user's Whoop.
  *
- * Three-step disconnect (issues #313 + #330):
+ * Two-step disconnect (issues #313, #330 + #595):
  *   1. Best-effort revoke the stored refresh_token at Whoop. Failure is
  *      logged but never blocks the local cleanup — Whoop revocation matters
  *      for "stop a leaked token from refreshing", not for the user's
  *      perceived state.
  *   2. Delete the integrations row for the signed-in user.
- *   3. Delete any stale row at user_id=1 (the legacy bootstrap id) for
- *      hygiene — pre-SIWA installs may have written tokens there even when
- *      the active session is user_id=2.
+ *      Other users' rows, including the historical bootstrap id 1, are
+ *      outside this request's authorization boundary.
  *
  * Idempotent: second call returns the same shape with `removed: false`. The
  * tokens.json file fallback was removed in #330, so the integrations row IS
@@ -51,10 +45,8 @@ export async function POST(req: Request) {
     log.error({ user_id: auth.user.id, err: revokeError }, "revoke error");
   }
 
-  // Step 2 + 3: delete integrations row for signed-in user AND the legacy
-  // user_id=1 row (if it's not the same user already).
+  // Step 2: delete only the signed-in user's Whoop integration.
   let dbRemoved = false;
-  let legacyRemoved = false;
   try {
     dbRemoved = deleteIntegration(auth.user.id, WHOOP_PROVIDER) > 0;
   } catch (err) {
@@ -63,31 +55,18 @@ export async function POST(req: Request) {
       "integrations delete failed",
     );
   }
-  if (auth.user.id !== LEGACY_DEFAULT_USER_ID) {
-    try {
-      legacyRemoved =
-        deleteIntegration(LEGACY_DEFAULT_USER_ID, WHOOP_PROVIDER) > 0;
-    } catch (err) {
-      log.error(
-        {
-          user_id: auth.user.id,
-          err: err instanceof Error ? err.message : String(err),
-        },
-        "legacy integrations delete failed",
-      );
-    }
-  }
 
   log.info(
-    { user_id: auth.user.id, dbRemoved, legacyRemoved, revoked, revokeError },
+    { user_id: auth.user.id, dbRemoved, revoked, revokeError },
     "disconnect complete",
   );
 
   return NextResponse.json({
     ok: true,
-    removed: dbRemoved || legacyRemoved,
+    removed: dbRemoved,
     db_removed: dbRemoved,
-    legacy_removed: legacyRemoved,
+    // Retain the field for existing clients; cross-user cleanup is forbidden.
+    legacy_removed: false,
     revoked,
     revoke_error: revokeError,
   });
