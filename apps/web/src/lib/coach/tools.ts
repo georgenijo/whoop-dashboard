@@ -243,7 +243,7 @@ export const TOOLS: ToolSchema[] = [
   {
     name: "query_steps",
     description:
-      "Query steps from WHOOP (default) or Apple Health. WHOOP queries refresh native cycle step counts from the API, with a bounded timeout, and return {rows, _meta} including source, refresh status and time basis. WHOOP rows include cycle boundaries and is_partial; dates label cycles, not midnight-to-midnight totals. Never mix sources or treat missing rows as zero. Use at most 366 days per call.",
+      "Query steps from WHOOP (default) or Apple Health. WHOOP queries read saved cycle step counts and refresh them from the API only when the range includes today and the saved data is more than 15 minutes old (refresh capped at 3 s). Return {rows, _meta} including source, refresh status, steps_stale and time basis. WHOOP rows include cycle boundaries and is_partial; dates label cycles, not midnight-to-midnight totals. Never mix sources or treat missing rows as zero. Use at most 366 days per call.",
     input_schema: {
       ...DATE_RANGE_SCHEMA,
       properties: {
@@ -272,7 +272,7 @@ export const TOOLS: ToolSchema[] = [
   {
     name: "query_daily_snapshot",
     description:
-      "Bundled fetch of recovery + sleep + strain + workouts + steps for a date range, in one tool call. Returns the same row shapes as the individual query_* tools under the keys recovery, sleep, strain, workouts (workouts is { rows, _meta } matching query_workouts; steps is { rows, _meta } matching query_steps with a bounded native WHOOP refresh), and steps. Naps and journal are NOT included — use query_naps / query_journal directly when those are the question. Use this for broad 'how am I doing' / daily-status questions to avoid multiple round-trips; use the single-domain tools when the user asks about exactly one area.",
+      "Bundled fetch of recovery + sleep + strain + workouts + steps for a date range, in one tool call. Returns the same row shapes as the individual query_* tools under the keys recovery, sleep, strain, workouts (workouts is { rows, _meta } matching query_workouts; steps is { rows, _meta } matching query_steps with the same conditional native WHOOP refresh), and steps. Naps and journal are NOT included — use query_naps / query_journal directly when those are the question. Use this for broad 'how am I doing' / daily-status questions to avoid multiple round-trips; use the single-domain tools when the user asks about exactly one area.",
     input_schema: DATE_RANGE_SCHEMA,
     strict: true,
     cache_control: { type: "ephemeral", ttl: "1h" },

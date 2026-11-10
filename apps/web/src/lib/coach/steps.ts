@@ -1,14 +1,136 @@
 import "server-only";
-import { getStepsRange } from "@/lib/db/steps";
+import { getStepsRange, type StepsRow } from "@/lib/db/steps";
 import { getUserSettings } from "@/lib/db/user_settings";
 import { whoopGet, WhoopAuthError } from "@/lib/whoop/client";
 import { upsertCyclesAndRecompute, type WhoopCycleRecord } from "@/lib/whoop/upsert";
 
 const DAY_MS = 86_400_000;
 const MAX_PAGES = 16;
+/** Reuse saved steps for this long before asking WHOOP again. */
+const STEPS_FRESH_MS = 15 * 60_000;
+/** Interactive tool calls must not wait longer than this on WHOOP. */
+const REFRESH_TIMEOUT_MS = 3_000;
+
+function localToday(tz: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
+  } catch {
+    // A corrupt tz must not break the tool; fall back to UTC.
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "UTC" }).format(new Date());
+  }
+}
+
+function latestStoredAt(rows: StepsRow[], date: string): number | null {
+  let latest: number | null = null;
+  for (const row of rows) {
+    if (row.date !== date) continue;
+    const stored = row.fetched_at ?? row.updated_at;
+    const ts = Date.parse(stored);
+    if (Number.isFinite(ts) && (latest === null || ts > latest)) latest = ts;
+  }
+  return latest;
+}
+
+function isTodayStepsFresh(rows: StepsRow[], today: string, now: number): boolean {
+  const latest = latestStoredAt(rows, today);
+  return latest !== null && now - latest <= STEPS_FRESH_MS;
+}
+
+function isTimeoutError(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { name?: unknown }).name === "TimeoutError"
+  );
+}
+
+/** Bound the whole refresh, including token acquisition, not just the cycle
+ * fetch. Uses setTimeout so the deadline is observable in tests. */
+function createRefreshDeadline(external: AbortSignal | undefined): {
+  signal: AbortSignal;
+  cleanup: () => void;
+} {
+  const controller = new AbortController();
+  if (external?.aborted) {
+    controller.abort(external.reason);
+    return { signal: controller.signal, cleanup: () => {} };
+  }
+  const onExternalAbort = () => {
+    controller.abort(external?.reason ?? new DOMException("Aborted", "AbortError"));
+  };
+  external?.addEventListener("abort", onExternalAbort, { once: true });
+  const timer = setTimeout(() => {
+    controller.abort(
+      new DOMException("The operation was aborted due to timeout", "TimeoutError"),
+    );
+  }, REFRESH_TIMEOUT_MS);
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      clearTimeout(timer);
+      external?.removeEventListener("abort", onExternalAbort);
+    },
+  };
+}
+
+function raceAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  // The losing promise may reject after the race settles (for example when a
+  // slow token renewal finishes after the deadline). Mark it handled so that
+  // late rejection never surfaces as an unhandled rejection.
+  void promise.catch(() => {});
+  if (signal.aborted) {
+    return Promise.reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (err) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(err);
+      },
+    );
+  });
+}
+
+async function fetchWhoopStepRecords(
+  userId: number,
+  startDate: string,
+  endDate: string,
+  signal: AbortSignal,
+): Promise<WhoopCycleRecord[]> {
+  // Cycle labels use local creation/wake day; starts can precede that
+  // day. A three-day pad includes overnight and unusually long cycles.
+  const start = new Date(Date.parse(startDate) - 3 * DAY_MS).toISOString();
+  const end = new Date(Date.parse(endDate) + 2 * DAY_MS).toISOString();
+  let nextToken: string | null = null;
+  const records: WhoopCycleRecord[] = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const params = new URLSearchParams({ start, end, limit: "25" });
+    if (nextToken) params.set("nextToken", nextToken);
+    const result: { records?: WhoopCycleRecord[]; next_token?: string | null } = await whoopGet(
+      `/v2/cycle?${params}`, { userId, signal },
+    );
+    if (!Array.isArray(result.records)) throw new Error("Missing cycle records in WHOOP response.");
+    records.push(...result.records);
+    nextToken = result.next_token ?? null;
+    if (!nextToken) break;
+  }
+  if (nextToken) throw new Error("Step history exceeded the bounded fetch.");
+  signal.throwIfAborted();
+  return records;
+}
 
 /** Native steps are refreshed independently of the full-sync cooldown. A
- * successful recovery webhook says nothing about today's running step total. */
+ * successful recovery webhook says nothing about today's running step total.
+ * Historical and recently fetched ranges are served from SQLite so a Coach
+ * tool call never blocks on the WHOOP API unnecessarily. */
 export async function querySteps(
   userId: number,
   startDate: string,
@@ -18,48 +140,58 @@ export async function querySteps(
 ) {
   let refresh: "updated" | "failed" | "not_requested" = "not_requested";
   let error: string | null = null;
+  let stepsStale = false;
+
+  // Preserve caller cancellation before touching either the database or the
+  // network. The refresh path below also rethrows when the caller aborts
+  // mid-request.
+  if (source === "whoop" && signal?.aborted) {
+    throw signal.reason ?? new DOMException("Aborted", "AbortError");
+  }
+
+  let rows = getStepsRange(userId, startDate, endDate, source);
+
   if (source === "whoop") {
-    try {
-      const requestSignal = signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
-        : AbortSignal.timeout(30_000);
-      // Cycle labels use local creation/wake day; starts can precede that
-      // day. A three-day pad includes overnight and unusually long cycles.
-      const start = new Date(Date.parse(startDate) - 3 * DAY_MS).toISOString();
-      const end = new Date(Date.parse(endDate) + 2 * DAY_MS).toISOString();
-      let nextToken: string | null = null;
-      const records: WhoopCycleRecord[] = [];
-      for (let page = 0; page < MAX_PAGES; page++) {
-        const params = new URLSearchParams({ start, end, limit: "25" });
-        if (nextToken) params.set("nextToken", nextToken);
-        const result: { records?: WhoopCycleRecord[]; next_token?: string | null } = await whoopGet(
-          `/v2/cycle?${params}`, { userId, signal: requestSignal },
+    const tz = getUserSettings(userId)?.tz ?? "UTC";
+    const today = localToday(tz);
+    const includesToday = startDate <= today && endDate >= today;
+    if (includesToday && !isTodayStepsFresh(rows, today, Date.now())) {
+      const deadline = createRefreshDeadline(signal);
+      try {
+        const records = await raceAbort(
+          fetchWhoopStepRecords(userId, startDate, endDate, deadline.signal),
+          deadline.signal,
         );
-        if (!Array.isArray(result.records)) throw new Error("Missing cycle records in WHOOP response.");
-        records.push(...result.records);
-        nextToken = result.next_token ?? null;
-        if (!nextToken) break;
+        // Do not write if the deadline or caller cancelled between the fetch
+        // resolving and the commit.
+        deadline.signal.throwIfAborted();
+        upsertCyclesAndRecompute(records, userId, tz);
+        refresh = "updated";
+        rows = getStepsRange(userId, startDate, endDate, source);
+      } catch (err) {
+        if (signal?.aborted) throw err;
+        refresh = "failed";
+        stepsStale = true;
+        const timedOut = isTimeoutError(err) || (deadline.signal.aborted && !signal?.aborted);
+        // Do not relay upstream response bodies or credentials into model context.
+        error = timedOut
+          ? "WHOOP step refresh timed out. Returned saved data, which may be stale."
+          : err instanceof WhoopAuthError
+            ? "Reconnect Whoop in Settings to refresh native steps."
+            : "Could not refresh Whoop steps. Returned rows are saved data; freshness is uncertain. Try a shorter range or retry later.";
+      } finally {
+        deadline.cleanup();
       }
-      if (nextToken) throw new Error("Step history exceeded the bounded fetch.");
-      requestSignal.throwIfAborted();
-      upsertCyclesAndRecompute(records, userId, getUserSettings(userId)?.tz ?? "UTC");
-      refresh = "updated";
-    } catch (err) {
-      if (signal?.aborted) throw err;
-      refresh = "failed";
-      // Do not relay upstream response bodies or credentials into model context.
-      error = err instanceof WhoopAuthError
-        ? "Reconnect Whoop in Settings to refresh native steps."
-        : "Could not refresh Whoop steps. Returned rows are saved data; freshness is uncertain. Try a shorter range or retry later.";
     }
   }
-  const rows = getStepsRange(userId, startDate, endDate, source);
+
   return {
     rows,
     _meta: {
       source,
       refresh,
       error,
+      steps_stale: stepsStale,
       last_available_date: rows.at(-1)?.date ?? null,
       time_basis: source === "whoop" ? "physiological_cycle" : "calendar_day",
       note: source === "whoop"
