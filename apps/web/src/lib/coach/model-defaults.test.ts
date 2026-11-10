@@ -86,6 +86,18 @@ describe("resolveConfiguredModel", () => {
     expect(haiku.model).toBe("claude-haiku-5-5");
   });
 
+  it("normalizes legacy Anthropic model IDs to their family before falling back", () => {
+    // Legacy layout: claude-<major>-<minor>-<family>-<date>.
+    const legacyHaiku = resolveConfiguredModel(catalog, "claude-3-5-haiku-20241022");
+    expect(legacyHaiku.model).toBe("claude-haiku-5-5");
+    expect(legacyHaiku.option).toBe(catalog[2]);
+    const legacySonnet = resolveConfiguredModel(catalog, "claude-3-7-sonnet-20250219");
+    expect(legacySonnet.model).toBe("claude-sonnet-5-5");
+    // Legacy single-digit layout: claude-<major>-<family>-<date>.
+    expect(resolveConfiguredModel(catalog, "claude-3-haiku-20240307").model)
+      .toBe("claude-haiku-5-5");
+  });
+
   it("sends an unresolvable configured model unverified with no capabilities", () => {
     expect(resolveConfiguredModel(catalog, "composer-2.5-fast")).toEqual({
       model: "composer-2.5-fast",

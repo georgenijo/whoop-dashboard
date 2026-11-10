@@ -4,10 +4,9 @@
 // generation, so adopting a newer model family is a one-file change.
 //
 // Environment overrides let a deployment pin or swap an ID without a code
-// change. Client-safe by design (no "server-only" import): the settings page
-// derives its default model preference from `defaultChatModel()`, and in a
-// client bundle non-public env vars resolve to undefined, so the shipped
-// fallback applies there.
+// change. Client-safe by design (no "server-only" import); see the settings
+// page's initial model preference for why env-derived values must never
+// participate in that page's initial render.
 import type { AnthropicModelOption } from "./anthropic-model-options";
 
 export const FALLBACK_CHAT_MODEL = "claude-sonnet-5-5";
@@ -34,11 +33,19 @@ export function insightModel(): string {
   return configuredModel("COACH_INSIGHT_MODEL", FALLBACK_INSIGHT_MODEL);
 }
 
-// Family affinity for the same-family fallback: everything up to the trailing
-// version run. "claude-sonnet-5-5" -> "claude-sonnet",
-// "claude-haiku-3-7-20260101" -> "claude-haiku". IDs without a version suffix
-// are their own family.
+// Family affinity for the same-family fallback. Both Anthropic ID layouts
+// normalize to the same explicit family:
+//   modern:  claude-<family>-<version>[-<date>]       -> claude-<family>
+//   legacy:  claude-<major>[-<minor>]-<family>[-<date>] -> claude-<family>
+// so "claude-sonnet-5-5" and the legacy "claude-3-7-sonnet-20250219" both
+// resolve to "claude-sonnet" (and haiku likewise). IDs that fit neither
+// layout are their own family.
+const LEGACY_FAMILY_RE =
+  /^claude-(?:\d+-)?\d+-(haiku|opus|sonnet)(?:-[\d-]*)?$/;
+
 function modelFamily(id: string): string {
+  const legacy = id.match(LEGACY_FAMILY_RE);
+  if (legacy) return `claude-${legacy[1]}`;
   return id.match(/^(.+?)-\d[\d-]*$/)?.[1] ?? id;
 }
 

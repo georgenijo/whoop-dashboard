@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import styles from "./settings.module.css";
 import type { AnthropicModelOption } from "@/lib/coach/anthropic-model-options";
-import { defaultChatModel } from "@/lib/coach/model-defaults";
+import { FALLBACK_CHAT_MODEL } from "@/lib/coach/model-defaults";
 
 type LocalSetting = {
   key: string;
@@ -56,10 +56,13 @@ type ByokError =
   | { kind: "probe_failed" }
   | { kind: "request_failed"; message: string };
 
-// Issue #587 — one source of truth for the default chat model. Client bundles
-// resolve non-public env vars to undefined, so this always lands on the
-// shipped fallback here, which matches what the server sends such users.
-const ANTHROPIC_PREF = `anthropic:${defaultChatModel()}`;
+// Issue #587 — the initial selection must hydrate identically on the server
+// and in the browser. COACH_DEFAULT_MODEL is server-only, so it cannot take
+// part in this initial value; the shipped fallback constant is rendered on
+// both sides, and the effective server default (override included) is applied
+// right after mount from GET /api/settings, which resolves parseModelPref's
+// env-aware response server-side.
+const ANTHROPIC_PREF = `anthropic:${FALLBACK_CHAT_MODEL}`;
 
 const CONNECTOR_STATUS_COPY: Record<
   WhoopConnectorStatus,
