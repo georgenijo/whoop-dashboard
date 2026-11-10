@@ -29,12 +29,24 @@ describe("parseModelPref", () => {
   it("defaults null/undefined to the Anthropic default", () => {
     expect(parseModelPref(null)).toEqual({
       provider: "anthropic",
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-5-5",
     });
     expect(parseModelPref(undefined)).toEqual({
       provider: "anthropic",
-      model: "claude-sonnet-4-6",
+      model: "claude-sonnet-5-5",
     });
+  });
+
+  it("honors the COACH_DEFAULT_MODEL override for users with no saved pref", () => {
+    vi.stubEnv("COACH_DEFAULT_MODEL", "claude-opus-4-6");
+    try {
+      expect(parseModelPref(null)).toEqual({
+        provider: "anthropic",
+        model: "claude-opus-4-6",
+      });
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it("parses the known anthropic + cursor prefs", () => {
@@ -63,7 +75,7 @@ describe("parseModelPref", () => {
     expect(parseModelPref("anthropic:claude-opus-4-6")).toEqual({
       provider: "anthropic", model: "claude-opus-4-6",
     });
-    expect(parseModelPref("anthropic: model").model).toBe("claude-sonnet-4-6");
+    expect(parseModelPref("anthropic: model").model).toBe("claude-sonnet-5-5");
   });
 
   it("falls back malformed/legacy values to Anthropic", () => {

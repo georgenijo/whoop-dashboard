@@ -22,7 +22,8 @@ import type {
   CoachConversationMessage,
   CoachUserTurn,
 } from "./image-types";
-import { COACH_MODEL, buildSystemPrompt } from "./prompts";
+import { buildSystemPrompt } from "./prompts";
+import { defaultChatModel } from "./model-defaults";
 import { AnthropicModelCatalogError, AnthropicModelUnavailableError, listAnthropicModelsForKey } from "./anthropic-models";
 import { effectiveAnthropicEffort } from "./anthropic-model-options";
 import {
@@ -306,7 +307,7 @@ export async function runAnthropicSdk(
   apiKeyOrigin: ApiKeyOrigin,
   options: RunAnthropicOptions = {},
   accumulator?: ChatMessageInsert[],
-  model: string = COACH_MODEL,
+  model: string = defaultChatModel(),
 ): Promise<{ reply: string; iterations: number; messages: ChatMessageInsert[] }> {
   // Per-turn state shared across all `executeToolResult` calls in this turn.
   // Currently used to hard-cap `trigger_whoop_sync` at one attempt per turn.

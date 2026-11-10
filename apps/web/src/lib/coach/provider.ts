@@ -8,6 +8,7 @@ import "server-only";
 import { getUserSettings } from "@/lib/db";
 import type { CursorModelParameterSelection } from "./cursor-model-params";
 import { effectiveAnthropicEffort, type AnthropicModelOption } from "./anthropic-model-options";
+import { defaultChatModel } from "./model-defaults";
 import type { MessageCreateParamsBase } from "@anthropic-ai/sdk/resources/messages";
 
 export type CoachProvider = "anthropic" | "cursor";
@@ -20,18 +21,13 @@ export const COACH_EFFORTS = ["off", "low", "medium", "high", "xhigh", "max"] as
 export type CoachEffort = (typeof COACH_EFFORTS)[number];
 export type ActiveCoachEffort = Exclude<CoachEffort, "off">;
 
-// Default chat model — must match the Anthropic loop's model constant.
-export const DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-6";
+// Default chat model — owned by ./model-defaults, resolved at use time so
+// env overrides apply. The persisted pref inherits it via ANTHROPIC_PREF.
 export const CURSOR_COMPOSER_MODEL = "composer-2.5-fast";
 
-export const ANTHROPIC_PREF = `anthropic:${DEFAULT_ANTHROPIC_MODEL}`;
+export const ANTHROPIC_PREF = `anthropic:${defaultChatModel()}`;
 export const CURSOR_PREF = `cursor:${CURSOR_COMPOSER_MODEL}`;
 export const DEFAULT_COACH_EFFORT: CoachEffort = "high";
-
-const ANTHROPIC_DEFAULT: CoachModelSelection = {
-  provider: "anthropic",
-  model: DEFAULT_ANTHROPIC_MODEL,
-};
 
 /** Parse a stored model_pref into a provider+model, defaulting to Anthropic. */
 export function parseModelPref(
@@ -50,7 +46,7 @@ export function parseModelPref(
       return { provider, model };
     }
   }
-  return ANTHROPIC_DEFAULT;
+  return { provider: "anthropic", model: defaultChatModel() };
 }
 
 export function cursorModelFromPref(pref: string): string | null {

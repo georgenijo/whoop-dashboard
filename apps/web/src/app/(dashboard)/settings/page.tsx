@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import styles from "./settings.module.css";
 import type { AnthropicModelOption } from "@/lib/coach/anthropic-model-options";
+import { defaultChatModel } from "@/lib/coach/model-defaults";
 
 type LocalSetting = {
   key: string;
@@ -55,7 +56,10 @@ type ByokError =
   | { kind: "probe_failed" }
   | { kind: "request_failed"; message: string };
 
-const ANTHROPIC_PREF = "anthropic:claude-sonnet-4-6";
+// Issue #587 — one source of truth for the default chat model. Client bundles
+// resolve non-public env vars to undefined, so this always lands on the
+// shipped fallback here, which matches what the server sends such users.
+const ANTHROPIC_PREF = `anthropic:${defaultChatModel()}`;
 
 const CONNECTOR_STATUS_COPY: Record<
   WhoopConnectorStatus,

@@ -2,9 +2,6 @@ import "server-only";
 import type { TextBlockParam } from "@anthropic-ai/sdk/resources/messages";
 import { COACH_GOAL_LABELS, type CoachGoalId } from "./goals";
 
-export const COACH_MODEL = "claude-sonnet-4-6";
-export const TITLE_MODEL = "claude-haiku-4-5";
-
 export const IMAGE_ANALYSIS_PROMPT = `## Image analysis safety
 - Separate visible observations from interpretations.
 - For symptoms or injuries, give a short ranked list of possibilities with explicit uncertainty. Ask for relevant context such as duration, pain, fever, mechanism, progression, and associated symptoms.

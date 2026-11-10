@@ -52,7 +52,7 @@ Both web and iOS clients call the same `/api/*` routes on Next.js. Bearer-token 
 - The web app reads `shared/whoop_data.db` via `process.cwd() + relative path`; from `apps/web`, the relative path is `../../shared/whoop_data.db`. Production always sets `WHOOP_DB_PATH` to the persistent service-root database.
 - Production runs on Fleet node `opti` under user-level systemd. Use `scripts/deploy`; do not SSH to an IP or reintroduce the retired Oracle VM.
 - This is **Next.js 16** (custom version). APIs differ from public Next.js. Read `apps/web/AGENTS.md` and `apps/web/node_modules/next/dist/docs/` before relying on training-data Next.js knowledge.
-- AI calls use `claude-sonnet-4-6` with `thinking: { type: "adaptive" }`. Keep Coach model changes explicit and consistent across the tool-use loop.
+- AI calls source model IDs from `apps/web/src/lib/coach/model-defaults.ts` (chat `claude-sonnet-5-5`, titles + insights `claude-haiku-5-5`, env-overridable). The Coach tool-use loop keeps `thinking: { type: "adaptive" }` — keep Coach model changes explicit and single-sourced.
 - The Anthropic SDK is preferred over the Claude CLI for production code paths. CLI fallback exists in `apps/web/src/app/api/chat/route.ts` — consider it deprecated.
 
 ## Conventions

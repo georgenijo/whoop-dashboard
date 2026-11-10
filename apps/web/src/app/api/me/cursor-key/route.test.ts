@@ -144,7 +144,7 @@ describe("DELETE /api/me/cursor-key", () => {
       present: false,
       masked: null,
       fallback_available: false,
-      model_pref: "anthropic:claude-sonnet-4-6",
+      model_pref: "anthropic:claude-sonnet-5-5",
     });
     expect(upsertUserSettingsMock).toHaveBeenCalledWith({
       user_id: 1,

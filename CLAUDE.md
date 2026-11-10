@@ -66,7 +66,7 @@ tokens.json       Whoop OAuth tokens — legacy single-user file; integrations t
 - Next.js 16.2.4 — **NOT the Next.js you know.** Read `apps/web/node_modules/next/dist/docs/` before writing code. APIs and conventions diverge from training-data Next.js. `apps/web/AGENTS.md` reinforces this.
 - React 19 · TypeScript · Tailwind 4
 - Recharts 3.8 for charts
-- `@anthropic-ai/sdk` 0.91 for the Coach (Claude Sonnet 4.6, adaptive thinking, no `budget_tokens`)
+- `@anthropic-ai/sdk` 0.91 for the Coach. Default model IDs are single-sourced in `apps/web/src/lib/coach/model-defaults.ts` (issue #587): chat `claude-sonnet-5-5`, titles + insights `claude-haiku-5-5`, each overridable by env. Background title/insight calls resolve their configured ID against the account catalog and fall back to the newest same-family model; the Coach keeps adaptive thinking (no `budget_tokens`)
 - `better-sqlite3` 12 for synchronous DB access from Next.js
 - `marked` 18 + DOMPurify for assistant message rendering
 
@@ -97,7 +97,7 @@ Caps:
 
 Conversations are persisted in `chat_messages` keyed by `thread_id`. The model's `tool_use` and `tool_result` content blocks are stored as JSON in the `blocks` column so multi-turn conversations preserve full tool context across reloads. Synthetic `[tool_result]` rows are filtered from UI by `getChatMessages` and `getChatThreads` queries.
 
-Threads have auto-titles via Haiku 4.5 fired in `after()` (Next.js post-response hook), only on first turn of a blank-title thread. Persistence is buffered in memory and committed atomically via `addChatMessages` (uses `db.transaction(fn)`) — failed API calls leave the DB untouched.
+Threads have auto-titles via the configured title model fired in `after()` (Next.js post-response hook), only on first turn of a blank-title thread. Persistence is buffered in memory and committed atomically via `addChatMessages` (uses `db.transaction(fn)`) — failed API calls leave the DB untouched.
 
 ### DB layer (`apps/web/src/lib/db/`)
 
@@ -162,7 +162,7 @@ Adding a third-party script, font, image host, or `fetch` target means widening 
 - Required env: `WHOOP_CLIENT_ID`, `WHOOP_CLIENT_SECRET`, `ANTHROPIC_API_KEY`
 - Optional env: `WHOOP_REDIRECT_URI`, `WHOOP_DB_PATH`, `WHOOP_TOKENS_PATH`, `CYCLES_RECONCILE_LOOKBACK_DAYS` (default 30 — look-back for the per-sync orphaned-cycles reconcile in `sync.ts`; historical orphans are handled by the one-time `app_settings`-guarded backfill instead, so this rarely needs changing), `WHOOP_REFRESH_SECRET` (bearer secret for `POST /api/whoop/refresh`, the background refresh-only keepalive on a 30-min systemd timer, #273 — route fails closed with 404 when unset)
 - Optional push env (iOS only, all five required for push to work): `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, `APNS_PRIVATE_KEY`, `APNS_ENVIRONMENT`. Set `ENABLE_PUSH_DEBUG=1` to expose `/api/devices/test-push` in production.
-- Use Anthropic SDK, not raw HTTP. Default model: `claude-sonnet-4-6` for chat, `claude-haiku-4-5` for titles.
+- Use Anthropic SDK, not raw HTTP. Default chat model: `claude-sonnet-5-5`; titles and daily insights: `claude-haiku-5-5`. All three are owned by `apps/web/src/lib/coach/model-defaults.ts` with env overrides `COACH_DEFAULT_MODEL` / `COACH_TITLE_MODEL` / `COACH_INSIGHT_MODEL` (issue #587). Before a title or insight call the configured ID is checked against the account catalog (`resolveCatalogModel` in `apps/web/src/lib/coach/model-resolution.ts`) and falls back to the newest same-family catalog model with a once-per-process warning.
 
 ## Deploy
 

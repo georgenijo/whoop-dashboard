@@ -13,6 +13,24 @@ vi.mock("@anthropic-ai/sdk", () => ({
     constructor(options: unknown) { sdk.options(options); }
   },
 }));
+const catalog = vi.hoisted(() => ({ list: vi.fn() }));
+vi.mock("@/lib/coach/anthropic-models", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/coach/anthropic-models")>();
+  return { ...actual, listAnthropicModelsForKey: catalog.list };
+});
+
+// Issue #587 fixture: the Models API lists newest first. Contains the
+// configured chat default and the title/insight model defaults.
+const defaultCatalog = [
+  {
+    id: "claude-sonnet-5-5", display_name: "Claude Sonnet 5.5", thinking: "adaptive",
+    efforts: ["off", "low", "medium", "high"], max_tokens: 64000, output_effort: true,
+  },
+  {
+    id: "claude-haiku-5-5", display_name: "Claude Haiku 5.5", thinking: "enabled",
+    efforts: ["off", "low", "medium", "high"], max_tokens: 32000,
+  },
+];
 
 import { openWrite } from "./db/connection";
 import { getLatestInsight, saveInsight } from "./db/summary";
@@ -49,6 +67,8 @@ beforeEach(() => {
   vi.setSystemTime(new Date("2026-11-10T03:30:00Z"));
   sdk.create.mockReset();
   sdk.options.mockClear();
+  catalog.list.mockReset();
+  catalog.list.mockResolvedValue(defaultCatalog);
 });
 afterEach(() => {
   vi.restoreAllMocks();
@@ -206,7 +226,12 @@ describe("insight reliability", () => {
     expect(insightToday(2)).toBe("2026-11-09");
     sdk.create.mockResolvedValue({ content: [{ type: "text", text: "Today's insight" }] });
     await pageLoad();
-    expect(sdk.create.mock.calls[0][0].model).toBe("claude-sonnet-4-6");
+    expect(catalog.list).toHaveBeenCalledWith("fixture-key");
+    expect(sdk.create.mock.calls[0][0]).toMatchObject({
+      model: "claude-haiku-5-5",
+      thinking: { type: "enabled", budget_tokens: 2047 },
+      max_tokens: 2048,
+    });
     expect(getLatestInsight(2)?.date).toBe("2026-11-09");
     expect(getInsightStatus(2, true).isStale).toBe(false);
     vi.setSystemTime(new Date("2026-11-10T05:00:00Z"));
@@ -226,8 +251,10 @@ describe("insight reliability", () => {
     }));
     const lock = acquireInsightRegenerationLock(getInsightStatus(2, true), "key")!;
     const pending = regenerateInsight(2, "key", lock);
-    expect(timeout).toHaveBeenCalledWith(125_000);
     expect(getInsightStatus(2, true).isRegenerating).toBe(true);
+    // The catalog resolution now awaits before the create call is issued, so
+    // wait for the request (and its abort signal) to actually start.
+    await vi.waitFor(() => expect(timeout).toHaveBeenCalledWith(125_000));
     deadline.abort();
     await pending;
     expect(getInsightStatus(2, true)).toMatchObject({ isRegenerating: false, errorClass: "provider_error" });
@@ -241,6 +268,37 @@ describe("insight reliability", () => {
     await pageLoad();
     expect(getLatestInsight(2)?.insight).toBe("Cached insight");
     expect(getInsightStatus(2, true).errorClass).toBe("provider_error");
+  });
+
+  it("falls back to the newest same-family catalog model when the insight model is missing", async () => {
+    bootstrap();
+    catalog.list.mockResolvedValue([
+      {
+        id: "claude-haiku-4-5-20251001", display_name: "Claude Haiku 4.5", thinking: "enabled",
+        efforts: ["off", "low", "medium", "high"], max_tokens: 32000,
+      },
+    ]);
+    sdk.create.mockResolvedValue({ content: [{ type: "text", text: "Fallback advice" }] });
+    await pageLoad();
+    expect(sdk.create.mock.calls[0][0]).toMatchObject({
+      model: "claude-haiku-4-5-20251001",
+      thinking: { type: "enabled", budget_tokens: 2047 },
+    });
+    expect(getLatestInsight(2)?.insight).toBe("Fallback advice");
+    expect(getInsightStatus(2, true).errorClass).toBeNull();
+  });
+
+  it("sends the configured insight model unverified when the catalog probe fails", async () => {
+    bootstrap();
+    catalog.list.mockRejectedValue(new Error("catalog unreachable"));
+    sdk.create.mockResolvedValue({ content: [{ type: "text", text: "Direct advice" }] });
+    await pageLoad();
+    expect(sdk.create.mock.calls[0][0]).toMatchObject({
+      model: "claude-haiku-5-5",
+      max_tokens: 2048,
+    });
+    expect(sdk.create.mock.calls[0][0]).not.toHaveProperty("thinking");
+    expect(getLatestInsight(2)?.insight).toBe("Direct advice");
   });
 });
 
@@ -278,5 +336,30 @@ describe("title reliability", () => {
     vi.setSystemTime(Date.now() + 60_000);
     await titleChatThread(2, 3, "Training advice", "key");
     expect(sdk.create).toHaveBeenCalledTimes(2);
+  });
+
+  it("resolves the title model against the catalog and falls back within its family", async () => {
+    bootstrap();
+    sdk.create.mockResolvedValue({ content: [{ type: "text", text: "Sleep Plan" }] });
+    thread(1);
+    await titleChatThread(2, 1, "Help me sleep better", "key");
+    expect(sdk.create.mock.calls[0][0]).toMatchObject({
+      model: "claude-haiku-5-5",
+      max_tokens: 30,
+      thinking: { type: "disabled" },
+      system: "You title chat threads. Reply with a 3-6 word title only.",
+    });
+    catalog.list.mockResolvedValue([
+      {
+        id: "claude-haiku-4-5-20251001", display_name: "Claude Haiku 4.5", thinking: "enabled",
+        efforts: ["off", "low", "medium", "high"], max_tokens: 32000,
+      },
+    ]);
+    thread(2);
+    await titleChatThread(2, 2, "Help me sleep better", "key");
+    expect(sdk.create.mock.calls[1][0]).toMatchObject({
+      model: "claude-haiku-4-5-20251001",
+      thinking: { type: "disabled" },
+    });
   });
 });
