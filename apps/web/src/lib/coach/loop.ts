@@ -50,6 +50,9 @@ export type DetailState = {
   iterations: number;
   effort?: string;
   persistence_ms?: number;
+  // Time from provider-turn start to the first streamed assistant text. Set by
+  // both the Anthropic loop and the Cursor ACP turn so /logs can compare them.
+  first_text_ms?: number | null;
   cursor?: {
     transport?: "legacy" | "acp";
     acp?: {
@@ -57,6 +60,9 @@ export type DetailState = {
       agent_name: string | null;
       agent_version: string | null;
       session_id: string | null;
+      // True when `cursorAcpSessions.run` handed back a warm session; false
+      // when this turn cold-started one.
+      session_reused?: boolean | null;
       applied_parameters: Array<{ id: string; value: string }>;
       process: {
         exit_code: number | null;
@@ -124,6 +130,15 @@ export type DetailState = {
       spawn_to_early_exit_ms: number | null;
       cleanup_ms: number;
       turn_ms: number;
+      // ACP per-phase timings (issue #585). Optional so the legacy streaming
+      // transport, which measures spawn-relative spans instead, can omit them.
+      preload_ms?: number | null;
+      session_acquire_ms?: number | null;
+      prepare_turn_ms?: number | null;
+      apply_model_ms?: number | null;
+      first_text_ms?: number | null;
+      first_tool_ms?: number | null;
+      audit_drain_ms?: number | null;
     };
   };
 };
@@ -308,6 +323,7 @@ export async function runAnthropicSdk(
   accumulator?: ChatMessageInsert[],
   model: string = COACH_MODEL,
 ): Promise<{ reply: string; iterations: number; messages: ChatMessageInsert[] }> {
+  const turnStartedAt = Date.now();
   // Per-turn state shared across all `executeToolResult` calls in this turn.
   // Currently used to hard-cap `trigger_whoop_sync` at one attempt per turn.
   const turnState = newToolTurnState();
@@ -332,6 +348,7 @@ export async function runAnthropicSdk(
       ...callOptions,
       onTextDelta: (text) => {
         emittedText = true;
+        detailState.first_text_ms ??= Date.now() - turnStartedAt;
         callOptions.onTextDelta?.(text);
       },
     };

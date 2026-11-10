@@ -256,3 +256,57 @@ describe("runAnthropicSdk system prompt wiring (issue #498)", () => {
     expect(JSON.stringify(noRow)).toBe(JSON.stringify(blank));
   });
 });
+
+describe("runAnthropicSdk phase timing (issue #585)", () => {
+  it("records first_text_ms from the first streamed assistant text", async () => {
+    getUserSettingsMock.mockReturnValue(null);
+    const final = {
+      id: "msg_test",
+      type: "message",
+      role: "assistant",
+      model: "claude-sonnet-4-6",
+      content: [{ type: "text", text: "Recovery is 78%." }],
+      stop_reason: "end_turn",
+      stop_sequence: null,
+      usage: {
+        input_tokens: 10,
+        output_tokens: 5,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+      },
+    } as unknown as Message;
+    streamMock.mockReturnValue({
+      async *[Symbol.asyncIterator]() {
+        yield {
+          type: "content_block_delta",
+          index: 0,
+          delta: { type: "text_delta", text: "Recovery is 78%." },
+        };
+      },
+      finalMessage: async () => final,
+    });
+    const detailState: DetailState = { iterations: 0 };
+
+    await runAnthropicSdk(
+      1,
+      42,
+      { displayText: "How am I doing?", modelText: "How am I doing?", images: [] },
+      [],
+      [],
+      {
+        input_tokens_total: 0,
+        output_tokens_total: 0,
+        cache_creation_input_tokens_total: 0,
+        cache_read_input_tokens_total: 0,
+        calls: 0,
+      },
+      detailState,
+      "sk-test",
+      "env",
+      { onTextDelta: () => {} },
+    );
+
+    expect(typeof detailState.first_text_ms).toBe("number");
+    expect(detailState.first_text_ms).toBeGreaterThanOrEqual(0);
+  });
+});

@@ -493,6 +493,26 @@ export class CursorAcpRuntime {
     );
   }
 
+  // True when this session already has the requested model and every requested
+  // parameter. Used to skip redundant `session/set_config_option` round-trips
+  // on a warm session (issue #585).
+  sessionConfigMatches(
+    model: string,
+    parameters: CursorModelParameterSelection[],
+  ): boolean {
+    const modelOption = findCursorAcpModelOption(this.configOptions);
+    if (!modelOption || modelOption.type !== "select") return false;
+    if (modelOption.currentValue !== model) return false;
+    for (const selection of parameters) {
+      const option = findCursorAcpConfigOption(this.configOptions, selection);
+      if (!option) return false;
+      const requested = cursorAcpConfigValue(option, selection.value);
+      if (requested === null) return false;
+      if (String(option.currentValue) !== String(requested)) return false;
+    }
+    return true;
+  }
+
   async applyModel(
     model: string,
     parameters: CursorModelParameterSelection[],

@@ -118,6 +118,7 @@ export async function runAndPersistCoachTurn(
       effort: detailState.effort ?? null,
       timing: {
         persistence_ms: detailState.persistence_ms ?? null,
+        first_text_ms: detailState.first_text_ms ?? null,
       },
       ...(detailState.cursor ? { cursor: detailState.cursor } : {}),
     });

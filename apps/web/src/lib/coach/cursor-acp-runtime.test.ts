@@ -79,6 +79,35 @@ describe("CursorAcpRuntime", () => {
     });
   });
 
+  it("detects model and parameter drift against the live session", async () => {
+    const runtime = await start();
+
+    expect(
+      runtime.sessionConfigMatches("gpt-5.6-luna", [
+        { id: "reasoning", value: "low" },
+      ]),
+    ).toBe(true);
+    expect(
+      runtime.sessionConfigMatches("grok-4.6", [
+        { id: "reasoning", value: "low" },
+      ]),
+    ).toBe(false);
+    expect(
+      runtime.sessionConfigMatches("gpt-5.6-luna", [
+        { id: "reasoning", value: "high" },
+      ]),
+    ).toBe(false);
+
+    await runtime.applyModel("gpt-5.6-luna", [
+      { id: "reasoning", value: "high" },
+    ]);
+    expect(
+      runtime.sessionConfigMatches("gpt-5.6-luna", [
+        { id: "reasoning", value: "high" },
+      ]),
+    ).toBe(true);
+  });
+
   it("sends a real session cancellation and retires the now-divergent session", async () => {
     const runtime = await start("slow");
     await runtime.applyModel("gpt-5.6-luna", []);
