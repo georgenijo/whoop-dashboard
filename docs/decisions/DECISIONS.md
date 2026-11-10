@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-11-10: Whoop disconnect only touches the signed-in user
+
+**Decision:** A Whoop disconnect request deletes only the authenticated user's `integrations` row. The retired bootstrap id (`user_id = 1`) is no longer deleted as a side effect of another user's disconnect. Any legacy uid=1 credential cleanup is a one-shot, `app_settings`-guarded operation that runs only when that row has no Apple identity and no session, and it records the decision so it is never revisited.
+
+**Rationale:** uid=1 is the pre-SIWA bootstrap placeholder: `openWrite()` seeds it, Phase D assigned legacy domain rows to it, and `scripts/migrate-uid1-to-uid2.ts` moved those rows to the maintainer's SIWA id without moving the integration row. Treating every caller as authorized to delete uid=1 turned a routine disconnect into a cross-tenant write and would disconnect a real first user on any database where id=1 signed in. The guarded cleanup keeps the original hygiene goal — a stale placeholder cannot keep refreshing — while failing closed for any account that could actually be signed in.
+
+**Status:** active
+
+**References:** #595, `apps/web/src/app/api/auth/whoop/disconnect/route.ts`, `apps/web/src/lib/db/legacy-user-cleanup.ts`
+
+---
+
 ## 2026-11-04: Keep Coach provider choices explicit when credentials disappear
 
 **Decision:** Preserve the selected provider and model when a provider key is removed or becomes unavailable. Gate unavailable models in the web picker and Settings, and reject a turn with missing credentials instead of silently switching providers. Discover Anthropic models and reasoning capabilities using the same personal-key-first resolution as chat execution.
