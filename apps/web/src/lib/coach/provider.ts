@@ -26,7 +26,7 @@ export const CURSOR_COMPOSER_MODEL = "composer-2.5-fast";
 
 export const ANTHROPIC_PREF = `anthropic:${DEFAULT_ANTHROPIC_MODEL}`;
 export const CURSOR_PREF = `cursor:${CURSOR_COMPOSER_MODEL}`;
-export const DEFAULT_COACH_EFFORT: CoachEffort = "high";
+export const DEFAULT_COACH_EFFORT: CoachEffort = "medium";
 
 const ANTHROPIC_DEFAULT: CoachModelSelection = {
   provider: "anthropic",

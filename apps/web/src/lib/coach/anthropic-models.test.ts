@@ -42,16 +42,92 @@ describe("Anthropic model discovery", () => {
     expect(construct).toHaveBeenNthCalledWith(2, expect.objectContaining({ apiKey: "personal-b" }));
   });
 
-  it("expires cached catalogs", async () => {
+  it("keeps a catalog fresh for ten minutes", async () => {
     list.mockImplementation(() => (async function* () { yield model("claude-sonnet-4-6"); })());
     const now = vi.spyOn(Date, "now").mockReturnValue(1000);
     try {
       const { listAnthropicModelsForKey } = await import("./anthropic-models");
       await listAnthropicModelsForKey("key");
-      now.mockReturnValue(62000);
+      now.mockReturnValue(1000 + 10 * 60_000 - 1);
       await listAnthropicModelsForKey("key");
-      expect(list).toHaveBeenCalledTimes(2);
+      expect(list).toHaveBeenCalledTimes(1);
     } finally { now.mockRestore(); }
+  });
+
+  it("serves a stale catalog immediately and refreshes in the background", async () => {
+    list.mockImplementation(() => (async function* () { yield model("claude-sonnet-4-6"); })());
+    let now = 1000;
+    const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
+    let releaseRefresh!: () => void;
+    const refreshGate = new Promise<void>((resolve) => { releaseRefresh = resolve; });
+    try {
+      const { listAnthropicModelsForKey } = await import("./anthropic-models");
+      const first = await listAnthropicModelsForKey("key");
+      expect(first.map((entry) => entry.id)).toEqual(["claude-sonnet-4-6"]);
+
+      now = 1000 + 10 * 60_000 + 1;
+      list.mockImplementation(() => (async function* () {
+        await refreshGate;
+        yield model("claude-opus-4-6");
+      })());
+
+      const stale = await listAnthropicModelsForKey("key");
+      expect(stale.map((entry) => entry.id)).toEqual(["claude-sonnet-4-6"]);
+      expect(list).toHaveBeenCalledTimes(2);
+
+      releaseRefresh();
+      await vi.waitFor(async () => {
+        const fresh = await listAnthropicModelsForKey("key");
+        expect(fresh.map((entry) => entry.id)).toEqual(["claude-opus-4-6"]);
+      });
+      expect(list).toHaveBeenCalledTimes(2);
+    } finally { nowSpy.mockRestore(); }
+  });
+
+  it("shares one background refresh across concurrent stale turns", async () => {
+    list.mockImplementation(() => (async function* () { yield model("claude-sonnet-4-6"); })());
+    const now = vi.spyOn(Date, "now").mockReturnValue(1000);
+    let releaseRefresh!: () => void;
+    const refreshGate = new Promise<void>((resolve) => { releaseRefresh = resolve; });
+    try {
+      const { listAnthropicModelsForKey } = await import("./anthropic-models");
+      await listAnthropicModelsForKey("key");
+      now.mockReturnValue(1000 + 10 * 60_000 + 1);
+      list.mockImplementation(() => (async function* () {
+        await refreshGate;
+        yield model("claude-opus-4-6");
+      })());
+      await Promise.all([
+        listAnthropicModelsForKey("key"),
+        listAnthropicModelsForKey("key"),
+        listAnthropicModelsForKey("key"),
+      ]);
+      expect(list).toHaveBeenCalledTimes(2);
+      releaseRefresh();
+    } finally { now.mockRestore(); }
+  });
+
+  it("keeps the stale catalog when a background refresh fails", async () => {
+    list.mockImplementation(() => (async function* () { yield model("claude-sonnet-4-6"); })());
+    let now = 1000;
+    const nowSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
+    try {
+      const { listAnthropicModelsForKey } = await import("./anthropic-models");
+      await listAnthropicModelsForKey("key");
+
+      now = 1000 + 10 * 60_000 + 1;
+      list.mockImplementation(() => (async function* () {
+        throw new APIError(500, {}, "upstream down", new Headers());
+      })());
+
+      expect((await listAnthropicModelsForKey("key")).map((entry) => entry.id))
+        .toEqual(["claude-sonnet-4-6"]);
+      await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+      // Still serving the stale copy, and the next turn retries the probe.
+      expect((await listAnthropicModelsForKey("key")).map((entry) => entry.id))
+        .toEqual(["claude-sonnet-4-6"]);
+      await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(3));
+    } finally { nowSpy.mockRestore(); }
   });
 
   it("does not cache failures or expose upstream credential-bearing messages", async () => {
