@@ -445,6 +445,107 @@ describe("getPRStats equals the uncached computation", () => {
     expect(after.recoveryStreak?.count).toBe(2);
   });
 
+  describe("historical changes invalidate the cache (older edit, older backfill, delete, tenants)", () => {
+    const A = 10;
+    const B = 11;
+    const run = (fn: (db: Db) => void) => {
+      const db = new Database(dbFile);
+      try { fn(db); } finally { db.close(); }
+    };
+    const rec = (db: Db, uid: number, date: string, hrv: number, rhr = 55, score = 90) =>
+      db.prepare("INSERT INTO recovery (user_id, date, recovery_score, hrv, rhr) VALUES (?, ?, ?, ?, ?)").run(uid, date, score, hrv, rhr);
+
+    beforeAll(() => {
+      run((db) => {
+        for (const u of [A, B]) db.prepare("INSERT OR IGNORE INTO users (id) VALUES (?)").run(u);
+        for (const u of [A, B]) {
+          rec(db, u, "2025-03-01", 60);
+          rec(db, u, "2025-03-02", 40);
+          rec(db, u, "2025-03-03", 45); // newest row: its date/raw never changes below
+        }
+        db.prepare("INSERT INTO sleep (user_id, sleep_id, date, in_bed_ms, performance, nap) VALUES (?, ?, ?, 1, ?, 0)").run(A, "a-old", "2025-03-01", 50);
+      });
+    });
+
+    it("older-row edit: best HRV follows an edit of a day that is not the newest", () => {
+      expect(getPRStats(A).bestHRV).toEqual({ value: 60, date: "2025-03-01" });
+      expect(getPRStats(A)).toBe(getPRStats(A)); // cached while nothing changes
+      run((db) => db.prepare("UPDATE recovery SET hrv = 150 WHERE user_id = ? AND date = '2025-03-01'").run(A));
+      expect(getPRStats(A).bestHRV).toEqual({ value: 150, date: "2025-03-01" });
+      expect(getPRStats(A)).toEqual(refPRStats(A));
+    });
+
+    it("older backfill: a row inserted before every existing date is picked up", () => {
+      run((db) => rec(db, A, "2025-02-01", 200, 30));
+      const s = getPRStats(A);
+      expect(s.bestHRV).toEqual({ value: 200, date: "2025-02-01" });
+      expect(s.lowestRHR).toEqual({ value: 30, date: "2025-02-01" });
+      expect(s).toEqual(refPRStats(A));
+    });
+
+    it("older sleep edit: the sleep-performance streak follows a non-newest sleep row", () => {
+      expect(getPRStats(A).sleepPerfStreak).toBeNull();
+      run((db) => db.prepare("UPDATE sleep SET performance = 95 WHERE user_id = ? AND sleep_id = 'a-old'").run(A));
+      expect(getPRStats(A).sleepPerfStreak).toMatchObject({ count: 1, start_date: "2025-03-01" });
+      expect(getPRStats(A)).toEqual(refPRStats(A));
+    });
+
+    it("deletion: removing the best (older) day falls back to the next best", () => {
+      run((db) => db.prepare("DELETE FROM recovery WHERE user_id = ? AND date = '2025-02-01'").run(A));
+      expect(getPRStats(A).bestHRV).toEqual({ value: 150, date: "2025-03-01" });
+      run((db) => db.prepare("DELETE FROM recovery WHERE user_id = ? AND date = '2025-03-01'").run(A));
+      expect(getPRStats(A).bestHRV).toEqual({ value: 45, date: "2025-03-03" });
+      run((db) => db.prepare("DELETE FROM sleep WHERE user_id = ?").run(A));
+      expect(getPRStats(A).sleepPerfStreak).toBeNull();
+      expect(getPRStats(A)).toEqual(refPRStats(A));
+    });
+
+    it("INSERT OR REPLACE (how sync upserts) over an older day also invalidates", () => {
+      run((db) => db.prepare("INSERT OR REPLACE INTO recovery (user_id, date, recovery_score, hrv, rhr) VALUES (?, '2025-03-02', 90, 99, 55)").run(A));
+      expect(getPRStats(A).bestHRV).toEqual({ value: 99, date: "2025-03-02" });
+      expect(getPRStats(A)).toEqual(refPRStats(A));
+    });
+
+    it("tenant isolation: A's changes neither invalidate nor leak into B, and vice versa", () => {
+      const b1 = getPRStats(B);
+      expect(b1.bestHRV).toEqual({ value: 60, date: "2025-03-01" });
+      run((db) => db.prepare("UPDATE recovery SET hrv = 300 WHERE user_id = ? AND date = '2025-03-03'").run(A));
+      expect(getPRStats(A).bestHRV).toEqual({ value: 300, date: "2025-03-03" });
+      expect(getPRStats(B)).toBe(b1); // B untouched: still the cached object
+      expect(getPRStats(B).bestHRV).toEqual({ value: 60, date: "2025-03-01" });
+      run((db) => db.prepare("UPDATE recovery SET hrv = 500 WHERE user_id = ? AND date = '2025-03-02'").run(B));
+      expect(getPRStats(B).bestHRV).toEqual({ value: 500, date: "2025-03-02" });
+      expect(getPRStats(A).bestHRV).toEqual({ value: 300, date: "2025-03-03" });
+      expect(getPRStats(A)).toEqual(refPRStats(A));
+      expect(getPRStats(B)).toEqual(refPRStats(B));
+    });
+
+    it("does not cache at all when the change-tracking triggers are not known to exist", () => {
+      run((db) => db.prepare("DELETE FROM app_settings WHERE key = 'pr_stats_triggers'").run());
+      try {
+        const first = getPRStats(B);
+        expect(getPRStats(B)).not.toBe(first); // recomputed, never served stale
+        expect(getPRStats(B)).toEqual(refPRStats(B));
+      } finally {
+        run((db) => db.prepare("INSERT OR IGNORE INTO app_settings (key, value) VALUES ('pr_stats_triggers', '1')").run());
+      }
+    });
+
+    it("re-assigning a row to another tenant invalidates both", () => {
+      run((db) => rec(db, A, "2025-04-01", 700));
+      const a = getPRStats(A);
+      const b = getPRStats(B);
+      expect(a.bestHRV).toEqual({ value: 700, date: "2025-04-01" });
+      run((db) => db.prepare("UPDATE recovery SET user_id = ? WHERE user_id = ? AND date = '2025-04-01'").run(B, A));
+      expect(getPRStats(A)).not.toEqual(a);
+      expect(getPRStats(A)).toEqual(refPRStats(A));
+      expect(getPRStats(A).bestHRV).toEqual({ value: 300, date: "2025-03-03" });
+      expect(getPRStats(B)).not.toEqual(b);
+      expect(getPRStats(B).bestHRV).toEqual({ value: 700, date: "2025-04-01" });
+      expect(getPRStats(B)).toEqual(refPRStats(B));
+    });
+  });
+
   it("is keyed per tenant", () => {
     expect(getPRStats(U_SHORT)).toEqual(refPRStats(U_SHORT));
     expect(getPRStats(U_OTHER)).toEqual(refPRStats(U_OTHER));

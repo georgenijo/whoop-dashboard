@@ -50,17 +50,9 @@ function takeToken(userId: number): boolean {
   return true;
 }
 
-type Payload = {
-  source?: unknown;
-  metric?: unknown;
-  value?: unknown;
-  rating?: unknown;
-  path?: unknown;
-  navigation_type?: unknown;
-  app_version?: unknown;
-};
-
-type BatchPayload = { metrics: Payload[] };
+function isObject(x: unknown): x is Record<string, unknown> {
+  return typeof x === "object" && x !== null && !Array.isArray(x);
+}
 
 function isString(x: unknown): x is string {
   return typeof x === "string";
@@ -76,16 +68,27 @@ export async function POST(req: Request) {
   }
   const userId = auth.user.id;
 
-  let payload: Payload | BatchPayload;
+  let payload: unknown;
   try {
-    payload = (await req.json()) as Payload | BatchPayload;
+    payload = await req.json();
   } catch {
     return Response.json({ ok: false, error: "bad_json" }, { status: 400 });
   }
 
+  // The body must be a JSON object. `null`, numbers, strings and arrays are
+  // valid JSON but not a metric or a batch, and `"metrics" in null` would throw.
+  if (!isObject(payload)) {
+    return Response.json({ ok: false, error: "bad_payload" }, { status: 400 });
+  }
+
   // Older clients post one metric. New clients send the whole page-load batch.
-  const metrics = "metrics" in payload ? payload.metrics : [payload];
-  if (!Array.isArray(metrics) || metrics.length === 0 || metrics.length > 10) {
+  const metrics: unknown = "metrics" in payload ? payload.metrics : [payload];
+  if (
+    !Array.isArray(metrics) ||
+    metrics.length === 0 ||
+    metrics.length > 10 ||
+    !metrics.every(isObject)
+  ) {
     return Response.json({ ok: false, error: "bad_batch" }, { status: 400 });
   }
   if (!takeToken(userId)) {

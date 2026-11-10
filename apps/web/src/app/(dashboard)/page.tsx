@@ -80,7 +80,7 @@ export default async function OverviewPage({
     data.latestRecovery !== null || data.latestCycle !== null || data.latestSleep !== null;
   return (
     <>
-      <TzBackfill />
+      <TzBackfill userId={user.id} />
       {!whoopStatus.exists ? (
         <SetupCard />
       ) : whoopStatus.needs_reauth ? (
