@@ -9,6 +9,9 @@ import {
 import { getInsightToday as insightToday, saveInsight } from "@/lib/db/summary";
 import { getGenerationFailure, type GenerationErrorClass } from "@/lib/db/ai-generation";
 import { isSettingLockActive, releaseSettingLock, type SettingLock } from "@/lib/db/settings";
+import { resolveCatalogModel } from "@/lib/coach/model-resolution";
+import { insightModel } from "@/lib/coach/model-defaults";
+import { DEFAULT_COACH_EFFORT, anthropicReasoningConfig } from "@/lib/coach/provider";
 import {
   acquireGenerationLock,
   classifyGenerationError,
@@ -20,7 +23,7 @@ import {
   retryAt,
 } from "@/lib/ai-generation";
 
-const INSIGHT_MODEL = "claude-sonnet-4-6";
+const INSIGHT_MAX_TOKENS = 2048;
 const INSIGHT_DAYS = 30;
 
 const SYSTEM_PROMPT = `You are a personal health and performance analyst reviewing Whoop biometric data.
@@ -110,10 +113,14 @@ export async function regenerateInsight(
     const date = insightToday(userId);
     const context = getHealthContext(userId, INSIGHT_DAYS);
     const client = new Anthropic({ apiKey, ...GENERATION_CLIENT_OPTIONS });
+    // Issue #587 — resolve the configured insight model against the account
+    // catalog (same-family fallback) and build the request's thinking/effort
+    // fields through anthropicReasoningConfig so they are only sent to models
+    // that accept them. Insight generation keeps the coach's default effort.
+    const { model, option } = await resolveCatalogModel(apiKey, insightModel());
     const response = await client.messages.create({
-      model: INSIGHT_MODEL,
-      thinking: { type: "adaptive" },
-      max_tokens: 2048,
+      model,
+      max_tokens: INSIGHT_MAX_TOKENS,
       system: SYSTEM_PROMPT,
       messages: [
         {
@@ -121,6 +128,7 @@ export async function regenerateInsight(
           content: `Analyze my Whoop data and give me insights:\n\n${context}`,
         },
       ],
+      ...(option ? anthropicReasoningConfig(DEFAULT_COACH_EFFORT, option, INSIGHT_MAX_TOKENS) : {}),
     }, { signal: AbortSignal.timeout(GENERATION_DEADLINE_MS) });
     const insight = response.content
       .filter((block) => block.type === "text")

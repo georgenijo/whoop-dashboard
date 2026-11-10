@@ -501,6 +501,69 @@ describe("Settings model catalog integration", () => {
     vi.stubGlobal("confirm", vi.fn(() => true));
   });
 
+  it("holds the Coach model picker behind the loaded selection", async () => {
+    // Hold GET /api/settings unresolved so the effective saved/default
+    // selection (possibly the COACH_DEFAULT_MODEL override, server-side)
+    // has not landed while catalogs are already ready.
+    let releaseSettings!: (response: Response) => void;
+    settingsMock.mockImplementation((_url, init) => init?.method === "POST"
+      ? Response.json(JSON.parse(init.body))
+      : new Promise<Response>((resolve) => { releaseSettings = resolve; }));
+    render(<SettingsPage />);
+    const select = screen.getByRole("combobox", { name: "Coach model" });
+    await within(select).findByRole("option", { name: "Claude Opus Live" });
+    // Before settings load: disabled, no wrong model displayed or selectable.
+    expect(select).toBeDisabled();
+    expect(within(select).getByText("Loading your saved model…")).toBeInTheDocument();
+    expect(select).toHaveValue("");
+    // After the effective selection arrives: real value enabled and applied.
+    await act(async () => releaseSettings(
+      Response.json({ system_prompt: "", model_pref: "anthropic:claude-opus-live" }),
+    ));
+    expect(select).toBeEnabled();
+    expect(select).toHaveValue("anthropic:claude-opus-live");
+  });
+
+  it.each([
+    { label: "non-OK HTTP status", respond: () => new Response(null, { status: 500 }) },
+    { label: "rejected request", respond: () => Promise.reject(new Error("network down")) },
+    { label: "invalid JSON", respond: () => new Response("<html>", { status: 200, headers: { "Content-Type": "text/html" } }) },
+  ])("fails closed with a retry on settings load failure: $label", async ({ respond }) => {
+    const postMock = vi.fn();
+    let fail = true;
+    settingsMock.mockImplementation((_url, init) => {
+      if (init?.method === "POST") {
+        postMock();
+        return Response.json(JSON.parse(init.body));
+      }
+      return fail
+        ? respond()
+        : Response.json({ system_prompt: "", model_pref: "anthropic:claude-opus-live" });
+    });
+    render(<SettingsPage />);
+    const select = screen.getByRole("combobox", { name: "Coach model" });
+    // The failure is explained instead of an eternal loading state.
+    expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't load your saved model.");
+    expect(within(select).getByText("Unavailable")).toBeInTheDocument();
+    expect(select).toBeDisabled();
+    // A loading failure cannot silently become a saveable wrong selection:
+    // nothing is POSTed while the selection is unknown.
+    expect(postMock).not.toHaveBeenCalled();
+
+    // Retry with a good response recovers the true selection.
+    await act(async () => {
+      fail = false;
+      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    });
+    await waitFor(() => expect(select).toBeEnabled());
+    expect(select).toHaveValue("anthropic:claude-opus-live");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    // Still never POSTed; the recovery was read-only.
+    expect(settingsMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === "POST"))
+      .toHaveLength(0);
+  });
+
   it("groups the live models by provider", async () => {
     render(<SettingsPage />);
     const select = screen.getByRole("combobox", { name: "Coach model" });

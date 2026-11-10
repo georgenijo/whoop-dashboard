@@ -8,13 +8,16 @@ import {
   type ChatMessageInsert,
 } from "@/lib/db";
 import type { ApiKeyOrigin } from "./api-key";
+import { resolveCatalogModel } from "./model-resolution";
 import {
   type DetailState,
   type RunAnthropicOptions,
   type Usage,
   textFromContent,
 } from "./loop";
-import { TITLE_MODEL, TITLE_SYSTEM_PROMPT } from "./prompts";
+import { titleModel } from "./model-defaults";
+import { TITLE_SYSTEM_PROMPT } from "./prompts";
+import { anthropicReasoningConfig } from "./provider";
 import { deriveTitleFromText } from "./title";
 import { type ToolDetail, chatLogToolSummaries } from "./tools";
 import { resolveCoachProvider } from "./provider";
@@ -211,8 +214,14 @@ export async function titleChatThread(
   }
   try {
     const client = new Anthropic({ apiKey, ...GENERATION_CLIENT_OPTIONS });
+    // Issue #587 — resolve the configured title model against the account
+    // catalog (same-family fallback) and build the reasoning fields through
+    // anthropicReasoningConfig so thinking/effort only reached models that
+    // accept them. Titles need no reasoning; "off" normalizes to a supported
+    // effort when a model rejects disabled thinking.
+    const { model, option } = await resolveCatalogModel(apiKey, titleModel());
     const response = await client.messages.create({
-      model: TITLE_MODEL,
+      model,
       max_tokens: 30,
       system: TITLE_SYSTEM_PROMPT,
       messages: [
@@ -221,6 +230,7 @@ export async function titleChatThread(
           content: `Title this conversation: "${firstUserText}"`,
         },
       ],
+      ...(option ? anthropicReasoningConfig("off", option, 30) : {}),
     }, { signal: AbortSignal.timeout(GENERATION_DEADLINE_MS) });
     title = textFromContent(response.content)
       .replace(/^['"`]+|['"`]+$/g, "")

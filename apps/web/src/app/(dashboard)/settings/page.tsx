@@ -55,7 +55,12 @@ type ByokError =
   | { kind: "probe_failed" }
   | { kind: "request_failed"; message: string };
 
-const ANTHROPIC_PREF = "anthropic:claude-sonnet-4-6";
+// Issue #587 — the Coach-model selection (a saved preference or the
+// COACH_DEFAULT_MODEL override, both resolved server-side) is only known to
+// GET /api/settings. COACH_DEFAULT_MODEL is server-only, so it can never be
+// part of an initial client render: until that response lands, the picker
+// renders an identical disabled placeholder on server and client — showing no
+// model, and not interactively saveable — then adopts the effective selection.
 
 const CONNECTOR_STATUS_COPY: Record<
   WhoopConnectorStatus,
@@ -159,6 +164,9 @@ export default function SettingsPage() {
   const [localValues, setLocalValues] = useState<Record<string, boolean>>({});
   const [systemPrompt, setSystemPrompt] = useState("");
   const [savedSystemPrompt, setSavedSystemPrompt] = useState("");
+  // Mirrors savedSystemPrompt so loadSettings (a stable callback) can tell
+  // whether the draft was edited since the last baseline without a stale closure.
+  const savedSystemPromptRef = useRef("");
   const [saving, setSaving] = useState(false);
   const [backgroundFailure, setBackgroundFailure] = useState<string | null>(null);
   const [promptError, setPromptError] = useState<string | null>(null);
@@ -193,7 +201,16 @@ export default function SettingsPage() {
   const [cursorByokError, setCursorByokError] = useState<ByokError | null>(
     null,
   );
-  const [modelPref, setModelPref] = useState(ANTHROPIC_PREF);
+  const [modelPref, setModelPref] = useState("");
+  // False until the effective selection (saved preference or the server-side
+  // COACH_DEFAULT_MODEL default) arrives from GET /api/settings. While false
+  // the picker stays disabled and shows no model, so an interim — possibly
+  // overridden — selection can neither display wrong nor be saved.
+  const [modelPrefLoaded, setModelPrefLoaded] = useState(false);
+  // A failed settings load is explicit and retryable rather than an eternal
+  // "Loading your saved model…" with no explanation or recovery path.
+  const [modelPrefLoadFailed, setModelPrefLoadFailed] = useState(false);
+  const [modelPrefReloading, setModelPrefReloading] = useState(false);
   const [anthropicModels, setAnthropicModels] = useState<AnthropicModelOption[]>([]);
   const [anthropicModelsStatus, setAnthropicModelsStatus] =
     useState<ModelCatalogStatus>("loading");
@@ -267,6 +284,44 @@ export default function SettingsPage() {
     }
   }, []);
 
+  // Load the effective Coach-model selection (saved preference or the
+  // server-resolved COACH_DEFAULT_MODEL default) plus the raw instructions.
+  // Failure is explicit and retryable (Retry control): the picker stays
+  // fail-closed — disabled, selection unknown — while the payload is
+  // unavailable, instead of loading forever or saving an unknown selection.
+  const loadSettings = useCallback(async (): Promise<void> => {
+    setModelPrefReloading(true);
+    try {
+      const response = await fetch("/api/settings");
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const data = (await response.json()) as {
+        system_prompt: string;
+        model_pref?: string;
+        cursor_available?: boolean;
+      };
+      if (data === null || typeof data !== "object" || typeof data.model_pref !== "string") {
+        throw new Error("malformed settings payload");
+      }
+      // Never clobber an edited draft (e.g. typed while the first load had
+      // failed, then Retry): adopt the server text only when the draft still
+      // equals the previous baseline. The baseline itself always refreshes, so
+      // a kept draft correctly stays "Unsaved changes" against the new one.
+      const previousBaseline = savedSystemPromptRef.current;
+      setSystemPrompt((draft) =>
+        draft === previousBaseline ? data.system_prompt : draft,
+      );
+      savedSystemPromptRef.current = data.system_prompt;
+      setSavedSystemPrompt(data.system_prompt);
+      setModelPref(data.model_pref);
+      setModelPrefLoaded(true);
+      setModelPrefLoadFailed(false);
+    } catch {
+      setModelPrefLoadFailed(true);
+    } finally {
+      setModelPrefReloading(false);
+    }
+  }, []);
+
   useEffect(() => {
     refreshWhoop();
   }, [refreshWhoop]);
@@ -291,25 +346,8 @@ export default function SettingsPage() {
       })
       .catch(() => {});
 
-    fetch("/api/settings")
-      .then((response) =>
-        response.ok
-          ? (response.json() as Promise<{
-              system_prompt: string;
-              model_pref?: string;
-              cursor_available?: boolean;
-            }>)
-          : null,
-      )
-      .then(
-        (data) => {
-          if (!data) return;
-          setSystemPrompt(data.system_prompt);
-          setSavedSystemPrompt(data.system_prompt);
-          if (data.model_pref) setModelPref(data.model_pref);
-        },
-      )
-      .catch(() => {});
+    // Retryable; keeps the model picker fail-closed until this lands.
+    queueMicrotask(() => { void loadSettings(); });
 
     fetch("/api/me/anthropic-key")
       .then((response) =>
@@ -344,7 +382,7 @@ export default function SettingsPage() {
       void refreshCursorModels();
       void refreshAnthropicModels();
     });
-  }, [refreshCursorModels, refreshAnthropicModels]);
+  }, [refreshCursorModels, refreshAnthropicModels, loadSettings]);
 
   function toggleLocal(key: string, value: boolean) {
     localStorage.setItem(key, value ? "1" : "0");
@@ -526,6 +564,10 @@ export default function SettingsPage() {
       setCursorByokStatus("ready");
       setCursorByokInput("");
       if (data.model_pref) setModelPref(data.model_pref);
+      // The Cursor-key route resolves the effective selection server-side
+      // (parseModelPref), so it counts as a loaded selection even if the
+      // settings request had not landed yet.
+      setModelPrefLoaded(true);
       if (data.fallback_available) {
         await refreshCursorModels();
       } else {
@@ -582,6 +624,7 @@ export default function SettingsPage() {
       } else {
         const data = (await response.json()) as { model_pref?: string };
         if (data.model_pref) setModelPref(data.model_pref);
+        setModelPrefLoaded(true);
       }
     } catch (error) {
       setModelPref(previous);
@@ -612,6 +655,7 @@ export default function SettingsPage() {
       }
       const data = (await response.json()) as { system_prompt: string };
       setSystemPrompt(data.system_prompt);
+      savedSystemPromptRef.current = data.system_prompt;
       setSavedSystemPrompt(data.system_prompt);
     } catch (error) {
       setPromptError(
@@ -814,11 +858,16 @@ export default function SettingsPage() {
             >
               <select
                 className={styles.select}
-                value={modelPref}
-                disabled={modelSaving}
+                value={modelPrefLoaded ? modelPref : ""}
+                disabled={modelSaving || !modelPrefLoaded}
                 aria-label="Coach model"
                 onChange={(event) => saveModelPref(event.target.value)}
               >
+                {!modelPrefLoaded ? (
+                  <option value="" disabled>
+                    {modelPrefLoadFailed ? "Unavailable" : "Loading your saved model…"}
+                  </option>
+                ) : null}
                 {modelGroups.map((group) => (
                   <optgroup
                     key={group.prefix}
@@ -841,13 +890,28 @@ export default function SettingsPage() {
                     ) : null}
                   </optgroup>
                 ))}
-                {selectedModelMissing ? (
+                {modelPrefLoaded && selectedModelMissing ? (
                   <option value={modelPref} disabled>
                     {modelPref.replace(/^(anthropic|cursor):/, "")} (saved, unavailable)
                   </option>
                 ) : null}
               </select>
             </SettingRow>
+            {modelPrefLoadFailed ? (
+              <div className={styles.inlineControl} data-testid="model-load-error">
+                <p className={styles.catalogStatus} role="alert">
+                  Couldn&apos;t load your saved model.
+                </p>
+                <button
+                  type="button"
+                  className={styles.secondaryButton}
+                  disabled={modelPrefReloading}
+                  onClick={() => { void loadSettings(); }}
+                >
+                  Retry
+                </button>
+              </div>
+            ) : null}
 
             <div className={styles.divider} />
 

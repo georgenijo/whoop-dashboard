@@ -106,6 +106,7 @@ beforeEach(() => {
   getUserSettingsMock.mockReset();
   listModelsMock.mockReset();
   listModelsMock.mockResolvedValue([
+    { id: "claude-sonnet-5-5", thinking: "adaptive", efforts: ["off", "low", "medium", "high"], output_effort: true, max_tokens: 64000 },
     { id: "claude-sonnet-4-6", thinking: "adaptive", efforts: ["off", "low", "medium", "high"], output_effort: true, max_tokens: 64000 },
     { id: "claude-opus-4-6", thinking: "adaptive", efforts: ["off", "low", "medium", "high", "max"], output_effort: true, max_tokens: 64000 },
   ]);
