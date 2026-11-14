@@ -6,6 +6,7 @@ struct CoachWorkLogView: View {
 
     @State private var expanded = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -17,19 +18,24 @@ struct CoachWorkLogView: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(statusColor)
                         .frame(width: 16)
-                    Text(summary)
-                        .font(Theme.FontStyle.sans(13, weight: .medium))
-                        .foregroundStyle(Theme.Palette.fg2)
-                    if let detail {
-                        Text(detail)
-                            .font(Theme.FontStyle.mono(11))
-                            .foregroundStyle(Theme.Palette.fg3)
+                    let layout = dynamicTypeSize.isAccessibilitySize
+                        ? AnyLayout(VStackLayout(alignment: .leading, spacing: 3))
+                        : AnyLayout(HStackLayout(spacing: 8))
+                    layout {
+                        Text(summary)
+                            .font(Theme.FontStyle.sans(13, weight: .medium))
+                            .foregroundStyle(Theme.Palette.fg2)
+                        if let detail {
+                            Text(detail)
+                                .font(Theme.FontStyle.mono(11))
+                                .foregroundStyle(Theme.Palette.fg3)
+                        }
                     }
+                    Spacer(minLength: 0)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(Theme.Palette.fg3)
                         .rotationEffect(.degrees(expanded ? 90 : 0))
-                    Spacer(minLength: 0)
                 }
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
@@ -37,7 +43,7 @@ struct CoachWorkLogView: View {
             .buttonStyle(.plain)
             .sensoryFeedback(.selection, trigger: expanded)
             .accessibilityLabel(summary)
-            .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+            .accessibilityValue([expanded ? "Expanded" : "Collapsed", detail].compactMap { $0 }.joined(separator: ", "))
             .accessibilityHint("Shows the steps the coach took")
 
             if expanded {
@@ -48,22 +54,24 @@ struct CoachWorkLogView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .clipped()
     }
 
     private var summary: String {
-        let duration = Self.duration(workLog.durationMs)
         switch workLog.status {
-        case .complete: return "Worked for \(duration)"
-        case .running: return "Working for \(duration)"
-        case .error, .aborted: return "Stopped after \(duration)"
+        case .complete: return "How Coach answered"
+        case .running: return "Coach is working"
+        case .error, .aborted: return "Work stopped"
         }
     }
 
     private var detail: String? {
         let count = workLog.tools.count
-        guard count > 0 else { return nil }
-        return "· \(count) step\(count == 1 ? "" : "s")"
+        var parts: [String] = []
+        if count > 0 { parts.append("\(count) step\(count == 1 ? "" : "s")") }
+        if let durationMs = workLog.durationMs, durationMs >= 0 {
+            parts.append(Self.duration(durationMs))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     private var statusSymbol: String {
@@ -76,7 +84,7 @@ struct CoachWorkLogView: View {
 
     private var statusColor: Color {
         switch workLog.status {
-        case .complete: return Theme.Palette.success
+        case .complete: return Theme.Palette.fg3
         case .running: return Theme.Palette.warning
         case .error, .aborted: return Theme.Palette.danger
         }
@@ -99,6 +107,7 @@ struct CoachWorkLogView: View {
 private struct WorkTimeline: View {
     let notes: [String]
     let tools: [CoachToolActivity]
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -114,11 +123,14 @@ private struct WorkTimeline: View {
             ForEach(tools) { tool in
                 step(dot: tool.status == "error" ? Theme.Palette.danger : Theme.Palette.success) {
                     VStack(alignment: .leading, spacing: 6) {
-                      HStack(alignment: .firstTextBaseline, spacing: 8) {
+                      let layout = dynamicTypeSize.isAccessibilitySize
+                          ? AnyLayout(VStackLayout(alignment: .leading, spacing: 3))
+                          : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))
+                      layout {
                         Text(LiveCoachWorkView.label(tool.name).replacingOccurrences(of: "Querying", with: "Queried"))
                             .font(Theme.FontStyle.sans(13))
                             .foregroundStyle(Theme.Palette.fg1)
-                        Spacer(minLength: 8)
+                        if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 8) }
                         Text(meta(tool))
                             .font(Theme.FontStyle.mono(11))
                             .foregroundStyle(Theme.Palette.fg3)
@@ -173,9 +185,10 @@ private struct WorkTimeline: View {
 struct LiveCoachWorkView: View {
     let tools: [LiveToolActivity]
 
-    @State private var expanded = true
+    @State private var expanded = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var startedAt = Date()
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -185,39 +198,45 @@ struct LiveCoachWorkView: View {
                 HStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.mini)
-                        .tint(Theme.Palette.ai)
+                        .tint(Theme.Palette.accent)
                         .frame(width: 16)
-                    Text(headline)
-                        .font(Theme.FontStyle.sans(13, weight: .medium))
-                        .foregroundStyle(Theme.Palette.fg2)
-                    TimelineView(.periodic(from: startedAt, by: 1)) { context in
-                        Text("· \(Self.elapsed(since: startedAt, now: context.date))")
-                            .font(Theme.FontStyle.mono(11))
-                            .foregroundStyle(Theme.Palette.fg3)
-                            .contentTransition(.numericText())
+                    let layout = dynamicTypeSize.isAccessibilitySize
+                        ? AnyLayout(VStackLayout(alignment: .leading, spacing: 3))
+                        : AnyLayout(HStackLayout(spacing: 8))
+                    layout {
+                        Text(headline)
+                            .font(Theme.FontStyle.sans(13, weight: .medium))
+                            .foregroundStyle(hasErrors ? Theme.Palette.danger : Theme.Palette.fg2)
+                        TimelineView(.periodic(from: startedAt, by: 1)) { context in
+                            Text(Self.elapsed(since: startedAt, now: context.date))
+                                .font(Theme.FontStyle.mono(11))
+                                .foregroundStyle(Theme.Palette.fg3)
+                                .contentTransition(.numericText())
+                        }
                     }
+                    Spacer(minLength: 0)
                     if !tools.isEmpty {
                         Image(systemName: "chevron.right")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(Theme.Palette.fg3)
                             .rotationEffect(.degrees(expanded ? 90 : 0))
                     }
-                    Spacer(minLength: 0)
                 }
                 .frame(minHeight: 44)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Coach is working")
-            .accessibilityValue(headline)
+            .accessibilityValue("\(headline), \(expanded ? "Expanded" : "Collapsed")")
+            .accessibilityHint("Shows the steps Coach is taking")
 
             if expanded && !tools.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(tools) { tool in
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Image(systemName: tool.isComplete ? (tool.error == nil ? "checkmark" : "exclamationmark") : "circle.fill")
+                            Image(systemName: tool.isComplete ? (tool.hasFailed ? "exclamationmark" : "checkmark") : "circle.fill")
                                 .font(.system(size: tool.isComplete ? 11 : 6))
-                                .foregroundStyle(tool.error == nil ? Theme.Palette.recovery : Theme.Palette.danger)
+                                .foregroundStyle(tool.hasFailed ? Theme.Palette.danger : Theme.Palette.recovery)
                                 .frame(width: 16)
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(tool.stage.map { "\(Self.label(tool.name)) · \($0)" } ?? Self.label(tool.name))
@@ -241,8 +260,11 @@ struct LiveCoachWorkView: View {
     }
 
     private var headline: String {
-        tools.isEmpty ? "Thinking" : "Working"
+        if hasErrors { return "Some steps failed" }
+        return tools.isEmpty ? "Thinking" : "Working"
     }
+
+    private var hasErrors: Bool { tools.contains(where: \.hasFailed) }
 
     static func elapsed(since start: Date, now: Date) -> String {
         let seconds = max(0, Int(now.timeIntervalSince(start)))
