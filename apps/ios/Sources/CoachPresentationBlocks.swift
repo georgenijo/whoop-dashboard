@@ -215,7 +215,7 @@ struct CoachPresentationBlocksView: View {
     @ViewBuilder private func blockView(_ block: CoachPresentationBlock) -> some View {
         switch block {
         case .metricStrip(let strip):
-            MetricStripView(strip: strip).coachCard()
+            MetricStripView(strip: strip).coachCard(padding: 0)
         case .comparison(let comparison):
             ComparisonView(comparison: comparison).coachCard()
         case .chart(let chart):
@@ -227,7 +227,7 @@ struct CoachPresentationBlocksView: View {
         case .workoutPlan(let plan):
             WorkoutPlanView(plan: plan).coachCard()
         case .evidence(let evidence):
-            EvidenceView(evidence: evidence).coachCard(padding: 0)
+            EvidenceView(evidence: evidence).frame(maxWidth: .infinity, alignment: .leading)
         case .fallback(let text):
             MarkdownView(content: text, style: .chat).coachCard()
         }
@@ -242,6 +242,7 @@ private extension View {
     func coachCard(padding: CGFloat = Theme.Spacing.md) -> some View {
         frame(maxWidth: .infinity, alignment: .leading)
             .glassCard(padding: padding)
+            .overlay(Rectangle().strokeBorder(Theme.Palette.borderDefault, lineWidth: 1))
     }
 }
 
@@ -293,22 +294,48 @@ private enum Tone {
 
 // MARK: Metric strip
 
+enum MetricStripColumns {
+    /// Cells per row: as many 150 pt cells as fit, never more than the metrics
+    /// and always one at accessibility sizes so values are not truncated.
+    static func count(width: CGFloat, metrics: Int, accessibilitySize: Bool) -> Int {
+        guard metrics > 0 else { return 1 }
+        if accessibilitySize { return 1 }
+        return max(1, min(metrics, Int(width / 150)))
+    }
+}
+
 private struct MetricStripView: View {
     let strip: MetricStrip
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var width: CGFloat = 400
 
     var body: some View {
-        LazyVGrid(
-            columns: dynamicTypeSize.isAccessibilitySize
-                ? [GridItem(.flexible(minimum: 0))]
-                : [GridItem(.adaptive(minimum: 180), spacing: 16)],
-            alignment: .leading,
-            spacing: 20
-        ) {
-            ForEach(Array(strip.metrics.enumerated()), id: \.offset) { _, metric in
-                tile(metric)
+        let columns = MetricStripColumns.count(
+            width: width, metrics: strip.metrics.count, accessibilitySize: dynamicTypeSize.isAccessibilitySize
+        )
+        let rows = stride(from: 0, to: strip.metrics.count, by: columns).map {
+            Array(strip.metrics[$0..<min($0 + columns, strip.metrics.count)])
+        }
+        VStack(spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
+                if rowIndex > 0 { LedgerRule() }
+                HStack(spacing: 0) {
+                    ForEach(0..<columns, id: \.self) { column in
+                        Group {
+                            if column < row.count { tile(row[column]) } else { Color.clear }
+                        }
+                        .padding(Theme.Spacing.sm)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .overlay(alignment: .trailing) {
+                            if column < columns - 1 {
+                                Rectangle().fill(CoachLedger.rule).frame(width: 1)
+                            }
+                        }
+                    }
+                }
             }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(strip.fallback)
     }
@@ -319,7 +346,6 @@ private struct MetricStripView: View {
                 .font(Theme.FontStyle.sans(13, weight: .medium))
                 .foregroundStyle(Theme.Palette.fg2)
                 .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
             // Narrow tiles put the unit under the value rather than truncating it.
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -389,7 +415,7 @@ private struct ComparisonView: View {
                 .padding(.bottom, 6)
             ForEach(Array(comparison.items.enumerated()), id: \.offset) { index, item in
                 if index > 0 {
-                    Divider().overlay(Theme.Palette.borderSubtle)
+                    LedgerRule()
                 }
                 row(item)
                     .padding(.vertical, 10)
@@ -458,21 +484,27 @@ private struct ComparisonView: View {
 
 private struct ActionPlanView: View {
     let plan: ActionPlan
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 0) {
             Text(plan.title)
-                .font(Theme.FontStyle.sans(16, weight: .semibold))
+                .font(Theme.FontStyle.sans(13, weight: .medium))
                 .foregroundStyle(Theme.Palette.fg0)
                 .fixedSize(horizontal: false, vertical: true)
-            ForEach(Array(plan.sections.enumerated()), id: \.offset) { _, section in
-                VStack(alignment: .leading, spacing: 8) {
-                    CoachCardLabel(section.timeframe)
-                    ForEach(Array(section.items.enumerated()), id: \.offset) { _, item in
-                        HStack(alignment: .firstTextBaseline, spacing: 10) {
-                            Image(systemName: "circle")
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(Theme.Palette.fg3)
+                .padding(.bottom, 8)
+            ForEach(Array(plan.sections.enumerated()), id: \.offset) { index, section in
+                if index > 0 { LedgerRule() }
+                let layout = dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+                    : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 14))
+                layout {
+                    Text(section.timeframe)
+                        .font(Theme.FontStyle.sans(13, weight: .medium))
+                        .foregroundStyle(Theme.Palette.fg2)
+                        .frame(width: dynamicTypeSize.isAccessibilitySize ? nil : 84, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(Array(section.items.enumerated()), id: \.offset) { _, item in
                             Text(MarkdownView.inline(item, emphasis: Theme.Palette.fg0))
                                 .font(Theme.FontStyle.sans(14.5))
                                 .foregroundStyle(Theme.Palette.fg1)
@@ -480,7 +512,9 @@ private struct ActionPlanView: View {
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .padding(.vertical, 10)
             }
         }
         .accessibilityElement(children: .combine)
@@ -588,7 +622,7 @@ private struct WorkoutPlanView: View {
             .padding(.bottom, 8)
             ForEach(Array(plan.exercises.enumerated()), id: \.offset) { index, exercise in
                 if index > 0 {
-                    Divider().overlay(Theme.Palette.borderSubtle)
+                    LedgerRule()
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     layout {
@@ -642,12 +676,13 @@ private struct EvidenceView: View {
                 withAnimation(reduceMotion ? nil : .snappy) { expanded.toggle() }
             } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: "doc.text.magnifyingglass")
+                    Image(systemName: "info.circle")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Theme.Palette.fg2)
+                        .foregroundStyle(Theme.Palette.fg3)
                     Text(evidence.title)
-                        .font(Theme.FontStyle.sans(14, weight: .medium))
-                        .foregroundStyle(Theme.Palette.fg1)
+                        .font(Theme.FontStyle.sans(12.5))
+                        .foregroundStyle(Theme.Palette.fg2)
+                        .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
                     Image(systemName: "chevron.right")
@@ -655,8 +690,7 @@ private struct EvidenceView: View {
                         .foregroundStyle(Theme.Palette.fg3)
                         .rotationEffect(.degrees(expanded ? 90 : 0))
                 }
-                .padding(.horizontal, Theme.Spacing.md)
-                .frame(minHeight: 48)
+                .frame(minHeight: 44)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -685,8 +719,8 @@ private struct EvidenceView: View {
                         }
                     }
                 }
-                .padding(.horizontal, Theme.Spacing.md)
-                .padding(.bottom, Theme.Spacing.md)
+                .padding(.leading, 23)
+                .padding(.bottom, Theme.Spacing.sm)
                 .transition(.opacity)
             }
         }

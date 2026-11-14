@@ -10,9 +10,43 @@ enum CoachSelection: Hashable {
     case thread(id: Int, title: String?)
 }
 
+/// Where the Coach list pane and the conversation pane sit on a regular
+/// width. The list fills the area left of the fold and the conversation the
+/// area right of it, so no answer column ever crosses the crease. The split
+/// is held open (the sidebar cannot be hidden) whenever the display reports a
+/// fold; hiding it would stretch the conversation across the hinge.
+struct CoachPaneLayout: Equatable {
+    /// Width of the list column, ending where the fold band ends.
+    var sidebarWidth: CGFloat
+    /// Space kept clear at the trailing edge of the list so rows stop at the
+    /// fold band instead of running into it.
+    var listTrailingInset: CGFloat
+    /// True when the layout is anchored to a real fold.
+    var pinsSidebar: Bool
+
+    static let minimumPane: CGFloat = 300
+
+    static func compute(fold: FoldGeometry, regular: Bool) -> CoachPaneLayout? {
+        guard regular, fold.width > 0 else { return nil }
+        if let hinge = fold.hinge,
+           hinge.lowerBound >= minimumPane,
+           fold.width - hinge.upperBound >= minimumPane {
+            return CoachPaneLayout(
+                sidebarWidth: hinge.upperBound,
+                listTrailingInset: hinge.upperBound - hinge.lowerBound,
+                pinsSidebar: true
+            )
+        }
+        let width = min(max(fold.width * 0.4, 320), 420)
+        guard fold.width - width >= minimumPane else { return nil }
+        return CoachPaneLayout(sidebarWidth: width, listTrailingInset: 0, pinsSidebar: false)
+    }
+}
+
 struct CoachView: View {
     @Environment(\.appNavigation) private var navigation
     @Environment(\.horizontalSizeClass) private var sizeClass
+    @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
     @State private var selection: CoachSelection?
     /// Which column a collapsed (compact) split view shows. Selecting a
     /// conversation moves it to the detail; the system Back moves it back.
@@ -31,18 +65,17 @@ struct CoachView: View {
     /// conversation view, its draft, and its attachments alive while the
     /// device opens and closes.
     var body: some View {
-        NavigationSplitView(preferredCompactColumn: $compactColumn) {
-            ThreadListView(
-                selection: openConversation,
-                highlightedThreadId: sizeClass == .regular ? highlightedThreadId : nil
-            )
-            .background(Theme.Palette.bg1)
-        } detail: {
-            NavigationStack {
-                chat(for: selection ?? .new(id: blankChat, draft: nil))
-            }
-        }
-        .navigationSplitViewStyle(.balanced)
+        CoachSplit(
+            selection: $selection,
+            compactColumn: $compactColumn,
+            columnVisibility: $columnVisibility,
+            openConversation: openConversation,
+            highlightedThreadId: highlightedThreadId,
+            blankChat: blankChat,
+            chat: { chat(for: $0) },
+            newChat: { selection = .new(id: UUID(), draft: nil); compactColumn = .detail }
+        )
+        .measuresFold()
         .task { consumeComposeRequest() }
         .onChange(of: navigation.composeRequest) { _, _ in consumeComposeRequest() }
         .onChange(of: selection) { old, new in
@@ -101,6 +134,81 @@ struct CoachView: View {
         case .thread(let id, let title):
             ChatView(threadId: id, initialTitle: title, onComposerInteraction: { compactColumn = .detail })
                 .id(id)
+        }
+    }
+}
+
+/// Split container, separate from CoachView so the fold measurement wrapped
+/// around it is visible to the columns through the environment.
+private struct CoachSplit<Chat: View>: View {
+    @Binding var selection: CoachSelection?
+    @Binding var compactColumn: NavigationSplitViewColumn
+    @Binding var columnVisibility: NavigationSplitViewVisibility
+    let openConversation: Binding<CoachSelection?>
+    let highlightedThreadId: Int?
+    let blankChat: UUID
+    let chat: (CoachSelection) -> Chat
+    let newChat: () -> Void
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.foldGeometry) private var fold
+
+    private var layout: CoachPaneLayout? {
+        CoachPaneLayout.compute(fold: fold, regular: sizeClass == .regular)
+    }
+
+    private var visibility: Binding<NavigationSplitViewVisibility> {
+        guard layout?.pinsSidebar == true else { return $columnVisibility }
+        return Binding(get: { .all }, set: { _ in })
+    }
+
+    var body: some View {
+        NavigationSplitView(columnVisibility: visibility, preferredCompactColumn: $compactColumn) {
+            ThreadListView(
+                selection: openConversation,
+                highlightedThreadId: sizeClass == .regular ? highlightedThreadId : nil
+            )
+            .background(Theme.Palette.bg1)
+            .modifier(SidebarWidth(layout: layout))
+        } detail: {
+            NavigationStack {
+                chat(selection ?? .new(id: blankChat, draft: nil))
+                    .toolbar {
+                        if sizeClass == .compact {
+                            ToolbarItem(placement: .primaryAction) {
+                                Button(action: newChat) {
+                                    Label("New chat", systemImage: "square.and.pencil")
+                                }
+                                .tint(Theme.Palette.accent)
+                            }
+                        }
+                    }
+                    .modifier(HidesSidebarToggle(hidden: layout?.pinsSidebar == true))
+            }
+        }
+        .navigationSplitViewStyle(.balanced)
+    }
+}
+
+private struct SidebarWidth: ViewModifier {
+    let layout: CoachPaneLayout?
+
+    func body(content: Content) -> some View {
+        if let layout {
+            content.navigationSplitViewColumnWidth(layout.sidebarWidth)
+        } else {
+            content.navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 420)
+        }
+    }
+}
+
+private struct HidesSidebarToggle: ViewModifier {
+    let hidden: Bool
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18.0, *) {
+            content.toolbar(removing: hidden ? .sidebarToggle : nil)
+        } else {
+            content
         }
     }
 }

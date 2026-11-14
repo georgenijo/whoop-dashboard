@@ -91,7 +91,8 @@ struct ChatService {
     func send(
         threadId: Int?,
         content: String,
-        images: [PendingChatImage] = []
+        images: [PendingChatImage] = [],
+        control: ChatStreamControl? = nil
     ) -> AsyncThrowingStream<ChatStreamEvent, Error> {
         struct Body: Encodable {
             let messages: [Message]
@@ -176,6 +177,7 @@ struct ChatService {
                     continuation.finish(throwing: error)
                 }
             }
+            control?.cancel = { task.cancel() }
             continuation.onTermination = { _ in task.cancel() }
         }
     }

@@ -101,6 +101,19 @@ struct ProviderKeyState: Decodable {
 private struct ProviderKeySave: Encodable { let key: String }
 private struct ProviderKeyResult: Decodable { let ok: Bool; let code: String? }
 
+struct ProviderKeysView: View {
+    var body: some View {
+        Form {
+            Section("Provider keys") {
+                NavigationLink("Anthropic") { ProviderKeySettings(provider: .anthropic) }
+                NavigationLink("Cursor") { ProviderKeySettings(provider: .cursor) }
+            }
+        }
+        .navigationTitle("Provider keys")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 private struct ProviderKeySettings: View {
     let provider: CoachModelProvider
     @Environment(\.api) private var api

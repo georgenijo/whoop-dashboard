@@ -38,6 +38,8 @@ struct ChatView: View {
     @State private var attachmentCache = ChatAttachmentCache()
     @State private var scrollState = ChatScrollState()
     @State private var jumpRequest = 0
+    @State private var stopRequested = false
+    @State private var streamControl = ChatStreamControl()
     @FocusState private var isComposerFocused: Bool
 
     /// `initialDraft` only pre-fills the composer; nothing is sent until the user taps send.
@@ -52,11 +54,12 @@ struct ChatView: View {
         self._input = State(initialValue: initialDraft ?? "")
     }
 
-    static let suggestedPrompts = [
-        "How was my recovery this week?",
-        "Why did I sleep badly last night?",
-        "What should I train today?",
-        "Compare this week to last week"
+    /// Each starter names the data Coach reads for it.
+    static let starterPrompts: [(prompt: String, reads: String)] = [
+        ("Why is my recovery where it is today?", "Recovery · HRV · Sleep"),
+        ("What should I train today?", "Plans · Strain"),
+        ("How did I sleep this week?", "Sleep · 7 nights"),
+        ("Compare this week to last week", "All metrics")
     ]
 
     struct StreamingAssistant {
@@ -408,57 +411,57 @@ struct ChatView: View {
     private var emptyAsk: some View {
         VStack(alignment: .leading, spacing: 28) {
             VStack(alignment: .leading, spacing: 10) {
-                Text(Date.now.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
-                    .font(Theme.FontStyle.sans(13))
-                    .foregroundStyle(Theme.Palette.fg3)
                 Text("Understand your day")
-                    .font(Theme.FontStyle.sans(22, weight: .medium))
+                    .font(Theme.FontStyle.sans(26, weight: .medium))
                     .foregroundStyle(Theme.Palette.fg0)
-                Text("Ask about recovery, sleep, or training. Explore the evidence behind each answer.")
+                    .accessibilityAddTraits(.isHeader)
+                Text("Coach reads your recovery, sleep and training before it answers.")
                     .font(Theme.FontStyle.sans(15))
                     .foregroundStyle(Theme.Palette.fg2)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Start a conversation")
-                    .font(Theme.FontStyle.sans(13, weight: .medium))
-                    .foregroundStyle(Theme.Palette.fg2)
-                VStack(spacing: 0) {
-                    ForEach(Self.suggestedPrompts, id: \.self) { prompt in
-                        Button {
-                            input = prompt
-                            isComposerFocused = true
-                        } label: {
-                            HStack(spacing: 12) {
-                                Text(prompt)
+            VStack(spacing: 0) {
+                ForEach(Array(Self.starterPrompts.enumerated()), id: \.offset) { index, starter in
+                    Button {
+                        input = starter.prompt
+                        isComposerFocused = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(starter.prompt)
                                     .font(Theme.FontStyle.sans(15))
                                     .foregroundStyle(Theme.Palette.fg0)
                                     .multilineTextAlignment(.leading)
                                     .fixedSize(horizontal: false, vertical: true)
-                                Spacer(minLength: 8)
-                                Image(systemName: "arrow.up.left")
-                                    .font(.system(size: 12, weight: .medium))
+                                Text(starter.reads)
+                                    .font(Theme.FontStyle.sans(11))
                                     .foregroundStyle(Theme.Palette.fg3)
+                                    .multilineTextAlignment(.leading)
                             }
-                            .padding(.vertical, 12)
-                            .frame(minHeight: 52)
-                            .contentShape(Rectangle())
-                            .overlay(alignment: .top) {
-                                Rectangle().fill(Theme.Palette.borderSubtle).frame(height: 1)
-                            }
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Theme.Palette.fg3)
                         }
-                        .buttonStyle(ChatPressStyle())
-                        .accessibilityHint("Fills the message field")
+                        .padding(.vertical, 12)
+                        .padding(.horizontal, Theme.Spacing.sm)
+                        .frame(minHeight: 52)
+                        .contentShape(Rectangle())
+                        .overlay(alignment: .top) {
+                            if index > 0 { Rectangle().fill(CoachLedger.rule).frame(height: 1) }
+                        }
                     }
-                }
-                .overlay(alignment: .bottom) {
-                    Rectangle().fill(Theme.Palette.borderSubtle).frame(height: 1)
+                    .buttonStyle(ChatPressStyle())
+                    .accessibilityLabel("\(starter.prompt). Reads \(starter.reads).")
+                    .accessibilityHint("Fills the message field")
                 }
             }
+            .coachLedgerOutline()
         }
         .padding(.horizontal, Theme.Spacing.lg)
         .padding(.top, Theme.Spacing.xl)
         .padding(.bottom, Theme.Spacing.md)
+        .frame(maxWidth: 640, alignment: .topLeading)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -531,7 +534,8 @@ struct ChatView: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 TextField("Message Coach", text: $input,
-                          prompt: Text("Ask Coach…").foregroundColor(Theme.Palette.fg2),
+                          prompt: Text(rows.isEmpty ? "Ask about recovery, sleep, strain…" : "Ask a follow-up…")
+                              .foregroundColor(Theme.Palette.fg2),
                           axis: .vertical)
                     .font(Theme.FontStyle.sans(15))
                     .foregroundStyle(Theme.Palette.fg0)
@@ -560,34 +564,53 @@ struct ChatView: View {
                     .accessibilityLabel("Attach photos")
                     .accessibilityValue("\(pendingImages.count) of 3 selected")
 
-                    Spacer(minLength: 4)
-
                     CoachModelPicker(disabled: isSending)
 
-                    Button {
-                        Task { await send() }
-                    } label: {
-                        ZStack {
-                            Circle()
-                                .fill(canSend ? Theme.Palette.accent : Theme.Palette.bg3)
-                            if isSending {
-                                ProgressView()
-                                    .controlSize(.small)
-                                    .tint(Theme.Palette.fg2)
-                            } else {
+                    Spacer(minLength: 4)
+
+                    if isSending {
+                        Text(stopRequested ? "Stopping…" : "Stop")
+                            .font(Theme.FontStyle.sans(13, weight: .medium))
+                            .foregroundStyle(Theme.Palette.fg2)
+                            .accessibilityHidden(true)
+                        Button {
+                            stopReply()
+                        } label: {
+                            ZStack {
+                                Circle().fill(Theme.Palette.fg0)
+                                Image(systemName: "stop.fill")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(Theme.Palette.bg0)
+                            }
+                            .frame(width: 34, height: 34)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(ChatPressStyle())
+                        .disabled(stopRequested)
+                        .opacity(stopRequested ? 0.5 : 1)
+                        .accessibilityLabel("Stop reply")
+                        .accessibilityHint("Stops Coach. The question and any partial answer are kept.")
+                        .accessibilityIdentifier("chat-stop-reply")
+                    } else {
+                        Button {
+                            Task { await send() }
+                        } label: {
+                            ZStack {
+                                Circle()
+                                    .fill(canSend ? Theme.Palette.accent : Theme.Palette.bg3)
                                 Image(systemName: "arrow.up")
                                     .font(.system(size: 15, weight: .bold))
                                     .foregroundStyle(canSend ? Theme.Palette.bg0 : Theme.Palette.fg3)
                             }
+                            .frame(width: 34, height: 34)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
                         }
-                        .frame(width: 34, height: 34)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
+                        .buttonStyle(ChatPressStyle())
+                        .disabled(!canSend)
+                        .accessibilityLabel("Send message")
                     }
-                    .buttonStyle(ChatPressStyle())
-                    .disabled(!canSend)
-                    .accessibilityLabel(isSending ? "Sending" : "Send message")
-                    .sensoryFeedback(.impact(weight: .light), trigger: isSending) { _, sending in sending }
                 }
             }
         }
@@ -728,6 +751,7 @@ struct ChatView: View {
 
         sendError = nil
         recoveryStatus = nil
+        stopRequested = false
         let sentDraft = ChatDraft(text: input, images: pendingImages)
         let baselineMessageId = latestPersistedMessageId
         let optimisticId = UUID()
@@ -764,7 +788,8 @@ struct ChatView: View {
         func markInFlight(_ id: Int) {
             markedThreadId = id
             inFlight.inFlight[id] = ChatInFlightTurn(
-                baselineMessageId: baselineMessageId
+                baselineMessageId: baselineMessageId,
+                pendingText: trimmed
             )
         }
         func clearInFlight() {
@@ -777,7 +802,8 @@ struct ChatView: View {
             let stream = ChatService(api: api).send(
                 threadId: threadId,
                 content: trimmed,
-                images: sentDraft.images
+                images: sentDraft.images,
+                control: streamControl
             )
             for try await event in stream {
                 switch event {
@@ -845,6 +871,13 @@ struct ChatView: View {
                 // The completed turn already contains its full answer and blocks.
                 // History refresh only reconciles server IDs and title metadata.
                 await loadHistory()
+            } else if stopRequested && !sawError {
+                await finishStoppedTurn(
+                    optimisticId: optimisticId,
+                    draft: sentDraft,
+                    baselineMessageId: baselineMessageId,
+                    clearMarker: clearInFlight
+                )
             } else if !sawError {
                 flushStreamingText()
                 // Stream ended without `done` or an SSE `error`: a transport drop.
@@ -864,6 +897,13 @@ struct ChatView: View {
                     )
                 }
             }
+        } catch where stopRequested {
+            await finishStoppedTurn(
+                optimisticId: optimisticId,
+                draft: sentDraft,
+                baselineMessageId: baselineMessageId,
+                clearMarker: clearInFlight
+            )
         } catch APIError.unauthorized {
             rollbackOptimistic(optimisticId: optimisticId, restore: sentDraft)
             clearInFlight()
@@ -900,6 +940,49 @@ struct ChatView: View {
                 clearInFlight()
             }
         }
+    }
+
+    /// Stop cancels only the client's request. The server sees the disconnect,
+    /// stops its tool loop and persists the question plus any partial answer
+    /// (work log status "aborted"). Nothing is shown from the local stream:
+    /// the transcript is replaced by what the server saved, so the stopped
+    /// turn can neither duplicate nor disappear. If the server saved nothing
+    /// (stopped before it started), the draft is restored instead.
+    @MainActor
+    private func finishStoppedTurn(
+        optimisticId: UUID,
+        draft: ChatDraft,
+        baselineMessageId: Int?,
+        clearMarker: () -> Void
+    ) async {
+        streamFlushTask?.cancel()
+        streamFlushTask = nil
+        streamBuffer.pending = ""
+        activeTools = []
+        recoveryStatus = nil
+        if let threadId {
+            for delay in [0.4, 1.0, 2.0] {
+                try? await Task.sleep(for: .seconds(delay))
+                guard let detail = try? await ChatService(api: api).threadDetail(id: threadId) else { continue }
+                if ChatRecovery.hasPersistedTurn(detail.messages, afterMessageId: baselineMessageId) {
+                    rows = detail.messages.map { .persisted($0) }
+                    currentTitle = detail.thread.title
+                    clearMarker()
+                    NotificationCenter.default.post(name: .chatThreadListChanged, object: threadId)
+                    return
+                }
+            }
+        }
+        rollbackOptimistic(optimisticId: optimisticId, restore: draft)
+        clearMarker()
+        sendError = "Stopped before Coach replied. Your message is back in the box."
+    }
+
+    @MainActor
+    private func stopReply() {
+        guard isSending else { return }
+        stopRequested = true
+        streamControl.stop()
     }
 
     /// Reconcile a foreground transport drop without making the user leave and
@@ -1119,7 +1202,8 @@ private struct MessageBubble: View {
                 pendingAttachments: [],
                 workLog: message.workLog,
                 presentationBlocks: message.presentationBlocks,
-                dimmed: false
+                dimmed: false,
+                createdAt: message.createdAt
             )
         case .optimistic(_, let content, let attachments):
             bubble(
@@ -1160,7 +1244,8 @@ private struct MessageBubble: View {
         pendingAttachments: [PendingChatImage],
         workLog: CoachWorkLog?,
         presentationBlocks: [CoachPresentationBlock],
-        dimmed: Bool
+        dimmed: Bool,
+        createdAt: Date? = nil
     ) -> some View {
         Group {
             if role == .user {
@@ -1177,7 +1262,8 @@ private struct MessageBubble: View {
                     attachments: attachments,
                     pendingAttachments: pendingAttachments,
                     workLog: workLog,
-                    presentationBlocks: presentationBlocks
+                    presentationBlocks: presentationBlocks,
+                    createdAt: createdAt
                 )
                     .foregroundStyle(Theme.Palette.fg1)
                     .textSelection(.enabled)
@@ -1258,14 +1344,23 @@ private struct MessageBubble: View {
         attachments: [ChatAttachment],
         pendingAttachments: [PendingChatImage],
         workLog: CoachWorkLog?,
-        presentationBlocks: [CoachPresentationBlock]
+        presentationBlocks: [CoachPresentationBlock],
+        createdAt: Date? = nil
     ) -> some View {
         if role == .assistant {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Coach")
-                    .font(Theme.FontStyle.sans(13, weight: .medium))
-                    .foregroundStyle(Theme.Palette.fg2)
-                    .accessibilityAddTraits(.isHeader)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text("Coach")
+                        .font(Theme.FontStyle.sans(13, weight: .medium))
+                        .foregroundStyle(Theme.Palette.fg2)
+                    if let createdAt {
+                        Text(createdAt.formatted(.dateTime.hour().minute()))
+                            .font(Theme.FontStyle.sans(11))
+                            .foregroundStyle(Theme.Palette.fg3)
+                    }
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isHeader)
                 MarkdownView(content: content, style: .chat)
                 if !presentationBlocks.isEmpty {
                     CoachPresentationBlocksView(blocks: presentationBlocks)
@@ -1575,17 +1670,23 @@ private struct JumpToLatestButton: View {
 
     private var button: some View {
         Button(action: action) {
-            Image(systemName: "arrow.down")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Theme.Palette.fg0)
-                .frame(width: 36, height: 36)
-                .background(Theme.Palette.bg3, in: Circle())
-                .overlay(Circle().strokeBorder(Theme.Palette.borderDefault))
-                .shadow(color: .black.opacity(0.5), radius: 10, y: 4)
-                .frame(width: 44, height: 44)
-                .contentShape(Circle())
+            HStack(spacing: 6) {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 12, weight: .semibold))
+                Text("Latest reply")
+                    .font(Theme.FontStyle.sans(13, weight: .medium))
+            }
+            .foregroundStyle(Theme.Palette.fg0)
+            .padding(.horizontal, 14)
+            .frame(minHeight: 36)
+            .background(Theme.Palette.bg3, in: Capsule())
+            .overlay(Capsule().strokeBorder(Theme.Palette.borderDefault))
+            .shadow(color: .black.opacity(0.5), radius: 10, y: 4)
+            .frame(minHeight: 44)
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Jump to latest message")
+        .accessibilityLabel("Latest reply")
+        .accessibilityHint("Scrolls to the newest message")
     }
 }

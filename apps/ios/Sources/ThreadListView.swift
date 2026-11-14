@@ -8,17 +8,25 @@ struct ThreadListView: View {
 
     @Environment(\.api) private var api
     @Environment(\.chatInFlight) private var inFlight
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    @Environment(\.foldGeometry) private var fold
     @State private var deletingThread: ChatThread?
     @State private var deleteError: String?
     @State private var isDeleting = false
     @State private var titleRefreshTask: Task<Void, Never>?
     @State private var threads: [ChatThread] = []
     @State private var phase: Phase = .loading
+    @State private var query = ""
 
     enum Phase {
         case loading
         case loaded
         case error(String)
+    }
+
+    /// Keeps rows on the leading side of the fold when the list is a pane.
+    private var trailingInset: CGFloat {
+        CoachPaneLayout.compute(fold: fold, regular: sizeClass == .regular)?.listTrailingInset ?? 0
     }
 
     var body: some View {
@@ -71,10 +79,11 @@ struct ThreadListView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     ForEach(0..<6, id: \.self) { _ in
-                        ThreadRow(thread: ThreadRow.placeholder)
+                        ThreadRow(thread: ThreadRow.placeholder, state: .idle)
                     }
                 }
-                .padding(.horizontal, Theme.Spacing.md)
+                .padding(.leading, Theme.Spacing.md)
+                .padding(.trailing, Theme.Spacing.md + trailingInset)
                 .redacted(reason: .placeholder)
             }
             .scrollDisabled(true)
@@ -92,103 +101,178 @@ struct ThreadListView: View {
                 } label: {
                     Text("Retry")
                         .font(Theme.FontStyle.sans(14, weight: .semibold))
-                        .foregroundStyle(Theme.Palette.bg0)
+                        .foregroundStyle(Theme.Palette.fg0)
                         .padding(.horizontal, 20)
-                        .frame(minHeight: 40)
-                        .background(Theme.Palette.fg0, in: Capsule())
                         .frame(minHeight: 44)
+                        .overlay(Rectangle().strokeBorder(Theme.Palette.borderStrong, lineWidth: 1))
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .glassCard()
-            .padding(Theme.Spacing.md)
+            .padding(.leading, Theme.Spacing.md)
+            .padding(.trailing, Theme.Spacing.md + trailingInset)
+            .padding(.vertical, Theme.Spacing.md)
             .frame(maxHeight: .infinity, alignment: .top)
         default:
             if threads.isEmpty {
                 emptyState
             } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
-                        ForEach(ThreadGroup.group(threads)) { group in
-                            Text(group.title)
-                                .font(Theme.FontStyle.sans(12, weight: .medium))
-                                .foregroundStyle(Theme.Palette.fg3)
-                                .padding(.top, group.id == 0 ? 6 : 22)
-                                .padding(.bottom, 2)
-                                .accessibilityAddTraits(.isHeader)
-                            ForEach(group.threads) { thread in
-                                let isSelected = thread.id == highlightedThreadId
-                                Button {
-                                    // Re-picking the conversation already on
-                                    // screen must not rebuild it: a new chat
-                                    // mid-stream would lose its live reply.
-                                    guard !isSelected else { return }
-                                    selection = .thread(id: thread.id, title: thread.title)
-                                } label: {
-                                    ThreadRow(thread: thread)
-                                }
-                                .buttonStyle(ThreadRowStyle(isSelected: isSelected))
-                                .accessibilityAddTraits(isSelected ? .isSelected : [])
-                                .contextMenu {
-                                    Button("Delete conversation", systemImage: "trash", role: .destructive) {
-                                        deletingThread = thread
-                                    }
-                                    .disabled(isDeleting || inFlight.inFlight[thread.id] != nil)
-                                }
-                                .accessibilityAction(named: "Delete conversation") {
-                                    guard !isDeleting, inFlight.inFlight[thread.id] == nil else { return }
-                                    deletingThread = thread
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal, Theme.Spacing.md)
-                    .padding(.bottom, Theme.Spacing.xl)
+                VStack(spacing: 0) {
+                    searchField
+                    results
                 }
-                .scrollContentBackground(.hidden)
             }
         }
     }
 
-    private var emptyState: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("No conversations yet")
-                        .font(Theme.FontStyle.sans(20, weight: .semibold))
-                        .foregroundStyle(Theme.Palette.fg0)
-                    Text("Start with a question about recovery, sleep, or training.")
-                        .font(Theme.FontStyle.sans(14))
-                        .foregroundStyle(Theme.Palette.fg2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.bottom, 10)
-                ForEach(ChatView.suggestedPrompts, id: \.self) { prompt in
-                    Button {
-                        selection = .new(id: UUID(), draft: prompt)
-                    } label: {
-                        HStack {
-                            Text(prompt)
-                                .font(Theme.FontStyle.sans(15))
-                                .foregroundStyle(Theme.Palette.fg1)
-                            Spacer(minLength: 8)
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(Theme.Palette.fg3)
-                        }
-                        .padding(.vertical, 12)
-                        .frame(minHeight: 52)
-                        .overlay(alignment: .top) {
-                            Rectangle().fill(Theme.Palette.borderSubtle).frame(height: 1)
-                        }
+    private var searchField: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Theme.Palette.fg3)
+                .accessibilityHidden(true)
+            TextField("Search conversations", text: $query)
+                .font(Theme.FontStyle.sans(15))
+                .foregroundStyle(Theme.Palette.fg0)
+                .tint(Theme.Palette.accent)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.search)
+                .accessibilityIdentifier("thread-search")
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Theme.Palette.fg3)
+                        .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, query.isEmpty ? 12 : 0)
+        .frame(minHeight: 44)
+        .background(Theme.Palette.composerSurface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(.leading, Theme.Spacing.md)
+        .padding(.trailing, Theme.Spacing.md + trailingInset)
+        .padding(.bottom, Theme.Spacing.xs)
+    }
+
+    @ViewBuilder
+    private var results: some View {
+        let visible = ThreadListLogic.filter(threads, query: query)
+        if visible.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("No matches")
+                    .font(Theme.FontStyle.sans(15, weight: .semibold))
+                    .foregroundStyle(Theme.Palette.fg0)
+                Text("No conversation title or preview contains “\(query.trimmingCharacters(in: .whitespacesAndNewlines))”.")
+                    .font(Theme.FontStyle.sans(13))
+                    .foregroundStyle(Theme.Palette.fg2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, Theme.Spacing.md)
+            .padding(.trailing, Theme.Spacing.md + trailingInset)
+            .padding(.top, Theme.Spacing.md)
+            Spacer(minLength: 0)
+        } else {
+            List {
+                ForEach(ThreadGroup.group(visible)) { group in
+                    Section {
+                        ForEach(group.threads) { thread in
+                            row(thread)
+                        }
+                    } header: {
+                        Text(group.title)
+                            .font(Theme.FontStyle.sans(12, weight: .medium))
+                            .foregroundStyle(Theme.Palette.fg3)
+                            .textCase(nil)
+                            .padding(.leading, Theme.Spacing.md)
+                            .accessibilityAddTraits(.isHeader)
                     }
-                    .buttonStyle(ChatPressStyle())
+                    .listRowSeparator(.hidden)
                 }
             }
-            .padding(Theme.Spacing.md)
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .environment(\.defaultMinListHeaderHeight, 28)
         }
+    }
+
+    private func row(_ thread: ChatThread) -> some View {
+        let isSelected = thread.id == highlightedThreadId
+        let state = ThreadListLogic.rowState(for: thread.id, inFlight: inFlight.inFlight)
+        let locked = isDeleting || state != .idle
+        return Button {
+            // Re-picking the conversation already on screen must not rebuild
+            // it: a new chat mid-stream would lose its live reply.
+            guard !isSelected else { return }
+            selection = .thread(id: thread.id, title: thread.title)
+        } label: {
+            ThreadRow(thread: thread, state: state)
+                .padding(.leading, Theme.Spacing.md)
+                .padding(.trailing, Theme.Spacing.md + trailingInset)
+        }
+        .buttonStyle(ThreadRowStyle(isSelected: isSelected))
+        .listRowInsets(EdgeInsets())
+        .listRowBackground(Color.clear)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if !locked {
+                Button(role: .destructive) {
+                    deletingThread = thread
+                } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        }
+        .contextMenu {
+            Button("Delete conversation", systemImage: "trash", role: .destructive) {
+                deletingThread = thread
+            }
+            .disabled(locked)
+        }
+        .accessibilityAction(named: "Delete conversation") {
+            guard !locked else { return }
+            deletingThread = thread
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("No conversations yet")
+                .font(Theme.FontStyle.sans(20, weight: .semibold))
+                .foregroundStyle(Theme.Palette.fg0)
+            Text("Start a new chat with the compose button. Coach reads your recovery, sleep and training before it answers.")
+                .font(Theme.FontStyle.sans(15))
+                .foregroundStyle(Theme.Palette.fg2)
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                selection = .new(id: UUID(), draft: nil)
+            } label: {
+                Label("New chat", systemImage: "square.and.pencil")
+                    .font(Theme.FontStyle.sans(15, weight: .semibold))
+                    .foregroundStyle(Theme.Palette.fg0)
+                    .padding(.horizontal, 16)
+                    .frame(minHeight: 44)
+                    .overlay(Rectangle().strokeBorder(Theme.Palette.borderStrong, lineWidth: 1))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, Theme.Spacing.md)
+        .padding(.trailing, Theme.Spacing.md + trailingInset)
+        .padding(.top, Theme.Spacing.md)
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     @MainActor
@@ -229,6 +313,32 @@ struct ThreadListView: View {
     }
 }
 
+/// Pure list logic, kept apart from the view so it can be unit tested.
+enum ThreadListLogic {
+    enum RowState: Equatable {
+        case idle
+        /// A reply is in flight; `question` is the pending message, if known.
+        case replying(question: String?)
+    }
+
+    static func rowState(for threadId: Int, inFlight: [Int: ChatInFlightTurn]) -> RowState {
+        guard let turn = inFlight[threadId] else { return .idle }
+        let question = turn.pendingText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return .replying(question: (question?.isEmpty == false) ? question : nil)
+    }
+
+    /// Case- and diacritic-insensitive match on title or preview. An empty
+    /// query keeps every thread.
+    static func filter(_ threads: [ChatThread], query: String) -> [ChatThread] {
+        let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else { return threads }
+        return threads.filter { thread in
+            thread.displayTitle.localizedStandardContains(needle)
+                || (thread.lastPreview.map(MarkdownView.plain)?.localizedStandardContains(needle) ?? false)
+        }
+    }
+}
+
 struct ThreadGroup: Identifiable {
     let id: Int
     let title: String
@@ -242,7 +352,8 @@ struct ThreadGroup: Identifiable {
         for thread in sorted {
             if calendar.isDate(thread.updatedAt, inSameDayAs: now) {
                 buckets[0].1.append(thread)
-            } else if calendar.isDateInYesterday(thread.updatedAt) {
+            } else if let yesterday = calendar.date(byAdding: .day, value: -1, to: startOfToday),
+                      calendar.isDate(thread.updatedAt, inSameDayAs: yesterday) {
                 buckets[1].1.append(thread)
             } else if thread.updatedAt >= weekAgo {
                 buckets[2].1.append(thread)
@@ -261,17 +372,12 @@ private struct ThreadRowStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .background {
-                Rectangle()
-                    .fill(isSelected || configuration.isPressed ? Theme.Palette.bg3 : .clear)
-                    .padding(.horizontal, -10)
-            }
+            .background(isSelected || configuration.isPressed ? Theme.Palette.bg3 : .clear)
             .overlay(alignment: .leading) {
                 if isSelected {
                     Rectangle()
                         .fill(Theme.Palette.accent)
                         .frame(width: 2)
-                        .padding(.leading, -10)
                 }
             }
     }
@@ -279,6 +385,7 @@ private struct ThreadRowStyle: ButtonStyle {
 
 private struct ThreadRow: View {
     let thread: ChatThread
+    let state: ThreadListLogic.RowState
     var showsDivider = true
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -289,6 +396,11 @@ private struct ThreadRow: View {
         messageCount: 2,
         lastPreview: "You fell asleep around 1:17 AM and woke around 9:59 AM, which left you short of your need."
     )
+
+    private var preview: String? {
+        if case .replying(let question) = state, let question { return question }
+        return thread.lastPreview.map(MarkdownView.plain).flatMap { $0.isEmpty ? nil : $0 }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -302,12 +414,10 @@ private struct ThreadRow: View {
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
                 if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 4) }
-                Text(Self.timestamp(thread.updatedAt))
-                    .font(Theme.FontStyle.mono(11))
-                    .foregroundStyle(Theme.Palette.fg3)
+                trailing
                     .fixedSize(horizontal: !dynamicTypeSize.isAccessibilitySize, vertical: true)
             }
-            if let preview = thread.lastPreview.map(MarkdownView.plain), !preview.isEmpty {
+            if let preview {
                 Text(preview)
                     .font(Theme.FontStyle.sans(13))
                     .foregroundStyle(Theme.Palette.fg2)
@@ -320,11 +430,26 @@ private struct ThreadRow: View {
         .padding(.vertical, 13)
         .contentShape(Rectangle())
         .overlay(alignment: .bottom) {
-            if showsDivider {
-                Rectangle()
-                    .fill(Theme.Palette.borderSubtle)
-                    .frame(height: 1)
+            if showsDivider { LedgerRule() }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var trailing: some View {
+        if case .replying = state {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(Theme.Palette.strain)
+                    .frame(width: 8, height: 8)
+                Text("Replying…")
+                    .font(Theme.FontStyle.sans(12, weight: .medium))
+                    .foregroundStyle(Theme.Palette.strain)
             }
+        } else {
+            Text(Self.timestamp(thread.updatedAt))
+                .font(Theme.FontStyle.mono(11))
+                .foregroundStyle(Theme.Palette.fg3)
         }
     }
 
@@ -333,7 +458,7 @@ private struct ThreadRow: View {
         if calendar.isDate(date, inSameDayAs: now) {
             return date.formatted(.dateTime.hour().minute())
         }
-        if calendar.isDateInYesterday(date) { return "Yesterday" }
+        if calendar.isDateInYesterday(date) { return date.formatted(.dateTime.hour().minute()) }
         if let days = calendar.dateComponents([.day], from: date, to: now).day, days < 7 {
             return date.formatted(.dateTime.weekday(.abbreviated))
         }

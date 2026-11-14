@@ -257,6 +257,19 @@ struct SSEError: Decodable {
 }
 
 enum ChatRecovery {
+    /// After the user stops a reply the server persists the question (and any
+    /// partial answer) when it sees the disconnect. True once history holds a
+    /// message newer than the one the turn started from.
+    static func hasPersistedTurn(
+        _ messages: [ChatMessage],
+        afterMessageId baselineMessageId: Int?
+    ) -> Bool {
+        messages.contains { message in
+            guard let baselineMessageId else { return true }
+            return message.id > baselineMessageId
+        }
+    }
+
     static func hasNewAssistantReply(
         _ messages: [ChatMessage],
         afterMessageId baselineMessageId: Int?
@@ -278,6 +291,16 @@ enum ChatRecovery {
 
 struct ChatInFlightTurn {
     let baselineMessageId: Int?
+    /// The question awaiting its reply, shown as the preview of the thread's
+    /// row in the conversation list while the reply is in flight.
+    var pendingText: String? = nil
+}
+
+/// Lets the view cancel the in-flight request without cancelling the task
+/// that reconciles afterwards.
+final class ChatStreamControl {
+    var cancel: (() -> Void)?
+    func stop() { cancel?() }
 }
 
 @MainActor
