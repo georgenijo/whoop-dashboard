@@ -529,14 +529,14 @@ struct ChatView: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 0) {
                 TextField("Message Coach", text: $input,
                           prompt: Text("Ask Coach…").foregroundColor(Theme.Palette.fg2),
                           axis: .vertical)
                     .font(Theme.FontStyle.sans(15))
                     .foregroundStyle(Theme.Palette.fg0)
                     .tint(Theme.Palette.accent)
-                    .lineLimit(2...6)
+                    .lineLimit(1...6)
                     .disabled(isSending)
                     .textFieldStyle(.plain)
                     .focused($isComposerFocused)
@@ -592,8 +592,8 @@ struct ChatView: View {
             }
         }
         .padding(.horizontal, 10)
-        .padding(.top, 14)
-        .padding(.bottom, 6)
+        .padding(.top, 10)
+        .padding(.bottom, 4)
         .background(Theme.Palette.composerSurface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
