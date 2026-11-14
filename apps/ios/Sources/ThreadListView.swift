@@ -101,6 +101,10 @@ struct ThreadListView: View {
                             ForEach(Array(group.threads.enumerated()), id: \.element.id) { index, thread in
                                 let isSelected = thread.id == highlightedThreadId
                                 Button {
+                                    // Re-picking the conversation already on
+                                    // screen must not rebuild it: a new chat
+                                    // mid-stream would lose its live reply.
+                                    guard !isSelected else { return }
                                     selection = .thread(id: thread.id, title: thread.title)
                                 } label: {
                                     ThreadRow(thread: thread, showsDivider: index < group.threads.count - 1 && !isSelected)

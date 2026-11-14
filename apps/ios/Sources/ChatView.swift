@@ -118,8 +118,13 @@ struct ChatView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .task {
             if !didLoadInitial {
-                didLoadInitial = true
                 await loadHistory()
+                // The split view can re-host this view as it collapses or
+                // expands, cancelling the first appearance's task while the
+                // next appearance's task is already running. Only a load that
+                // ran to completion counts, so the surviving task still loads.
+                if Task.isCancelled { return }
+                didLoadInitial = true
                 // recoveryStatus is view-local @State, so it doesn't survive leaving and
                 // reopening this thread; re-arm the bar/send-block from the shared store.
                 if let threadId, chatInFlight.inFlight[threadId] != nil {
@@ -674,10 +679,13 @@ struct ChatView: View {
         } catch APIError.unauthorized {
             loadError = "Session expired. Sign in again."
         } catch APIError.network(let err) {
+            // A cancelled fetch (view went away mid-load) is not a failure.
+            if Task.isCancelled || (err as? URLError)?.code == .cancelled { return }
             loadError = "Network error: \(err.localizedDescription)"
         } catch APIError.serverError(let code) {
             loadError = "Server error (\(code))"
         } catch {
+            if Task.isCancelled { return }
             loadError = "Could not load thread"
         }
     }
@@ -771,6 +779,10 @@ struct ChatView: View {
                 case .done(let reply, _):
                     sawDone = true
                     NotificationCenter.default.post(name: .chatThreadListChanged, object: threadId)
+                    // Any other view showing this thread (e.g. rebuilt by a
+                    // layout change) reloads the finished turn; this view
+                    // ignores it because it is still sending.
+                    NotificationCenter.default.post(name: .chatThreadNeedsRefresh, object: threadId)
                     activeTools = []
                     commitAssistant(reply: reply)
                     clearInFlight()
