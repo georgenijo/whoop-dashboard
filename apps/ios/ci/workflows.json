@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "appId": "6767579063",
+  "productId": "76F07B3C-145A-4458-82D2-DCCC1C9EBA30",
+  "repository": {
+    "id": "cccd38c5-6682-4860-b065-1be47480a1ba",
+    "httpCloneUrl": "https://github.com/georgenijo/whoop-dashboard.git"
+  },
+  "xcode": {
+    "id": "8330ad8b-821d-4f60-afe3-8a598385c7e9",
+    "name": "Xcode 27.2",
+    "version": "27B52",
+    "deviceTypeIdentifier": "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo",
+    "runtimeName": "iOS 27.2",
+    "runtimeIdentifier": "com.apple.CoreSimulator.SimRuntime.iOS-27-2"
+  },
+  "macOs": {
+    "id": "353ddc8d-0ec5-436d-b324-fd88644df393",
+    "name": "macOS Golden Gate 27.2",
+    "version": "26B123"
+  },
+  "beta": {
+    "id": "331CD557-A605-4CA8-85CC-9D80A00F3ACB",
+    "attributes": {
+      "name": "Beta",
+      "isEnabled": true,
+      "clean": true,
+      "containerFilePath": "apps/ios/Coach.xcodeproj",
+      "branchStartCondition": {
+        "source": {
+          "isAllMatch": false,
+          "patterns": [
+            {
+              "pattern": "main",
+              "isPrefix": false
+            }
+          ]
+        },
+        "filesAndFoldersRule": {
+          "mode": "START_IF_ANY_FILE_MATCHES",
+          "matchers": [
+            {
+              "directory": "apps/ios",
+              "fileExtension": null,
+              "fileName": null
+            }
+          ]
+        },
+        "autoCancel": true
+      }
+    },
+    "archiveAction": {
+      "name": "Archive - iOS",
+      "actionType": "ARCHIVE",
+      "buildDistributionAudience": "INTERNAL_ONLY",
+      "scheme": "Coach",
+      "platform": "IOS",
+      "isRequiredToPass": true
+    }
+  },
+  "verify": {
+    "attributes": {
+      "name": "Verify",
+      "description": "Native iOS PR tests and daily pinned-toolchain health check",
+      "pullRequestStartCondition": {
+        "source": {
+          "isAllMatch": true
+        },
+        "destination": {
+          "isAllMatch": false,
+          "patterns": [
+            {
+              "pattern": "main",
+              "isPrefix": false
+            }
+          ]
+        },
+        "filesAndFoldersRule": {
+          "mode": "START_IF_ANY_FILE_MATCHES",
+          "matchers": [
+            {
+              "directory": "apps/ios"
+            }
+          ]
+        },
+        "autoCancel": true
+      },
+      "scheduledStartCondition": {
+        "source": {
+          "isAllMatch": false,
+          "patterns": [
+            {
+              "pattern": "main",
+              "isPrefix": false
+            }
+          ]
+        },
+        "schedule": {
+          "frequency": "DAILY",
+          "hour": 7,
+          "minute": 0,
+          "timezone": "UTC"
+        }
+      },
+      "isEnabled": true,
+      "clean": true,
+      "containerFilePath": "apps/ios/Coach.xcodeproj"
+    },
+    "testAction": {
+      "name": "Test - iOS",
+      "actionType": "TEST",
+      "destination": "ANY_IOS_SIMULATOR",
+      "testConfiguration": {
+        "kind": "USE_SCHEME_SETTINGS",
+        "testDestinations": [
+          {
+            "deviceTypeName": "iPhone Duo",
+            "deviceTypeIdentifier": "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo",
+            "runtimeName": "iOS 27.2",
+            "runtimeIdentifier": "com.apple.CoreSimulator.SimRuntime.iOS-27-2",
+            "kind": "SIMULATOR"
+          }
+        ]
+      },
+      "scheme": "Coach",
+      "platform": "IOS",
+      "isRequiredToPass": true
+    }
+  }
+}

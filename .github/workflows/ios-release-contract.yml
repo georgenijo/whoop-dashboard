@@ -1,0 +1,26 @@
+name: iOS release tooling
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Validate release tooling
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Test workflow reconciliation without credentials
+        run: python3 -m unittest discover -s tests -p 'test_ios_cloud*.py' -v
+      - name: Check Cloud hook syntax
+        run: sh -n apps/ios/ci_scripts/ci_post_clone.sh
