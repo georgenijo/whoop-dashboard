@@ -4,7 +4,7 @@ Native verification and TestFlight delivery run in Xcode Cloud. GitHub's web CI 
 
 ## Versioned configuration
 
-`ci/workflows.json` is the source of truth for the managed workflow fields and concrete compatible toolchain IDs. The current pin is Xcode 27.2 (`27B52`) on macOS Golden Gate 27.2 (`26B123`), with the iPhone Duo iOS 27.2 simulator.
+`ci/workflows.json` is the source of truth for the managed workflow fields and concrete compatible toolchain IDs. The current pin is Xcode 27.2 (`27B52`) on macOS Golden Gate 27.2 (`26B123`), with the iPhone Duo iOS 27.2 simulator. The runtime ID is device-specific (`com.apple.CoreSimulator.SimRuntime.iOS-27-2-iPhone19-4`): Apple lists the generic 27.2 runtime for Duo too, but the cloud runner rejects that pair as incompatible. Catalog membership alone does not prove a destination can execute; require a passing native run.
 
 | Workflow | Starts | Required action |
 |---|---|---|

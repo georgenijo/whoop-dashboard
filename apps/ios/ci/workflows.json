@@ -12,7 +12,7 @@
     "version": "27B52",
     "deviceTypeIdentifier": "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo",
     "runtimeName": "iOS 27.2",
-    "runtimeIdentifier": "com.apple.CoreSimulator.SimRuntime.iOS-27-2"
+    "runtimeIdentifier": "com.apple.CoreSimulator.SimRuntime.iOS-27-2-iPhone19-4"
   },
   "macOs": {
     "id": "353ddc8d-0ec5-436d-b324-fd88644df393",
@@ -117,7 +117,7 @@
             "deviceTypeName": "iPhone Duo",
             "deviceTypeIdentifier": "com.apple.CoreSimulator.SimDeviceType.iPhone-Duo",
             "runtimeName": "iOS 27.2",
-            "runtimeIdentifier": "com.apple.CoreSimulator.SimRuntime.iOS-27-2",
+            "runtimeIdentifier": "com.apple.CoreSimulator.SimRuntime.iOS-27-2-iPhone19-4",
             "kind": "SIMULATOR"
           }
         ]
