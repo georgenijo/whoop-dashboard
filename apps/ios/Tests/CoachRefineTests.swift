@@ -224,5 +224,7 @@ final class CoachRefineTests: XCTestCase {
         XCTAssertEqual(MetricStripColumns.count(width: 640, metrics: 2, accessibilitySize: false), 2)
         XCTAssertEqual(MetricStripColumns.count(width: 640, metrics: 4, accessibilitySize: true), 1)
         XCTAssertEqual(MetricStripColumns.count(width: 10, metrics: 4, accessibilitySize: false), 1)
+        XCTAssertEqual(MetricStripColumns.count(width: 450, metrics: 4, accessibilitySize: false), 2, "no orphan cell in a 3+1 grid")
+        XCTAssertEqual(MetricStripColumns.count(width: 450, metrics: 6, accessibilitySize: false), 3)
     }
 }

@@ -300,7 +300,13 @@ enum MetricStripColumns {
     static func count(width: CGFloat, metrics: Int, accessibilitySize: Bool) -> Int {
         guard metrics > 0 else { return 1 }
         if accessibilitySize { return 1 }
-        return max(1, min(metrics, Int(width / 150)))
+        let fits = max(1, min(metrics, Int(width / 140)))
+        // Prefer a column count that fills every row over one that leaves
+        // empty cells.
+        for columns in stride(from: fits, through: 2, by: -1) where metrics % columns == 0 {
+            return columns
+        }
+        return fits
     }
 }
 
