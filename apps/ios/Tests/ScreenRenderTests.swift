@@ -211,19 +211,19 @@ final class ScreenRenderTests: XCTestCase {
         window.isHidden = true
     }
 
-    private let inner = CGSize(width: 867, height: 669)
-    private let cover = CGSize(width: 382, height: 678)
+    private let inner = CGSize(width: 951, height: 669)
+    private let cover = CGSize(width: 466, height: 678)
     private let innerFold = FoldGeometry(width: 867, hinge: 455 ... 495)
 
     @MainActor
     func testRenderAll() throws {
-        let tall = CGSize(width: 867, height: 1500)
-        let coverTall = CGSize(width: 382, height: 1900)
+        let tall = CGSize(width: 951, height: 1500)
+        let coverTall = CGSize(width: 466, height: 1900)
         try snapshot(DashboardView(), name: "01-today-inner", size: inner, regular: true, fold: innerFold)
         try snapshot(DashboardView(), name: "01-today-inner-scroll", size: tall, regular: true, fold: innerFold)
         try snapshot(DashboardView(), name: "01-today-cover", size: cover, regular: false, fold: .none)
         try snapshot(ActivityView(), name: "02-trends-inner", size: inner, regular: true, fold: innerFold)
-        try snapshot(ActivityView(), name: "02-trends-inner-scroll", size: CGSize(width: 867, height: 1700), regular: true, fold: innerFold)
+        try snapshot(ActivityView(), name: "02-trends-inner-scroll", size: CGSize(width: 951, height: 1700), regular: true, fold: innerFold)
         try snapshot(ActivityView(), name: "02-trends-cover", size: cover, regular: false, fold: .none)
         try snapshot(NavigationStack { StatsView(range: .constant(.d90)) }, name: "03-progress-inner", size: inner, regular: true, fold: innerFold)
         try snapshot(NavigationStack { StatsView(range: .constant(.d90)) }, name: "03-progress-inner-scroll", size: tall, regular: true, fold: innerFold)

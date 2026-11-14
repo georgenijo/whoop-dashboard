@@ -44,10 +44,17 @@ struct ZoneScale: View {
                     ForEach(0..<3, id: \.self) { i in label(i, alignment: .leading) }
                 }
             } else {
-                HStack(alignment: .firstTextBaseline, spacing: 0) {
-                    label(0, alignment: .leading)
-                    label(1, alignment: .center)
-                    label(2, alignment: .trailing)
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        label(0, alignment: .leading).fixedSize()
+                        label(1, alignment: .center)
+                        label(2, alignment: .trailing).fixedSize()
+                    }
+                    HStack(alignment: .firstTextBaseline, spacing: 0) {
+                        label(0, alignment: .leading, showsName: false)
+                        label(1, alignment: .center, showsName: false)
+                        label(2, alignment: .trailing, showsName: false)
+                    }
                 }
             }
         }
@@ -56,13 +63,12 @@ struct ZoneScale: View {
         .accessibilityValue("Score \(Int(score.rounded())). Low 0 to 33, moderate 34 to 66, high 67 to 100.")
     }
 
-    private func label(_ i: Int, alignment: Alignment) -> some View {
+    private func label(_ i: Int, alignment: Alignment, showsName: Bool = true) -> some View {
         let zone = Self.zones[i]
-        return Text("\(zone.bandName) · \(zone.bandRange)")
+        return Text(showsName ? "\(zone.bandName) · \(zone.bandRange)" : zone.bandRange)
             .font(Theme.FontStyle.mono(11))
             .foregroundStyle(Theme.Palette.fg2)
             .lineLimit(1)
-            .minimumScaleFactor(0.8)
             .frame(maxWidth: .infinity, alignment: alignment)
     }
 }
