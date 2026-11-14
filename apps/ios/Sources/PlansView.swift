@@ -217,23 +217,15 @@ private struct TodayHero: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                let header = dynamicTypeSize.isAccessibilitySize
-                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 6))
-                    : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 10))
-                header {
+                ViewThatFits(in: .horizontal) {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text(isActive ? "Today" : "Most recent plan")
-                            .font(Theme.FontStyle.sans(15, weight: .semibold))
-                            .foregroundStyle(Theme.Palette.fg0)
-                        if let date = today.flatMap({ PlansPresentation.dayParts($0.date) }) {
-                            Text("\(date.weekday), \(date.day)")
-                                .font(Theme.FontStyle.sans(13))
-                                .foregroundStyle(Theme.Palette.fg3)
-                        }
+                        heroTitle
+                        Spacer(minLength: 8)
+                        heroChip
                     }
-                    if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 8) }
-                    if let today, let band {
-                        BandChip(score: today.recoveryScore, band: band)
+                    VStack(alignment: .leading, spacing: 6) {
+                        heroTitle
+                        heroChip
                     }
                 }
 
@@ -301,6 +293,30 @@ private struct TodayHero: View {
             heroActions
         }
         .coachLedgerOutline()
+    }
+
+    private var heroTitle: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(isActive ? "Today" : "Most recent plan")
+                .font(Theme.FontStyle.sans(15, weight: .semibold))
+                .foregroundStyle(Theme.Palette.fg0)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+            if let date = today.flatMap({ PlansPresentation.dayParts($0.date) }) {
+                Text("\(date.weekday), \(date.day)")
+                    .font(Theme.FontStyle.sans(13))
+                    .foregroundStyle(Theme.Palette.fg3)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var heroChip: some View {
+        if let today, let band {
+            BandChip(score: today.recoveryScore, band: band)
+        }
     }
 
     private var subtitle: String {
