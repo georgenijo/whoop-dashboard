@@ -359,11 +359,12 @@ struct ChatView: View {
                     }
                 }
                 .onAppear {
+                    guard scrollState.takeInitialPosition() else { return }
                     proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom)
                 }
                 .scrollDismissesKeyboard(.interactively)
                 .onChange(of: rows.last?.id) { _, newLastId in
-                    if let newLastId {
+                    if let newLastId, scrollState.isAtBottom {
                         withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo(newLastId, anchor: .bottom) }
                     }
                 }
@@ -738,6 +739,9 @@ struct ChatView: View {
             )
         )
         rows.append(.typing)
+        // An explicit follow-up reveals the submitted turn, even if the user
+        // was reading older messages. Background updates keep their place.
+        jumpRequest += 1
         streamingAssistant = nil
         activeTools = []
         defer {
@@ -1103,6 +1107,7 @@ private struct MessageBubble: View {
     let api: APIClient
     let cache: ChatAttachmentCache
     let onAttachmentTap: (ChatAttachment) -> Void
+    @State private var copied = false
 
     var body: some View {
         switch row {
@@ -1257,10 +1262,10 @@ private struct MessageBubble: View {
     ) -> some View {
         if role == .assistant {
             VStack(alignment: .leading, spacing: 14) {
-                if let workLog {
-                    CoachWorkLogView(workLog: workLog)
-                        .padding(.bottom, -4)
-                }
+                Text("Coach")
+                    .font(Theme.FontStyle.sans(13, weight: .medium))
+                    .foregroundStyle(Theme.Palette.fg2)
+                    .accessibilityAddTraits(.isHeader)
                 MarkdownView(content: content, style: .chat)
                 if !presentationBlocks.isEmpty {
                     CoachPresentationBlocksView(blocks: presentationBlocks)
@@ -1272,19 +1277,29 @@ private struct MessageBubble: View {
                     let summary = ([content] + presentationBlocks.map(\.fallbackText))
                         .filter { !$0.isEmpty }.joined(separator: "\n\n")
                     HStack(spacing: 20) {
-                        Button { UIPasteboard.general.string = summary } label: {
-                            Label("Copy", systemImage: "doc.on.doc")
+                        Button {
+                            UIPasteboard.general.string = summary
+                            copied = true
+                        } label: {
+                            Label(copied ? "Copied" : "Copy", systemImage: copied ? "checkmark" : "doc.on.doc")
+                                .frame(minWidth: 44, minHeight: 44)
                         }
+                        .accessibilityIdentifier("coach-copy-answer")
                         ShareLink(item: summary) {
                             Label("Share", systemImage: "square.and.arrow.up")
+                                .frame(minWidth: 44, minHeight: 44)
                         }
                     }
                     .font(Theme.FontStyle.sans(12, weight: .medium))
                     .foregroundStyle(Theme.Palette.fg2)
                     .buttonStyle(.plain)
                     .frame(minHeight: 44)
+                    if let workLog {
+                        CoachWorkLogView(workLog: workLog)
+                    }
                 }
             }
+            .frame(maxWidth: 640, alignment: .leading)
         } else {
             VStack(alignment: .leading, spacing: 8) {
                 if !attachments.isEmpty {
@@ -1516,11 +1531,27 @@ private struct ChatAttachmentViewer: View {
 @Observable
 final class ChatScrollState {
     private(set) var isAtBottom = true
-    @ObservationIgnored var viewportHeight: CGFloat = 0
+    @ObservationIgnored private var positionedHistory = false
+    @ObservationIgnored private var lastBottomEdge: CGFloat?
+    @ObservationIgnored var viewportHeight: CGFloat = 0 {
+        didSet { refreshPosition() }
+    }
+
+    /// A split-view reappearance during folding must not repeat the initial jump.
+    func takeInitialPosition() -> Bool {
+        guard !positionedHistory else { return false }
+        positionedHistory = true
+        return true
+    }
 
     /// `bottomEdge` is the end-of-transcript marker's y in the scroll viewport.
     func update(bottomEdge: CGFloat) {
-        guard viewportHeight > 0 else { return }
+        lastBottomEdge = bottomEdge
+        refreshPosition()
+    }
+
+    private func refreshPosition() {
+        guard viewportHeight > 0, let bottomEdge = lastBottomEdge else { return }
         let atBottom = bottomEdge <= viewportHeight + 120
         if atBottom != isAtBottom { isAtBottom = atBottom }
     }
