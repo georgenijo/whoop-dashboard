@@ -14,6 +14,7 @@ struct ChatView: View {
     @Environment(\.chatInFlight) private var chatInFlight
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.horizontalSizeClass) private var sizeClass
     private let conversation: UUID?
     private let onComposerInteraction: (() -> Void)?
     @State private var threadId: Int?
@@ -124,10 +125,23 @@ struct ChatView: View {
                     .offset(y: -54)
                 }
             }
+        // The expanded Duo layout has a side rail and no bottom home indicator.
+        // Retain the compact display's home-indicator inset and all keyboard avoidance.
+        .ignoresSafeArea(.container, edges: sizeClass == .regular ? .bottom : [])
         .navigationTitle(currentTitle ?? initialTitle ?? "New chat")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Theme.Palette.bg0, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .keyboard) {
+                Button {
+                    isComposerFocused = false
+                } label: {
+                    Label("Hide keyboard", systemImage: "keyboard.chevron.compact.down")
+                }
+                .accessibilityIdentifier("chat-dismiss-keyboard")
+            }
+        }
         .task {
             if !didLoadInitial {
                 await loadHistory()
@@ -448,7 +462,7 @@ struct ChatView: View {
     }
 
     private var composer: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 10) {
             if !pendingImages.isEmpty {
                 VStack(alignment: .leading, spacing: 5) {
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -514,19 +528,19 @@ struct ChatView: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 2) {
-                TextField("Ask about recovery, sleep, strain…", text: $input,
-                          prompt: Text("Ask about recovery, sleep, strain…").foregroundColor(Theme.Palette.fg2),
+            VStack(alignment: .leading, spacing: 6) {
+                TextField("Message Coach", text: $input,
+                          prompt: Text("Ask Coach…").foregroundColor(Theme.Palette.fg2),
                           axis: .vertical)
                     .font(Theme.FontStyle.sans(15))
                     .foregroundStyle(Theme.Palette.fg0)
                     .tint(Theme.Palette.accent)
-                    .lineLimit(1...6)
+                    .lineLimit(2...6)
                     .disabled(isSending)
                     .textFieldStyle(.plain)
                     .focused($isComposerFocused)
-                    .padding(.horizontal, 6)
-                    .padding(.top, 8)
+                    .padding(.horizontal, 4)
+                    .accessibilityIdentifier("chat-message-input")
 
                 HStack(spacing: 2) {
                     PhotosPicker(
@@ -537,8 +551,6 @@ struct ChatView: View {
                         Image(systemName: "plus")
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(Theme.Palette.fg1)
-                            .frame(width: 32, height: 32)
-                            .background(Theme.Palette.bg3, in: Circle())
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
                     }
@@ -546,11 +558,10 @@ struct ChatView: View {
                     .opacity(isSending || pendingImages.count >= 3 ? 0.4 : 1)
                     .accessibilityLabel("Attach photos")
                     .accessibilityValue("\(pendingImages.count) of 3 selected")
-                    .padding(.leading, -6)
-
-                    CoachModelPicker(disabled: isSending)
 
                     Spacer(minLength: 4)
+
+                    CoachModelPicker(disabled: isSending)
 
                     Button {
                         Task { await send() }
@@ -574,25 +585,27 @@ struct ChatView: View {
                     }
                     .buttonStyle(ChatPressStyle())
                     .disabled(!canSend)
-                    .padding(.trailing, -5)
                     .accessibilityLabel(isSending ? "Sending" : "Send message")
                     .sensoryFeedback(.impact(weight: .light), trigger: isSending) { _, sending in sending }
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 2)
-            .background(Theme.Palette.bg2, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .strokeBorder(
-                        isComposerFocused ? Theme.Palette.accent : Theme.Palette.borderDefault,
-                        lineWidth: 1
-                    )
-            )
         }
+        .padding(.horizontal, 10)
+        .padding(.top, 14)
+        .padding(.bottom, 6)
+        .background(Theme.Palette.composerSurface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(
+                    isComposerFocused ? Theme.Palette.accent : Theme.Palette.borderDefault,
+                    lineWidth: 1
+                )
+        )
         .padding(.horizontal, Theme.Spacing.sm)
         .padding(.top, 6)
         .padding(.bottom, 8)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("chat-composer")
     }
 
     private var canSend: Bool {
