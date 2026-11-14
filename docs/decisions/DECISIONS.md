@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-11-14: Version and verify native release workflows
+
+**Decision:** Manage explicit compatible Xcode/macOS pins and native workflow settings in `apps/ios/ci/workflows.json`, reconciled through a validated plan/apply tool. Add Apple-managed Duo PR tests and daily main verification alongside the existing internal Beta archive. Keep API credentials outside GitHub and preserve Apple's existing TestFlight group post-action.
+
+**Rationale:** The old Xcode pin disappeared from Apple's catalog, leaving a null workflow relationship and three failed releases before any build action started. Web CI could not detect this. Daily native verification exposes future toolchain retirement even without new commits; release acceptance still requires an observed TestFlight build.
+
+**Status:** active
+
+**References:** apps/ios/CI.md, apps/ios/ci/workflows.json, scripts/ios-cloud.py
+
+---
+
 ## 2026-11-14: Make iPhone Duo the native acceptance target
 
 **Decision:** Prioritize the Duo inner display, fold geometry and native vertical controls for native design and verification. Keep compact adaptation for the Duo cover display. Other iPhone simulators are outside this iteration’s acceptance target unless requested.
