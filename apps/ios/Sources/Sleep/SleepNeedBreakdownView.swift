@@ -29,7 +29,7 @@ struct SleepNeedBreakdownView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            LedgerHeader(title: "Sleep need", subtitle: "what the night was measured against")
+            LedgerHeader(title: "Sleep need", subtitle: "last night")
             ForEach(Self.parts(need)) { part in
                 LedgerRule()
                 row(label: part.label, value: Self.format(part), emphasized: false)
