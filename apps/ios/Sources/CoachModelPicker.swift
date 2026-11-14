@@ -2,6 +2,7 @@ import SwiftUI
 
 struct CoachModelPicker: View {
     @Environment(\.api) private var api
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     let disabled: Bool
 
@@ -23,21 +24,25 @@ struct CoachModelPicker: View {
             presentation = .picker
         } label: {
             HStack(spacing: 5) {
-                Text(selection.triggerLabel)
-                    .lineLimit(1)
-                if let reasoningLabel = triggerReasoningLabel {
-                    Text(reasoningLabel)
-                        .foregroundStyle(Theme.Palette.fg2)
+                let layout = dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+                    : AnyLayout(HStackLayout(spacing: 5))
+                layout {
+                    Text(selection.triggerLabel)
+                        .lineLimit(1)
+                    if let reasoningLabel = triggerReasoningLabel {
+                        Text(reasoningLabel)
+                            .foregroundStyle(Theme.Palette.fg2)
+                            .lineLimit(1)
+                    }
                 }
-                Image(systemName: "chevron.up")
+                Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Theme.Palette.fg3)
             }
             .font(Theme.FontStyle.sans(12.5, weight: .medium))
             .foregroundStyle(Theme.Palette.fg1)
-            .padding(.horizontal, 11)
-            .frame(minHeight: 30)
-            .background(Color.white.opacity(0.07), in: Capsule())
+            .padding(.horizontal, 8)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
         }

@@ -30,7 +30,7 @@ final class DailyBriefTests: XCTestCase {
         for appearance in [UIUserInterfaceStyle.light, .dark] {
             let traits = UITraitCollection(userInterfaceStyle: appearance)
             for foreground in [Theme.Palette.fg0, Theme.Palette.fg1, Theme.Palette.fg2, Theme.Palette.fg3, Theme.Palette.fg4] {
-                for background in [Theme.Palette.bg0, Theme.Palette.bg2, Theme.Palette.bg4] {
+                for background in [Theme.Palette.bg0, Theme.Palette.bg2, Theme.Palette.bg4, Theme.Palette.composerSurface] {
                     let first = luminance(UIColor(foreground).resolvedColor(with: traits))
                     let second = luminance(UIColor(background).resolvedColor(with: traits))
                     XCTAssertGreaterThanOrEqual((max(first, second) + 0.05) / (min(first, second) + 0.05), 4.5)

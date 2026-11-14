@@ -28,6 +28,7 @@ enum Theme {
         static let borderDefault = adaptive("#CCC5BE", "#36312D")
         static let borderStrong = adaptive("#9C8B7E", "#75675C")
         static let accent = adaptive("#806047", "#C5AC98")
+        static let composerSurface = adaptive("#F8F6F3", "#222220")
         static let brandStrain = adaptive("#A62F4A", "#F19AAC")
         static let brandStrainDim = brandStrain
         static let recovery = adaptive("#176E5C", "#74C9AF")
