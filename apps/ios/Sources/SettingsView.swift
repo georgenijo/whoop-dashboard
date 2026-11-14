@@ -400,8 +400,6 @@ private struct SettingsRow<Trailing: View>: View {
     var iconTint: Color = Theme.Palette.fg1
     @ViewBuilder let trailing: () -> Trailing
 
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
     init(icon: String, title: String, detail: String? = nil,
          titleColor: Color = Theme.Palette.fg0, iconTint: Color = Theme.Palette.fg1,
          @ViewBuilder trailing: @escaping () -> Trailing) {
@@ -424,7 +422,6 @@ private struct SettingsRow<Trailing: View>: View {
                     Text(detail)
                         .font(Theme.FontStyle.sans(13))
                         .foregroundStyle(Theme.Palette.fg2)
-                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }

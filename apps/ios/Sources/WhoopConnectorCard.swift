@@ -60,6 +60,7 @@ struct WhoopConnectorCard: View {
                 }
             } else if loadError != nil {
                 Button("Retry") { Task { await refresh(force: true) } }
+                    .tint(Theme.Palette.accent)
                     .frame(minHeight: 44)
             }
             if reconnecting { ProgressView("Updating connection…") }
