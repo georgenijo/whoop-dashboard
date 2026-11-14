@@ -427,7 +427,7 @@ struct ChatView: View {
         VStack(alignment: .leading, spacing: 28) {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Understand your day")
-                    .font(Theme.FontStyle.sans(26, weight: .medium))
+                    .font(Theme.FontStyle.sans(24, weight: .medium))
                     .foregroundStyle(Theme.Palette.fg0)
                     .accessibilityAddTraits(.isHeader)
                 Text("Coach reads your recovery, sleep and training before it answers.")

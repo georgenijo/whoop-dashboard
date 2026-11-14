@@ -190,7 +190,9 @@ private struct BandChip: View {
             Text("Recovery \(PlansPresentation.percent(score)) · \(band.label)")
                 .font(Theme.FontStyle.sans(13))
                 .foregroundStyle(Theme.Palette.fg1)
+                .lineLimit(1)
         }
+        .fixedSize(horizontal: true, vertical: false)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Recovery \(Int(score.rounded())) percent, \(band.label)")
     }

@@ -203,7 +203,6 @@ struct ThreadListView: View {
                             .font(Theme.FontStyle.sans(12, weight: .medium))
                             .foregroundStyle(Theme.Palette.fg3)
                             .textCase(nil)
-                            .padding(.leading, Theme.Spacing.md)
                             .accessibilityAddTraits(.isHeader)
                     }
                     .listRowSeparator(.hidden)
