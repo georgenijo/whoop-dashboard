@@ -6,7 +6,7 @@ import XCTest
 /// Temporary visual check: renders the refined screens against canned
 /// payloads (served through a URLProtocol stub) and writes PNGs.
 final class ScreenRenderTests: XCTestCase {
-    private static let outDir = "/tmp/refine-render"
+    private static let outDir = "/tmp/rtoday-render"
 
     // MARK: Canned data
 
