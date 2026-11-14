@@ -17,6 +17,7 @@ enum TrendsLoadable<Value> {
 struct TrendsCardState<Value> {
     private(set) var phase: TrendsLoadable<Value> = .loading
     private(set) var loadedRange: DateRange?
+    private(set) var refreshError: String?
 
     var value: Value? { phase.value }
 
@@ -27,12 +28,17 @@ struct TrendsCardState<Value> {
     mutating func succeed(_ value: Value, range: DateRange) {
         phase = .loaded(value)
         loadedRange = range
+        refreshError = nil
     }
 
     mutating func fail(_ message: String, range: DateRange) {
-        if phase.value != nil, loadedRange == range { return }
+        if phase.value != nil, loadedRange == range {
+            refreshError = message
+            return
+        }
         phase = .failed(message)
         loadedRange = nil
+        refreshError = nil
     }
 }
 
@@ -359,13 +365,14 @@ struct TrendsRangeBar: View {
     @Binding var range: DateRange
 
     var body: some View {
-        // Capped so the segmented control never straddles iPhone Duo's fold.
+        // Use the actual usable pane beside the fold, including the rail's
+        // asymmetry. The cover display naturally remains a single column.
         RangePicker(selection: $range)
-            .frame(maxWidth: 420)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .inLeadingFoldColumn()
             .padding(.horizontal, Theme.Spacing.md)
             .padding(.vertical, Theme.Spacing.xs)
             .background(Theme.Palette.bg0.opacity(0.92))
+            .measuresFold()
     }
 }
 

@@ -5,6 +5,7 @@ import SwiftUI
 struct SleepNeedBreakdownView: View {
     let need: SleepPayload.LatestSleep.NeedBreakdown
     var asleepMs: Double? = nil
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private struct Part: Identifiable {
         let label: String
@@ -32,20 +33,19 @@ struct SleepNeedBreakdownView: View {
 
     private var fraction: Double? {
         guard let asleepMs, totalNeed > 0 else { return nil }
-        return min(1, asleepMs / totalNeed)
+        return min(1, max(0, asleepMs / totalNeed))
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
             TrendsCardLabel("Sleep need")
-            HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.lg) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), alignment: .leading)], alignment: .leading, spacing: 16) {
                 figure(label: "Needed", value: TrendsFormat.hoursMinutes(ms: totalNeed), color: Theme.Palette.fg0)
                 if let asleepMs {
-                    figure(label: "Got", value: TrendsFormat.hoursMinutes(ms: asleepMs), color: Theme.Palette.fg0)
+                    figure(label: "Asleep", value: TrendsFormat.hoursMinutes(ms: asleepMs), color: Theme.Palette.fg0)
                 }
-                Spacer(minLength: 0)
                 if let fraction {
-                    VStack(alignment: .trailing, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 2) {
                         Text("\(Int((fraction * 100).rounded()))%")
                             .font(Theme.FontStyle.mono(22, weight: .medium))
                             .foregroundStyle(fraction >= 0.85 ? Theme.Palette.success : Theme.Palette.warning)
@@ -67,22 +67,35 @@ struct SleepNeedBreakdownView: View {
                 .frame(height: 8)
                 .accessibilityHidden(true)
             }
-            VStack(spacing: 8) {
+            Text("Need met compares time asleep with estimated need. Sleep performance is a separate score reported by Whoop and may differ.")
+                .font(Theme.FontStyle.sans(13))
+                .foregroundStyle(Theme.Palette.fg2)
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(spacing: 12) {
                 ForEach(parts) { part in
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    let layout = dynamicTypeSize.isAccessibilitySize
+                        ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+                        : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))
+                    layout {
                         RoundedRectangle(cornerRadius: 2)
                             .fill(part.color)
                             .frame(width: 10, height: 10)
                         Text(part.label)
                             .font(Theme.FontStyle.sans(15))
                             .foregroundStyle(Theme.Palette.fg1)
-                        Spacer()
+                        if !dynamicTypeSize.isAccessibilitySize { Spacer() }
                         Text("\(part.sign)\(part.sign.isEmpty ? "" : " ")\(TrendsFormat.hoursMinutes(ms: part.ms))")
                             .font(Theme.FontStyle.mono(13, weight: .medium))
                             .foregroundStyle(Theme.Palette.fg1)
                     }
                     .accessibilityElement(children: .combine)
                 }
+            }
+            if need.debtMs > 0 {
+                Text("Sleep debt adds to this estimate of need; it isn’t the same as last night’s shortfall.")
+                    .font(Theme.FontStyle.sans(13))
+                    .foregroundStyle(Theme.Palette.fg2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .glassCard(tint: .sleep, padding: Theme.Spacing.md)

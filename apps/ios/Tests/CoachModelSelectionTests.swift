@@ -2,6 +2,45 @@ import XCTest
 @testable import Coach
 
 final class CoachModelSelectionTests: XCTestCase {
+    func testEffectiveEffortMatchesServerWithoutChangingSavedPreference() throws {
+        let catalog = try JSONDecoder().decode(AnthropicModelCatalogPayload.self, from: Data(#"{"status":"ready","models":[{"id":"claude-sonnet-5-5","display_name":"Sonnet 5.5","thinking":"adaptive","efforts":["low","medium","high"],"max_tokens":64000}]}"#.utf8))
+        var selection = CoachModelSelection.fallback
+        selection.modelPref = "anthropic:claude-sonnet-5-5"
+        selection.anthropicModels = catalog.models
+        selection.effort = .off
+        XCTAssertEqual(selection.effectiveEffort, .high)
+        XCTAssertEqual(selection.effort, .off)
+        selection.effort = .max
+        XCTAssertEqual(selection.effectiveEffort, .high)
+        selection.effort = .medium
+        XCTAssertEqual(selection.effectiveEffort, .medium)
+    }
+
+    func testAnthropicCatalogPreservesServerCapabilities() throws {
+        let catalog = try JSONDecoder().decode(AnthropicModelCatalogPayload.self, from: Data("""
+        {"status":"ready","models":[{"id":"claude-sonnet-5-5","display_name":"Claude Sonnet 5.5","thinking":"adaptive","efforts":["medium","high"]}]}
+        """.utf8))
+        let selection = CoachModelSelection(
+            modelPref: "anthropic:claude-sonnet-5-5", effort: .off,
+            cursorStatus: .notConfigured, cursorModels: [],
+            anthropicStatus: catalog.status, anthropicModels: catalog.models
+        )
+        XCTAssertEqual(selection.selectedOption.label, "Claude Sonnet 5.5")
+        XCTAssertEqual(selection.supportedEfforts, [.medium, .high])
+        XCTAssertFalse(selection.supportedEfforts.contains(.off))
+        XCTAssertEqual(selection.options.count, 1)
+    }
+
+    func testCatalogFailureDoesNotAdvertiseInventedModelsOrEfforts() {
+        let selection = CoachModelSelection(
+            modelPref: "anthropic:claude-sonnet-5-5", effort: .high,
+            cursorStatus: .unavailable, cursorModels: []
+        )
+        XCTAssertEqual(selection.options.map(\.id), ["anthropic:claude-sonnet-5-5"])
+        XCTAssertEqual(selection.triggerLabel, "Sonnet 5.5")
+        XCTAssertTrue(selection.supportedEfforts.isEmpty)
+    }
+
     func testEffortLabelsMatchSupportedServerValues() {
         XCTAssertEqual(
             CoachEffort.allCases.map(\.rawValue),
@@ -30,7 +69,6 @@ final class CoachModelSelectionTests: XCTestCase {
         XCTAssertEqual(
             selection.options,
             [
-                .claude,
                 CoachModelOption(
                     id: "cursor:composer-2.5",
                     label: "Composer 2.5",
@@ -51,7 +89,7 @@ final class CoachModelSelectionTests: XCTestCase {
             cursorModels: []
         )
 
-        XCTAssertEqual(selection.options.count, 2)
+        XCTAssertEqual(selection.options.count, 1)
         XCTAssertEqual(selection.selectedOption.id, "cursor:previous-model")
         XCTAssertEqual(selection.selectedOption.provider, .cursor)
     }
@@ -77,7 +115,7 @@ final class CoachModelSelectionTests: XCTestCase {
         )
         XCTAssertEqual(selection.selectedOption.id, "anthropic:claude-opus-4-6")
         XCTAssertEqual(selection.selectedOption.provider, .anthropic)
-        XCTAssertEqual(selection.triggerLabel, "claude-opus-4-6")
+        XCTAssertEqual(selection.triggerLabel, "Opus 4.6")
     }
 
     func testSettingsPayloadDecodesExtraHighEffort() throws {

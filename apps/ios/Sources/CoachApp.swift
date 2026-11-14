@@ -102,7 +102,6 @@ struct CoachApp: App {
             content
                 .environment(\.api, api)
                 .environment(\.chatInFlight, chatInFlight)
-                .preferredColorScheme(.dark)
                 .onReceive(NotificationCenter.default.publisher(for: .apiUnauthorized)) { _ in
                     isSignedIn = false
                 }

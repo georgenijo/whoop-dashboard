@@ -7,7 +7,7 @@ struct SSEEventFrame: Equatable {
 
 /// Incremental Server-Sent Events framing.
 ///
-/// `URLSession.AsyncBytes.lines` owns byte/chunk reassembly. This parser owns
+/// `SSELineSequence` reassembles UTF-8 lines without discarding empty lines. This parser owns
 /// SSE's line-level rules: CRLF normalization, comment/unknown-field ignores,
 /// multi-line `data` joining, blank-line dispatch, and partial-event discard at
 /// EOF.
@@ -126,7 +126,7 @@ struct ChatService {
             let task = Task {
                 do {
                     let headers: HTTPURLResponse
-                    let lines: AsyncLineSequence<URLSession.AsyncBytes>
+                    let lines: SSELineSequence<URLSession.AsyncBytes>
                     if images.isEmpty {
                         (headers, lines) = try await api.openSSE(
                             "/api/chat",
@@ -214,10 +214,11 @@ struct ChatService {
             return .textDelta(d.text)
         case "tool_use_start":
             let d = try decoder.decode(SSEToolUseStart.self, from: payload)
-            return .toolUseStart(name: d.name)
+            return .toolUseStart(id: d.id, name: d.name)
         case "tool_use_end":
             let d = try decoder.decode(SSEToolUseEnd.self, from: payload)
             return .toolUseEnd(
+                id: d.id,
                 name: d.name,
                 status: d.status,
                 rows: d.rows,
@@ -226,10 +227,10 @@ struct ChatService {
             )
         case "tool_progress":
             let d = try decoder.decode(SSEToolProgress.self, from: payload)
-            return .toolProgress(tool: d.tool, stage: d.stage, message: d.message)
+            return .toolProgress(id: d.id, tool: d.tool, stage: d.stage, message: d.message)
         case "done":
             let d = try decoder.decode(SSEDone.self, from: payload)
-            return .done(reply: d.reply, presentationBlocks: d.presentationBlocks)
+            return .done(reply: d.reply, workLog: d.workLog, presentationBlocks: d.presentationBlocks)
         case "error":
             let d = try decoder.decode(SSEError.self, from: payload)
             return .error(kind: d.kind, message: d.message, origin: d.origin)

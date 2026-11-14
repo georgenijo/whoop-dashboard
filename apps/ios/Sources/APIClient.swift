@@ -13,6 +13,8 @@ extension Notification.Name {
     static let apiUnauthorized = Notification.Name("com.georgenijo.coach.apiUnauthorized")
 }
 
+struct APIEmptyResponse: Decodable {}
+
 struct SyncResponse: Decodable {
     let ok: Bool
     let skipped: Bool?
@@ -112,28 +114,7 @@ final class APIClient {
         self.session = session
 
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .custom { dec in
-            let container = try dec.singleValueContainer()
-            let raw = try container.decode(String.self)
-            // Backend emits two formats:
-            //   chat_messages.created_at → Date.toISOString() ("…T…Z" w/ ms)
-            //   chat_threads.updated_at  → SQLite datetime('now') ("YYYY-MM-DD HH:MM:SS" UTC)
-            let withFractional = ISO8601DateFormatter()
-            withFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            if let date = withFractional.date(from: raw) { return date }
-            let plain = ISO8601DateFormatter()
-            plain.formatOptions = [.withInternetDateTime]
-            if let date = plain.date(from: raw) { return date }
-            let sqlite = DateFormatter()
-            sqlite.locale = Locale(identifier: "en_US_POSIX")
-            sqlite.timeZone = TimeZone(identifier: "UTC")
-            sqlite.dateFormat = "yyyy-MM-dd HH:mm:ss"
-            if let date = sqlite.date(from: raw) { return date }
-            throw DecodingError.dataCorruptedError(
-                in: container,
-                debugDescription: "Unrecognized date: \(raw)"
-            )
-        }
+        decoder.dateDecodingStrategy = APIDateDecoding.strategy()
         self.decoder = decoder
         self.encoder = JSONEncoder()
     }
@@ -162,6 +143,11 @@ final class APIClient {
         return try await execute(request, path: path)
     }
 
+    func delete<T: Decodable>(_ path: String) async throws -> T {
+        let request = makeRequest(path: path, query: nil, method: "DELETE", bodyData: nil)
+        return try await execute(request, path: path)
+    }
+
     func postSync() async throws -> SyncResponse {
         var request = makeRequest(path: "/api/sync", query: nil, method: "POST", bodyData: nil)
         request.timeoutInterval = 130
@@ -172,7 +158,7 @@ final class APIClient {
         _ path: String,
         query: [URLQueryItem]? = nil,
         body: U
-    ) async throws -> (headers: HTTPURLResponse, lines: AsyncLineSequence<URLSession.AsyncBytes>) {
+    ) async throws -> (headers: HTTPURLResponse, lines: SSELineSequence<URLSession.AsyncBytes>) {
         let bodyData: Data
         do {
             bodyData = try encoder.encode(body)
@@ -196,7 +182,7 @@ final class APIClient {
         files: [MultipartFile]
     ) async throws -> (
         headers: HTTPURLResponse,
-        lines: AsyncLineSequence<URLSession.AsyncBytes>
+        lines: SSELineSequence<URLSession.AsyncBytes>
     ) {
         let boundary = "CoachBoundary-\(UUID().uuidString)"
         let body = MultipartFormData.encode(
@@ -249,7 +235,7 @@ final class APIClient {
         path: String
     ) async throws -> (
         headers: HTTPURLResponse,
-        lines: AsyncLineSequence<URLSession.AsyncBytes>
+        lines: SSELineSequence<URLSession.AsyncBytes>
     ) {
         let bytes: URLSession.AsyncBytes
         let response: URLResponse
@@ -273,7 +259,7 @@ final class APIClient {
 
         switch http.statusCode {
         case 200..<300:
-            return (http, bytes.lines)
+            return (http, SSELineSequence(base: bytes))
         case 401:
             if request.value(forHTTPHeaderField: "Authorization") != nil {
                 await handleUnauthorized()
@@ -360,6 +346,9 @@ final class APIClient {
 
         switch http.statusCode {
         case 200..<300:
+            if http.statusCode == 204, let empty = APIEmptyResponse() as? T {
+                return empty
+            }
             do {
                 return try decoder.decode(T.self, from: data)
             } catch {

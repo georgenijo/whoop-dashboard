@@ -11,6 +11,7 @@ enum CoachSelection: Hashable {
 }
 
 struct CoachView: View {
+    @Environment(\.appNavigation) private var navigation
     @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var selection: CoachSelection?
     /// Which column a collapsed (compact) split view shows. Selecting a
@@ -42,6 +43,8 @@ struct CoachView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
+        .task { consumeComposeRequest() }
+        .onChange(of: navigation.composeRequest) { _, _ in consumeComposeRequest() }
         .onChange(of: selection) { old, new in
             // Once the blank conversation has been used and left, the next
             // empty detail column must be a genuinely new chat.
@@ -59,6 +62,13 @@ struct CoachView: View {
                 compactColumn = .detail
             }
         }
+    }
+
+    private func consumeComposeRequest() {
+        guard let request = navigation.composeRequest else { return }
+        selection = .new(id: request.id, draft: request.draft)
+        compactColumn = .detail
+        navigation.composeRequest = nil
     }
 
     /// Selection as the list sets it: every pick (including re-picking the

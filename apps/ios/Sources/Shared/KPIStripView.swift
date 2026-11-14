@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// Vitals as a fixed grid: every tile visible at once, no sideways scroll.
-/// Rows are balanced (7 tiles at 3 columns lay out 3-2-2, never 3-3-1), so no
-/// tile is stranded. Tiles become buttons (with a chevron) only when `onTap`
-/// is supplied and the tile has a destination.
+/// Supporting measurements share one quiet surface. Two columns keep values
+/// readable on compact displays; accessibility sizes use full-width rows.
+/// Cells become buttons only when a destination and callback are supplied.
 struct KPIStripView: View {
     let tiles: [KPITile]
     var columns: Int = 3
@@ -19,7 +18,7 @@ struct KPIStripView: View {
         if dynamicTypeSize >= .accessibility3 {
             return 1
         }
-        return dynamicTypeSize.isAccessibilitySize ? min(columns, 2) : columns
+        return dynamicTypeSize.isAccessibilitySize ? 1 : min(columns, 2)
     }
 
     static func rowSizes(count: Int, columns: Int) -> [Int] {
@@ -49,7 +48,7 @@ struct KPIStripView: View {
 
     var body: some View {
         let shared = sharedContext
-        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 HStack(spacing: Theme.Spacing.xs) {
                     ForEach(row) { tile in
@@ -60,12 +59,14 @@ struct KPIStripView: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
             if let shared {
+                Divider()
                 Text("Change \(shared)")
                     .font(Theme.FontStyle.mono(11))
                     .foregroundStyle(Theme.Palette.fg3)
                     .padding(.leading, 2)
             }
         }
+        .glassCard(padding: Theme.Spacing.md)
     }
 
     @ViewBuilder
@@ -125,7 +126,6 @@ private struct KPICell: View {
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    private var accent: Color { Color(hex: tile.colorHex) }
     private var wraps: Bool { dynamicTypeSize.isAccessibilitySize }
 
     var body: some View {
@@ -147,13 +147,13 @@ private struct KPICell: View {
 
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(formattedValue)
-                    .font(Theme.FontStyle.mono(24, weight: .medium))
+                    .font(Theme.FontStyle.mono(28, weight: .semibold))
                     .foregroundStyle(tile.value == nil ? Theme.Palette.fg3 : Theme.Palette.fg0)
                     .contentTransition(.numericText())
                 if !tile.unit.isEmpty, tile.value != nil {
                     Text(tile.unit)
                         .font(Theme.FontStyle.mono(11))
-                        .foregroundStyle(accent)
+                        .foregroundStyle(Theme.Palette.fg2)
                 }
             }
             .lineLimit(1)
@@ -162,24 +162,8 @@ private struct KPICell: View {
             deltaRow
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
-        .background(
-            RoundedRectangle(cornerRadius: Theme.Radius.lg + 2)
-                .fill(Color.white.opacity(0.035))
-        )
-        .overlay(alignment: .topLeading) {
-            Capsule()
-                .fill(accent)
-                .frame(width: 14, height: 2)
-                .padding(.leading, 12)
-                .opacity(0.9)
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.Radius.lg + 2)
-                .strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1)
-        )
-        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.lg + 2))
+        .frame(minHeight: 88)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(tile.label)
         .accessibilityValue(accessibilityValue)
@@ -206,11 +190,8 @@ private struct KPICell: View {
     }
 
     private func deltaColor(_ dir: KPITile.Delta.Direction) -> Color {
-        switch dir {
-        case .up: return Theme.Palette.zoneGreen
-        case .down: return Theme.Palette.zoneRed
-        case .flat: return Theme.Palette.fg2
-        }
+        // Direction is not a verdict: a lighter training day may be useful.
+        Theme.Palette.fg2
     }
 
     private var formattedValue: String {
@@ -230,11 +211,12 @@ private struct KPICell: View {
 }
 
 private struct KPIPressStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .brightness(configuration.isPressed ? 0.06 : 0)
-            .animation(.snappy(duration: 0.18), value: configuration.isPressed)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.18), value: configuration.isPressed)
     }
 }
 

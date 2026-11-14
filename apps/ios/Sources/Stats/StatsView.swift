@@ -22,7 +22,8 @@ struct StatsView: View {
     var body: some View {
         NavigationStack {
             content
-                .navigationTitle("Stats")
+                .navigationTitle("Progress")
+                .navigationBarTitleDisplayMode(.inline)
         }
         .task(id: range) { await load() }
         .onChange(of: scenePhase) { _, newPhase in
@@ -154,14 +155,6 @@ private struct StatsContent: View {
             // Inner display: all-time on one side of the fold, the selected
             // window on the other.
             FoldColumns {
-                AllTimeHero(allTime: payload.allTime, historyFloor: payload.historyFloor)
-                if !payload.yoy.metrics.isEmpty {
-                    YearOverYearCard(yoy: payload.yoy, historyFloor: payload.historyFloor)
-                }
-                if !payload.records.isEmpty {
-                    RecordsCard(records: payload.records)
-                }
-            } trailing: {
                 VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
                     HStack(alignment: .firstTextBaseline) {
                         Text("Recent activity")
@@ -193,6 +186,14 @@ private struct StatsContent: View {
                 }
                 .opacity(isRefreshing ? 0.45 : 1)
                 .animation(.snappy, value: isRefreshing)
+            } trailing: {
+                AllTimeHero(allTime: payload.allTime, historyFloor: payload.historyFloor)
+                if !payload.yoy.metrics.isEmpty {
+                    YearOverYearCard(yoy: payload.yoy, historyFloor: payload.historyFloor)
+                }
+                if !payload.records.isEmpty {
+                    RecordsCard(records: payload.records)
+                }
             }
             .padding(.horizontal, Theme.Spacing.md)
             .padding(.bottom, Theme.Spacing.xxl)

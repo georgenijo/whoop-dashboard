@@ -3,62 +3,66 @@ import SwiftUI
 struct RootView: View {
     var onSignOut: () -> Void
 
-    enum Tab: Hashable {
-        case home, trends, stats, coach, plans, settings
-    }
-
-    /// Bound explicitly: an unbound TabView re-resolves its selection when
-    /// iPhone Duo moves the app between displays, which dropped people back
-    /// on Home every time they opened or closed the device.
+    enum Tab: Hashable { case home, coach, activity, plans }
     @State private var tab: Tab = .home
+    @State private var showsSettings = false
+    @State private var navigation = AppNavigation()
 
     var body: some View {
-        ZStack {
-            AmbientAurora(intensity: .stealth)
-
-            TabView(selection: $tab) {
-                DashboardView()
-                    .tabItem {
-                        Label("Home", systemImage: "house.fill")
-                    }
-                    .tag(Tab.home)
-
-                TrendsView()
-                    .tabItem {
-                        Label("Trends", systemImage: "chart.xyaxis.line")
-                    }
-                    .tag(Tab.trends)
-
-                StatsView()
-                    .tabItem {
-                        Label("Stats", systemImage: "chart.bar.fill")
-                    }
-                    .tag(Tab.stats)
-
-                CoachView()
-                    .tabItem {
-                        Label("Coach", systemImage: "sparkles")
-                    }
-                    .tag(Tab.coach)
-
-                PlansView()
-                    .tabItem {
-                        Label("Plans", systemImage: "figure.strengthtraining.traditional")
-                    }
-                    .tag(Tab.plans)
-
-                SettingsView(onSignOut: onSignOut)
-                    .tabItem {
-                        Label("Settings", systemImage: "gearshape.fill")
-                    }
-                    .tag(Tab.settings)
-            }
-            .tint(Theme.Palette.recovery)
+        TabView(selection: $tab) {
+            DashboardView(onOpenSettings: { showsSettings = true })
+                .tabItem { Label("Today", systemImage: "sun.max") }
+                .tag(Tab.home)
+            CoachView()
+                .tabItem { Label("Coach", systemImage: "bubble.left.and.bubble.right") }
+                .tag(Tab.coach)
+            ActivityView()
+                .tabItem { Label("Activity", systemImage: "chart.xyaxis.line") }
+                .tag(Tab.activity)
+            PlansView()
+                .tabItem { Label("Plans", systemImage: "figure.strengthtraining.traditional") }
+                .tag(Tab.plans)
         }
-        .preferredColorScheme(.dark)
+        .environment(\.appNavigation, navigation)
+        .tint(Theme.Palette.recovery)
+        .background(Theme.Palette.bg0)
+        .sheet(isPresented: $showsSettings) {
+            SettingsView(onSignOut: {
+                showsSettings = false
+                onSignOut()
+            })
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .coachComposeRequested)) { note in
+            navigation.composeRequest = CoachComposeRequest(draft: note.object as? String)
+            tab = .coach
+        }
     }
 }
 
-#Preview {
-    RootView(onSignOut: {})
+/// Each analytical destination is created only when selected. Visiting Today
+/// should not fetch and render every historical chart in the background.
+private struct ActivityView: View {
+    enum Section: String, CaseIterable { case trends = "Trends", progress = "Progress", workouts = "Workouts" }
+    @State private var section: Section = .trends
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Picker("Activity", selection: $section) {
+                ForEach(Section.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .inLeadingFoldColumn()
+            .padding(.horizontal, Theme.Spacing.md)
+            .padding(.vertical, Theme.Spacing.xs)
+            Group {
+                switch section {
+                case .trends: TrendsView()
+                case .progress: StatsView()
+                case .workouts: NavigationStack { WorkoutsView() }
+                }
+            }
+        }
+        .background(Theme.Palette.bg0)
+        .measuresFold()
+    }
 }

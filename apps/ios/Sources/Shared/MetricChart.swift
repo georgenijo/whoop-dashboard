@@ -5,7 +5,7 @@ import Charts
 ///
 /// - A large headline value (latest day, or the scrubbed day while dragging)
 ///   so the number you care about never lives in an axis label.
-/// - Raw days drawn faint, the 7-day average drawn bold — both at once, so
+/// - Raw days drawn lighter, the 7-day average drawn bold — both at once, so
 ///   there is no Raw/7d/30d toggle to hunt for.
 /// - A dashed period-average rule gives every chart the same reference line.
 /// - Monotone interpolation: curves never overshoot past real values the way
@@ -35,22 +35,44 @@ struct MetricChart: View {
 
     @State private var selectedDate: Date?
 
-    private var series: [Day] {
-        points.compactMap { p in
-            guard let date = ChartDate.parse(p.date) else { return nil }
-            return Day(date: date, raw: p.raw, trend: p.ma7)
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    // Preparing calendar dates in init keeps formatter work out of drag updates.
+    // The view receives a new series whenever its parent supplies new points.
+    private let series: [Day]
+    private let rawValues: [Double]
+
+    init(
+        title: String, unit: String, accent: Color, points: [TrendPoint],
+        style: Style = .line, precision: Int = 0,
+        yDomain: ClosedRange<Double>? = nil, markers: [Marker] = [],
+        height: CGFloat = 180, format: ((Double) -> String)? = nil
+    ) {
+        self.title = title
+        self.unit = unit
+        self.accent = accent
+        self.points = points
+        self.style = style
+        self.precision = precision
+        self.yDomain = yDomain
+        self.markers = markers
+        self.height = height
+        self.format = format
+        self.series = points.compactMap { point in
+            guard let date = ChartDate.parse(point.date) else { return nil }
+            return Day(key: point.date, date: date, raw: point.raw, trend: point.ma7)
         }
+        self.rawValues = series.compactMap(\.raw)
     }
 
     var body: some View {
         let days = series
-        let rawValues = days.compactMap(\.raw)
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             header(days: days, rawValues: rawValues)
             if rawValues.isEmpty {
                 empty
             } else {
                 chart(days: days, rawValues: rawValues)
+                legend(hasTrend: days.contains { $0.trend != nil })
             }
         }
     }
@@ -75,7 +97,7 @@ struct MetricChart: View {
                     if !unit.isEmpty {
                         Text(unit)
                             .font(Theme.FontStyle.mono(13))
-                            .foregroundStyle(accent)
+                            .foregroundStyle(Theme.Palette.fg2)
                     }
                 }
                 Spacer(minLength: 0)
@@ -88,7 +110,7 @@ struct MetricChart: View {
                         .foregroundStyle(Theme.Palette.fg3)
                 }
             }
-            .animation(.snappy(duration: 0.15), value: selectedDate)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.15), value: selectedDate)
         }
     }
 
@@ -139,8 +161,8 @@ struct MetricChart: View {
                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 4]))
 
             ForEach(days) { day in
-                rawMarks(day, focus: focus, hasTrend: hasTrend, floor: domain.lowerBound)
-                if markerDates.contains(ChartDate.key(day.date)), let raw = day.raw {
+                rawMarks(day, focus: focus, hasTrend: hasTrend)
+                if markerDates.contains(day.key), let raw = day.raw {
                     PointMark(x: .value("Date", day.date), y: .value(title, raw))
                         .symbol(Circle().strokeBorder(lineWidth: 2))
                         .symbolSize(64)
@@ -150,7 +172,7 @@ struct MetricChart: View {
 
             if hasTrend {
                 ForEach(days) { day in
-                    trendMarks(day, floor: domain.lowerBound)
+                    trendMarks(day)
                 }
             }
 
@@ -181,11 +203,13 @@ struct MetricChart: View {
             }
         }
         .frame(height: height)
+        .accessibilityLabel(title)
+        .accessibilityValue(accessibilitySummary)
         .sensoryFeedback(.selection, trigger: focus?.date)
     }
 
     @ChartContentBuilder
-    private func rawMarks(_ day: Day, focus: Day?, hasTrend: Bool, floor: Double) -> some ChartContent {
+    private func rawMarks(_ day: Day, focus: Day?, hasTrend: Bool) -> some ChartContent {
         if let raw = day.raw {
             switch style {
             case .bars:
@@ -198,29 +222,15 @@ struct MetricChart: View {
                          y: .value(title, raw),
                          series: .value("Series", "raw"))
                     .interpolationMethod(hasTrend ? .linear : .monotone)
-                    .foregroundStyle(accent.opacity(hasTrend ? 0.35 : 1))
+                    .foregroundStyle(accent.opacity(hasTrend ? 0.65 : 1))
                     .lineStyle(StrokeStyle(lineWidth: hasTrend ? 1 : 2, lineCap: .round, lineJoin: .round))
-                if !hasTrend {
-                    AreaMark(x: .value("Date", day.date),
-                             yStart: .value("Floor", floor),
-                             yEnd: .value(title, raw))
-                        .interpolationMethod(.monotone)
-                        .foregroundStyle(areaGradient)
-                }
             }
         }
     }
 
     @ChartContentBuilder
-    private func trendMarks(_ day: Day, floor: Double) -> some ChartContent {
+    private func trendMarks(_ day: Day) -> some ChartContent {
         if let trend = day.trend {
-            if style == .line {
-                AreaMark(x: .value("Date", day.date),
-                         yStart: .value("Floor", floor),
-                         yEnd: .value("7-day average", trend))
-                    .interpolationMethod(.monotone)
-                    .foregroundStyle(areaGradient)
-            }
             if style == .bars {
                 LineMark(x: .value("Date", day.date, unit: .day),
                          y: .value("7-day average", trend),
@@ -257,14 +267,50 @@ struct MetricChart: View {
         }
     }
 
-    private var areaGradient: LinearGradient {
-        LinearGradient(colors: [accent.opacity(0.28), accent.opacity(0)],
-                       startPoint: .top, endPoint: .bottom)
+    private func legend(hasTrend: Bool) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) { legendItems(hasTrend: hasTrend) }
+            VStack(alignment: .leading, spacing: 6) { legendItems(hasTrend: hasTrend) }
+        }
+        .font(Theme.FontStyle.sans(10))
+        .foregroundStyle(Theme.Palette.fg2)
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private func legendItems(hasTrend: Bool) -> some View {
+        Label {
+            Text("Daily")
+        } icon: {
+            Rectangle().fill(accent.opacity(0.65)).frame(width: 16, height: 2)
+        }
+        if hasTrend {
+            Label {
+                Text("7-day average")
+            } icon: {
+                Rectangle().fill(style == .bars ? Theme.Palette.fg1 : accent).frame(width: 16, height: 3)
+            }
+        }
+        Label {
+            Text("Period average")
+        } icon: {
+            HStack(spacing: 2) {
+                ForEach(0..<3) { _ in Rectangle().frame(width: 4, height: 1) }
+            }.frame(width: 16)
+        }
+    }
+
+    private var accessibilitySummary: String {
+        guard let last = series.last(where: { $0.raw != nil }), let value = last.raw else {
+            return "No readings available"
+        }
+        let average = rawValues.reduce(0, +) / Double(rawValues.count)
+        return "\(rawValues.count) readings. Latest \(display(value)) \(unit), \(last.date.formatted(date: .abbreviated, time: .omitted)). Period average \(display(average)) \(unit)."
     }
 
     private func barOpacity(day: Day, focus: Day?, hasTrend: Bool) -> Double {
         if let focus { return focus.date == day.date ? 1 : 0.3 }
-        return hasTrend ? 0.55 : 0.85
+        return hasTrend ? 0.8 : 0.9
     }
 
     private func paddedDomain(days: [Day], rawValues: [Double]) -> ClosedRange<Double> {
@@ -305,6 +351,7 @@ struct MetricChart: View {
     }
 
     private struct Day: Identifiable {
+        let key: String
         let date: Date
         let raw: Double?
         let trend: Double?

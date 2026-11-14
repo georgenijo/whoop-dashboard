@@ -240,6 +240,8 @@ struct CoachModelSelection {
     var cursorStatus: CursorModelCatalogStatus
     var cursorModels: [CursorCoachModel]
     var cursorModelParams: [String: [CursorModelParameterSelection]] = [:]
+    var anthropicStatus: CursorModelCatalogStatus = .unavailable
+    var anthropicModels: [AnthropicCoachModel] = []
 
     static let fallback = CoachModelSelection(
         modelPref: CoachModelOption.claude.id,
@@ -249,7 +251,13 @@ struct CoachModelSelection {
     )
 
     var options: [CoachModelOption] {
-        var result = [CoachModelOption.claude]
+        var result = anthropicModels.map {
+            CoachModelOption(id: "anthropic:\($0.id)", label: $0.displayName,
+                             detail: $0.thinking == "none" ? "Standard replies" : "Supports extended reasoning",
+                             provider: .anthropic)
+        }
+        // A catalog failure must not invent an available paid model. Keep only
+        // the saved selection visible, with availability explained in the sheet.
         result.append(
             contentsOf: cursorModels.map {
                 CoachModelOption(
@@ -269,13 +277,31 @@ struct CoachModelSelection {
             result.append(
                 CoachModelOption(
                     id: modelPref,
-                    label: rawID,
-                    detail: isAnthropic ? "Previously selected Anthropic model." : "Previously selected Cursor model.",
+                    label: Self.friendlyName(rawID),
+                    detail: "Saved selection · \(rawID)",
                     provider: isAnthropic ? .anthropic : .cursor
                 )
             )
         }
         return result
+    }
+
+    static func friendlyName(_ rawID: String) -> String {
+        let parts = rawID.split(separator: "-").map(String.init)
+        guard parts.count >= 3, parts[0] == "claude" else { return rawID }
+        return "Claude " + parts[1].capitalized + " " + parts.dropFirst(2).joined(separator: ".")
+    }
+
+    var supportedEfforts: [CoachEffort] {
+        let rawID = String(modelPref.dropFirst("anthropic:".count))
+        return anthropicModels.first(where: { $0.id == rawID })?.efforts ?? []
+    }
+
+    /// Mirrors effectiveAnthropicEffort on the server while preserving the
+    /// stored preference for later model switches.
+    var effectiveEffort: CoachEffort {
+        if supportedEfforts.contains(effort) { return effort }
+        return supportedEfforts.contains(.high) ? .high : supportedEfforts.first(where: { $0 != .off }) ?? .off
     }
 
     var selectedOption: CoachModelOption {
@@ -314,14 +340,18 @@ struct CoachModelSelectionService {
     let api: APIClient
 
     func load() async throws -> CoachModelSelection {
-        let loadedSettings: CoachSettingsPayload = try await api.get("/api/settings")
-        let loadedCatalog = await loadCatalog()
+        async let settings: CoachSettingsPayload = api.get("/api/settings")
+        async let cursor = loadCatalog()
+        async let anthropic = loadAnthropicCatalog()
+        let (loadedSettings, loadedCatalog, loadedAnthropic) = try await (settings, cursor, anthropic)
         return CoachModelSelection(
             modelPref: loadedSettings.modelPref,
             effort: loadedSettings.coachEffort,
             cursorStatus: loadedCatalog.status,
             cursorModels: loadedCatalog.models,
-            cursorModelParams: loadedSettings.cursorModelParams
+            cursorModelParams: loadedSettings.cursorModelParams,
+            anthropicStatus: loadedAnthropic.status,
+            anthropicModels: loadedAnthropic.models
         )
     }
 
@@ -354,6 +384,14 @@ struct CoachModelSelectionService {
                 )
             )
         )
+    }
+
+    private func loadAnthropicCatalog() async -> AnthropicModelCatalogPayload {
+        do {
+            return try await api.get("/api/me/anthropic-models")
+        } catch {
+            return AnthropicModelCatalogPayload(status: .unavailable, models: [])
+        }
     }
 
     private func loadCatalog() async -> CursorModelCatalogPayload {
@@ -394,5 +432,22 @@ private struct CursorModelParamsUpdate: Encodable {
     enum CodingKeys: String, CodingKey {
         case modelID = "model_id"
         case params
+    }
+}
+
+struct AnthropicModelCatalogPayload: Decodable {
+    let status: CursorModelCatalogStatus
+    let models: [AnthropicCoachModel]
+}
+
+struct AnthropicCoachModel: Decodable, Identifiable, Equatable {
+    let id: String
+    let displayName: String
+    let thinking: String
+    let efforts: [CoachEffort]
+
+    enum CodingKeys: String, CodingKey {
+        case id, thinking, efforts
+        case displayName = "display_name"
     }
 }

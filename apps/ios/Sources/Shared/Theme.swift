@@ -1,56 +1,56 @@
 import SwiftUI
+import UIKit
 
 enum Theme {
     enum Palette {
-        static let bg0 = Color(hex: "#000000")
-        static let bg1 = Color(hex: "#0a0a0b")
-        static let bg2 = Color(hex: "#121214")
-        static let bg3 = Color(hex: "#1a1a1e")
-        static let bg4 = Color(hex: "#242429")
+        /// Semantic colors resolve with the system appearance. Surfaces are
+        /// opaque: no blur or layered gradients are needed to read the data.
+        private static func adaptive(_ light: String, _ dark: String) -> Color {
+            Color(uiColor: UIColor { traits in
+                UIColor(Color(hex: traits.userInterfaceStyle == .dark ? dark : light))
+            })
+        }
 
-        static let fg0 = Color(hex: "#ffffff")
-        static let fg1 = Color(hex: "#e7e7ea")
-        static let fg2 = Color(hex: "#a1a1aa")
-        /// Tertiary text. #8e8e98 keeps 5.8:1 on cards (bg2) and 4.8:1 on the
-        /// lightest surface (bg4); the old #6b6b74 sat at 3.0–3.6:1, below the
-        /// 4.5:1 floor for small text.
-        static let fg3 = Color(hex: "#8e8e98")
-        static let fg4 = Color(hex: "#3f3f46")
-
-        static let borderSubtle = Color.white.opacity(0.06)
-        static let borderDefault = Color.white.opacity(0.10)
-        static let borderStrong = Color.white.opacity(0.18)
-
-        static let brandStrain = Color(hex: "#ff0043")
-        static let brandStrainDim = Color(hex: "#cc0036")
-
-        static let recovery = Color(hex: "#00d4aa")
-        static let hrv = Color(hex: "#7b61ff")
-        static let rhr = Color(hex: "#ff6b6b")
-        static let strain = Color(hex: "#ffaa00")
-        static let sleepDeep = Color(hex: "#0055ff")
-        static let sleepRem = Color(hex: "#7b61ff")
-        static let sleepLight = Color(hex: "#00d4aa")
-        static let respiration = Color(hex: "#00aaff")
-        static let spo2 = Color(hex: "#00d4aa")
-        static let skinTemp = Color(hex: "#ffaa00")
-
-        static let zoneRed = Color(hex: "#ff4444")
-        static let zoneYellow = Color(hex: "#ffaa00")
-        static let zoneGreen = Color(hex: "#00d4aa")
-
-        static let hrZone0 = Color(hex: "#666666")
-        static let hrZone1 = Color(hex: "#00d4aa")
-        static let hrZone2 = Color(hex: "#00aaff")
-        static let hrZone3 = Color(hex: "#ffaa00")
-        static let hrZone4 = Color(hex: "#ff6b6b")
-        static let hrZone5 = Color(hex: "#ff0000")
-
-        static let success = Color(hex: "#00d4aa")
-        static let warning = Color(hex: "#ffaa00")
-        static let danger = Color(hex: "#ff4444")
-        static let info = Color(hex: "#00aaff")
-        static let ai = Color(hex: "#7b61ff")
+        static let bg0 = adaptive("#F3F6F5", "#101817")
+        static let bg1 = bg0
+        static let bg2 = adaptive("#FFFFFF", "#182321")
+        static let bg3 = adaptive("#EAF0ED", "#202E2A")
+        static let bg4 = adaptive("#DEE8E3", "#2A3B35")
+        static let fg0 = adaptive("#172F2B", "#E7F0ED")
+        static let fg1 = adaptive("#304B43", "#D3E0DA")
+        static let fg2 = adaptive("#526761", "#A6B8B1")
+        static let fg3 = adaptive("#526761", "#A6B8B1")
+        // Quiet text still carries information and meets the body-text target.
+        static let fg4 = fg3
+        static let borderSubtle = adaptive("#DCE5DF", "#30443C")
+        static let borderDefault = adaptive("#BCCFC4", "#496056")
+        static let borderStrong = adaptive("#8DA99A", "#6D8B7C")
+        static let brandStrain = adaptive("#A62F4A", "#F19AAC")
+        static let brandStrainDim = brandStrain
+        static let recovery = adaptive("#176E5C", "#74C9AF")
+        static let hrv = adaptive("#6551A8", "#BEADF1")
+        static let rhr = adaptive("#A43838", "#F2A09A")
+        static let strain = adaptive("#8A5717", "#E4B876")
+        static let sleepDeep = adaptive("#285C9D", "#91B9EF")
+        static let sleepRem = hrv
+        static let sleepLight = recovery
+        static let respiration = adaptive("#246784", "#8AC8E2")
+        static let spo2 = recovery
+        static let skinTemp = strain
+        static let zoneRed = rhr
+        static let zoneYellow = strain
+        static let zoneGreen = recovery
+        static let hrZone0 = fg3
+        static let hrZone1 = recovery
+        static let hrZone2 = respiration
+        static let hrZone3 = strain
+        static let hrZone4 = rhr
+        static let hrZone5 = adaptive("#96283B", "#ED7890")
+        static let success = recovery
+        static let warning = strain
+        static let danger = rhr
+        static let info = respiration
+        static let ai = hrv
     }
 
     enum Typeface {

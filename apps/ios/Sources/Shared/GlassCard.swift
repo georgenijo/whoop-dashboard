@@ -39,29 +39,15 @@ struct GlassCardModifier: ViewModifier {
             .background(background)
             .overlay(
                 RoundedRectangle(cornerRadius: radius)
-                    .strokeBorder(tint.border, lineWidth: 1)
+                    .strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: radius))
     }
 
-    @ViewBuilder
     private var background: some View {
-        ZStack {
-            LinearGradient(
-                colors: [Color.white.opacity(0.04), Color.white.opacity(0.01)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            if let accent = tint.accent {
-                RadialGradient(
-                    colors: [accent.opacity(tint == .ai ? 0.18 : 0.16), .clear],
-                    center: tint == .ai ? UnitPoint(x: 0.7, y: 0) : UnitPoint(x: 0.3, y: 0.1),
-                    startRadius: 0,
-                    endRadius: 220
-                )
-            }
-        }
+        Theme.Palette.bg2
     }
+
 }
 
 extension View {

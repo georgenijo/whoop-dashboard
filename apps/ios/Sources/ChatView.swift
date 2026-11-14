@@ -1,21 +1,31 @@
 import PhotosUI
 import SwiftUI
 
+/// Non-observed staging buffer: token arrival does not invalidate the view.
+/// Only the bounded flush updates the visible transcript.
+private final class ChatStreamBuffer {
+    var pending = ""
+}
+
 struct ChatView: View {
     let initialTitle: String?
 
     @Environment(\.api) private var api
     @Environment(\.chatInFlight) private var chatInFlight
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let conversation: UUID?
     @State private var threadId: Int?
     @State private var rows: [ChatRow] = []
+    @State private var currentTitle: String?
     @State private var input: String = ""
     @State private var isSending = false
     @State private var loadError: String?
     @State private var sendError: String?
     @State private var didLoadInitial = false
     @State private var streamingAssistant: StreamingAssistant?
+    @State private var streamBuffer = ChatStreamBuffer()
+    @State private var streamFlushTask: Task<Void, Never>?
     @State private var activeTools: [LiveToolActivity] = []
     @State private var recoveryStatus: RecoveryStatus?
     @State private var showAbandonRecoveryConfirmation = false
@@ -59,6 +69,8 @@ struct ChatView: View {
         case persisted(ChatMessage)
         case optimistic(id: UUID, content: String, attachments: [PendingChatImage])
         case streaming(id: UUID, content: String)
+        case completed(id: UUID, message: ChatMessage)
+        case sent(id: UUID, content: String, attachments: [PendingChatImage])
         case typing
 
         var id: String {
@@ -66,6 +78,8 @@ struct ChatView: View {
             case .persisted(let m): return "p-\(m.id)"
             case .optimistic(let id, _, _): return "o-\(id.uuidString)"
             case .streaming(let id, _): return "s-\(id.uuidString)"
+            case .completed(let id, _): return "c-\(id.uuidString)"
+            case .sent(let id, _, _): return "o-\(id.uuidString)"
             case .typing: return "typing"
             }
         }
@@ -74,8 +88,8 @@ struct ChatView: View {
         var startsTurn: Bool {
             switch self {
             case .persisted(let m): return m.role == .user
-            case .optimistic: return true
-            case .streaming, .typing: return false
+            case .optimistic, .sent: return true
+            case .streaming, .completed, .typing: return false
             }
         }
     }
@@ -87,6 +101,9 @@ struct ChatView: View {
                 VStack(spacing: 0) {
                     if let recoveryStatus {
                         recoveryBar(recoveryStatus)
+                    }
+                    if let loadError, !rows.isEmpty {
+                        sendErrorBanner("History couldn’t refresh. Your current reply is still shown. \(loadError)", onDismiss: { self.loadError = nil })
                     }
                     if let sendError {
                         sendErrorBanner(sendError)
@@ -113,7 +130,7 @@ struct ChatView: View {
                     .offset(y: -54)
                 }
             }
-        .navigationTitle(initialTitle ?? "New chat")
+        .navigationTitle(currentTitle ?? initialTitle ?? "New chat")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .task {
@@ -187,7 +204,7 @@ struct ChatView: View {
                 }
                 .font(Theme.FontStyle.sans(11.5, weight: .medium))
                 .foregroundStyle(Theme.Palette.ai)
-                Button("Stop") {
+                Button("Stop waiting") {
                     showAbandonRecoveryConfirmation = true
                 }
                 .font(Theme.FontStyle.sans(11.5, weight: .medium))
@@ -199,7 +216,7 @@ struct ChatView: View {
         .background(Theme.Palette.ai.opacity(0.06))
     }
 
-    private func sendErrorBanner(_ text: String) -> some View {
+    private func sendErrorBanner(_ text: String, onDismiss: (() -> Void)? = nil) -> some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(Theme.Palette.danger)
@@ -211,13 +228,14 @@ struct ChatView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
             Button {
-                sendError = nil
+                if let onDismiss { onDismiss() } else { sendError = nil }
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Theme.Palette.fg2)
-                    .padding(4)
+                    .frame(width: 44, height: 44)
             }
+            .accessibilityLabel("Dismiss error")
         }
         .padding(.horizontal, Theme.Spacing.md)
         .padding(.vertical, 10)
@@ -316,7 +334,7 @@ struct ChatView: View {
                                 }
                             }
                     }
-                    .animation(.snappy(duration: 0.32), value: rows.count)
+                    .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: rows.count)
                     .padding(.horizontal, Theme.Spacing.md)
                     .padding(.top, Theme.Spacing.md)
                     .padding(.bottom, Theme.Spacing.sm)
@@ -336,11 +354,11 @@ struct ChatView: View {
                 .scrollDismissesKeyboard(.interactively)
                 .onChange(of: rows.last?.id) { _, newLastId in
                     if let newLastId {
-                        withAnimation { proxy.scrollTo(newLastId, anchor: .bottom) }
+                        withAnimation(reduceMotion ? nil : .default) { proxy.scrollTo(newLastId, anchor: .bottom) }
                     }
                 }
                 .onChange(of: jumpRequest) { _, _ in
-                    withAnimation(.snappy) { proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom) }
+                    withAnimation(reduceMotion ? nil : .snappy) { proxy.scrollTo(Self.bottomAnchorId, anchor: .bottom) }
                 }
             }
         }
@@ -380,26 +398,16 @@ struct ChatView: View {
         VStack(spacing: 0) {
             Spacer(minLength: 24)
             VStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            RadialGradient(
-                                colors: [Theme.Palette.ai.opacity(0.28), Theme.Palette.ai.opacity(0)],
-                                center: .center,
-                                startRadius: 0,
-                                endRadius: 48
-                            )
-                        )
-                        .frame(width: 96, height: 96)
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 30, weight: .light))
-                        .foregroundStyle(Theme.Palette.ai)
-                        .shadow(color: Theme.Palette.ai.opacity(0.6), radius: 10)
-                }
-                Text("Ask the coach")
+                Image(systemName: "bubble.left.and.text.bubble.right")
+                    .font(.system(size: 28, weight: .regular))
+                    .foregroundStyle(Theme.Palette.recovery)
+                Text(Date.now.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
+                    .font(Theme.FontStyle.sans(13))
+                    .foregroundStyle(Theme.Palette.fg2)
+                Text("Make sense of your day")
                     .font(Theme.FontStyle.sans(22, weight: .semibold))
                     .foregroundStyle(Theme.Palette.fg0)
-                Text("It reads your recovery, sleep, and training before it answers.")
+                Text("Explore your recovery, sleep, and training. Ask for a recommendation, then inspect the evidence behind it.")
                     .font(Theme.FontStyle.sans(14))
                     .foregroundStyle(Theme.Palette.fg2)
                     .multilineTextAlignment(.center)
@@ -408,7 +416,7 @@ struct ChatView: View {
             }
             Spacer(minLength: 24)
             VStack(alignment: .leading, spacing: 8) {
-                Text("TRY")
+                Text("Start a conversation")
                     .font(Theme.FontStyle.sans(11, weight: .semibold))
                     .tracking(0.5)
                     .foregroundStyle(Theme.Palette.fg3)
@@ -671,6 +679,7 @@ struct ChatView: View {
         do {
             let detail = try await ChatService(api: api).threadDetail(id: threadId)
             rows = detail.messages.map { .persisted($0) }
+            currentTitle = detail.thread.title
             // In-flight removal is NOT owned here. The live turn clears it in
             // send() on done/error; a turn recovered after backgrounding is
             // cleared by CoachApp.reconcileInFlight once it is terminal. A bare
@@ -694,8 +703,20 @@ struct ChatView: View {
     private func send() async {
         let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canSend else { return }
-
+        // A previous done event can be complete locally while its history
+        // reconciliation failed. Establish fresh server IDs before another
+        // turn so dropped-stream recovery cannot mistake that older reply for
+        // the new turn's response.
         isSending = true
+        if rows.contains(where: { if case .completed = $0 { return true }; return false }) {
+            await loadHistory()
+            guard !rows.contains(where: { if case .completed = $0 { return true }; return false }) else {
+                sendError = "Your last reply is shown, but history couldn’t refresh. Try sending again when connected; your draft is kept."
+                isSending = false
+                return
+            }
+        }
+
         sendError = nil
         recoveryStatus = nil
         let sentDraft = ChatDraft(text: input, images: pendingImages)
@@ -712,6 +733,9 @@ struct ChatView: View {
         streamingAssistant = nil
         activeTools = []
         defer {
+            streamFlushTask?.cancel()
+            streamFlushTask = nil
+            streamBuffer.pending = ""
             isSending = false
             activeTools = []
             streamingAssistant = nil
@@ -761,22 +785,25 @@ struct ChatView: View {
                 case .textDelta(let delta):
                     appendStreamingDelta(delta)
 
-                case .toolUseStart(let name):
-                    activeTools.append(LiveToolActivity(name: name, stage: nil))
+                case .toolUseStart(let id, let name):
+                    activeTools.append(LiveToolActivity(id: id ?? UUID().uuidString, name: name, stage: nil))
 
-                case .toolProgress(let tool, let stage, _):
-                    if let idx = activeTools.lastIndex(where: { $0.name == tool }) {
+                case .toolProgress(let id, let tool, let stage, let message):
+                    if let idx = activeTools.lastIndex(where: { activity in id.map { activity.id == $0 } ?? (activity.name == tool && !activity.isComplete) }) {
                         activeTools[idx].stage = stage
-                    } else {
-                        activeTools.append(LiveToolActivity(name: tool, stage: stage))
+                        activeTools[idx].message = message
                     }
 
-                case .toolUseEnd(let name, _, _, _, _):
-                    if let idx = activeTools.lastIndex(where: { $0.name == name }) {
-                        activeTools.remove(at: idx)
+                case .toolUseEnd(let id, let name, let status, _, _, let error):
+                    if let idx = activeTools.lastIndex(where: { activity in
+                        id.map { activity.id == $0 } ?? (activity.name == name && !activity.isComplete)
+                    }) {
+                        activeTools[idx].isComplete = true
+                        activeTools[idx].stage = status == "error" ? "Failed" : "Complete"
+                        activeTools[idx].error = error
                     }
 
-                case .done(let reply, _):
+                case .done(let reply, let workLog, let blocks):
                     sawDone = true
                     NotificationCenter.default.post(name: .chatThreadListChanged, object: threadId)
                     // Any other view showing this thread (e.g. rebuilt by a
@@ -784,7 +811,13 @@ struct ChatView: View {
                     // ignores it because it is still sending.
                     NotificationCenter.default.post(name: .chatThreadNeedsRefresh, object: threadId)
                     activeTools = []
-                    commitAssistant(reply: reply)
+                    commitAssistant(reply: reply, workLog: workLog, blocks: blocks)
+                    if let idx = rows.firstIndex(where: { row in
+                        if case .optimistic(let id, _, _) = row { return id == optimisticId }
+                        return false
+                    }) {
+                        rows[idx] = .sent(id: optimisticId, content: trimmed, attachments: sentDraft.images)
+                    }
                     clearInFlight()
                     photoPickerItems = []
 
@@ -792,27 +825,16 @@ struct ChatView: View {
                     sawError = true
                     activeTools = []
                     sendError = message
-                    if !sentDraft.images.isEmpty {
-                        rollbackOptimistic(
-                            optimisticId: optimisticId,
-                            restore: sentDraft
-                        )
-                    } else {
-                        // Preserve the existing text-only partial-stream behavior.
-                        rows.removeAll { if case .typing = $0 { return true }; return false }
-                        streamingAssistant = nil
-                    }
+                    rollbackOptimistic(optimisticId: optimisticId, restore: sentDraft)
                     clearInFlight()
                 }
             }
             if sawDone {
-                // Replace the optimistic user row + streamed assistant row with
-                // the persisted transcript, so the user's bubble stops rendering
-                // as pending (dimmed). `done.reply` already showed the final text,
-                // and a failed reload leaves those rows in place (rows non-empty,
-                // so loadError stays hidden) — no worse than before.
+                // The completed turn already contains its full answer and blocks.
+                // History refresh only reconciles server IDs and title metadata.
                 await loadHistory()
             } else if !sawError {
+                flushStreamingText()
                 // Stream ended without `done` or an SSE `error`: a transport drop.
                 activeTools = []
                 rows.removeAll { if case .typing = $0 { return true }; return false }
@@ -842,6 +864,7 @@ struct ChatView: View {
             rows.removeAll { if case .typing = $0 { return true }; return false }
         } catch {
             if Self.isTransportDrop(error) {
+                flushStreamingText()
                 activeTools = []
                 rows.removeAll { if case .typing = $0 { return true }; return false }
                 // Preserve the existing silent app-scoped recovery when the app
@@ -933,6 +956,23 @@ struct ChatView: View {
     }
 
     private func appendStreamingDelta(_ delta: String) {
+        streamBuffer.pending += delta
+        guard streamFlushTask == nil else { return }
+        // One render per 50 ms instead of one Markdown parse/layout per token.
+        // This task is bounded to the active turn and cancelled on completion.
+        streamFlushTask = Task { @MainActor in
+            do { try await Task.sleep(for: .milliseconds(50)) }
+            catch { return }
+            flushStreamingText()
+        }
+    }
+
+    private func flushStreamingText() {
+        streamFlushTask?.cancel()
+        streamFlushTask = nil
+        let delta = streamBuffer.pending
+        streamBuffer.pending = ""
+        guard !delta.isEmpty else { return }
         if var assistant = streamingAssistant {
             assistant.text += delta
             streamingAssistant = assistant
@@ -949,22 +989,27 @@ struct ChatView: View {
         }
     }
 
-    private func commitAssistant(reply: String) {
-        rows.removeAll { if case .typing = $0 { return true }; return false }
-        if let assistant = streamingAssistant,
-            let idx = rows.firstIndex(where: { row in
-                if case .streaming(let id, _) = row { return id == assistant.id }
-                return false
-            }) {
-            rows[idx] = .streaming(id: assistant.id, content: reply)
-        } else {
-            rows.removeAll { if case .typing = $0 { return true }; return false }
-            rows.append(.streaming(id: UUID(), content: reply))
+    private func commitAssistant(reply: String, workLog: CoachWorkLog?, blocks: [CoachPresentationBlock]) {
+        streamFlushTask?.cancel()
+        streamFlushTask = nil
+        streamBuffer.pending = ""
+        let assistantId = streamingAssistant?.id ?? UUID()
+        rows.removeAll { row in
+            if case .typing = row { return true }
+            if case .streaming(let id, _) = row { return id == assistantId }
+            return false
         }
+        rows.append(.completed(id: assistantId, message: ChatMessage(
+            id: 0, role: .assistant, content: reply, createdAt: .now,
+            workLog: workLog, presentationBlocks: blocks
+        )))
         streamingAssistant = nil
     }
 
-    private static func isTransportDrop(_ error: Error) -> Bool {
+    nonisolated static func isTransportDrop(_ error: Error) -> Bool {
+        // A framing limit interrupts an already accepted response; preserve
+        // reconciliation instead of restoring a draft that could be resent.
+        if error is SSEFramingError { return true }
         if case APIError.network(let underlying) = error {
             if let urlError = underlying as? URLError {
                 switch urlError.code {
@@ -1013,6 +1058,9 @@ struct ChatView: View {
     }
 
     private func rollbackOptimistic(optimisticId: UUID, restore draft: ChatDraft) {
+        streamFlushTask?.cancel()
+        streamFlushTask = nil
+        streamBuffer.pending = ""
         let streamingId = streamingAssistant?.id
         rows.removeAll { row in
             if case .typing = row { return true }
@@ -1050,7 +1098,7 @@ private struct MessageBubble: View {
 
     var body: some View {
         switch row {
-        case .persisted(let message):
+        case .persisted(let message), .completed(_, let message):
             bubble(
                 role: message.role,
                 content: message.content,
@@ -1069,6 +1117,12 @@ private struct MessageBubble: View {
                 workLog: nil,
                 presentationBlocks: [],
                 dimmed: true
+            )
+        case .sent(_, let content, let attachments):
+            bubble(
+                role: .user, content: content, attachments: [],
+                pendingAttachments: attachments, workLog: nil,
+                presentationBlocks: [], dimmed: false
             )
         case .streaming(_, let content):
             bubble(
@@ -1203,6 +1257,24 @@ private struct MessageBubble: View {
                 if !presentationBlocks.isEmpty {
                     CoachPresentationBlocksView(blocks: presentationBlocks)
                         .padding(.top, 2)
+                }
+                if case .streaming = row {
+                    // Partial answers are not yet saved or ready to share.
+                } else {
+                    let summary = ([content] + presentationBlocks.map(\.fallbackText))
+                        .filter { !$0.isEmpty }.joined(separator: "\n\n")
+                    HStack(spacing: 20) {
+                        Button { UIPasteboard.general.string = summary } label: {
+                            Label("Copy", systemImage: "doc.on.doc")
+                        }
+                        ShareLink(item: summary) {
+                            Label("Share", systemImage: "square.and.arrow.up")
+                        }
+                    }
+                    .font(Theme.FontStyle.sans(12, weight: .medium))
+                    .foregroundStyle(Theme.Palette.fg2)
+                    .buttonStyle(.plain)
+                    .frame(minHeight: 44)
                 }
             }
         } else {

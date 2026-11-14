@@ -6,6 +6,30 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-11-14: Make iPhone Duo the native acceptance target
+
+**Decision:** Prioritize the Duo inner display, fold geometry and native vertical controls for native design and verification. Keep compact adaptation for the Duo cover display. Other iPhone simulators are outside this iteration’s acceptance target unless requested.
+
+**Rationale:** George uses the Duo exclusively. Align custom selectors and date context to the measured usable pane instead of spanning the hinge or assuming a fixed width.
+
+**Status:** active
+
+**References:** PR #613, apps/ios/Sources/Shared/FoldLayout.swift, apps/ios/Sources/RootView.swift
+
+---
+
+## 2026-11-14: Organize native iOS around a dated daily brief
+
+**Decision:** Use Today, Coach, Activity, and Plans as the four native destinations. Keep Trends, Progress, and Workouts within Activity and account settings behind Today’s account control. Present current recommendations before supporting measurements; dated historical readings and advice must not imply current readiness.
+
+**Rationale:** The six-tab layout overflowed on compact iPhones, and stale advice competed with current readings. Preserve one information priority across compact and Duo displays. Use adaptive opaque surfaces and bounded streaming updates to improve readability without continuous decorative rendering.
+
+**Status:** active
+
+**References:** apps/ios/Sources/RootView.swift, apps/ios/Sources/DashboardView.swift, apps/ios/Sources/ChatView.swift
+
+---
+
 ## 2026-11-10: Scope Whoop disconnect to the authenticated user's integration
 
 **Decision:** A Whoop disconnect request may revoke credentials and delete the integration only for the authenticated user. Remove the additional delete for user 1; retain the response's `legacy_removed` field as `false` for client compatibility. Do not add automatic legacy cleanup without evidence that it is still needed; any future cleanup must be a one-time `app_settings`-guarded migration that requires user 1 to have neither sessions nor an Apple identity.

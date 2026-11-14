@@ -73,10 +73,16 @@ struct PlansView: View {
             Text("No plans yet")
                 .font(Theme.FontStyle.sans(20, weight: .semibold))
                 .foregroundStyle(Theme.Palette.fg0)
-            Text("Ask the coach to build you a recovery-tuned split. Saved plans show up here with today's session up top.")
+            Text("Build a training plan that adjusts to your recovery. Saved plans and their exercises appear here.")
                 .font(Theme.FontStyle.sans(15))
                 .foregroundStyle(Theme.Palette.fg2)
                 .fixedSize(horizontal: false, vertical: true)
+            Button("Build a plan with Coach") {
+                NotificationCenter.default.post(name: .coachComposeRequested, object: "Help me build a training plan that adjusts to my recovery. Ask about my goals, schedule and available equipment first.")
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.Palette.recovery)
+            .frame(minHeight: 44)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard(padding: Theme.Spacing.lg)
@@ -136,7 +142,18 @@ struct PlansContent: View {
             // saved splits.
             FoldColumns {
                 if let hero = heroPlan {
-                    TodaySessionHero(plan: hero, isActive: heroIsActive, today: recovery?.today)
+                    NavigationLink {
+                        PlanDetailView(plan: hero)
+                    } label: {
+                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                            TodaySessionHero(plan: hero, isActive: heroIsActive, today: recovery?.today)
+                            Label("View exercises and sessions", systemImage: "arrow.right")
+                                .font(Theme.FontStyle.sans(15, weight: .semibold))
+                                .padding(.horizontal, Theme.Spacing.md)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
 
                     if let week = recovery?.week, !week.isEmpty {
                         WeekReadinessStrip(week: week, todayDate: recovery?.today?.date)

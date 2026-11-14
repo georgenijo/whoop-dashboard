@@ -24,60 +24,60 @@ struct WhoopConnectorCard: View {
 
     @State private var connector: WhoopConnector?
     @State private var loading = false
+    @State private var operationMessage: String?
     @State private var loadError: String?
     @State private var reconnecting = false
     @State private var lastRefreshAt: Date?
+    @State private var confirmingDisconnect = false
 
     var body: some View {
-        HStack(spacing: Theme.Spacing.sm) {
-            Image(systemName: "waveform.path.ecg")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Theme.Palette.brandStrain)
-                .frame(width: 32, height: 32)
-                .background(Theme.Palette.brandStrain.opacity(0.14), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
-
-            VStack(alignment: .leading, spacing: 4) {
-                // Status sits beside the name when it fits, under it when
-                // not (narrow displays with a Reconnect button alongside).
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: Theme.Spacing.xs) {
-                        name
-                        statusBadge.fixedSize()
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        name
-                        statusBadge.fixedSize()
-                    }
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            HStack(alignment: .top, spacing: Theme.Spacing.sm) {
+                Image(systemName: "waveform.path.ecg")
+                    .font(.title3)
+                    .foregroundStyle(Theme.Palette.recovery)
+                    .frame(width: 32, height: 32)
+                VStack(alignment: .leading, spacing: 6) {
+                    name
+                    statusBadge
+                    Text(detailText)
+                        .font(Theme.FontStyle.sans(13))
+                        .foregroundStyle(Theme.Palette.fg2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Text(detailText)
-                    .font(Theme.FontStyle.mono(11))
-                    .foregroundStyle(Theme.Palette.fg3)
-                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
             }
-
-            Spacer(minLength: Theme.Spacing.xs)
-
-            if connector?.status == .needsReconnect {
-                Button(action: { Task { await handleReconnect() } }) {
-                    Group {
-                        if reconnecting {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Text("Reconnect")
-                                .font(Theme.FontStyle.sans(13, weight: .semibold))
-                        }
+            if let status = connector?.status {
+                if status != .connected {
+                    Button(status == .disconnected ? "Connect Whoop" : "Reconnect Whoop") {
+                        Task { await handleReconnect() }
                     }
-                    .frame(minWidth: 84, minHeight: 36)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .buttonStyle(.bordered)
+                    .tint(Theme.Palette.recovery)
+                    .disabled(reconnecting)
+                } else {
+                    Button("Disconnect Whoop", role: .destructive) { confirmingDisconnect = true }
+                        .frame(minHeight: 44)
+                        .disabled(reconnecting)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Theme.Palette.brandStrain)
-                .disabled(reconnecting)
-                .frame(minHeight: 44)
+            } else if loadError != nil {
+                Button("Retry") { Task { await refresh(force: true) } }
+                    .frame(minHeight: 44)
             }
+            if reconnecting { ProgressView("Updating connection…") }
         }
-        .frame(minHeight: 44)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .confirmationDialog("Disconnect Whoop?", isPresented: $confirmingDisconnect, titleVisibility: .visible) {
+            Button("Disconnect", role: .destructive) { Task { await disconnect() } }
+        } message: {
+            Text("New Whoop data will stop syncing. Your saved history stays in Coach.")
+        }
         .accessibilityElement(children: .contain)
         .task { await refresh() }
+        .onReceive(NotificationCenter.default.publisher(for: .coachDataDidSync)) { _ in
+            Task { await refresh(force: true) }
+        }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active { Task { await refresh() } }
         }
@@ -96,7 +96,6 @@ struct WhoopConnectorCard: View {
                 Circle()
                     .fill(badgeColor(for: status))
                     .frame(width: 6, height: 6)
-                    .shadow(color: badgeColor(for: status).opacity(0.7), radius: 3)
                 Text(badgeLabel(for: status))
                     .font(Theme.FontStyle.sans(13, weight: .medium))
                     .foregroundStyle(badgeColor(for: status))
@@ -107,6 +106,7 @@ struct WhoopConnectorCard: View {
     }
 
     private var detailText: String {
+        if let operationMessage { return operationMessage }
         if let err = loadError { return err }
         guard let connector else { return "Loading…" }
         if let last = connector.lastSyncAt, let formatted = relative(from: last) {
@@ -126,8 +126,33 @@ struct WhoopConnectorCard: View {
     private func badgeLabel(for status: WhoopConnectorStatus) -> String {
         switch status {
         case .connected: return "Connected"
-        case .needsReconnect: return "Needs reconnect"
+        case .needsReconnect: return "Reconnect needed"
         case .disconnected: return "Disconnected"
+        }
+    }
+
+    @MainActor
+    private func disconnect() async {
+        guard !reconnecting else { return }
+        reconnecting = true
+        operationMessage = nil
+        defer { reconnecting = false }
+        do {
+            struct Body: Encodable {}
+            struct Result: Decodable { let ok: Bool; let dbRemoved: Bool; let revoked: Bool?
+                enum CodingKeys: String, CodingKey { case ok, revoked; case dbRemoved = "db_removed" }
+            }
+            let result: Result = try await api.post("/api/auth/whoop/disconnect", body: Body())
+            guard result.ok else { throw APIError.badResponse }
+            await refresh(force: true)
+            if connector?.status != .disconnected {
+                operationMessage = "Couldn’t remove the connection. Please try again."
+            } else if result.revoked != true {
+                operationMessage = "Disconnected locally. Whoop could not confirm revocation; you can also revoke access in Whoop."
+            }
+            NotificationCenter.default.post(name: .coachDataDidSync, object: nil)
+        } catch {
+            operationMessage = "Couldn’t disconnect. Please try again."
         }
     }
 
@@ -135,6 +160,7 @@ struct WhoopConnectorCard: View {
     private func handleReconnect() async {
         guard !reconnecting else { return }
         reconnecting = true
+        operationMessage = nil
         defer { reconnecting = false }
         loadError = nil
         do {
@@ -149,13 +175,14 @@ struct WhoopConnectorCard: View {
         } catch OAuthSessionError.canceled {
             // User dismissed the in-app browser. No-op — leave existing state intact.
         } catch OAuthSessionError.failed(let message) {
-            loadError = "Reconnect failed: \(message)"
+            operationMessage = "Reconnect failed: \(message)"
         } catch {
-            loadError = "Reconnect failed."
+            operationMessage = "Reconnect failed."
         }
         // Always re-fetch — the backend may have updated tokens even on a
         // surface-level "canceled" if the user completed Whoop's screen first.
         await refresh(force: true)
+        NotificationCenter.default.post(name: .coachDataDidSync, object: nil)
     }
 
     private func handle(callback url: URL) {
@@ -165,7 +192,7 @@ struct WhoopConnectorCard: View {
         let status = components.queryItems?.first { $0.name == "status" }?.value
         if status == "error" {
             let code = components.queryItems?.first { $0.name == "code" }?.value
-            loadError = "Reconnect failed (\(code ?? "unknown"))."
+            operationMessage = "Reconnect failed (\(code ?? "unknown"))."
         }
     }
 

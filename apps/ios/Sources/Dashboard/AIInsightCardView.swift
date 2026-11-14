@@ -2,6 +2,8 @@ import SwiftUI
 
 struct AIInsightCardView: View {
     let insight: DashboardPayload.AIInsight
+    var historical = false
+    private var isCurrent: Bool { insight.isCurrent && !historical }
 
     @State private var showFull = false
 
@@ -13,14 +15,19 @@ struct AIInsightCardView: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             header
 
-            if let digest, !digest.isEmpty {
+            if !isCurrent, insight.text?.isEmpty == false {
+                Text("Historical advice · current readings may differ.")
+                    .font(Theme.FontStyle.sans(13))
+                    .foregroundStyle(Theme.Palette.fg2)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if let digest, !digest.isEmpty {
                 digestBody(digest)
             } else if let text = insight.text, !text.isEmpty {
                 Text("Open the full analysis for details.")
                     .font(Theme.FontStyle.sans(15))
                     .foregroundStyle(Theme.Palette.fg2)
             } else {
-                Text("No insight yet. One is written after your next sync.")
+                Text("No daily analysis is available yet. You can ask Coach to review your latest data.")
                     .font(Theme.FontStyle.sans(15))
                     .foregroundStyle(Theme.Palette.fg2)
             }
@@ -29,7 +36,7 @@ struct AIInsightCardView: View {
                 Divider().overlay(Theme.Palette.borderSubtle)
                 Button { showFull = true } label: {
                     HStack {
-                        Text("Read full analysis")
+                        Text(isCurrent ? "Read full analysis" : "Read previous analysis")
                             .font(Theme.FontStyle.sans(15, weight: .medium))
                             .foregroundStyle(Theme.Palette.fg0)
                         Spacer()
@@ -37,7 +44,7 @@ struct AIInsightCardView: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(Theme.Palette.fg3)
                     }
-                    .frame(minHeight: 36)
+                    .frame(minHeight: 44)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -46,16 +53,13 @@ struct AIInsightCardView: View {
         }
         .glassCard(tint: .ai, padding: Theme.Spacing.md)
         .sheet(isPresented: $showFull) {
-            InsightFullSheet(insight: insight)
+            InsightFullSheet(insight: insight, historical: historical)
         }
     }
 
     private var header: some View {
         HStack(alignment: .center, spacing: 6) {
-            Image(systemName: "sparkle")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(Theme.Palette.ai)
-            Text("COACH INSIGHT")
+            Text(isCurrent ? "DAILY BRIEF" : "PREVIOUS ANALYSIS")
                 .font(Theme.FontStyle.sans(11, weight: .semibold))
                 .tracking(0.5)
                 .foregroundStyle(Theme.Palette.fg2)
@@ -65,9 +69,7 @@ struct AIInsightCardView: View {
                     .font(Theme.FontStyle.mono(11))
                     .foregroundStyle(Theme.Palette.fg3)
             }
-            if insight.isStale {
-                StaleBadge()
-            }
+
         }
     }
 
@@ -81,7 +83,7 @@ struct AIInsightCardView: View {
         }
         if !digest.actions.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("DO THIS")
+                Text("SUGGESTED TODAY")
                     .font(Theme.FontStyle.sans(11, weight: .semibold))
                     .tracking(0.5)
                     .foregroundStyle(Theme.Palette.fg3)
@@ -134,17 +136,23 @@ private struct StaleBadge: View {
 }
 
 enum InsightDate {
+    private static let fractional: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+    private static let plain = ISO8601DateFormatter()
+    private static let sql: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter
+    }()
     static func parse(_ raw: String?) -> Date? {
         guard let raw else { return nil }
-        let frac = ISO8601DateFormatter()
-        frac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let d = frac.date(from: raw) { return d }
-        let plain = ISO8601DateFormatter()
+        if let d = fractional.date(from: raw) { return d }
         if let d = plain.date(from: raw) { return d }
-        let sql = DateFormatter()
-        sql.locale = Locale(identifier: "en_US_POSIX")
-        sql.timeZone = TimeZone(identifier: "UTC")
-        sql.dateFormat = "yyyy-MM-dd HH:mm:ss"
         return sql.date(from: raw)
     }
 
@@ -159,6 +167,7 @@ enum InsightDate {
 
 private struct InsightFullSheet: View {
     let insight: DashboardPayload.AIInsight
+    var historical = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -186,25 +195,24 @@ private struct InsightFullSheet: View {
             }
         }
         .presentationDragIndicator(.visible)
-        .preferredColorScheme(.dark)
     }
 
     @ViewBuilder
     private var meta: some View {
         let written = InsightDate.parse(insight.createdAt)
-        if written != nil || insight.isStale {
+        if written != nil || !insight.isCurrent || historical {
             HStack(spacing: 8) {
                 if let written {
                     Text("Written \(written.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute()))")
                         .font(Theme.FontStyle.mono(11))
                         .foregroundStyle(Theme.Palette.fg3)
                 }
-                if insight.isStale {
+                if !insight.isCurrent || historical {
                     StaleBadge()
                 }
             }
-            if insight.isStale {
-                Text("Newer Whoop data has arrived since this was written, so some numbers may be out of date.")
+            if !insight.isCurrent || historical {
+                Text("This is a previous analysis. Its measurements and suggestions may no longer describe today.")
                     .font(Theme.FontStyle.sans(13))
                     .foregroundStyle(Theme.Palette.fg2)
                     .fixedSize(horizontal: false, vertical: true)
