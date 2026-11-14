@@ -95,10 +95,11 @@ struct CoachView: View {
     private func chat(for selection: CoachSelection) -> some View {
         switch selection {
         case .new(let id, let draft):
-            ChatView(threadId: createdThreads[id], initialTitle: nil, initialDraft: draft, conversation: id)
+            ChatView(threadId: createdThreads[id], initialTitle: nil, initialDraft: draft, conversation: id,
+                     onComposerInteraction: { compactColumn = .detail })
                 .id(id)
         case .thread(let id, let title):
-            ChatView(threadId: id, initialTitle: title)
+            ChatView(threadId: id, initialTitle: title, onComposerInteraction: { compactColumn = .detail })
                 .id(id)
         }
     }

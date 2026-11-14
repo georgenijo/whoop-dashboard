@@ -15,6 +15,7 @@ struct ChatView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let conversation: UUID?
+    private let onComposerInteraction: (() -> Void)?
     @State private var threadId: Int?
     @State private var rows: [ChatRow] = []
     @State private var currentTitle: String?
@@ -41,9 +42,11 @@ struct ChatView: View {
     /// `initialDraft` only pre-fills the composer; nothing is sent until the user taps send.
     /// `conversation` identifies a new chat to its container (CoachView), which
     /// is told the thread id once the server assigns one.
-    init(threadId: Int?, initialTitle: String?, initialDraft: String? = nil, conversation: UUID? = nil) {
+    init(threadId: Int?, initialTitle: String?, initialDraft: String? = nil, conversation: UUID? = nil,
+         onComposerInteraction: (() -> Void)? = nil) {
         self.initialTitle = initialTitle
         self.conversation = conversation
+        self.onComposerInteraction = onComposerInteraction
         self._threadId = State(initialValue: threadId)
         self._input = State(initialValue: initialDraft ?? "")
     }
@@ -96,6 +99,9 @@ struct ChatView: View {
 
     var body: some View {
         messagesList
+            .onChange(of: isComposerFocused) { _, focused in
+                if focused { onComposerInteraction?() }
+            }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 VStack(spacing: 0) {
@@ -120,7 +126,8 @@ struct ChatView: View {
             }
         .navigationTitle(currentTitle ?? initialTitle ?? "New chat")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbarBackground(Theme.Palette.bg0, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .task {
             if !didLoadInitial {
                 await loadHistory()
@@ -144,6 +151,7 @@ struct ChatView: View {
         }
         .onChange(of: photoPickerItems) { _, items in
             guard !items.isEmpty else { return }
+            onComposerInteraction?()
             Task { await prepareSelectedPhotos(items) }
         }
         .sheet(item: $selectedAttachment) { attachment in
