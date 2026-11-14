@@ -139,6 +139,9 @@ struct LiveToolActivity: Identifiable, Hashable {
     var isComplete = false
     var error: String? = nil
 
+    /// A terminal failure may have no error text in the SSE payload.
+    var hasFailed: Bool { error != nil || (isComplete && stage == "Failed") }
+
     init(id: String = UUID().uuidString, name: String, stage: String?) {
         self.id = id
         self.name = name

@@ -250,11 +250,9 @@ private struct CoachCardLabel: View {
     init(_ text: String) { self.text = text }
 
     var body: some View {
-        Text(text.uppercased())
-            .font(Theme.FontStyle.sans(11, weight: .semibold))
-            .tracking(0.5)
+        Text(text)
+            .font(Theme.FontStyle.sans(13, weight: .medium))
             .foregroundStyle(Theme.Palette.fg2)
-            .lineLimit(2)
             .fixedSize(horizontal: false, vertical: true)
     }
 }
@@ -297,10 +295,13 @@ private enum Tone {
 
 private struct MetricStripView: View {
     let strip: MetricStrip
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: 180), spacing: 16)],
+            columns: dynamicTypeSize.isAccessibilitySize
+                ? [GridItem(.flexible(minimum: 0))]
+                : [GridItem(.adaptive(minimum: 180), spacing: 16)],
             alignment: .leading,
             spacing: 20
         ) {
@@ -314,15 +315,12 @@ private struct MetricStripView: View {
 
     private func tile(_ metric: MetricStrip.Metric) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(metric.label.uppercased())
-                .font(Theme.FontStyle.sans(11, weight: .semibold))
-                .tracking(0.45)
+            Text(metric.label)
+                .font(Theme.FontStyle.sans(13, weight: .medium))
                 .foregroundStyle(Theme.Palette.fg2)
-                .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
-            // Narrow tiles (iPhone Duo's outer display, three across) put
-            // the unit under the value rather than truncating it.
+            // Narrow tiles put the unit under the value rather than truncating it.
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     value(metric)
@@ -345,8 +343,9 @@ private struct MetricStripView: View {
         Text(metric.displayValue)
             .font(Theme.FontStyle.mono(22, weight: .medium))
             .foregroundStyle(Theme.Palette.fg0)
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+            .minimumScaleFactor(dynamicTypeSize.isAccessibilitySize ? 1 : 0.7)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     @ViewBuilder
@@ -355,7 +354,7 @@ private struct MetricStripView: View {
             Text(metric.unit)
                 .font(Theme.FontStyle.mono(12))
                 .foregroundStyle(Theme.Palette.fg3)
-                .lineLimit(1)
+                .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
         }
     }
 
@@ -382,6 +381,7 @@ private struct MetricStripView: View {
 
 private struct ComparisonView: View {
     let comparison: Comparison
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -401,11 +401,14 @@ private struct ComparisonView: View {
 
     private func row(_ item: Comparison.Item) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            HStack(alignment: .firstTextBaseline) {
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 5))
+                : AnyLayout(HStackLayout(alignment: .firstTextBaseline))
+            layout {
                 Text(item.label)
                     .font(Theme.FontStyle.sans(15))
                     .foregroundStyle(Theme.Palette.fg1)
-                Spacer(minLength: 8)
+                if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 8) }
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(item.current.map(CoachNumber.format) ?? "—")
                         .font(Theme.FontStyle.mono(18, weight: .medium))
@@ -417,13 +420,13 @@ private struct ComparisonView: View {
                     }
                 }
             }
-            HStack(spacing: 8) {
+            layout {
                 if let baseline = item.baseline {
                     Text("vs \(CoachNumber.format(baseline))")
                         .font(Theme.FontStyle.mono(11))
                         .foregroundStyle(Theme.Palette.fg3)
                 }
-                Spacer(minLength: 0)
+                if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 0) }
                 if let delta = deltaText(item) {
                     HStack(spacing: 3) {
                         if let arrow = Tone.arrow(item.direction) {
@@ -434,9 +437,6 @@ private struct ComparisonView: View {
                             .font(Theme.FontStyle.mono(11, weight: .medium))
                     }
                     .foregroundStyle(Theme.Palette.fg1)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color.white.opacity(0.07), in: Capsule())
                 }
             }
         }
@@ -493,6 +493,7 @@ private struct DataFreshnessView: View {
     let block: DataFreshness
     let api: APIClient
     @State private var state = ""
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -503,18 +504,23 @@ private struct DataFreshnessView: View {
                         .fill(color(source.status))
                         .frame(width: 7, height: 7)
                         .alignmentGuide(.firstTextBaseline) { d in d[.bottom] + 2 }
-                    Text(source.source)
-                        .font(Theme.FontStyle.sans(14))
-                        .foregroundStyle(Theme.Palette.fg1)
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    Text(dateText(source.lastAvailableDate))
-                        .font(Theme.FontStyle.mono(12))
-                        .foregroundStyle(Theme.Palette.fg2)
-                    Text(source.status.capitalized)
-                        .font(Theme.FontStyle.mono(11, weight: .medium))
-                        .foregroundStyle(color(source.status))
-                        .frame(minWidth: 52, alignment: .trailing)
+                    let layout = dynamicTypeSize.isAccessibilitySize
+                        ? AnyLayout(VStackLayout(alignment: .leading, spacing: 3))
+                        : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 10))
+                    layout {
+                        Text(source.source)
+                            .font(Theme.FontStyle.sans(14))
+                            .foregroundStyle(Theme.Palette.fg1)
+                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
+                        if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 8) }
+                        Text(dateText(source.lastAvailableDate))
+                            .font(Theme.FontStyle.mono(12))
+                            .foregroundStyle(Theme.Palette.fg2)
+                        Text(source.status.capitalized)
+                            .font(Theme.FontStyle.mono(11, weight: .medium))
+                            .foregroundStyle(color(source.status))
+                            .frame(minWidth: 52, alignment: dynamicTypeSize.isAccessibilitySize ? .leading : .trailing)
+                    }
                 }
                 .accessibilityElement(children: .combine)
             }
@@ -529,8 +535,8 @@ private struct DataFreshnessView: View {
                         .font(Theme.FontStyle.sans(13, weight: .medium))
                         .foregroundStyle(Theme.Palette.fg0)
                         .padding(.horizontal, 14)
-                        .frame(minHeight: 36)
-                        .background(Color.white.opacity(0.07), in: Capsule())
+                        .frame(minHeight: 44)
+                        .background(Theme.Palette.bg2, in: Capsule())
                         .overlay(Capsule().strokeBorder(Theme.Palette.borderDefault))
                         .frame(minHeight: 44)
                         .contentShape(Rectangle())
@@ -561,14 +567,18 @@ private struct DataFreshnessView: View {
 
 private struct WorkoutPlanView: View {
     let plan: CoachWorkoutPlanBlock
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 5))
+                : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 10))
+            layout {
                 Text(plan.title)
                     .font(Theme.FontStyle.sans(16, weight: .semibold))
                     .foregroundStyle(Theme.Palette.fg0)
-                Spacer(minLength: 8)
+                if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 8) }
                 if let date = plan.date {
                     Text(ChartDate.parse(date)?.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()) ?? date)
                         .font(Theme.FontStyle.mono(11))
@@ -581,15 +591,16 @@ private struct WorkoutPlanView: View {
                     Divider().overlay(Theme.Palette.borderSubtle)
                 }
                 VStack(alignment: .leading, spacing: 3) {
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    layout {
                         Text(exercise.name)
                             .font(Theme.FontStyle.sans(14.5, weight: .medium))
                             .foregroundStyle(Theme.Palette.fg1)
-                        Spacer(minLength: 8)
+                        if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 8) }
                         Text(exercise.prescription)
                             .font(Theme.FontStyle.mono(12.5))
                             .foregroundStyle(Theme.Palette.fg0)
-                            .multilineTextAlignment(.trailing)
+                            .multilineTextAlignment(dynamicTypeSize.isAccessibilitySize ? .leading : .trailing)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     if !exercise.notes.isEmpty {
                         Text(exercise.notes)
@@ -623,11 +634,12 @@ private struct WorkoutPlanView: View {
 private struct EvidenceView: View {
     let evidence: Evidence
     @State private var expanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
-                withAnimation(.snappy) { expanded.toggle() }
+                withAnimation(reduceMotion ? nil : .snappy) { expanded.toggle() }
             } label: {
                 HStack(spacing: 10) {
                     Image(systemName: "doc.text.magnifyingglass")
@@ -636,7 +648,7 @@ private struct EvidenceView: View {
                     Text(evidence.title)
                         .font(Theme.FontStyle.sans(14, weight: .medium))
                         .foregroundStyle(Theme.Palette.fg1)
-                        .lineLimit(1)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 8)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .semibold))
@@ -650,6 +662,7 @@ private struct EvidenceView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(evidence.title)
             .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+            .accessibilityHint("Shows the records, dates, and sources behind this answer")
 
             if expanded {
                 VStack(alignment: .leading, spacing: 8) {
