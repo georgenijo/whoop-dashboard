@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-11-14: Adopt Fleet Warehouse's visual language for Coach
+
+**Decision:** Use Fleet Warehouse's DM Sans, neutral light/dark surfaces, warm gray text, restrained brown action accent, and thin ruled data groups in the native Coach app. Keep health colors semantic, native Duo navigation, Dynamic Type, and separate fold columns. Replace decorative recovery rings and large chat suggestion containers with readable values and compact rows.
+
+**Rationale:** George explicitly prefers the existing Warehouse interface to Coach's green palette and rounded panels. Translate its alignment, contrast, and restraint into phone controls with comfortable tap targets rather than copying desktop text sizes. Keep rendering event-driven and avoid decorative gradients or animations.
+
+**Status:** active
+
+**References:** fleet-warehouse d435d4633961d66f320a657505e1192795ba8f36, apps/ios/Sources/Shared/Theme.swift
+
+---
+
 ## 2026-11-14: Version and verify native release workflows
 
 **Decision:** Manage explicit compatible Xcode/macOS pins and native workflow settings in `apps/ios/ci/workflows.json`, reconciled through a validated plan/apply tool. Add Apple-managed Duo PR tests and daily main verification alongside the existing internal Beta archive. Keep API credentials outside GitHub and preserve Apple's existing TestFlight group post-action.

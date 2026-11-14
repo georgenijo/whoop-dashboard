@@ -45,7 +45,7 @@ struct GlassCardModifier: ViewModifier {
     }
 
     private var background: some View {
-        Theme.Palette.bg2
+        Theme.Palette.bg0
     }
 
 }
@@ -54,7 +54,7 @@ extension View {
     func glassCard(
         tint: GlassTint = .neutral,
         padding: CGFloat = Theme.Spacing.md,
-        radius: CGFloat = Theme.Radius.xl
+        radius: CGFloat = 0
     ) -> some View {
         modifier(GlassCardModifier(tint: tint, padding: padding, radius: radius))
     }

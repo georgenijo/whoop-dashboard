@@ -84,9 +84,8 @@ struct MetricChart: View {
         let average = rawValues.isEmpty ? nil : rawValues.reduce(0, +) / Double(rawValues.count)
         let focus = focusDay(in: days)
         VStack(alignment: .leading, spacing: 6) {
-            Text(title.uppercased())
-                .font(Theme.FontStyle.sans(11, weight: .semibold))
-                .tracking(0.5)
+            Text(title)
+                .font(Theme.FontStyle.sans(13, weight: .medium))
                 .foregroundStyle(Theme.Palette.fg2)
             HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.sm) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {

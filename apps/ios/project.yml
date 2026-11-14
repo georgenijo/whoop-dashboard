@@ -45,6 +45,10 @@ targets:
       path: Info.plist
       properties:
         UIAppFonts:
+          - DMSans-Regular.ttf
+          - DMSans-Medium.ttf
+          - DMSans-SemiBold.ttf
+          - DMSans-Bold.ttf
           - Geist-Regular.ttf
           - Geist-Medium.ttf
           - Geist-SemiBold.ttf

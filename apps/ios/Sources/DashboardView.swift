@@ -5,6 +5,7 @@ struct DashboardView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.api) private var api
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var phase: Phase = .loading
     @State private var lastFetched: Date?
     @State private var isLoading = false
@@ -144,16 +145,22 @@ struct DashboardView: View {
                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     }
                 }
+                if sizeClass == .regular {
+                    RecoveryTrendCardView(points: payload.recoveryTrend)
+                    records(payload.prs)
+                }
             } trailing: {
-                Text("Your measurements")
-                    .font(Theme.FontStyle.sans(20, weight: .semibold))
+                Text("Measurements")
+                    .font(Theme.FontStyle.sans(15, weight: .medium))
                     .foregroundStyle(Theme.Palette.fg0)
                     .padding(.top, Theme.Spacing.xs)
                 KPIStripView(tiles: vitals(payload.kpi), columns: 2) { tile in
                     detail = tile.href
                 }
-                RecoveryTrendCardView(points: payload.recoveryTrend)
-                records(payload.prs)
+                if sizeClass != .regular {
+                    RecoveryTrendCardView(points: payload.recoveryTrend)
+                    records(payload.prs)
+                }
                 if let insight = payload.aiInsight, !insight.isCurrent || payload.isFallback {
                     AIInsightCardView(insight: insight, historical: true)
                 }
@@ -234,7 +241,7 @@ struct DashboardView: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.borderedProminent)
-            .tint(Theme.Palette.recovery.opacity(0.9))
+            .tint(Theme.Palette.accent)
             .foregroundStyle(Theme.Palette.bg0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

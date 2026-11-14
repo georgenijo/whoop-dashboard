@@ -59,9 +59,9 @@ struct AIInsightCardView: View {
 
     private var header: some View {
         HStack(alignment: .center, spacing: 6) {
-            Text(isCurrent ? "DAILY BRIEF" : "PREVIOUS ANALYSIS")
+            Text(isCurrent ? "Daily brief" : "Previous analysis")
                 .font(Theme.FontStyle.sans(11, weight: .semibold))
-                .tracking(0.5)
+                .tracking(0)
                 .foregroundStyle(Theme.Palette.fg2)
             Spacer(minLength: 8)
             if let written = InsightDate.short(insight.createdAt) {
@@ -83,17 +83,17 @@ struct AIInsightCardView: View {
         }
         if !digest.actions.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("SUGGESTED TODAY")
+                Text("Suggested today")
                     .font(Theme.FontStyle.sans(11, weight: .semibold))
-                    .tracking(0.5)
+                    .tracking(0)
                     .foregroundStyle(Theme.Palette.fg3)
                 ForEach(Array(digest.actions.enumerated()), id: \.offset) { index, action in
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
                         Text("\(index + 1)")
                             .font(Theme.FontStyle.mono(11, weight: .medium))
-                            .foregroundStyle(Theme.Palette.ai)
+                            .foregroundStyle(Theme.Palette.accent)
                             .frame(width: 18, height: 18)
-                            .background(Theme.Palette.ai.opacity(0.14), in: Circle())
+                            .background(Theme.Palette.bg2, in: Rectangle())
                             .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 5 }
                         MarkdownView(content: action)
                             .font(Theme.FontStyle.sans(15))

@@ -54,7 +54,7 @@ struct WhoopConnectorCard: View {
                     }
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .buttonStyle(.bordered)
-                    .tint(Theme.Palette.recovery)
+                    .tint(Theme.Palette.accent)
                     .disabled(reconnecting)
                 } else {
                     Button("Disconnect Whoop", role: .destructive) { confirmingDisconnect = true }

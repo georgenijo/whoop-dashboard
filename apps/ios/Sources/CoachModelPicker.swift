@@ -170,7 +170,7 @@ private struct CoachModelPickerSheet: View {
                 if isLoading {
                     ProgressView("Loading models…")
                         .font(Theme.FontStyle.sans(12))
-                        .tint(Theme.Palette.ai)
+                        .tint(Theme.Palette.accent)
                         .padding(16)
                         .background(
                             Theme.Palette.bg3,
@@ -509,7 +509,7 @@ private struct CoachEffortPicker: View {
             if isSaving {
                 ProgressView("Saving…")
                     .font(Theme.FontStyle.sans(11.5))
-                    .tint(Theme.Palette.ai)
+                    .tint(Theme.Palette.accent)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(Theme.Palette.bg3, in: Capsule())
@@ -615,7 +615,7 @@ private struct CursorReasoningPicker: View {
                         }
                     }
                     .toggleStyle(.switch)
-                    .tint(Theme.Palette.ai)
+                    .tint(Theme.Palette.accent)
                     .padding(.horizontal, 16)
                     .frame(minHeight: 62)
                     .disabled(isSaving)
@@ -681,7 +681,7 @@ private struct CursorReasoningPicker: View {
             if isSaving {
                 ProgressView("Saving…")
                     .font(Theme.FontStyle.sans(11.5))
-                    .tint(Theme.Palette.ai)
+                    .tint(Theme.Palette.accent)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(Theme.Palette.bg3, in: Capsule())
