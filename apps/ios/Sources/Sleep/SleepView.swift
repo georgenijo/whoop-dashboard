@@ -78,8 +78,30 @@ private struct SleepHeroCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            if let latest = payload.latestSleep {
+                VStack(alignment: .leading, spacing: 8) {
+                    TrendsCardLabel("Latest sleep", trailing: TrendsFormat.day(latest.date))
+                    if let stages = latest.stages {
+                        Text(TrendsFormat.hoursMinutes(ms: stages.lightMs + stages.deepMs + stages.remMs))
+                            .font(Theme.FontStyle.display(36, weight: .semibold))
+                            .foregroundStyle(Theme.Palette.fg0)
+                        Text("Time asleep")
+                            .font(Theme.FontStyle.sans(15, weight: .medium))
+                            .foregroundStyle(Theme.Palette.fg1)
+                        Text("\(TrendsFormat.hoursMinutes(ms: stages.lightMs + stages.deepMs + stages.remMs + stages.awakeMs)) in bed, including awake time")
+                            .font(Theme.FontStyle.sans(13))
+                            .foregroundStyle(Theme.Palette.fg2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text("Sleep stages aren’t available for this night. The history below shows recorded time in bed.")
+                            .font(Theme.FontStyle.sans(15))
+                            .foregroundStyle(Theme.Palette.fg2)
+                    }
+                }
+                Divider().overlay(Theme.Palette.borderSubtle)
+            }
             MetricChart(
-                title: "In bed",
+                title: "Time in bed history",
                 unit: "",
                 accent: Theme.Palette.sleepDeep,
                 points: payload.durationTrend.map { TrendPoint(date: $0.date, raw: $0.rawHours, ma7: $0.ma7, ma30: nil) },
@@ -103,19 +125,19 @@ private struct SleepHeroCard: View {
         return [
             TrendsStat(
                 id: "avg7",
-                label: "7-day avg",
+                label: "Avg in bed",
                 value: payload.durationTrend.last(where: { $0.ma7 != nil })?.ma7.map { TrendsFormat.hoursMinutes(hours: $0) } ?? "—",
                 caption: "rolling"
             ),
             TrendsStat(
                 id: "long",
-                label: "Longest",
+                label: "Longest in bed",
                 value: longest.map { TrendsFormat.hoursMinutes(hours: $0.hours) } ?? "—",
                 caption: longest.map { TrendsFormat.day($0.date) }
             ),
             TrendsStat(
                 id: "7h",
-                label: "7h+ nights",
+                label: "7h+ in bed",
                 value: nights.isEmpty ? "—" : "\(full)",
                 caption: nights.isEmpty ? nil : "of \(nights.count)"
             )

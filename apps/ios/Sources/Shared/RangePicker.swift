@@ -1,9 +1,10 @@
 import SwiftUI
 
-/// Full-width range control. Every segment is a 40pt-tall target (the old
+/// Full-width range control. Every segment is at least a 44pt-tall target (the old
 /// header `Menu` was an 11pt label), and the selection slides rather than
 /// snapping so the change is legible.
 struct RangePicker: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var selection: DateRange
     var options: [DateRange] = DateRange.allCases
 
@@ -14,12 +15,12 @@ struct RangePicker: View {
             ForEach(options) { range in
                 let selected = range == selection
                 Button {
-                    withAnimation(.snappy(duration: 0.25)) { selection = range }
+                    withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { selection = range }
                 } label: {
                     Text(range.label.uppercased())
                         .font(Theme.FontStyle.mono(13, weight: selected ? .semibold : .medium))
                         .foregroundStyle(selected ? Theme.Palette.fg0 : Theme.Palette.fg3)
-                        .frame(maxWidth: .infinity, minHeight: 36)
+                        .frame(maxWidth: .infinity, minHeight: 44)
                         .background {
                             if selected {
                                 Capsule()

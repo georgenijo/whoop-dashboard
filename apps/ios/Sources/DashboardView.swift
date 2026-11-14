@@ -1,12 +1,15 @@
 import SwiftUI
 
 struct DashboardView: View {
+    var onOpenSettings: () -> Void = {}
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.api) private var api
     @Environment(\.scenePhase) private var scenePhase
     @State private var phase: Phase = .loading
     @State private var lastFetched: Date?
     @State private var isLoading = false
     @State private var loadGeneration = 0
+    @State private var refreshError: String?
     @State private var detail: KPITile.Href?
 
     private static let staleInterval: TimeInterval = 300
@@ -21,6 +24,16 @@ struct DashboardView: View {
         NavigationStack {
             content
             .navigationTitle("Today")
+            .background(Theme.Palette.bg0)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: onOpenSettings) {
+                        Label("Settings", systemImage: "person.crop.circle")
+                            .labelStyle(.iconOnly)
+                            .frame(minWidth: 44, minHeight: 44)
+                    }
+                }
+            }
             .refreshable { await load(showSpinner: false) }
             .navigationDestination(item: $detail) { href in
                 switch href {
@@ -32,6 +45,9 @@ struct DashboardView: View {
             }
         }
         .task { await load(showSpinner: true) }
+        .onReceive(NotificationCenter.default.publisher(for: .coachDataDidSync)) { _ in
+            Task { await load(showSpinner: false) }
+        }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
             guard !isLoading else { return }
@@ -50,7 +66,7 @@ struct DashboardView: View {
                 Circle()
                     .fill(payload.isFallback ? Theme.Palette.warning : Theme.Palette.recovery)
                     .frame(width: 6, height: 6)
-                Text(payload.isFallback ? "Latest · \(label)" : label)
+                Text(payload.isFallback ? "No reading for today · latest \(label)" : label)
                     .font(Theme.FontStyle.mono(11, weight: .medium))
                     .foregroundStyle(payload.isFallback ? Theme.Palette.warning : Theme.Palette.fg2)
             }
@@ -90,26 +106,56 @@ struct DashboardView: View {
         }
     }
 
-    /// Compact width: one column. Inner display: today at a glance (score and
-    /// vitals) on the leading side of the fold, the coach's read and the trend
-    /// on the trailing side.
+    /// One hierarchy in both poses: dated state and recommendation first,
+    /// supporting measurements and historical evidence second.
     private func sections(_ payload: DashboardPayload, interactive: Bool) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             headerCaption
+            if let refreshError {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("Couldn't refresh", systemImage: "wifi.exclamationmark")
+                        .font(Theme.FontStyle.sans(13, weight: .semibold))
+                    Text("Showing previously loaded data. " + refreshError)
+                        .font(Theme.FontStyle.sans(13))
+                    Button("Try again") { Task { await load(showSpinner: false) } }
+                        .frame(minHeight: 44)
+                }
+                .foregroundStyle(Theme.Palette.fg1)
+                .glassCard()
+            }
             FoldColumns {
                 RecoveryHeroView(
                     hero: payload.recoveryHero,
                     trend: payload.recoveryTrend,
-                    onTap: interactive ? { detail = .recovery } : nil
+                    onTap: interactive ? { detail = .recovery } : nil,
+                    showsGuidance: payload.isFallback || payload.aiInsight?.isCurrent != true,
+                    isHistorical: payload.isFallback
                 )
-                KPIStripView(tiles: vitals(payload.kpi), columns: 3) { tile in
-                    detail = tile.href
-                }
-            } trailing: {
-                if let insight = payload.aiInsight {
+                if let insight = payload.aiInsight, insight.isCurrent, !payload.isFallback {
                     AIInsightCardView(insight: insight)
                 }
+                if payload.isFallback {
+                    Button {
+                        NotificationCenter.default.post(name: .coachComposeRequested, object: "Help me understand my latest data and what is missing before suggesting today's training.")
+                    } label: {
+                        Label("Review my data with Coach", systemImage: "bubble.left")
+                            .font(Theme.FontStyle.sans(15, weight: .medium))
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }
+                }
+            } trailing: {
+                Text("Your measurements")
+                    .font(Theme.FontStyle.sans(20, weight: .semibold))
+                    .foregroundStyle(Theme.Palette.fg0)
+                    .padding(.top, Theme.Spacing.xs)
+                KPIStripView(tiles: vitals(payload.kpi), columns: 2) { tile in
+                    detail = tile.href
+                }
                 RecoveryTrendCardView(points: payload.recoveryTrend)
+                records(payload.prs)
+                if let insight = payload.aiInsight, !insight.isCurrent || payload.isFallback {
+                    AIInsightCardView(insight: insight, historical: true)
+                }
             }
         }
         .padding(.horizontal, Theme.Spacing.md)
@@ -123,6 +169,46 @@ struct DashboardView: View {
     private func vitals(_ tiles: [KPITile]) -> [KPITile] {
         let order: [KPITile.Key] = [.hrv, .rhr, .sleep, .strain, .steps, .spo2]
         return order.compactMap { key in tiles.first { $0.key == key } }
+    }
+
+    @ViewBuilder
+    private func records(_ prs: DashboardPayload.PRs) -> some View {
+        if prs.bestHrv != nil || prs.lowestRhr != nil || prs.recoveryStreak != nil || prs.sleepPerfStreak != nil || prs.loggingStreak != nil {
+            DisclosureGroup("Personal records") {
+                VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                    if let row = prs.bestHrv {
+                        recordRow("Highest HRV", value: "\(Int(row.value.rounded())) ms", date: row.date)
+                    }
+                    if let row = prs.lowestRhr {
+                        recordRow("Lowest resting heart rate", value: "\(Int(row.value.rounded())) bpm", date: row.date)
+                    }
+                    if let row = prs.recoveryStreak {
+                        recordRow("Recovery at least 80%", value: "\(row.count) days", date: row.endDate)
+                    }
+                    if let row = prs.sleepPerfStreak {
+                        recordRow("Sleep performance at least 85%", value: "\(row.count) days", date: row.endDate)
+                    }
+                    if let row = prs.loggingStreak {
+                        recordRow("Logging streak", value: "\(row.count) days", date: row.endDate)
+                    }
+                }
+                .padding(.top, Theme.Spacing.sm)
+            }
+            .font(Theme.FontStyle.sans(15, weight: .medium))
+            .foregroundStyle(Theme.Palette.fg1)
+            .glassCard()
+        }
+    }
+
+    private func recordRow(_ title: String, value: String, date: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title).font(Theme.FontStyle.sans(13))
+            Text(value).font(Theme.FontStyle.mono(20, weight: .semibold))
+            Text(ChartDate.parse(date).map { $0.formatted(date: .abbreviated, time: .omitted) } ?? date)
+                .font(Theme.FontStyle.sans(11))
+                .foregroundStyle(Theme.Palette.fg2)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private func errorCard(_ message: String) -> some View {
@@ -172,7 +258,8 @@ struct DashboardView: View {
         do {
             let payload = try await DashboardServiceV2(api: api).load(range: .d30)
             guard generation == loadGeneration else { return }
-            withAnimation(.snappy) { phase = .loaded(payload) }
+            withAnimation(reduceMotion ? nil : .snappy) { phase = .loaded(payload) }
+            refreshError = nil
             lastFetched = Date()
             return
         } catch APIError.unauthorized {
@@ -186,8 +273,12 @@ struct DashboardView: View {
         } catch {
             failure = "Something went wrong. Pull down or tap Retry."
         }
-        guard generation == loadGeneration, !hadLoadedData else { return }
-        phase = .error(failure)
+        guard generation == loadGeneration else { return }
+        if hadLoadedData {
+            refreshError = failure
+        } else {
+            phase = .error(failure)
+        }
     }
 
     private static let placeholder: DashboardPayload = {

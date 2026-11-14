@@ -4,6 +4,9 @@ struct RecoveryHeroView: View {
     let hero: DashboardPayload.RecoveryHero
     var trend: [TrendPoint] = []
     var onTap: (() -> Void)? = nil
+    var showsGuidance = true
+    var isHistorical = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var baseline: Double? {
         Self.thirtyDayAverage(trend)
@@ -36,7 +39,7 @@ struct RecoveryHeroView: View {
     private func card(tappable: Bool) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
             HStack(spacing: 6) {
-                Text("RECOVERY")
+                Text(isHistorical ? "LATEST RECOVERY" : "RECOVERY")
                     .font(Theme.FontStyle.sans(11, weight: .semibold))
                     .tracking(0.5)
                     .foregroundStyle(Theme.Palette.fg2)
@@ -53,16 +56,23 @@ struct RecoveryHeroView: View {
                 }
             }
 
-            HStack(alignment: .center, spacing: Theme.Spacing.lg) {
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: Theme.Spacing.md))
+                : AnyLayout(HStackLayout(alignment: .center, spacing: Theme.Spacing.lg))
+            layout {
                 RecoveryRing(score: hero.score)
 
                 VStack(alignment: .leading, spacing: 10) {
                     if let score = hero.score {
-                        ZonePill(score: score)
-                        Text(RecoveryZone(score: score).guidance)
-                            .font(Theme.FontStyle.sans(15))
-                            .foregroundStyle(Theme.Palette.fg1)
-                            .fixedSize(horizontal: false, vertical: true)
+                        Text(score < 34 ? "Lower recovery" : score < 67 ? "Moderate recovery" : "Higher recovery")
+                            .font(Theme.FontStyle.sans(17, weight: .semibold))
+                            .foregroundStyle(Theme.Palette.fg0)
+                        if showsGuidance {
+                            Text(isHistorical ? "This reading describes your last recorded day, not your readiness today." : RecoveryZone(score: score).guidance)
+                                .font(Theme.FontStyle.sans(15))
+                                .foregroundStyle(Theme.Palette.fg1)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                         if let baseline {
                             baselineRow(score: score, baseline: baseline)
                         }
@@ -88,7 +98,7 @@ struct RecoveryHeroView: View {
     private func baselineRow(score: Double, baseline: Double) -> some View {
         let diff = score.rounded() - baseline.rounded()
         let sign = diff > 0 ? "+" : diff < 0 ? "−" : "±"
-        let color: Color = diff > 0 ? Theme.Palette.zoneGreen : diff < 0 ? Theme.Palette.zoneRed : Theme.Palette.fg2
+        let color = Theme.Palette.fg2
         return HStack(spacing: 5) {
             Text("\(sign)\(Int(abs(diff)))")
                 .font(Theme.FontStyle.mono(13, weight: .medium))
@@ -97,8 +107,7 @@ struct RecoveryHeroView: View {
                 .font(Theme.FontStyle.mono(11))
                 .foregroundStyle(Theme.Palette.fg3)
         }
-        .lineLimit(1)
-        .minimumScaleFactor(0.8)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var updatedCaption: String? {
@@ -111,11 +120,12 @@ struct RecoveryHeroView: View {
 }
 
 private struct HeroPressStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.985 : 1)
             .brightness(configuration.isPressed ? 0.04 : 0)
-            .animation(.snappy(duration: 0.2), value: configuration.isPressed)
+            .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: configuration.isPressed)
     }
 }
 
@@ -123,32 +133,26 @@ private struct RecoveryRing: View {
     let score: Double?
     @Environment(\.redactionReasons) private var redaction
 
-    private let size: CGFloat = 136
-    private let lineWidth: CGFloat = 11
+    private let size: CGFloat = 104
+    private let lineWidth: CGFloat = 6
 
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.white.opacity(0.07), lineWidth: lineWidth)
+                .stroke(Theme.Palette.borderSubtle, lineWidth: lineWidth)
             if let score {
                 let color = redaction.isEmpty ? RecoveryZone(score: score).color : Theme.Palette.fg4
                 let fraction = max(0.005, min(1, score / 100))
                 Circle()
                     .trim(from: 0, to: fraction)
                     .stroke(
-                        AngularGradient(
-                            colors: [color.opacity(0.35), color],
-                            center: .center,
-                            startAngle: .degrees(0),
-                            endAngle: .degrees(360 * fraction)
-                        ),
+                        color,
                         style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
                     )
                     .rotationEffect(.degrees(-90))
-                    .shadow(color: color.opacity(0.45), radius: 8)
                 HStack(alignment: .firstTextBaseline, spacing: 1) {
                     Text("\(Int(score.rounded()))")
-                        .font(Theme.FontStyle.mono(50, weight: .medium))
+                        .font(Theme.FontStyle.mono(36, weight: .semibold))
                         .foregroundStyle(Theme.Palette.fg0)
                         .contentTransition(.numericText())
                     Text("%")

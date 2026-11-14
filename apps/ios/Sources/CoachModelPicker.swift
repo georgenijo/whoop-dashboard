@@ -62,6 +62,9 @@ struct CoachModelPicker: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .coachSettingsDidChange)) { _ in
+            Task { await load() }
+        }
         .task {
             guard isLoading else { return }
             await load()
@@ -74,7 +77,7 @@ struct CoachModelPicker: View {
         }
         let model = selection.selectedOption
         if model.provider == .anthropic {
-            return "\(model.label), \(selection.effort.label) reasoning"
+            return "\(model.label), \(selection.effectiveEffort.label) reasoning"
         }
         if let reasoning = selection.selectedCursorReasoningLabel {
             return "\(model.label), \(reasoning) reasoning"
@@ -84,7 +87,7 @@ struct CoachModelPicker: View {
 
     private var triggerReasoningLabel: String? {
         selection.selectedOption.provider == .anthropic
-            ? selection.effort.label
+            ? (selection.supportedEfforts.isEmpty ? nil : selection.effectiveEffort.label)
             : selection.selectedCursorReasoningLabel
     }
 
@@ -116,6 +119,7 @@ private struct CoachModelPickerSheet: View {
     @Binding var isSaving: Bool
     @Binding var errorMessage: String?
     let onRetryLoad: () -> Void
+    @State private var search = ""
 
     var body: some View {
         NavigationStack {
@@ -127,25 +131,32 @@ private struct CoachModelPickerSheet: View {
 
                     modelGroup(
                         provider: .anthropic,
-                        options: selection.options.filter {
-                            $0.provider == .anthropic
-                        }
+                        options: filteredOptions(.anthropic)
                     )
 
                     modelGroup(
                         provider: .cursor,
-                        options: selection.options.filter {
-                            $0.provider == .cursor
-                        }
+                        options: filteredOptions(.cursor)
                     )
 
+                    if selection.anthropicStatus != .ready {
+                        Text("Anthropic models are unavailable. Check your provider key in Settings or retry later. Your saved selection is preserved.")
+                            .font(.callout)
+                            .foregroundStyle(Theme.Palette.fg2)
+                    }
                     if selection.cursorStatus != .ready {
                         catalogState
+                    }
+                    if selection.anthropicStatus != .ready || selection.cursorStatus != .ready {
+                        Button("Retry model catalogs", action: onRetryLoad)
+                            .frame(minHeight: 44)
+                            .disabled(isLoading || isSaving)
                     }
                 }
                 .padding(Theme.Spacing.md)
             }
             .background(Theme.Palette.bg1)
+            .searchable(text: $search, prompt: "Find a model")
             .navigationTitle("Choose a model")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -168,7 +179,12 @@ private struct CoachModelPickerSheet: View {
                 }
             }
         }
-        .preferredColorScheme(.dark)
+    }
+
+    private func filteredOptions(_ provider: CoachModelProvider) -> [CoachModelOption] {
+        selection.options.filter {
+            $0.provider == provider && (search.isEmpty || $0.label.localizedCaseInsensitiveContains(search) || $0.id.localizedCaseInsensitiveContains(search))
+        }
     }
 
     @ViewBuilder
@@ -248,8 +264,14 @@ private struct CoachModelPickerSheet: View {
                 selection.modelPref == option.id ? "Selected" : "Not selected"
             )
             .accessibilityHint("Selects this model for your next Coach reply")
+            .contextMenu {
+                Text(option.id)
+                ShareLink(item: option.id) { Label("Share model identifier", systemImage: "square.and.arrow.up") }
+            }
 
-            if option.provider == .anthropic {
+            if option.provider == .anthropic,
+               option.id == selection.modelPref,
+               !selection.supportedEfforts.isEmpty {
                 NavigationLink {
                     CoachEffortPicker(
                         selection: $selection,
@@ -267,7 +289,7 @@ private struct CoachModelPickerSheet: View {
                 .disabled(isLoading || isSaving || !hasLoadedSettings)
                 .accessibilityIdentifier("coach-model-customize")
                 .accessibilityLabel("Customize \(option.label)")
-                .accessibilityValue("\(selection.effort.label) reasoning")
+                .accessibilityValue("\(selection.effectiveEffort.label) reasoning")
                 .accessibilityHint("Shows reasoning choices")
             } else if
                 let model = selection.cursorModel(for: option),
@@ -433,7 +455,7 @@ private struct CoachEffortPicker: View {
                         .padding(.bottom, 12)
                 }
 
-                ForEach(CoachEffort.allCases) { effort in
+                ForEach(selection.supportedEfforts) { effort in
                     Button {
                         Task { await selectEffort(effort) }
                     } label: {
@@ -447,7 +469,7 @@ private struct CoachEffortPicker: View {
                                     .foregroundStyle(Theme.Palette.fg2)
                             }
                             Spacer()
-                            if selection.effort == effort {
+                            if selection.effectiveEffort == effort {
                                 Image(systemName: "checkmark")
                                     .font(.system(size: 14, weight: .semibold))
                                     .foregroundStyle(Theme.Palette.ai)
@@ -463,10 +485,10 @@ private struct CoachEffortPicker: View {
                     .accessibilityIdentifier("coach-effort-\(effort.rawValue)")
                     .accessibilityLabel(effort.label)
                     .accessibilityValue(
-                        selection.effort == effort ? "Selected" : effort.detail
+                        selection.effectiveEffort == effort ? "Selected" : effort.detail
                     )
 
-                    if effort != CoachEffort.allCases.last {
+                    if effort != selection.supportedEfforts.last {
                         Divider()
                             .overlay(Theme.Palette.borderSubtle)
                             .padding(.leading, 16)
@@ -522,7 +544,7 @@ private struct CoachEffortPicker: View {
 
     @MainActor
     private func selectEffort(_ effort: CoachEffort) async {
-        guard effort != selection.effort, !isSaving else { return }
+        guard selection.supportedEfforts.contains(effort), effort != selection.effort, !isSaving else { return }
         let previous = selection.effort
         selection.effort = effort
         isSaving = true

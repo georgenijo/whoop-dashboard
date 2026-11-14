@@ -81,7 +81,7 @@ struct ChatMessage: Decodable, Identifiable, Hashable {
             workLog = nil
         }
         do {
-            presentationBlocks = try container.decodeIfPresent([CoachPresentationBlock].self, forKey: .presentationBlocks) ?? []
+            presentationBlocks = try container.decodeIfPresent(CoachPresentationBlockList.self, forKey: .presentationBlocks)?.blocks ?? []
         } catch {
             presentationBlocks = []
         }
@@ -132,9 +132,18 @@ struct CoachToolActivity: Decodable, Identifiable, Hashable {
 }
 
 struct LiveToolActivity: Identifiable, Hashable {
-    let id = UUID()
+    let id: String
     let name: String
     var stage: String?
+    var message: String? = nil
+    var isComplete = false
+    var error: String? = nil
+
+    init(id: String = UUID().uuidString, name: String, stage: String?) {
+        self.id = id
+        self.name = name
+        self.stage = stage
+    }
 }
 
 struct ChatAttachment: Decodable, Identifiable, Hashable {
@@ -175,10 +184,10 @@ struct ChatSendResponse: Decodable {
 enum ChatStreamEvent {
     case threadId(Int)
     case textDelta(String)
-    case toolUseStart(name: String)
-    case toolUseEnd(name: String, status: String, rows: Int?, durationMs: Int, error: String?)
-    case toolProgress(tool: String, stage: String, message: String?)
-    case done(reply: String, presentationBlocks: [CoachPresentationBlock])
+    case toolUseStart(id: String?, name: String)
+    case toolUseEnd(id: String?, name: String, status: String, rows: Int?, durationMs: Int, error: String?)
+    case toolProgress(id: String?, tool: String, stage: String, message: String?)
+    case done(reply: String, workLog: CoachWorkLog?, presentationBlocks: [CoachPresentationBlock])
     case error(kind: String, message: String, origin: String?)
 }
 
@@ -187,10 +196,12 @@ struct SSETextDelta: Decodable {
 }
 
 struct SSEToolUseStart: Decodable {
+    let id: String?
     let name: String
 }
 
 struct SSEToolUseEnd: Decodable {
+    let id: String?
     let name: String
     let durationMs: Int
     let rows: Int?
@@ -198,12 +209,13 @@ struct SSEToolUseEnd: Decodable {
     let error: String?
 
     enum CodingKeys: String, CodingKey {
-        case name, rows, status, error
+        case id, name, rows, status, error
         case durationMs = "duration_ms"
     }
 }
 
 struct SSEToolProgress: Decodable {
+    let id: String?
     let tool: String
     let stage: String
     let message: String?
@@ -211,21 +223,24 @@ struct SSEToolProgress: Decodable {
 
 struct SSEDone: Decodable {
     let reply: String
+    let workLog: CoachWorkLog?
     let presentationBlocks: [CoachPresentationBlock]
 
     enum CodingKeys: String, CodingKey {
         case reply
+        case workLog = "work_log"
         case presentationBlocks = "presentation_blocks"
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         reply = try container.decode(String.self, forKey: .reply)
+        workLog = try? container.decodeIfPresent(CoachWorkLog.self, forKey: .workLog)
         do {
             presentationBlocks = try container.decodeIfPresent(
-                [CoachPresentationBlock].self,
+                CoachPresentationBlockList.self,
                 forKey: .presentationBlocks
-            ) ?? []
+            )?.blocks ?? []
         } catch {
             presentationBlocks = []
         }

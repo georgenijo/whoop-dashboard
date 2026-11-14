@@ -101,11 +101,11 @@ struct YearOverYearCard: View {
         let ahead = changes.filter { $0.direction == .up }.count
         let behind = changes.filter { $0.direction == .down }.count
         let prior = String(yoy.priorYear)
-        if ahead == changes.count { return "Ahead of \(prior) on every measure so far." }
-        if behind == changes.count { return "Behind \(prior)'s pace on every measure so far." }
+        if ahead == changes.count { return "All measures are higher than \(prior) so far." }
+        if behind == changes.count { return "All measures are lower than \(prior) so far." }
         if ahead == 0 && behind == 0 { return "Level with \(prior) so far." }
-        if ahead == 0 { return "Behind \(prior) on \(behind) of \(changes.count) measures so far." }
-        return "Ahead of \(prior) on \(ahead) of \(changes.count) measures so far."
+        if ahead == 0 { return "\(behind) of \(changes.count) measures are lower than \(prior)." }
+        return "\(ahead) of \(changes.count) measures are higher than \(prior)."
     }
 
     private var priorYearIsPartial: Bool {

@@ -46,10 +46,24 @@ struct TrendsView: View {
             }
             .refreshable { await loadAll() }
             .navigationTitle("Trends")
+                .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: TrendsRoute.self) { route in
                 destination(route)
             }
             .task(id: range) { await loadAll() }
+            .onReceive(NotificationCenter.default.publisher(for: .coachDataDidSync)) { _ in
+                Task { await loadAll() }
+            }
+            .safeAreaInset(edge: .bottom) {
+                if [recovery.refreshError, sleep.refreshError, strain.refreshError, steps.refreshError, workouts.refreshError].contains(where: { $0 != nil }) {
+                    Label("Refresh failed. Showing previously loaded readings.", systemImage: "wifi.exclamationmark")
+                        .font(Theme.FontStyle.sans(13))
+                        .foregroundStyle(Theme.Palette.warning)
+                        .padding(Theme.Spacing.sm)
+                        .frame(maxWidth: .infinity)
+                        .background(Theme.Palette.bg2)
+                }
+            }
         }
     }
 

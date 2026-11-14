@@ -74,6 +74,14 @@ private struct StepsHeroCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            if payload.today.steps == nil {
+                Text("No Apple Health steps synced for today yet.")
+                    .font(Theme.FontStyle.sans(15))
+                    .foregroundStyle(Theme.Palette.fg2)
+            }
+            Text("\(days.count) days recorded in this \(payload.rangeLabel) period")
+                .font(Theme.FontStyle.sans(13))
+                .foregroundStyle(Theme.Palette.fg2)
             MetricChart(
                 title: "Steps",
                 unit: "",
@@ -82,11 +90,6 @@ private struct StepsHeroCard: View {
                 style: .bars,
                 height: 200
             )
-            if payload.today.steps == nil {
-                Text("No Apple Health steps synced for today yet.")
-                    .font(Theme.FontStyle.sans(15))
-                    .foregroundStyle(Theme.Palette.fg2)
-            }
             TrendsStatGrid(tiles: tiles, columns: 2)
                 .padding(.top, Theme.Spacing.sm)
                 .overlay(alignment: .top) {

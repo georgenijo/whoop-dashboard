@@ -42,6 +42,7 @@ enum CoachPresentationBlock: Decodable, Hashable {
     case dataFreshness(DataFreshness)
     case workoutPlan(CoachWorkoutPlanBlock)
     case evidence(Evidence)
+    case fallback(String)
 
     private enum Keys: String, CodingKey { case version, type }
 
@@ -59,6 +60,43 @@ enum CoachPresentationBlock: Decodable, Hashable {
         case "workout_plan": self = .workoutPlan(try CoachWorkoutPlanBlock(from: decoder))
         case "evidence": self = .evidence(try Evidence(from: decoder))
         default: throw DecodingError.dataCorruptedError(forKey: .type, in: container, debugDescription: "Unknown presentation type")
+        }
+    }
+}
+
+/// Decode each element through its own decoder so an unknown or malformed
+/// block cannot discard valid siblings. Future blocks retain readable text.
+struct CoachPresentationBlockList: Decodable {
+    let blocks: [CoachPresentationBlock]
+
+    init(from decoder: Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        var decoded: [CoachPresentationBlock] = []
+        while !container.isAtEnd {
+            let element = try container.superDecoder()
+            if let block = try? CoachPresentationBlock(from: element) {
+                decoded.append(block)
+            } else if let text = try? PresentationFallback(from: element), !text.fallback.isEmpty {
+                decoded.append(.fallback(text.fallback))
+            }
+        }
+        blocks = decoded
+    }
+
+    private struct PresentationFallback: Decodable { let fallback: String }
+}
+
+extension CoachPresentationBlock {
+    var fallbackText: String {
+        switch self {
+        case .metricStrip(let x): x.fallback
+        case .comparison(let x): x.fallback
+        case .chart(let x): x.fallback
+        case .actionPlan(let x): x.fallback
+        case .dataFreshness(let x): x.fallback
+        case .workoutPlan(let x): x.fallback
+        case .evidence(let x): x.fallback
+        case .fallback(let text): text
         }
     }
 }
@@ -190,19 +228,13 @@ struct CoachPresentationBlocksView: View {
             WorkoutPlanView(plan: plan).coachCard()
         case .evidence(let evidence):
             EvidenceView(evidence: evidence).coachCard(padding: 0)
+        case .fallback(let text):
+            MarkdownView(content: text, style: .chat).coachCard()
         }
     }
 
     private func fallback(_ block: CoachPresentationBlock) -> String {
-        switch block {
-        case .metricStrip(let x): x.fallback
-        case .comparison(let x): x.fallback
-        case .chart(let x): x.fallback
-        case .actionPlan(let x): x.fallback
-        case .dataFreshness(let x): x.fallback
-        case .workoutPlan(let x): x.fallback
-        case .evidence(let x): x.fallback
-        }
+        block.fallbackText
     }
 }
 
@@ -267,30 +299,13 @@ private struct MetricStripView: View {
     let strip: MetricStrip
 
     var body: some View {
-        Group {
-            if strip.metrics.count <= 3 {
-                HStack(alignment: .top, spacing: 0) {
-                    ForEach(Array(strip.metrics.enumerated()), id: \.offset) { index, metric in
-                        if index > 0 {
-                            Rectangle()
-                                .fill(Theme.Palette.borderSubtle)
-                                .frame(width: 1)
-                                .padding(.horizontal, 12)
-                        }
-                        tile(metric)
-                    }
-                }
-                .fixedSize(horizontal: false, vertical: true)
-            } else {
-                LazyVGrid(
-                    columns: [GridItem(.flexible(), spacing: 16), GridItem(.flexible(), spacing: 16)],
-                    alignment: .leading,
-                    spacing: 16
-                ) {
-                    ForEach(Array(strip.metrics.enumerated()), id: \.offset) { _, metric in
-                        tile(metric)
-                    }
-                }
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: 180), spacing: 16)],
+            alignment: .leading,
+            spacing: 20
+        ) {
+            ForEach(Array(strip.metrics.enumerated()), id: \.offset) { _, metric in
+                tile(metric)
             }
         }
         .accessibilityElement(children: .ignore)

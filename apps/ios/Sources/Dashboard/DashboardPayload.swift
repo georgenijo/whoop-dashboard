@@ -28,6 +28,11 @@ struct DashboardPayload: Decodable {
         let createdAt: String?
         let isStale: Bool
 
+        /// Old or undated advice must not read as today's recommendation.
+        var isCurrent: Bool {
+            !isStale && InsightDate.parse(createdAt).map { Calendar.current.isDateInToday($0) } == true
+        }
+
         enum CodingKeys: String, CodingKey {
             case text
             case createdAt = "created_at"

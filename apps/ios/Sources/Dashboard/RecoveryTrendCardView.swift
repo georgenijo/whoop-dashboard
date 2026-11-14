@@ -5,7 +5,7 @@ struct RecoveryTrendCardView: View {
 
     var body: some View {
         MetricChart(
-            title: "Recovery · 30 days",
+            title: "Recovery history",
             unit: "%",
             accent: Theme.Palette.recovery,
             points: points,

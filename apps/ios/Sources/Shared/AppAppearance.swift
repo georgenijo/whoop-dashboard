@@ -14,7 +14,7 @@ enum AppAppearance {
         appearance.backgroundColor = UIColor.black.withAlphaComponent(0.0)
         appearance.shadowColor = .clear
 
-        let titleColor = UIColor.white
+        let titleColor = UIColor.label
         let largeFont = UIFont(name: "Geist-SemiBold", size: 32) ?? UIFont.systemFont(ofSize: 32, weight: .semibold)
         let inlineFont = UIFont(name: "Geist-SemiBold", size: 17) ?? UIFont.systemFont(ofSize: 17, weight: .semibold)
 
@@ -31,18 +31,18 @@ enum AppAppearance {
         UINavigationBar.appearance().standardAppearance = appearance
         UINavigationBar.appearance().scrollEdgeAppearance = appearance
         UINavigationBar.appearance().compactAppearance = appearance
-        UINavigationBar.appearance().tintColor = UIColor(red: 1.0, green: 0.0, blue: 0.27, alpha: 1.0)
+        UINavigationBar.appearance().tintColor = UIColor(Theme.Palette.recovery)
     }
 
     private static func configureTabBar() {
         let appearance = UITabBarAppearance()
         appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor.black
-        appearance.shadowColor = UIColor.white.withAlphaComponent(0.06)
+        appearance.backgroundColor = UIColor(Theme.Palette.bg2)
+        appearance.shadowColor = UIColor.separator
 
         let labelFont = UIFont(name: "Geist-Medium", size: 10) ?? UIFont.systemFont(ofSize: 10, weight: .medium)
-        let inactiveColor = UIColor(red: 107 / 255.0, green: 107 / 255.0, blue: 116 / 255.0, alpha: 1.0)
-        let activeColor = UIColor.white
+        let inactiveColor = UIColor.secondaryLabel
+        let activeColor = UIColor(Theme.Palette.recovery)
 
         for state in [appearance.stackedLayoutAppearance, appearance.inlineLayoutAppearance, appearance.compactInlineLayoutAppearance] {
             state.normal.iconColor = inactiveColor
@@ -59,7 +59,7 @@ enum AppAppearance {
 
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance
-        UITabBar.appearance().tintColor = UIColor(red: 1.0, green: 0.0, blue: 0.27, alpha: 1.0)
+        UITabBar.appearance().tintColor = UIColor(Theme.Palette.recovery)
         UITabBar.appearance().unselectedItemTintColor = inactiveColor
     }
 

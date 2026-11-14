@@ -7,6 +7,11 @@ struct ThreadListView: View {
     var highlightedThreadId: Int?
 
     @Environment(\.api) private var api
+    @Environment(\.chatInFlight) private var inFlight
+    @State private var deletingThread: ChatThread?
+    @State private var deleteError: String?
+    @State private var isDeleting = false
+    @State private var titleRefreshTask: Task<Void, Never>?
     @State private var threads: [ChatThread] = []
     @State private var phase: Phase = .loading
 
@@ -30,13 +35,31 @@ struct ThreadListView: View {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .chatThreadListChanged)) { _ in
-                Task {
+                titleRefreshTask?.cancel()
+                titleRefreshTask = Task {
                     await load()
-                    // Titles are generated after the reply lands; pick them up.
+                    // Coalesce title refreshes instead of retaining a task per turn.
                     try? await Task.sleep(for: .seconds(6))
+                    guard !Task.isCancelled else { return }
                     await load()
                 }
             }
+            .onDisappear { titleRefreshTask?.cancel() }
+            .confirmationDialog("Delete conversation?", isPresented: Binding(
+                get: { deletingThread != nil },
+                set: { if !$0 { deletingThread = nil } }
+            ), titleVisibility: .visible) {
+                if let thread = deletingThread {
+                    Button("Delete conversation", role: .destructive) {
+                        Task { await delete(thread) }
+                    }
+                }
+            } message: {
+                Text("This permanently removes the conversation and its messages.")
+            }
+            .alert("Couldn’t delete conversation", isPresented: Binding(
+                get: { deleteError != nil }, set: { if !$0 { deleteError = nil } }
+            )) { Button("OK") { deleteError = nil } } message: { Text(deleteError ?? "") }
             .task { await load() }
             .refreshable { await load() }
     }
@@ -53,9 +76,6 @@ struct ThreadListView: View {
                 }
                 .padding(.horizontal, Theme.Spacing.md)
                 .redacted(reason: .placeholder)
-                .phaseAnimator([0.5, 1.0]) { content, phase in
-                    content.opacity(phase)
-                } animation: { _ in .easeInOut(duration: 0.9) }
             }
             .scrollDisabled(true)
             .accessibilityLabel("Loading conversations")
@@ -111,6 +131,16 @@ struct ThreadListView: View {
                                 }
                                 .buttonStyle(ThreadRowStyle(isSelected: isSelected))
                                 .accessibilityAddTraits(isSelected ? .isSelected : [])
+                                .contextMenu {
+                                    Button("Delete conversation", systemImage: "trash", role: .destructive) {
+                                        deletingThread = thread
+                                    }
+                                    .disabled(isDeleting || inFlight.inFlight[thread.id] != nil)
+                                }
+                                .accessibilityAction(named: "Delete conversation") {
+                                    guard !isDeleting, inFlight.inFlight[thread.id] == nil else { return }
+                                    deletingThread = thread
+                                }
                             }
                         }
                     }
@@ -162,13 +192,34 @@ struct ThreadListView: View {
     }
 
     @MainActor
+    private func delete(_ thread: ChatThread) async {
+        guard !isDeleting, inFlight.inFlight[thread.id] == nil else { return }
+        isDeleting = true
+        defer { isDeleting = false; deletingThread = nil }
+        do {
+            let _: APIEmptyResponse = try await api.delete("/api/threads/\(thread.id)")
+            threads.removeAll { $0.id == thread.id }
+            if case .thread(let id, _) = selection, id == thread.id {
+                selection = nil
+            } else if highlightedThreadId == thread.id {
+                selection = nil
+            }
+        } catch {
+            deleteError = "Your conversation is still here. Check your connection and try again."
+        }
+    }
+
+    @MainActor
     private func load() async {
         do {
             threads = try await ChatService(api: api).listThreads()
             phase = .loaded
+        } catch is CancellationError {
+            return
         } catch APIError.unauthorized {
             phase = .error("Session expired. Sign in again.")
         } catch APIError.network(let err) {
+            if (err as NSError).code == NSURLErrorCancelled { return }
             phase = .error("Network error: \(err.localizedDescription)")
         } catch APIError.serverError(let code) {
             phase = .error("Server error (\(code))")
@@ -237,7 +288,8 @@ private struct ThreadRow: View {
                 Text(thread.displayTitle)
                     .font(Theme.FontStyle.sans(15, weight: .semibold))
                     .foregroundStyle(Theme.Palette.fg0)
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
                 Spacer(minLength: 4)
                 Text(Self.timestamp(thread.updatedAt))
                     .font(Theme.FontStyle.mono(11))
@@ -248,7 +300,7 @@ private struct ThreadRow: View {
                     .font(Theme.FontStyle.sans(13.5))
                     .foregroundStyle(Theme.Palette.fg2)
                     .lineSpacing(2)
-                    .lineLimit(2)
+                    .lineLimit(1)
                     .multilineTextAlignment(.leading)
             }
         }

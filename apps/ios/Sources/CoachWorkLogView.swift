@@ -5,11 +5,12 @@ struct CoachWorkLogView: View {
     let workLog: CoachWorkLog
 
     @State private var expanded = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
-                withAnimation(.snappy(duration: 0.25)) { expanded.toggle() }
+                withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { expanded.toggle() }
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: statusSymbol)
@@ -30,7 +31,7 @@ struct CoachWorkLogView: View {
                         .rotationEffect(.degrees(expanded ? 90 : 0))
                     Spacer(minLength: 0)
                 }
-                .frame(minHeight: 32)
+                .frame(minHeight: 44)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -112,7 +113,8 @@ private struct WorkTimeline: View {
             }
             ForEach(tools) { tool in
                 step(dot: tool.status == "error" ? Theme.Palette.danger : Theme.Palette.success) {
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 6) {
+                      HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(LiveCoachWorkView.label(tool.name).replacingOccurrences(of: "Querying", with: "Queried"))
                             .font(Theme.FontStyle.sans(13))
                             .foregroundStyle(Theme.Palette.fg1)
@@ -120,6 +122,13 @@ private struct WorkTimeline: View {
                         Text(meta(tool))
                             .font(Theme.FontStyle.mono(11))
                             .foregroundStyle(Theme.Palette.fg3)
+                      }
+                      if let message = tool.stageMessage, !message.isEmpty {
+                          Text(message).font(Theme.FontStyle.sans(12)).foregroundStyle(Theme.Palette.fg2)
+                      }
+                      if let error = tool.error, !error.isEmpty {
+                          Text(error).font(Theme.FontStyle.sans(12)).foregroundStyle(Theme.Palette.danger)
+                      }
                     }
                 }
             }
@@ -165,19 +174,22 @@ struct LiveCoachWorkView: View {
     let tools: [LiveToolActivity]
 
     @State private var expanded = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var startedAt = Date()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
-                withAnimation(.snappy(duration: 0.25)) { expanded.toggle() }
+                withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) { expanded.toggle() }
             } label: {
                 HStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.mini)
                         .tint(Theme.Palette.ai)
                         .frame(width: 16)
-                    ShimmerText(text: headline)
+                    Text(headline)
+                        .font(Theme.FontStyle.sans(13, weight: .medium))
+                        .foregroundStyle(Theme.Palette.fg2)
                     TimelineView(.periodic(from: startedAt, by: 1)) { context in
                         Text("· \(Self.elapsed(since: startedAt, now: context.date))")
                             .font(Theme.FontStyle.mono(11))
@@ -192,7 +204,7 @@ struct LiveCoachWorkView: View {
                     }
                     Spacer(minLength: 0)
                 }
-                .frame(minHeight: 32)
+                .frame(minHeight: 44)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -203,18 +215,26 @@ struct LiveCoachWorkView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(tools) { tool in
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            PulsingDot()
-                                .alignmentGuide(.firstTextBaseline) { d in d[.bottom] + 2.5 }
+                            Image(systemName: tool.isComplete ? (tool.error == nil ? "checkmark" : "exclamationmark") : "circle.fill")
+                                .font(.system(size: tool.isComplete ? 11 : 6))
+                                .foregroundStyle(tool.error == nil ? Theme.Palette.recovery : Theme.Palette.danger)
                                 .frame(width: 16)
-                            Text(tool.stage.map { "\(Self.label(tool.name)) · \($0)" } ?? Self.label(tool.name))
-                                .font(Theme.FontStyle.sans(13))
-                                .foregroundStyle(Theme.Palette.fg2)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(tool.stage.map { "\(Self.label(tool.name)) · \($0)" } ?? Self.label(tool.name))
+                                    .font(Theme.FontStyle.sans(13))
+                                    .foregroundStyle(Theme.Palette.fg2)
+                                if let message = tool.error ?? tool.message {
+                                    Text(message)
+                                        .font(Theme.FontStyle.sans(12))
+                                        .foregroundStyle(Theme.Palette.fg3)
+                                }
+                            }
                         }
                         .transition(.opacity)
                     }
                 }
                 .padding(.top, 4)
-                .animation(.snappy, value: tools)
+                .animation(reduceMotion ? nil : .snappy, value: tools)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -243,54 +263,6 @@ struct LiveCoachWorkView: View {
             "trigger_whoop_sync": "Syncing Whoop"
         ]
         return labels[name] ?? name.replacingOccurrences(of: "_", with: " ").capitalized
-    }
-}
-
-private struct ShimmerText: View {
-    let text: String
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var phase: CGFloat = -1
-
-    var body: some View {
-        let label = Text(text)
-            .font(Theme.FontStyle.sans(13, weight: .medium))
-        label
-            .foregroundStyle(Theme.Palette.fg2)
-            .overlay {
-                if !reduceMotion {
-                    GeometryReader { proxy in
-                        LinearGradient(
-                            colors: [.clear, Theme.Palette.fg0, .clear],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        .frame(width: proxy.size.width * 0.8)
-                        .offset(x: phase * proxy.size.width * 1.4)
-                    }
-                    .mask(label)
-                    .allowsHitTesting(false)
-                }
-            }
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) {
-                    phase = 1
-                }
-            }
-    }
-}
-
-private struct PulsingDot: View {
-    @State private var on = false
-
-    var body: some View {
-        Circle()
-            .fill(Theme.Palette.warning)
-            .frame(width: 6, height: 6)
-            .opacity(on ? 1 : 0.35)
-            .onAppear {
-                withAnimation(.easeInOut(duration: 0.8).repeatForever()) { on = true }
-            }
     }
 }
 

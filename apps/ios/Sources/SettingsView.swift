@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     var onSignOut: () -> Void
 
+    @Environment(\.dismiss) private var dismiss
     @Environment(\.api) private var api
 
     @State private var confirmingSignOut = false
@@ -53,8 +54,19 @@ struct SettingsView: View {
                                         .transition(.opacity)
                                 }
                             }
-                            .animation(.snappy, value: statusLine?.text)
                             .glassCard(padding: Theme.Spacing.md)
+                        }
+
+                        section("Coach") {
+                            NavigationLink {
+                                CoachAccountSettings()
+                            } label: {
+                                SettingsRow(icon: "slider.horizontal.3", tint: Theme.Palette.recovery, title: "Coach preferences") {
+                                    Image(systemName: "chevron.right").foregroundStyle(Theme.Palette.fg3)
+                                }
+                                .glassCard(padding: Theme.Spacing.md)
+                            }
+                            .buttonStyle(.plain)
                         }
 
                         section("About") {
@@ -70,8 +82,8 @@ struct SettingsView: View {
                         Button(role: .destructive) {
                             confirmingSignOut = true
                         } label: {
-                            SettingsRow(icon: "rectangle.portrait.and.arrow.right", tint: Theme.Palette.brandStrain,
-                                        title: "Sign out", titleColor: Theme.Palette.brandStrain) {
+                            SettingsRow(icon: "rectangle.portrait.and.arrow.right", tint: Theme.Palette.danger,
+                                        title: "Sign out", titleColor: Theme.Palette.danger) {
                                 EmptyView()
                             }
                             .glassCard(padding: Theme.Spacing.md)
@@ -86,6 +98,12 @@ struct SettingsView: View {
                 .scrollIndicators(.hidden)
             }
             .navigationTitle("Settings")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .onDisappear { clearTask?.cancel() }
             .confirmationDialog(
                 "Sign out of Coach?",
                 isPresented: $confirmingSignOut,
@@ -142,6 +160,9 @@ struct SettingsView: View {
                     syncStatus = status
                     isSyncing = false
                     scheduleClear()
+                    if resp.ok && resp.skipped != true {
+                        NotificationCenter.default.post(name: .coachDataDidSync, object: nil)
+                    }
                 }
                 ClientLogger.shared.lifecycle("sync_manual_ios", details: ["status": logStatus])
             } catch {
@@ -170,11 +191,11 @@ struct SettingsView: View {
         switch status {
         case let .ok(r, s, w, ms):
             let seconds = String(format: "%.1f", Double(ms) / 1000)
-            return ("Synced \u{2022} R\(r) S\(s) W\(w) \u{2022} \(seconds)s", Theme.Palette.fg3)
+            return ("Updated \(r) recovery, \(s) sleep and \(w) workout records in \(seconds)s", Theme.Palette.fg3)
         case let .skipped(at):
             return ("Already synced \(Self.timeFormatter.string(from: at))", Theme.Palette.fg3)
         case .error:
-            return ("Sync failed", Theme.Palette.brandStrain)
+            return ("Couldn’t sync. Check your connection and Whoop status, then try again.", Theme.Palette.danger)
         }
     }
 
