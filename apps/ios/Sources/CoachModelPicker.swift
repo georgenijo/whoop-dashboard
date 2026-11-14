@@ -180,7 +180,7 @@ private struct CoachModelPickerSheet: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(provider.rawValue.uppercased())
                     .font(Theme.FontStyle.sans(10, weight: .semibold))
-                    .tracking(1.4)
+                    .tracking(0.7)
                     .foregroundStyle(Theme.Palette.fg3)
                     .padding(.horizontal, 4)
                     .accessibilityAddTraits(.isHeader)

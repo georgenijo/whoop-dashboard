@@ -152,7 +152,7 @@ struct TrendsCardLabel: View {
         HStack(alignment: .firstTextBaseline) {
             Text(text.uppercased())
                 .font(Theme.FontStyle.sans(11, weight: .semibold))
-                .tracking(1.2)
+                .tracking(0.5)
                 .foregroundStyle(Theme.Palette.fg2)
             Spacer(minLength: 8)
             if let trailing {
@@ -187,7 +187,7 @@ struct TrendsStatGrid: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(tile.label.uppercased())
                         .font(Theme.FontStyle.sans(11, weight: .semibold))
-                        .tracking(1.0)
+                        .tracking(0.5)
                         .foregroundStyle(Theme.Palette.fg3)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
@@ -261,7 +261,7 @@ struct TrendsErrorCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title.uppercased())
                     .font(Theme.FontStyle.sans(11, weight: .semibold))
-                    .tracking(1.2)
+                    .tracking(0.5)
                     .foregroundStyle(Theme.Palette.fg2)
                 Text(message)
                     .font(Theme.FontStyle.sans(15))
@@ -294,7 +294,7 @@ struct TrendsChartPlaceholder: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             Text(title.uppercased())
                 .font(Theme.FontStyle.sans(11, weight: .semibold))
-                .tracking(1.2)
+                .tracking(0.5)
                 .foregroundStyle(Theme.Palette.fg2)
             HStack(alignment: .firstTextBaseline) {
                 Text("00.0")
@@ -320,14 +320,21 @@ struct TrendsDetailLoading: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: Theme.Spacing.sm) {
-                ForEach(Array(titles.enumerated()), id: \.offset) { index, title in
-                    TrendsChartPlaceholder(title: title, chartHeight: index == 0 ? 200 : 150)
-                }
+            FoldColumns {
+                placeholders(titles.prefix(1), first: true)
+            } trailing: {
+                placeholders(titles.dropFirst(), first: false)
             }
             .padding(Theme.Spacing.md)
         }
+        .measuresFold()
         .scrollDisabled(true)
+    }
+
+    private func placeholders(_ titles: ArraySlice<String>, first: Bool) -> some View {
+        ForEach(Array(titles.enumerated()), id: \.offset) { index, title in
+            TrendsChartPlaceholder(title: title, chartHeight: first && index == 0 ? 200 : 150)
+        }
     }
 }
 
@@ -339,9 +346,11 @@ struct TrendsDetailError: View {
     var body: some View {
         VStack {
             TrendsErrorCard(title: title, message: message, retry: retry)
+                .inLeadingFoldColumn()
             Spacer()
         }
         .padding(Theme.Spacing.md)
+        .measuresFold()
     }
 }
 
@@ -350,7 +359,10 @@ struct TrendsRangeBar: View {
     @Binding var range: DateRange
 
     var body: some View {
+        // Capped so the segmented control never straddles iPhone Duo's fold.
         RangePicker(selection: $range)
+            .frame(maxWidth: 420)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, Theme.Spacing.md)
             .padding(.vertical, Theme.Spacing.xs)
             .background(Theme.Palette.bg0.opacity(0.92))

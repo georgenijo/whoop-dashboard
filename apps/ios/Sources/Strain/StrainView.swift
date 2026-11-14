@@ -32,8 +32,10 @@ struct StrainView: View {
             TrendsDetailError(title: "Strain", message: message) { Task { await load() } }
         case .loaded(let payload):
             ScrollView {
-                VStack(spacing: Theme.Spacing.sm) {
+                // Inner display: the trend beside today's load.
+                FoldColumns {
                     StrainHeroCard(payload: payload)
+                } trailing: {
                     StrainTodayCard(today: payload.today, range: range)
                     TrendChartView(
                         title: "Avg heart rate",
@@ -45,6 +47,7 @@ struct StrainView: View {
                 .padding(Theme.Spacing.md)
             }
             .scrollContentBackground(.hidden)
+            .measuresFold()
         }
     }
 

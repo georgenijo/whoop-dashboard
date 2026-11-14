@@ -5,7 +5,8 @@ struct PlanDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            // Inner display: the plan and its rationale beside the days.
+            FoldColumns {
                 header
 
                 if let why = plan.plan.why {
@@ -22,7 +23,7 @@ struct PlanDetailView: View {
                     }
                     .glassCard(tint: .ai, padding: Theme.Spacing.md)
                 }
-
+            } trailing: {
                 ForEach(Array(plan.plan.days.enumerated()), id: \.offset) { _, day in
                     DayCard(day: day)
                 }
@@ -30,6 +31,7 @@ struct PlanDetailView: View {
             .padding(.horizontal, Theme.Spacing.md)
             .padding(.bottom, Theme.Spacing.xxl)
         }
+        .measuresFold()
         .scrollIndicators(.hidden)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)

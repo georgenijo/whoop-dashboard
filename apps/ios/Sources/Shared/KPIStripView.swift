@@ -133,7 +133,7 @@ private struct KPICell: View {
             HStack(spacing: 4) {
                 Text(tile.label.uppercased())
                     .font(Theme.FontStyle.sans(11, weight: .semibold))
-                    .tracking(1.2)
+                    .tracking(0.5)
                     .foregroundStyle(Theme.Palette.fg2)
                     .lineLimit(wraps ? 2 : 1)
                     .minimumScaleFactor(0.8)

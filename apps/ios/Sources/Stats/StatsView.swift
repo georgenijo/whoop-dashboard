@@ -21,11 +21,8 @@ struct StatsView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                PageHeader("Stats")
-                content
-            }
-            .toolbar(.hidden, for: .navigationBar)
+            content
+                .navigationTitle("Stats")
         }
         .task(id: range) { await load() }
         .onChange(of: scenePhase) { _, newPhase in
@@ -50,7 +47,10 @@ struct StatsView: View {
                 ScrollView {
                     emptyState
                         .containerRelativeFrame(.vertical)
+                        .inLeadingFoldColumn()
+                        .padding(.horizontal, Theme.Spacing.md)
                 }
+                .measuresFold()
                 .refreshable { await load() }
             } else {
                 StatsContent(payload: payload, range: $range, loadedRange: loadedRange,
@@ -60,8 +60,10 @@ struct StatsView: View {
         case .error(let message):
             ScrollView {
                 InlineErrorCard(title: "Couldn't load stats", message: message, retry: retry)
+                    .inLeadingFoldColumn()
                     .padding(Theme.Spacing.md)
             }
+            .measuresFold()
             .refreshable { await load() }
         }
     }
@@ -137,6 +139,7 @@ struct StatsView: View {
 }
 
 private struct StatsContent: View {
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let payload: StatsPayload
     @Binding var range: DateRange
     var loadedRange: DateRange?
@@ -148,7 +151,9 @@ private struct StatsContent: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            // Inner display: all-time on one side of the fold, the selected
+            // window on the other.
+            FoldColumns {
                 AllTimeHero(allTime: payload.allTime, historyFloor: payload.historyFloor)
                 if !payload.yoy.metrics.isEmpty {
                     YearOverYearCard(yoy: payload.yoy, historyFloor: payload.historyFloor)
@@ -156,7 +161,7 @@ private struct StatsContent: View {
                 if !payload.records.isEmpty {
                     RecordsCard(records: payload.records)
                 }
-
+            } trailing: {
                 VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
                     HStack(alignment: .firstTextBaseline) {
                         Text("Recent activity")
@@ -172,7 +177,7 @@ private struct StatsContent: View {
                     }
                     RangePicker(selection: $range)
                 }
-                .padding(.top, Theme.Spacing.lg)
+                .padding(.top, sizeClass == .regular ? 0 : Theme.Spacing.lg)
 
                 Group {
                     if hasWindowData {
@@ -192,6 +197,7 @@ private struct StatsContent: View {
             .padding(.horizontal, Theme.Spacing.md)
             .padding(.bottom, Theme.Spacing.xxl)
         }
+        .measuresFold()
         .scrollContentBackground(.hidden)
         .scrollIndicators(.hidden)
     }

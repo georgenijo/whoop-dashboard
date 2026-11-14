@@ -94,7 +94,7 @@ struct WorkoutDetailView: View {
     }
 
     private var navTitle: String {
-        if case .loaded(let w) = phase { return w.sport ?? "Workout" }
+        if case .loaded(let w) = phase { return TrendsFormat.sport(w.sport) }
         return "Workout"
     }
 
@@ -113,16 +113,19 @@ struct WorkoutDetailView: View {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         case .loaded(let workout):
             ScrollView {
-                VStack(spacing: Theme.Spacing.sm) {
+                // Inner display: the session summary beside its heart-rate story.
+                FoldColumns {
                     HeaderCard(workout: workout)
                     StatStripCard(workout: workout)
+                    EffortSection(workout: workout)
+                } trailing: {
                     HRCurveSection(workout: workout)
                     ZonesSection(workout: workout)
-                    EffortSection(workout: workout)
                 }
                 .padding(Theme.Spacing.md)
             }
             .scrollContentBackground(.hidden)
+            .measuresFold()
         case .error(let message):
             VStack(spacing: 12) {
                 Text(message)
@@ -179,7 +182,7 @@ private struct HeaderCard: View {
                     Image(systemName: "figure.run")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Theme.Palette.strain)
-                    Text(workout.sport ?? "Workout")
+                    Text(TrendsFormat.sport(workout.sport))
                         .font(Theme.FontStyle.sans(19, weight: .bold))
                         .foregroundStyle(Theme.Palette.fg0)
                 }
@@ -293,7 +296,7 @@ private struct StatCell: View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label)
                 .font(Theme.FontStyle.sans(9, weight: .semibold))
-                .tracking(1.2)
+                .tracking(0.5)
                 .foregroundStyle(Theme.Palette.fg3)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(value)
@@ -441,7 +444,7 @@ private struct HRCurveSection: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("HEART RATE")
                         .font(Theme.FontStyle.sans(10, weight: .semibold))
-                        .tracking(1.4)
+                        .tracking(0.7)
                         .foregroundStyle(Theme.Palette.fg2)
                     Text("\(plot.sampleCount) points")
                         .font(Theme.FontStyle.mono(10))
@@ -542,7 +545,7 @@ private struct HRCurveSection: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             Text("HEART RATE")
                 .font(Theme.FontStyle.sans(10, weight: .semibold))
-                .tracking(1.4)
+                .tracking(0.7)
                 .foregroundStyle(Theme.Palette.fg2)
             VStack(spacing: 8) {
                 Image(systemName: "waveform.path.ecg")
@@ -580,27 +583,40 @@ private struct HRZoneLegend: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
-            ForEach(1..<6, id: \.self) { i in
-                HStack(spacing: 4) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(WD.zoneColors[i])
-                        .frame(width: 8, height: 8)
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("Z\(i)")
-                            .font(Theme.FontStyle.mono(9.5, weight: .medium))
-                            .foregroundStyle(Theme.Palette.fg2)
-                        if let r = range(i) {
-                            Text(r)
-                                .font(Theme.FontStyle.mono(8))
-                                .foregroundStyle(Theme.Palette.fg3)
-                        }
-                    }
+        // One row when the five ranges fit whole; a 3-column grid otherwise,
+        // so a range like "138–158" never splits across lines.
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) {
+                ForEach(1..<6, id: \.self) { i in
+                    item(i)
+                    if i < 5 { Spacer(minLength: 0) }
                 }
-                if i < 5 { Spacer(minLength: 0) }
+            }
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: 3),
+                      alignment: .leading, spacing: 8) {
+                ForEach(1..<6, id: \.self) { i in item(i) }
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private func item(_ i: Int) -> some View {
+        HStack(spacing: 4) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(WD.zoneColors[i])
+                .frame(width: 8, height: 8)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Z\(i)")
+                    .font(Theme.FontStyle.mono(9.5, weight: .medium))
+                    .foregroundStyle(Theme.Palette.fg2)
+                if let r = range(i) {
+                    Text(r)
+                        .font(Theme.FontStyle.mono(8))
+                        .foregroundStyle(Theme.Palette.fg3)
+                }
+            }
+            .fixedSize()
+        }
     }
 }
 
@@ -624,7 +640,7 @@ private struct ZonesSection: View {
             HStack {
                 Text("HR ZONES")
                     .font(Theme.FontStyle.sans(10, weight: .semibold))
-                    .tracking(1.4)
+                    .tracking(0.7)
                     .foregroundStyle(Theme.Palette.fg2)
                 Spacer()
                 if let mh = effectiveMaxHr(workout) {
@@ -663,7 +679,8 @@ private struct ZonesSection: View {
                         Text("\(Int((arr[i] / total * 100).rounded()))%")
                             .font(Theme.FontStyle.mono(10.5, weight: .medium))
                             .foregroundStyle(Theme.Palette.fg3)
-                            .frame(width: 38, alignment: .trailing)
+                            .fixedSize()
+                            .frame(minWidth: 38, alignment: .trailing)
                     }
                 }
             }
@@ -734,7 +751,7 @@ private struct EffortSection: View {
                 HStack {
                     Text("EFFORT & RECOVERY")
                         .font(Theme.FontStyle.sans(10, weight: .semibold))
-                        .tracking(1.4)
+                        .tracking(0.7)
                         .foregroundStyle(Theme.Palette.fg2)
                     Spacer()
                     HStack(spacing: 4) {
@@ -749,7 +766,7 @@ private struct EffortSection: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(cell.label)
                                 .font(Theme.FontStyle.sans(9, weight: .semibold))
-                                .tracking(0.8)
+                                .tracking(0.4)
                                 .foregroundStyle(Theme.Palette.fg3)
                             Text(cell.value)
                                 .font(Theme.FontStyle.display(18, weight: .medium))

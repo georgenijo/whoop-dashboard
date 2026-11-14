@@ -40,9 +40,11 @@ struct StepsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 4)
                 }
+                .inLeadingFoldColumn()
                 .padding(Theme.Spacing.md)
             }
             .scrollContentBackground(.hidden)
+            .measuresFold()
         }
     }
 

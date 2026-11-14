@@ -82,7 +82,7 @@ struct MarkdownView: View {
         case .codeBlock(_, let code):
             ScrollView(.horizontal, showsIndicators: false) {
                 Text(code)
-                    .font(Theme.FontStyle.mono(12.5))
+                    .font(Theme.FontStyle.code(12.5))
                     .foregroundStyle(Theme.Palette.fg1)
                     .lineSpacing(3)
                     .fixedSize()
@@ -178,7 +178,7 @@ struct MarkdownView: View {
                 attr[run.range].foregroundColor = emphasis
             }
             if intent.contains(.code) {
-                attr[run.range].font = Theme.FontStyle.mono(13.5)
+                attr[run.range].font = Theme.FontStyle.code(13.5)
                 attr[run.range].foregroundColor = Theme.Palette.fg0
                 attr[run.range].backgroundColor = Color.white.opacity(0.07)
             }
@@ -245,7 +245,7 @@ private struct MarkdownTableView: View {
                 ForEach(Array(header.enumerated()), id: \.offset) { index, cell in
                     Text(MarkdownView.plain(cell).uppercased())
                         .font(Theme.FontStyle.sans(11, weight: .semibold))
-                        .tracking(0.8)
+                        .tracking(0.4)
                         .foregroundStyle(Theme.Palette.fg3)
                         .gridColumnAlignment(index == 0 ? .leading : .trailing)
                 }

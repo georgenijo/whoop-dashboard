@@ -57,7 +57,7 @@ struct AIInsightCardView: View {
                 .foregroundStyle(Theme.Palette.ai)
             Text("COACH INSIGHT")
                 .font(Theme.FontStyle.sans(11, weight: .semibold))
-                .tracking(1.2)
+                .tracking(0.5)
                 .foregroundStyle(Theme.Palette.fg2)
             Spacer(minLength: 8)
             if let written = InsightDate.short(insight.createdAt) {
@@ -83,7 +83,7 @@ struct AIInsightCardView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("DO THIS")
                     .font(Theme.FontStyle.sans(11, weight: .semibold))
-                    .tracking(1.2)
+                    .tracking(0.5)
                     .foregroundStyle(Theme.Palette.fg3)
                 ForEach(Array(digest.actions.enumerated()), id: \.offset) { index, action in
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -124,7 +124,7 @@ private struct StaleBadge: View {
     var body: some View {
         Text("STALE")
             .font(Theme.FontStyle.sans(11, weight: .semibold))
-            .tracking(0.8)
+            .tracking(0.4)
             .foregroundStyle(Theme.Palette.warning)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)

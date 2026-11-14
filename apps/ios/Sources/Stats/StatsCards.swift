@@ -8,7 +8,7 @@ struct CardLabel: View {
     var body: some View {
         Text(text.uppercased())
             .font(Theme.FontStyle.sans(11, weight: .semibold))
-            .tracking(1.2)
+            .tracking(0.5)
             .foregroundStyle(Theme.Palette.fg2)
             .accessibilityAddTraits(.isHeader)
     }
@@ -82,7 +82,7 @@ struct AllTimeHero: View {
             .minimumScaleFactor(0.7)
             Text(label.uppercased())
                 .font(Theme.FontStyle.sans(11, weight: .semibold))
-                .tracking(1.2)
+                .tracking(0.5)
                 .foregroundStyle(Theme.Palette.fg3)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -196,7 +196,8 @@ private struct YoYRow: View {
             Text(String(year))
                 .font(Theme.FontStyle.mono(11, weight: isCurrent ? .medium : .regular))
                 .foregroundStyle(isCurrent ? Theme.Palette.fg2 : Theme.Palette.fg3)
-                .frame(width: 38, alignment: .leading)
+                .fixedSize()
+                .frame(minWidth: 38, alignment: .leading)
             GeometryReader { geo in
                 let fraction = (value ?? 0) / scale
                 Capsule()
@@ -445,7 +446,8 @@ struct SportBreakdownCard: View {
                 Text("\(share)%")
                     .font(Theme.FontStyle.mono(11))
                     .foregroundStyle(Theme.Palette.fg3)
-                    .frame(width: 38, alignment: .trailing)
+                    .fixedSize()
+                    .frame(minWidth: 38, alignment: .trailing)
             }
             GeometryReader { geo in
                 ZStack(alignment: .leading) {

@@ -89,7 +89,7 @@ struct WorkoutsSummaryCard: View {
             HStack {
                 Text("WORKOUTS")
                     .font(Theme.FontStyle.sans(11, weight: .semibold))
-                    .tracking(1.2)
+                    .tracking(0.5)
                     .foregroundStyle(Theme.Palette.fg2)
                 Spacer()
                 TrendsChevron()
@@ -143,8 +143,18 @@ struct WorkoutsSummaryCard: View {
         .clipShape(Capsule())
     }
 
+    /// Shows as many sports as fit whole (three, then two, then one) and
+    /// folds the rest into "+N", rather than truncating names mid-word.
     private var legend: some View {
-        let shown = Array(sports.prefix(3))
+        ViewThatFits(in: .horizontal) {
+            legendRow(showing: 3)
+            legendRow(showing: 2)
+            legendRow(showing: 1)
+        }
+    }
+
+    private func legendRow(showing count: Int) -> some View {
+        let shown = Array(sports.prefix(count))
         let rest = sports.count - shown.count
         return HStack(spacing: Theme.Spacing.sm) {
             ForEach(shown) { sport in
@@ -155,16 +165,18 @@ struct WorkoutsSummaryCard: View {
                     Text(TrendsFormat.sport(sport.sport))
                         .font(Theme.FontStyle.sans(13))
                         .foregroundStyle(Theme.Palette.fg1)
-                        .lineLimit(1)
+                        .fixedSize()
                     Text("\(sport.sessions)")
                         .font(Theme.FontStyle.mono(11))
                         .foregroundStyle(Theme.Palette.fg3)
+                        .fixedSize()
                 }
             }
             if rest > 0 {
                 Text("+\(rest)")
                     .font(Theme.FontStyle.mono(11))
                     .foregroundStyle(Theme.Palette.fg3)
+                    .fixedSize()
             }
             Spacer(minLength: 0)
         }

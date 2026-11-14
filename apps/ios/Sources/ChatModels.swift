@@ -275,6 +275,10 @@ final class ChatInFlightStore {
 
 extension Notification.Name {
     static let chatThreadNeedsRefresh = Notification.Name("com.georgenijo.coach.chatThreadNeedsRefresh")
+    /// A new conversation was saved as a thread; object is `ChatThreadCreated`.
+    static let chatThreadCreated = Notification.Name("com.georgenijo.coach.chatThreadCreated")
+    /// A turn finished, so thread titles, previews, and order may have changed.
+    static let chatThreadListChanged = Notification.Name("com.georgenijo.coach.chatThreadListChanged")
 }
 
 private struct ChatInFlightKey: EnvironmentKey {
