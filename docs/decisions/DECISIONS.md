@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-11-14: Make iPhone Duo the native acceptance target
+
+**Decision:** Prioritize the Duo inner display, fold geometry and native vertical controls for native design and verification. Keep compact adaptation for the Duo cover display. Other iPhone simulators are outside this iteration’s acceptance target unless requested.
+
+**Rationale:** George uses the Duo exclusively. Align custom selectors and date context to the measured usable pane instead of spanning the hinge or assuming a fixed width.
+
+**Status:** active
+
+**References:** PR #613, apps/ios/Sources/Shared/FoldLayout.swift, apps/ios/Sources/RootView.swift
+
+---
+
 ## 2026-11-14: Organize native iOS around a dated daily brief
 
 **Decision:** Use Today, Coach, Activity, and Plans as the four native destinations. Keep Trends, Progress, and Workouts within Activity and account settings behind Today’s account control. Present current recommendations before supporting measurements; dated historical readings and advice must not imply current readiness.

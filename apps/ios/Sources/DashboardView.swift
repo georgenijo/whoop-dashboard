@@ -111,6 +111,7 @@ struct DashboardView: View {
     private func sections(_ payload: DashboardPayload, interactive: Bool) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             headerCaption
+                .inLeadingFoldColumn()
             if let refreshError {
                 VStack(alignment: .leading, spacing: 6) {
                     Label("Couldn't refresh", systemImage: "wifi.exclamationmark")

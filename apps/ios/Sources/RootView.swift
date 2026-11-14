@@ -51,6 +51,7 @@ private struct ActivityView: View {
                 ForEach(Section.allCases, id: \.self) { Text($0.rawValue).tag($0) }
             }
             .pickerStyle(.segmented)
+            .inLeadingFoldColumn()
             .padding(.horizontal, Theme.Spacing.md)
             .padding(.vertical, Theme.Spacing.xs)
             Group {
@@ -62,5 +63,6 @@ private struct ActivityView: View {
             }
         }
         .background(Theme.Palette.bg0)
+        .measuresFold()
     }
 }

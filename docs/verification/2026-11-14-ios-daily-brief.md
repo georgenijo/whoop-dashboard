@@ -25,10 +25,14 @@ Simulator RSS includes runtime/framework overhead and does not establish physica
 ## Checks
 
 - Debug simulator build passed.
-- 111 iOS unit tests passed on iPhone 18 Pro simulator, including rich final events, resilient block decoding, server tool IDs, model capabilities/effective effort, byte-level SSE boundaries/limits, timestamp formats, advice freshness and light/dark text contrast.
+- 111 iOS unit tests passed on the iPhone Duo simulator, including rich final events, resilient block decoding, server tool IDs, model capabilities/effective effort, byte-level SSE boundaries/limits, timestamp formats, advice freshness and light/dark text contrast.
 - Required `apps/web` production build passed; no web runtime source changed.
 - Independent high-effort Sol review completed; material findings fixed. Focused recheck confirmed fixes and identified a concurrent instruction retry race; a loading guard plus disabled retry resolves it.
 - Device checks passed for compact/open layouts, first-visit Plans-to-Coach draft preservation, active-plan fixture exercise navigation, Settings dismissal, and rich final-answer retention with forced history HTTP 500 (including unsupported-block fallback and work log).
 - Device interaction evidence and raw performance data are published with the rendered verification artifact.
 
 This slice does not implement every analytical feature absent from the web parity inventory. All-time/YTD ranges, step-source selection, broader recovery/training analyses, widgets and Shortcuts remain separate work; the interface exposes the existing analytical destinations.
+
+## Duo-specific follow-up
+
+Duo is the acceptance target, including its inner and cover displays. The Activity selector, pinned date-range control and date caption now align to the measured leading pane. Native right-side navigation remains system-managed. The focused fold-layout review found no actionable issues; all 111 tests passed on Duo. The iPhone 18 Pro remains shut down.
