@@ -31,7 +31,7 @@ struct ThreadListView: View {
                     } label: {
                         Label("New chat", systemImage: "square.and.pencil")
                     }
-                    .tint(Theme.Palette.ai)
+                    .tint(Theme.Palette.accent)
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .chatThreadListChanged)) { _ in
@@ -111,14 +111,13 @@ struct ThreadListView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0, pinnedViews: []) {
                         ForEach(ThreadGroup.group(threads)) { group in
-                            Text(group.title.uppercased())
-                                .font(Theme.FontStyle.sans(11, weight: .semibold))
-                                .tracking(0.5)
+                            Text(group.title)
+                                .font(Theme.FontStyle.sans(12, weight: .medium))
                                 .foregroundStyle(Theme.Palette.fg3)
                                 .padding(.top, group.id == 0 ? 6 : 22)
                                 .padding(.bottom, 2)
                                 .accessibilityAddTraits(.isHeader)
-                            ForEach(Array(group.threads.enumerated()), id: \.element.id) { index, thread in
+                            ForEach(group.threads) { thread in
                                 let isSelected = thread.id == highlightedThreadId
                                 Button {
                                     // Re-picking the conversation already on
@@ -127,7 +126,7 @@ struct ThreadListView: View {
                                     guard !isSelected else { return }
                                     selection = .thread(id: thread.id, title: thread.title)
                                 } label: {
-                                    ThreadRow(thread: thread, showsDivider: index < group.threads.count - 1 && !isSelected)
+                                    ThreadRow(thread: thread)
                                 }
                                 .buttonStyle(ThreadRowStyle(isSelected: isSelected))
                                 .accessibilityAddTraits(isSelected ? .isSelected : [])
@@ -154,12 +153,12 @@ struct ThreadListView: View {
 
     private var emptyState: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
-                VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 0) {
+                VStack(alignment: .leading, spacing: 8) {
                     Text("No conversations yet")
                         .font(Theme.FontStyle.sans(20, weight: .semibold))
                         .foregroundStyle(Theme.Palette.fg0)
-                    Text("The coach reads your recovery, sleep, and training before it answers. Start with one of these.")
+                    Text("Start with a question about recovery, sleep, or training.")
                         .font(Theme.FontStyle.sans(14))
                         .foregroundStyle(Theme.Palette.fg2)
                         .fixedSize(horizontal: false, vertical: true)
@@ -178,11 +177,12 @@ struct ThreadListView: View {
                                 .font(.system(size: 12, weight: .semibold))
                                 .foregroundStyle(Theme.Palette.fg3)
                         }
-                        .padding(.horizontal, 14)
-                        .frame(minHeight: 50)
-                        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
-                        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.Palette.borderSubtle))
-                        .contentShape(RoundedRectangle(cornerRadius: 14))
+                        .padding(.vertical, 12)
+                        .frame(minHeight: 52)
+                        .overlay(alignment: .top) {
+                            Rectangle().fill(Theme.Palette.borderSubtle).frame(height: 1)
+                        }
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(ChatPressStyle())
                 }
@@ -261,18 +261,26 @@ private struct ThreadRowStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.white.opacity(isSelected ? 0.09 : configuration.isPressed ? 0.06 : 0))
+            .background {
+                Rectangle()
+                    .fill(isSelected || configuration.isPressed ? Theme.Palette.bg3 : .clear)
                     .padding(.horizontal, -10)
-            )
-            .animation(.snappy(duration: 0.15), value: configuration.isPressed)
+            }
+            .overlay(alignment: .leading) {
+                if isSelected {
+                    Rectangle()
+                        .fill(Theme.Palette.accent)
+                        .frame(width: 2)
+                        .padding(.leading, -10)
+                }
+            }
     }
 }
 
 private struct ThreadRow: View {
     let thread: ChatThread
     var showsDivider = true
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     static let placeholder = ChatThread(
         id: 0,
@@ -284,23 +292,27 @@ private struct ThreadRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 5))
+                : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 10))
+            layout {
                 Text(thread.displayTitle)
-                    .font(Theme.FontStyle.sans(15, weight: .semibold))
+                    .font(Theme.FontStyle.sans(15, weight: .medium))
                     .foregroundStyle(Theme.Palette.fg0)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
-                Spacer(minLength: 4)
+                if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 4) }
                 Text(Self.timestamp(thread.updatedAt))
                     .font(Theme.FontStyle.mono(11))
                     .foregroundStyle(Theme.Palette.fg3)
+                    .fixedSize(horizontal: !dynamicTypeSize.isAccessibilitySize, vertical: true)
             }
             if let preview = thread.lastPreview.map(MarkdownView.plain), !preview.isEmpty {
                 Text(preview)
-                    .font(Theme.FontStyle.sans(13.5))
+                    .font(Theme.FontStyle.sans(13))
                     .foregroundStyle(Theme.Palette.fg2)
                     .lineSpacing(2)
-                    .lineLimit(1)
+                    .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                     .multilineTextAlignment(.leading)
             }
         }

@@ -5,6 +5,15 @@ import XCTest
 @testable import Coach
 
 final class DailyBriefTests: XCTestCase {
+    func testWarehouseTypefaceIsRegisteredInTheAppBundle() {
+        for name in [Theme.Typeface.sansRegular, Theme.Typeface.sansMedium,
+                     Theme.Typeface.sansSemibold, Theme.Typeface.sansBold] {
+            let font = UIFont(name: name, size: 17)
+            XCTAssertNotNil(font, "Missing bundled font: \(name)")
+            XCTAssertEqual(font?.familyName, "DM Sans")
+        }
+    }
+
     func testOnlyTodaysNonStaleAnalysisIsCurrent() {
         let today = ISO8601DateFormatter().string(from: Date())
         let yesterday = ISO8601DateFormatter().string(

@@ -110,19 +110,7 @@ struct ChatView: View {
                     }
                     composer
                 }
-                .background {
-                    LinearGradient(
-                        stops: [
-                            .init(color: Theme.Palette.bg0.opacity(0), location: 0),
-                            .init(color: Theme.Palette.bg0.opacity(0.92), location: 0.28),
-                            .init(color: Theme.Palette.bg0, location: 1)
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                    .padding(.top, -18)
-                    .ignoresSafeArea()
-                }
+                .background(Theme.Palette.bg0.ignoresSafeArea())
                 .overlay(alignment: .top) {
                     JumpToLatestButton(scroll: scrollState, hidden: rows.isEmpty) {
                         jumpRequest += 1
@@ -184,11 +172,11 @@ struct ChatView: View {
             if status == .checking {
                 ProgressView()
                     .controlSize(.mini)
-                    .tint(Theme.Palette.ai)
+                    .tint(Theme.Palette.accent)
             } else {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Theme.Palette.ai)
+                    .foregroundStyle(Theme.Palette.accent)
             }
             Text(status == .checking ? "Checking for reply…" : "Reply is still running…")
                 .font(Theme.FontStyle.sans(11.5))
@@ -203,7 +191,7 @@ struct ChatView: View {
                     }
                 }
                 .font(Theme.FontStyle.sans(11.5, weight: .medium))
-                .foregroundStyle(Theme.Palette.ai)
+                .foregroundStyle(Theme.Palette.accent)
                 Button("Stop waiting") {
                     showAbandonRecoveryConfirmation = true
                 }
@@ -213,7 +201,7 @@ struct ChatView: View {
         }
         .padding(.horizontal, Theme.Spacing.md)
         .padding(.vertical, 7)
-        .background(Theme.Palette.ai.opacity(0.06))
+        .background(Theme.Palette.accent.opacity(0.06))
     }
 
     private func sendErrorBanner(_ text: String, onDismiss: (() -> Void)? = nil) -> some View {
@@ -395,61 +383,60 @@ struct ChatView: View {
     }
 
     private var emptyAsk: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 24)
-            VStack(spacing: 12) {
-                Image(systemName: "bubble.left.and.text.bubble.right")
-                    .font(.system(size: 28, weight: .regular))
-                    .foregroundStyle(Theme.Palette.recovery)
+        VStack(alignment: .leading, spacing: 28) {
+            VStack(alignment: .leading, spacing: 10) {
                 Text(Date.now.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()))
                     .font(Theme.FontStyle.sans(13))
-                    .foregroundStyle(Theme.Palette.fg2)
-                Text("Make sense of your day")
-                    .font(Theme.FontStyle.sans(22, weight: .semibold))
-                    .foregroundStyle(Theme.Palette.fg0)
-                Text("Explore your recovery, sleep, and training. Ask for a recommendation, then inspect the evidence behind it.")
-                    .font(Theme.FontStyle.sans(14))
-                    .foregroundStyle(Theme.Palette.fg2)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, Theme.Spacing.xl)
-            }
-            Spacer(minLength: 24)
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Start a conversation")
-                    .font(Theme.FontStyle.sans(11, weight: .semibold))
-                    .tracking(0.5)
                     .foregroundStyle(Theme.Palette.fg3)
-                    .padding(.leading, 4)
-                ForEach(Self.suggestedPrompts, id: \.self) { prompt in
-                    Button {
-                        input = prompt
-                        isComposerFocused = true
-                    } label: {
-                        HStack(spacing: 10) {
-                            Text(prompt)
-                                .font(Theme.FontStyle.sans(15))
-                                .foregroundStyle(Theme.Palette.fg1)
-                                .multilineTextAlignment(.leading)
-                            Spacer(minLength: 8)
-                            Image(systemName: "arrow.up.left")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(Theme.Palette.fg3)
+                Text("Understand your day")
+                    .font(Theme.FontStyle.sans(22, weight: .medium))
+                    .foregroundStyle(Theme.Palette.fg0)
+                Text("Ask about recovery, sleep, or training. Explore the evidence behind each answer.")
+                    .font(Theme.FontStyle.sans(15))
+                    .foregroundStyle(Theme.Palette.fg2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Start a conversation")
+                    .font(Theme.FontStyle.sans(13, weight: .medium))
+                    .foregroundStyle(Theme.Palette.fg2)
+                VStack(spacing: 0) {
+                    ForEach(Self.suggestedPrompts, id: \.self) { prompt in
+                        Button {
+                            input = prompt
+                            isComposerFocused = true
+                        } label: {
+                            HStack(spacing: 12) {
+                                Text(prompt)
+                                    .font(Theme.FontStyle.sans(15))
+                                    .foregroundStyle(Theme.Palette.fg0)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Spacer(minLength: 8)
+                                Image(systemName: "arrow.up.left")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(Theme.Palette.fg3)
+                            }
+                            .padding(.vertical, 12)
+                            .frame(minHeight: 52)
+                            .contentShape(Rectangle())
+                            .overlay(alignment: .top) {
+                                Rectangle().fill(Theme.Palette.borderSubtle).frame(height: 1)
+                            }
                         }
-                        .padding(.horizontal, 14)
-                        .frame(minHeight: 48)
-                        .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
-                        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(Theme.Palette.borderSubtle))
-                        .contentShape(RoundedRectangle(cornerRadius: 14))
+                        .buttonStyle(ChatPressStyle())
+                        .accessibilityHint("Fills the message field")
                     }
-                    .buttonStyle(ChatPressStyle())
-                    .accessibilityHint("Fills the message field")
+                }
+                .overlay(alignment: .bottom) {
+                    Rectangle().fill(Theme.Palette.borderSubtle).frame(height: 1)
                 }
             }
-            .padding(.horizontal, Theme.Spacing.md)
-            .padding(.bottom, Theme.Spacing.md)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, Theme.Spacing.lg)
+        .padding(.top, Theme.Spacing.xl)
+        .padding(.bottom, Theme.Spacing.md)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var composer: some View {
@@ -520,10 +507,12 @@ struct ChatView: View {
             }
 
             VStack(alignment: .leading, spacing: 2) {
-                TextField("Ask about recovery, sleep, strain…", text: $input, axis: .vertical)
+                TextField("Ask about recovery, sleep, strain…", text: $input,
+                          prompt: Text("Ask about recovery, sleep, strain…").foregroundColor(Theme.Palette.fg2),
+                          axis: .vertical)
                     .font(Theme.FontStyle.sans(15))
                     .foregroundStyle(Theme.Palette.fg0)
-                    .tint(Theme.Palette.ai)
+                    .tint(Theme.Palette.accent)
                     .lineLimit(1...6)
                     .disabled(isSending)
                     .textFieldStyle(.plain)
@@ -541,7 +530,7 @@ struct ChatView: View {
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(Theme.Palette.fg1)
                             .frame(width: 32, height: 32)
-                            .background(Color.white.opacity(0.07), in: Circle())
+                            .background(Theme.Palette.bg3, in: Circle())
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
                     }
@@ -560,7 +549,7 @@ struct ChatView: View {
                     } label: {
                         ZStack {
                             Circle()
-                                .fill(canSend ? Theme.Palette.fg0 : Color.white.opacity(0.08))
+                                .fill(canSend ? Theme.Palette.accent : Theme.Palette.bg3)
                             if isSending {
                                 ProgressView()
                                     .controlSize(.small)
@@ -574,7 +563,6 @@ struct ChatView: View {
                         .frame(width: 34, height: 34)
                         .frame(width: 44, height: 44)
                         .contentShape(Rectangle())
-                        .animation(.snappy(duration: 0.2), value: canSend)
                     }
                     .buttonStyle(ChatPressStyle())
                     .disabled(!canSend)
@@ -585,15 +573,14 @@ struct ChatView: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 2)
-            .background(Theme.Palette.bg2, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .background(Theme.Palette.bg2, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .strokeBorder(
-                        isComposerFocused ? Theme.Palette.borderStrong : Theme.Palette.borderDefault,
+                        isComposerFocused ? Theme.Palette.accent : Theme.Palette.borderDefault,
                         lineWidth: 1
                     )
             )
-            .animation(.snappy(duration: 0.2), value: isComposerFocused)
         }
         .padding(.horizontal, Theme.Spacing.sm)
         .padding(.top, 6)
@@ -1228,7 +1215,7 @@ private struct MessageBubble: View {
                     .textSelection(.enabled)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(Color.white.opacity(dimmed ? 0.06 : 0.09))
+                    .background(Theme.Palette.bg3.opacity(dimmed ? 0.6 : 1))
                     .overlay(bubbleBorder(role: .user))
                     .clipShape(bubbleShape(role: .user))
                     .fixedSize(horizontal: false, vertical: true)
@@ -1329,7 +1316,7 @@ private struct MessageBubble: View {
     private func bubbleBackground(role: ChatMessage.Role, dimmed: Bool) -> some View {
         Group {
             if role == .user {
-                Color.white.opacity(dimmed ? 0.04 : 0.06)
+                Theme.Palette.bg3.opacity(dimmed ? 0.6 : 1)
             } else {
                 Color.clear
             }
@@ -1343,7 +1330,7 @@ private struct MessageBubble: View {
 
     private func bubbleShape(role: ChatMessage.Role) -> UnevenRoundedRectangle {
         if role == .user {
-            UnevenRoundedRectangle(cornerRadii: .init(topLeading: 18, bottomLeading: 18, bottomTrailing: 6, topTrailing: 18), style: .continuous)
+            UnevenRoundedRectangle(cornerRadii: .init(topLeading: 6, bottomLeading: 6, bottomTrailing: 6, topTrailing: 6), style: .continuous)
         } else {
             UnevenRoundedRectangle(cornerRadii: .init(topLeading: 14, bottomLeading: 4, bottomTrailing: 14, topTrailing: 14))
         }
@@ -1354,8 +1341,6 @@ struct ChatPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .opacity(configuration.isPressed ? 0.6 : 1)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.snappy(duration: 0.15), value: configuration.isPressed)
     }
 }
 

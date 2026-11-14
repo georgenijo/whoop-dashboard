@@ -38,18 +38,20 @@ struct RecoveryHeroView: View {
 
     private func card(tappable: Bool) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            HStack(spacing: 6) {
-                Text(isHistorical ? "LATEST RECOVERY" : "RECOVERY")
-                    .font(Theme.FontStyle.sans(11, weight: .semibold))
-                    .tracking(0.5)
+            let headerLayout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+                : AnyLayout(HStackLayout(spacing: 6))
+            headerLayout {
+                Text(isHistorical ? "Latest recovery" : "Recovery")
+                    .font(Theme.FontStyle.sans(13, weight: .medium))
                     .foregroundStyle(Theme.Palette.fg2)
-                Spacer()
+                if !dynamicTypeSize.isAccessibilitySize { Spacer() }
                 if let updated = updatedCaption {
                     Text(updated)
                         .font(Theme.FontStyle.mono(11))
                         .foregroundStyle(Theme.Palette.fg3)
                 }
-                if tappable {
+                if tappable && !dynamicTypeSize.isAccessibilitySize {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Theme.Palette.fg3)
@@ -60,7 +62,7 @@ struct RecoveryHeroView: View {
                 ? AnyLayout(VStackLayout(alignment: .leading, spacing: Theme.Spacing.md))
                 : AnyLayout(HStackLayout(alignment: .center, spacing: Theme.Spacing.lg))
             layout {
-                RecoveryRing(score: hero.score)
+                RecoveryScore(score: hero.score)
 
                 VStack(alignment: .leading, spacing: 10) {
                     if let score = hero.score {
@@ -129,46 +131,24 @@ private struct HeroPressStyle: ButtonStyle {
     }
 }
 
-private struct RecoveryRing: View {
+/// A readable score, with color reserved for the health signal. The label,
+/// value and state remain available without relying on the color.
+private struct RecoveryScore: View {
     let score: Double?
-    @Environment(\.redactionReasons) private var redaction
-
-    private let size: CGFloat = 104
-    private let lineWidth: CGFloat = 6
 
     var body: some View {
-        ZStack {
-            Circle()
-                .stroke(Theme.Palette.borderSubtle, lineWidth: lineWidth)
+        HStack(alignment: .firstTextBaseline, spacing: 2) {
+            Text(score.map { "\(Int($0.rounded()))" } ?? "—")
+                .font(Theme.FontStyle.mono(56, weight: .medium))
+                .foregroundStyle(Theme.Palette.fg0)
             if let score {
-                let color = redaction.isEmpty ? RecoveryZone(score: score).color : Theme.Palette.fg4
-                let fraction = max(0.005, min(1, score / 100))
-                Circle()
-                    .trim(from: 0, to: fraction)
-                    .stroke(
-                        color,
-                        style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-                    )
-                    .rotationEffect(.degrees(-90))
-                HStack(alignment: .firstTextBaseline, spacing: 1) {
-                    Text("\(Int(score.rounded()))")
-                        .font(Theme.FontStyle.mono(36, weight: .semibold))
-                        .foregroundStyle(Theme.Palette.fg0)
-                        .contentTransition(.numericText())
-                    Text("%")
-                        .font(Theme.FontStyle.mono(16))
-                        .foregroundStyle(color)
-                }
-                .minimumScaleFactor(0.6)
-                .lineLimit(1)
-                .padding(.horizontal, lineWidth + 6)
-            } else {
-                Text("—")
-                    .font(Theme.FontStyle.mono(40, weight: .medium))
-                    .foregroundStyle(Theme.Palette.fg3)
+                Text("%")
+                    .font(Theme.FontStyle.sans(18))
+                    .foregroundStyle(RecoveryZone(score: score).color)
             }
         }
-        .frame(width: size, height: size)
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Recovery")
         .accessibilityValue(score.map { "\(Int($0.rounded())) percent, \(RecoveryZone(score: $0).label)" } ?? "No score")

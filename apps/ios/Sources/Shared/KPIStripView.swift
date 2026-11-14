@@ -10,10 +10,7 @@ struct KPIStripView: View {
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    /// Accessibility text sizes get two wide columns instead of three
-    /// narrow ones so values and deltas are never clipped. At the top
-    /// accessibility sizes even two columns can overflow a wide value like
-    /// "35,585", so those sizes drop to a single column.
+    /// Accessibility sizes use full-width rows for values and comparisons.
     private var effectiveColumns: Int {
         if dynamicTypeSize >= .accessibility3 {
             return 1
@@ -48,25 +45,40 @@ struct KPIStripView: View {
 
     var body: some View {
         let shared = sharedContext
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-                HStack(spacing: Theme.Spacing.xs) {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
+                HStack(spacing: 0) {
                     ForEach(row) { tile in
                         cell(tile, showContext: tile.delta.map { KPIDeltaText($0).context != shared } ?? false)
+                            .padding(Theme.Spacing.md)
                             .frame(maxHeight: .infinity)
+                            .overlay(alignment: .trailing) {
+                                if tile.id != row.last?.id {
+                                    Rectangle().fill(Theme.Palette.borderSubtle).frame(width: 1)
+                                }
+                            }
                     }
                 }
                 .fixedSize(horizontal: false, vertical: true)
+                .overlay(alignment: .bottom) {
+                    if index < rows.count - 1 {
+                        Rectangle().fill(Theme.Palette.borderSubtle).frame(height: 1)
+                    }
+                }
             }
             if let shared {
-                Divider()
                 Text("Change \(shared)")
                     .font(Theme.FontStyle.mono(11))
                     .foregroundStyle(Theme.Palette.fg3)
-                    .padding(.leading, 2)
+                    .padding(.horizontal, Theme.Spacing.md)
+                    .padding(.vertical, Theme.Spacing.sm)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .overlay(alignment: .top) {
+                        Rectangle().fill(Theme.Palette.borderSubtle).frame(height: 1)
+                    }
             }
         }
-        .glassCard(padding: Theme.Spacing.md)
+        .glassCard(padding: 0)
     }
 
     @ViewBuilder
@@ -131,9 +143,8 @@ private struct KPICell: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 4) {
-                Text(tile.label.uppercased())
-                    .font(Theme.FontStyle.sans(11, weight: .semibold))
-                    .tracking(0.5)
+                Text(tile.label)
+                    .font(Theme.FontStyle.sans(13, weight: .medium))
                     .foregroundStyle(Theme.Palette.fg2)
                     .lineLimit(wraps ? 2 : 1)
                     .minimumScaleFactor(0.8)
@@ -147,7 +158,7 @@ private struct KPICell: View {
 
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(formattedValue)
-                    .font(Theme.FontStyle.mono(28, weight: .semibold))
+                    .font(Theme.FontStyle.mono(26, weight: .medium))
                     .foregroundStyle(tile.value == nil ? Theme.Palette.fg3 : Theme.Palette.fg0)
                     .contentTransition(.numericText())
                 if !tile.unit.isEmpty, tile.value != nil {

@@ -11,20 +11,23 @@ enum Theme {
             })
         }
 
-        static let bg0 = adaptive("#F3F6F5", "#101817")
+        // Fleet Warehouse's neutral canvas and warm utility text. Health
+        // signals stay separate from the brown navigation/action accent.
+        static let bg0 = adaptive("#FFFFFF", "#000000")
         static let bg1 = bg0
-        static let bg2 = adaptive("#FFFFFF", "#182321")
-        static let bg3 = adaptive("#EAF0ED", "#202E2A")
-        static let bg4 = adaptive("#DEE8E3", "#2A3B35")
-        static let fg0 = adaptive("#172F2B", "#E7F0ED")
-        static let fg1 = adaptive("#304B43", "#D3E0DA")
-        static let fg2 = adaptive("#526761", "#A6B8B1")
-        static let fg3 = adaptive("#526761", "#A6B8B1")
+        static let bg2 = adaptive("#F8F6F3", "#0D0B0A")
+        static let bg3 = adaptive("#F1EEEA", "#141210")
+        static let bg4 = adaptive("#E8E4DF", "#211D19")
+        static let fg0 = adaptive("#20201E", "#FFFFFF")
+        static let fg1 = adaptive("#393632", "#D8D3CE")
+        static let fg2 = adaptive("#625D57", "#AAA39D")
+        static let fg3 = adaptive("#6A645F", "#A29B95")
         // Quiet text still carries information and meets the body-text target.
         static let fg4 = fg3
-        static let borderSubtle = adaptive("#DCE5DF", "#30443C")
-        static let borderDefault = adaptive("#BCCFC4", "#496056")
-        static let borderStrong = adaptive("#8DA99A", "#6D8B7C")
+        static let borderSubtle = adaptive("#E8E4DF", "#1C1A18")
+        static let borderDefault = adaptive("#CCC5BE", "#36312D")
+        static let borderStrong = adaptive("#9C8B7E", "#75675C")
+        static let accent = adaptive("#806047", "#C5AC98")
         static let brandStrain = adaptive("#A62F4A", "#F19AAC")
         static let brandStrainDim = brandStrain
         static let recovery = adaptive("#176E5C", "#74C9AF")
@@ -54,10 +57,10 @@ enum Theme {
     }
 
     enum Typeface {
-        static let sansRegular = "Geist-Regular"
-        static let sansMedium = "Geist-Medium"
-        static let sansSemibold = "Geist-SemiBold"
-        static let sansBold = "Geist-Bold"
+        static let sansRegular = "DMSans-Regular"
+        static let sansMedium = "DMSans-Medium"
+        static let sansSemibold = "DMSans-SemiBold"
+        static let sansBold = "DMSans-Bold"
         static let monoRegular = "GeistMono-Regular"
         static let monoMedium = "GeistMono-Medium"
         static let monoSemibold = "GeistMono-SemiBold"
@@ -71,7 +74,7 @@ enum Theme {
     /// Display sizes (above 24 pt) are left as designed. All fonts scale with
     /// Dynamic Type.
     ///
-    /// `mono` no longer means a monospaced face: data labels render in Geist
+    /// `mono` uses DM Sans for data labels
     /// with tabular figures, so digits still line up in columns without the
     /// wide, gappy letterforms of Geist Mono. Use `code` for real code.
     enum FontStyle {

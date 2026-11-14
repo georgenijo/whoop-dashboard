@@ -24,7 +24,7 @@ struct RootView: View {
                 .tag(Tab.plans)
         }
         .environment(\.appNavigation, navigation)
-        .tint(Theme.Palette.recovery)
+        .tint(Theme.Palette.accent)
         .background(Theme.Palette.bg0)
         .sheet(isPresented: $showsSettings) {
             SettingsView(onSignOut: {

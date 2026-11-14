@@ -20,6 +20,10 @@
 	<string>1</string>
 	<key>UIAppFonts</key>
 	<array>
+		<string>DMSans-Regular.ttf</string>
+		<string>DMSans-Medium.ttf</string>
+		<string>DMSans-SemiBold.ttf</string>
+		<string>DMSans-Bold.ttf</string>
 		<string>Geist-Regular.ttf</string>
 		<string>Geist-Medium.ttf</string>
 		<string>Geist-SemiBold.ttf</string>

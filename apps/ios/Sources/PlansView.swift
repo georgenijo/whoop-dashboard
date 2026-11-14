@@ -81,7 +81,7 @@ struct PlansView: View {
                 NotificationCenter.default.post(name: .coachComposeRequested, object: "Help me build a training plan that adjusts to my recovery. Ask about my goals, schedule and available equipment first.")
             }
             .buttonStyle(.borderedProminent)
-            .tint(Theme.Palette.recovery)
+            .tint(Theme.Palette.accent)
             .frame(minHeight: 44)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
