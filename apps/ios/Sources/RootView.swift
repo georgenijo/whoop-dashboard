@@ -41,7 +41,7 @@ struct RootView: View {
 
 /// Each analytical destination is created only when selected. Visiting Today
 /// should not fetch and render every historical chart in the background.
-private struct ActivityView: View {
+struct ActivityView: View {
     typealias Section = ActivityHeader.Section
     @State private var section: Section = .trends
     // Each segment keeps its own window: Trends reads recent days, Progress
