@@ -19,13 +19,13 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                PageHeader("Settings")
                 ScrollView {
-                    VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                    FoldColumns {
                         section("Connections") {
                             WhoopConnectorCard()
                                 .glassCard(padding: Theme.Spacing.md)
                         }
+                    } trailing: {
 
                         section("Data") {
                             VStack(alignment: .leading, spacing: 0) {
@@ -82,9 +82,10 @@ struct SettingsView: View {
                     .padding(.horizontal, Theme.Spacing.md)
                     .padding(.bottom, Theme.Spacing.xxl)
                 }
+                .measuresFold()
                 .scrollIndicators(.hidden)
             }
-            .toolbar(.hidden, for: .navigationBar)
+            .navigationTitle("Settings")
             .confirmationDialog(
                 "Sign out of Coach?",
                 isPresented: $confirmingSignOut,

@@ -19,11 +19,8 @@ struct DashboardView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                PageHeader("Today") { headerCaption }
-                content
-            }
-            .toolbar(.hidden, for: .navigationBar)
+            content
+            .navigationTitle("Today")
             .refreshable { await load(showSpinner: false) }
             .navigationDestination(item: $detail) { href in
                 switch href {
@@ -72,6 +69,7 @@ struct DashboardView: View {
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
+            .measuresFold()
             .scrollDisabled(true)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Loading today")
@@ -80,29 +78,39 @@ struct DashboardView: View {
             ScrollView {
                 sections(payload, interactive: true)
             }
+            .measuresFold()
         case .error(let message):
             ScrollView {
                 errorCard(message)
+                    .inLeadingFoldColumn()
                     .padding(.horizontal, Theme.Spacing.md)
                     .padding(.top, Theme.Spacing.xs)
             }
+            .measuresFold()
         }
     }
 
+    /// Compact width: one column. Inner display: today at a glance (score and
+    /// vitals) on the leading side of the fold, the coach's read and the trend
+    /// on the trailing side.
     private func sections(_ payload: DashboardPayload, interactive: Bool) -> some View {
-        VStack(spacing: Theme.Spacing.sm) {
-            RecoveryHeroView(
-                hero: payload.recoveryHero,
-                trend: payload.recoveryTrend,
-                onTap: interactive ? { detail = .recovery } : nil
-            )
-            KPIStripView(tiles: vitals(payload.kpi), columns: 3) { tile in
-                detail = tile.href
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            headerCaption
+            FoldColumns {
+                RecoveryHeroView(
+                    hero: payload.recoveryHero,
+                    trend: payload.recoveryTrend,
+                    onTap: interactive ? { detail = .recovery } : nil
+                )
+                KPIStripView(tiles: vitals(payload.kpi), columns: 3) { tile in
+                    detail = tile.href
+                }
+            } trailing: {
+                if let insight = payload.aiInsight {
+                    AIInsightCardView(insight: insight)
+                }
+                RecoveryTrendCardView(points: payload.recoveryTrend)
             }
-            if let insight = payload.aiInsight {
-                AIInsightCardView(insight: insight)
-            }
-            RecoveryTrendCardView(points: payload.recoveryTrend)
         }
         .padding(.horizontal, Theme.Spacing.md)
         .padding(.top, Theme.Spacing.xxs)

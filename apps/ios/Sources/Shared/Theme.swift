@@ -11,7 +11,10 @@ enum Theme {
         static let fg0 = Color(hex: "#ffffff")
         static let fg1 = Color(hex: "#e7e7ea")
         static let fg2 = Color(hex: "#a1a1aa")
-        static let fg3 = Color(hex: "#6b6b74")
+        /// Tertiary text. #8e8e98 keeps 5.8:1 on cards (bg2) and 4.8:1 on the
+        /// lightest surface (bg4); the old #6b6b74 sat at 3.0–3.6:1, below the
+        /// 4.5:1 floor for small text.
+        static let fg3 = Color(hex: "#8e8e98")
         static let fg4 = Color(hex: "#3f3f46")
 
         static let borderSubtle = Color.white.opacity(0.06)
@@ -60,15 +63,52 @@ enum Theme {
         static let monoSemibold = "GeistMono-SemiBold"
     }
 
+    /// Every text style resolves through here, so readability is decided in
+    /// one place. Call sites still pass the size they were designed at; that
+    /// design size is mapped onto a scale that never drops below 12 pt and
+    /// sits 2 pt above the original small sizes (11 → 13, 13 → 15, 15 → 17),
+    /// which keeps the relative hierarchy while clearing the HIG minimums.
+    /// Display sizes (above 24 pt) are left as designed. All fonts scale with
+    /// Dynamic Type.
+    ///
+    /// `mono` no longer means a monospaced face: data labels render in Geist
+    /// with tabular figures, so digits still line up in columns without the
+    /// wide, gappy letterforms of Geist Mono. Use `code` for real code.
     enum FontStyle {
         static func display(_ size: CGFloat, weight: Weight = .semibold) -> Font {
-            Font.custom(weight.sans, size: size)
+            Font.custom(weight.sans, size: readable(size), relativeTo: textStyle(for: size))
         }
         static func sans(_ size: CGFloat, weight: Weight = .regular) -> Font {
-            Font.custom(weight.sans, size: size)
+            Font.custom(weight.sans, size: readable(size), relativeTo: textStyle(for: size))
         }
         static func mono(_ size: CGFloat, weight: Weight = .regular) -> Font {
-            Font.custom(weight.mono, size: size)
+            Font.custom(weight.sans, size: readable(size), relativeTo: textStyle(for: size))
+                .monospacedDigit()
+        }
+        /// Monospaced face for code spans and code blocks only.
+        static func code(_ size: CGFloat, weight: Weight = .regular) -> Font {
+            Font.custom(weight.mono, size: readable(size), relativeTo: .footnote)
+        }
+
+        static let minimumSize: CGFloat = 12
+
+        static func readable(_ size: CGFloat) -> CGFloat {
+            size > 24 ? size : max(minimumSize, size + 2)
+        }
+
+        /// Dynamic Type curve to follow: big numbers grow like titles, small
+        /// labels like captions, so the largest accessibility sizes don't blow
+        /// a 64 pt score up at body-text rates.
+        static func textStyle(for size: CGFloat) -> Font.TextStyle {
+            switch size {
+            case ..<11: return .caption
+            case ..<13: return .footnote
+            case ..<15: return .subheadline
+            case ..<18: return .body
+            case ..<24: return .title3
+            case ..<34: return .title
+            default: return .largeTitle
+            }
         }
 
         enum Weight {

@@ -279,6 +279,14 @@ Use this whenever typecheck + lint alone won't catch the bug:
 
 Don't use it for production debugging (use the legacy-named `vm-ops` skill) or anything needing a real Whoop API call (this skill doesn't copy `tokens.json`).
 
+## iOS app (`apps/ios/`) on iPhone and iPhone Duo
+
+- **Layout follows size class, never device.** Compact width (any iPhone, iPhone Duo's outer display) is one column. Regular width (iPhone Duo's inner display) splits into two columns via `FoldColumns` (`Sources/Shared/FoldLayout.swift`): the screen's `ScrollView` carries `.measuresFold()`, which reads the hinge from `reservedRegions(kind: .division, options: .includeInactive)` (iOS 27.1+), and the column gutter is placed exactly on the fold so nothing crosses the crease. Inactive regions are included on purpose so the layout does not reflow as the device folds. A lone empty/error card uses `.inLeadingFoldColumn()`.
+- **Use system bars, not custom headers.** Root screens use `.navigationTitle` and `.toolbar`; iPhone Duo moves toolbars, Back, and the tab bar onto the side rail only for system components. Don't hide the navigation bar or draw a title row.
+- **Coach** is a `NavigationSplitView` on regular width and a `NavigationStack` on compact, both driven by one `CoachSelection`, so the open conversation survives opening/closing the device. `RootView`'s `TabView` selection is bound for the same reason (unbound, it reset to Home on every pose change).
+- **Type**: every font goes through `Theme.FontStyle`, which maps design sizes onto a readable scale (min 12 pt, +2 pt for small sizes) with Dynamic Type. `mono` renders Geist with tabular digits; use `code` for actual code. Prefer `ViewThatFits` over `lineLimit(1)` truncation when the larger type doesn't fit a narrow column.
+- **Simulator against a local server** (DEBUG builds only): start `whoop-dev` with a throwaway `JWT_SIGNING_KEY`, mint a session JWT for a user id with that key, then launch with `-COACH_API_BASE http://localhost:<port> -COACH_DEBUG_TOKEN <jwt>` (launch arguments; `SIMCTL_CHILD_*` env vars also work). Never mint against the production key. iPhone Duo poses: `agent-device fold closed|half-open|open`. A Duo simulator only shows up in T3's device panel after it has been booted once.
+
 ## Issue taxonomy
 
 Labels (case-sensitive):

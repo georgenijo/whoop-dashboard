@@ -38,7 +38,7 @@ struct RecoveryHeroView: View {
             HStack(spacing: 6) {
                 Text("RECOVERY")
                     .font(Theme.FontStyle.sans(11, weight: .semibold))
-                    .tracking(1.2)
+                    .tracking(0.5)
                     .foregroundStyle(Theme.Palette.fg2)
                 Spacer()
                 if let updated = updatedCaption {

@@ -12,21 +12,36 @@ struct SportFrequencyChartView: View {
     let items: [WorkoutsPayload.SportFreq]
     @State private var metric: SportMetric = .sessions
 
+    private var title: some View {
+        Text("SPORT BREAKDOWN")
+            .font(Theme.FontStyle.sans(10, weight: .semibold))
+            .tracking(0.7)
+            .foregroundStyle(Theme.Palette.fg2)
+    }
+
+    private var metricPicker: some View {
+        Picker("Metric", selection: $metric) {
+            ForEach(SportMetric.allCases) { m in
+                Text(m.rawValue).tag(m)
+            }
+        }
+        .pickerStyle(.segmented)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            HStack {
-                Text("SPORT BREAKDOWN")
-                    .font(Theme.FontStyle.sans(10, weight: .semibold))
-                    .tracking(1.4)
-                    .foregroundStyle(Theme.Palette.fg2)
-                Spacer()
-                Picker("Metric", selection: $metric) {
-                    ForEach(SportMetric.allCases) { m in
-                        Text(m.rawValue).tag(m)
-                    }
+            // Picker beside the title when both fit at their natural size,
+            // otherwise on its own row, so segment labels never truncate.
+            ViewThatFits(in: .horizontal) {
+                HStack {
+                    title
+                    Spacer()
+                    metricPicker.fixedSize()
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 180)
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    title
+                    metricPicker
+                }
             }
             if items.isEmpty {
                 emptyState

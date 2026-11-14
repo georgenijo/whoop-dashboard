@@ -16,7 +16,7 @@ struct WorkoutZoneChartView: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             Text("ZONE BREAKDOWN")
                 .font(Theme.FontStyle.sans(10, weight: .semibold))
-                .tracking(1.4)
+                .tracking(0.7)
                 .foregroundStyle(Theme.Palette.fg2)
             if rows.isEmpty {
                 VStack(spacing: 8) {

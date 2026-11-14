@@ -64,7 +64,7 @@ struct MetricChart: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title.uppercased())
                 .font(Theme.FontStyle.sans(11, weight: .semibold))
-                .tracking(1.2)
+                .tracking(0.5)
                 .foregroundStyle(Theme.Palette.fg2)
             HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.sm) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {

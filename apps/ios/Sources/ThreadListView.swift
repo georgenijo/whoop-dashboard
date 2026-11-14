@@ -1,6 +1,11 @@
 import SwiftUI
 
 struct ThreadListView: View {
+    @Binding var selection: CoachSelection?
+    /// The thread shown beside the list on a regular width; nil when the
+    /// list is the whole screen.
+    var highlightedThreadId: Int?
+
     @Environment(\.api) private var api
     @State private var threads: [ChatThread] = []
     @State private var phase: Phase = .loading
@@ -12,25 +17,28 @@ struct ThreadListView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            PageHeader("Coach") {
-                NavigationLink {
-                    ChatView(threadId: nil, initialTitle: nil)
-                } label: {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(Theme.Palette.ai)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
+        content
+            .navigationTitle("Coach")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        selection = .new(id: UUID(), draft: nil)
+                    } label: {
+                        Label("New chat", systemImage: "square.and.pencil")
+                    }
+                    .tint(Theme.Palette.ai)
                 }
-                .padding(.vertical, -10)
-                .accessibilityLabel("New chat")
             }
-            content
-        }
-        .toolbar(.hidden, for: .navigationBar)
-        .task { await load() }
-        .refreshable { await load() }
+            .onReceive(NotificationCenter.default.publisher(for: .chatThreadListChanged)) { _ in
+                Task {
+                    await load()
+                    // Titles are generated after the reply lands; pick them up.
+                    try? await Task.sleep(for: .seconds(6))
+                    await load()
+                }
+            }
+            .task { await load() }
+            .refreshable { await load() }
     }
 
     @ViewBuilder
@@ -85,18 +93,20 @@ struct ThreadListView: View {
                         ForEach(ThreadGroup.group(threads)) { group in
                             Text(group.title.uppercased())
                                 .font(Theme.FontStyle.sans(11, weight: .semibold))
-                                .tracking(1.2)
+                                .tracking(0.5)
                                 .foregroundStyle(Theme.Palette.fg3)
                                 .padding(.top, group.id == 0 ? 6 : 22)
                                 .padding(.bottom, 2)
                                 .accessibilityAddTraits(.isHeader)
                             ForEach(Array(group.threads.enumerated()), id: \.element.id) { index, thread in
-                                NavigationLink {
-                                    ChatView(threadId: thread.id, initialTitle: thread.title)
+                                let isSelected = thread.id == highlightedThreadId
+                                Button {
+                                    selection = .thread(id: thread.id, title: thread.title)
                                 } label: {
-                                    ThreadRow(thread: thread, showsDivider: index < group.threads.count - 1)
+                                    ThreadRow(thread: thread, showsDivider: index < group.threads.count - 1 && !isSelected)
                                 }
-                                .buttonStyle(ThreadRowStyle())
+                                .buttonStyle(ThreadRowStyle(isSelected: isSelected))
+                                .accessibilityAddTraits(isSelected ? .isSelected : [])
                             }
                         }
                     }
@@ -122,8 +132,8 @@ struct ThreadListView: View {
                 }
                 .padding(.bottom, 10)
                 ForEach(ChatView.suggestedPrompts, id: \.self) { prompt in
-                    NavigationLink {
-                        ChatView(threadId: nil, initialTitle: nil, initialDraft: prompt)
+                    Button {
+                        selection = .new(id: UUID(), draft: prompt)
                     } label: {
                         HStack {
                             Text(prompt)
@@ -192,11 +202,13 @@ struct ThreadGroup: Identifiable {
 }
 
 private struct ThreadRowStyle: ButtonStyle {
+    var isSelected = false
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.white.opacity(configuration.isPressed ? 0.06 : 0))
+                    .fill(Color.white.opacity(isSelected ? 0.09 : configuration.isPressed ? 0.06 : 0))
                     .padding(.horizontal, -10)
             )
             .animation(.snappy(duration: 0.15), value: configuration.isPressed)
@@ -262,6 +274,6 @@ private struct ThreadRow: View {
 }
 
 #Preview {
-    NavigationStack { ThreadListView() }
+    NavigationStack { ThreadListView(selection: .constant(nil)) }
         .preferredColorScheme(.dark)
 }

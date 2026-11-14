@@ -17,11 +17,8 @@ struct PlansView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                PageHeader("Plans")
-                content
-            }
-            .toolbar(.hidden, for: .navigationBar)
+            content
+                .navigationTitle("Plans")
         }
         .task { await load(showSpinner: true) }
         .onChange(of: scenePhase) { _, newPhase in
@@ -44,8 +41,10 @@ struct PlansView: View {
             if result.plans.isEmpty {
                 ScrollView {
                     emptyState
+                        .inLeadingFoldColumn()
                         .padding(.horizontal, Theme.Spacing.md)
                 }
+                .measuresFold()
                 .refreshable { await load(showSpinner: false) }
             } else {
                 PlansContent(plans: result.plans, recovery: result.recovery)
@@ -56,8 +55,10 @@ struct PlansView: View {
                 InlineErrorCard(title: "Couldn't load plans", message: message) {
                     Task { await load(showSpinner: true) }
                 }
+                .inLeadingFoldColumn()
                 .padding(Theme.Spacing.md)
             }
+            .measuresFold()
             .refreshable { await load(showSpinner: false) }
         }
     }
@@ -112,6 +113,7 @@ struct PlansView: View {
 }
 
 struct PlansContent: View {
+    @Environment(\.horizontalSizeClass) private var sizeClass
     let plans: [WorkoutPlan]
     let recovery: PlanRecovery?
 
@@ -130,7 +132,9 @@ struct PlansContent: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            // Inner display: today's session and readiness beside the
+            // saved splits.
+            FoldColumns {
                 if let hero = heroPlan {
                     TodaySessionHero(plan: hero, isActive: heroIsActive, today: recovery?.today)
 
@@ -138,10 +142,10 @@ struct PlansContent: View {
                         WeekReadinessStrip(week: week, todayDate: recovery?.today?.date)
                     }
                 }
-
+            } trailing: {
                 if !savedPlans.isEmpty {
                     CardLabel("Saved splits")
-                        .padding(.top, Theme.Spacing.md)
+                        .padding(.top, sizeClass == .regular ? 0 : Theme.Spacing.md)
                         .padding(.leading, 4)
 
                     VStack(spacing: Theme.Spacing.xs) {
@@ -159,6 +163,7 @@ struct PlansContent: View {
             .padding(.horizontal, Theme.Spacing.md)
             .padding(.bottom, Theme.Spacing.xxl)
         }
+        .measuresFold()
         .scrollIndicators(.hidden)
     }
 }
@@ -366,11 +371,8 @@ struct MetaTag: View {
 
 #Preview("Plans — sample") {
     NavigationStack {
-        VStack(spacing: 0) {
-            PageHeader("Plans")
-            PlansContent(plans: PlansSample.plans, recovery: PlansSample.recovery)
-        }
-        .toolbar(.hidden, for: .navigationBar)
+        PlansContent(plans: PlansSample.plans, recovery: PlansSample.recovery)
+            .navigationTitle("Plans")
     }
     .preferredColorScheme(.dark)
 }

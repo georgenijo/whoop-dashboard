@@ -32,7 +32,8 @@ struct WorkoutsView: View {
             TrendsDetailError(title: "Workouts", message: message) { Task { await load() } }
         case .loaded(let payload):
             ScrollView {
-                VStack(spacing: Theme.Spacing.sm) {
+                // Inner display: the charts beside the full workout list.
+                FoldColumns {
                     if payload.truncated {
                         HStack(spacing: 8) {
                             Image(systemName: "info.circle")
@@ -50,11 +51,13 @@ struct WorkoutsView: View {
                     SportFrequencyChartView(items: payload.sportFrequency)
                     WorkoutZoneChartView(rows: payload.zoneBreakdownRecent)
                     WorkoutDistanceChartView(rows: payload.distanceRecent)
+                } trailing: {
                     WorkoutsTableView(workouts: payload.workouts)
                 }
                 .padding(Theme.Spacing.md)
             }
             .scrollContentBackground(.hidden)
+            .measuresFold()
         }
     }
 

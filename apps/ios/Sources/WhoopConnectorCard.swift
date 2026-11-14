@@ -37,11 +37,17 @@ struct WhoopConnectorCard: View {
                 .background(Theme.Palette.brandStrain.opacity(0.14), in: RoundedRectangle(cornerRadius: Theme.Radius.md))
 
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: Theme.Spacing.xs) {
-                    Text("Whoop")
-                        .font(Theme.FontStyle.sans(15, weight: .medium))
-                        .foregroundStyle(Theme.Palette.fg0)
-                    statusBadge
+                // Status sits beside the name when it fits, under it when
+                // not (narrow displays with a Reconnect button alongside).
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: Theme.Spacing.xs) {
+                        name
+                        statusBadge.fixedSize()
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        name
+                        statusBadge.fixedSize()
+                    }
                 }
                 Text(detailText)
                     .font(Theme.FontStyle.mono(11))
@@ -75,6 +81,12 @@ struct WhoopConnectorCard: View {
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active { Task { await refresh() } }
         }
+    }
+
+    private var name: some View {
+        Text("Whoop")
+            .font(Theme.FontStyle.sans(15, weight: .medium))
+            .foregroundStyle(Theme.Palette.fg0)
     }
 
     @ViewBuilder

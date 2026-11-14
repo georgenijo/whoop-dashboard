@@ -23,28 +23,29 @@ struct TrendsView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                PageHeader("Trends")
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                        recoveryCards
-                        sleepCard
-                        strainCard
-                        stepsCard
-                        workoutsCard
-                    }
-                    .padding(.horizontal, Theme.Spacing.md)
-                    .padding(.top, Theme.Spacing.xs)
-                    .padding(.bottom, Theme.Spacing.xl)
-                    .animation(.snappy(duration: 0.3), value: range)
+            ScrollView {
+                // Inner display: recovery signals on one side of the fold,
+                // sleep and training load on the other.
+                FoldColumns {
+                    recoveryCards
+                } trailing: {
+                    sleepCard
+                    strainCard
+                    stepsCard
+                    workoutsCard
                 }
-                .scrollContentBackground(.hidden)
-                .safeAreaInset(edge: .top, spacing: 0) {
-                    TrendsRangeBar(range: $range)
-                }
-                .refreshable { await loadAll() }
+                .padding(.horizontal, Theme.Spacing.md)
+                .padding(.top, Theme.Spacing.xs)
+                .padding(.bottom, Theme.Spacing.xl)
+                .animation(.snappy(duration: 0.3), value: range)
             }
-            .toolbar(.hidden, for: .navigationBar)
+            .measuresFold()
+            .scrollContentBackground(.hidden)
+            .safeAreaInset(edge: .top, spacing: 0) {
+                TrendsRangeBar(range: $range)
+            }
+            .refreshable { await loadAll() }
+            .navigationTitle("Trends")
             .navigationDestination(for: TrendsRoute.self) { route in
                 destination(route)
             }

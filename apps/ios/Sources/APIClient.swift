@@ -96,13 +96,16 @@ private extension Data {
 }
 
 final class APIClient {
+    static let productionBaseURL = URL(string: "https://coach-api.georgenijo.com")!
+    static var defaultBaseURL: URL { DebugSession.apiBase ?? productionBaseURL }
+
     let baseURL: URL
     private let session: URLSession
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
 
     init(
-        baseURL: URL = URL(string: "https://coach-api.georgenijo.com")!,
+        baseURL: URL = APIClient.defaultBaseURL,
         session: URLSession = .shared
     ) {
         self.baseURL = baseURL

@@ -3,7 +3,7 @@ import Foundation
 final class ClientLogger {
     static let shared = ClientLogger()
 
-    private let endpoint = URL(string: "https://coach-api.georgenijo.com/api/log/client")!
+    private let endpoint = APIClient.defaultBaseURL.appendingPathComponent("api/log/client")
     private let session: URLSession
     private let queue = DispatchQueue(label: "com.georgenijo.coach.clientlogger", qos: .utility)
 

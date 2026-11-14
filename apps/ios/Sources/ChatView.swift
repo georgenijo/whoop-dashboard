@@ -7,6 +7,7 @@ struct ChatView: View {
     @Environment(\.api) private var api
     @Environment(\.chatInFlight) private var chatInFlight
     @Environment(\.scenePhase) private var scenePhase
+    private let conversation: UUID?
     @State private var threadId: Int?
     @State private var rows: [ChatRow] = []
     @State private var input: String = ""
@@ -28,8 +29,11 @@ struct ChatView: View {
     @FocusState private var isComposerFocused: Bool
 
     /// `initialDraft` only pre-fills the composer; nothing is sent until the user taps send.
-    init(threadId: Int?, initialTitle: String?, initialDraft: String? = nil) {
+    /// `conversation` identifies a new chat to its container (CoachView), which
+    /// is told the thread id once the server assigns one.
+    init(threadId: Int?, initialTitle: String?, initialDraft: String? = nil, conversation: UUID? = nil) {
         self.initialTitle = initialTitle
+        self.conversation = conversation
         self._threadId = State(initialValue: threadId)
         self._input = State(initialValue: initialDraft ?? "")
     }
@@ -394,13 +398,14 @@ struct ChatView: View {
                     .font(Theme.FontStyle.sans(14))
                     .foregroundStyle(Theme.Palette.fg2)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, Theme.Spacing.xl)
             }
             Spacer(minLength: 24)
             VStack(alignment: .leading, spacing: 8) {
                 Text("TRY")
                     .font(Theme.FontStyle.sans(11, weight: .semibold))
-                    .tracking(1.2)
+                    .tracking(0.5)
                     .foregroundStyle(Theme.Palette.fg3)
                     .padding(.leading, 4)
                 ForEach(Self.suggestedPrompts, id: \.self) { prompt in
@@ -733,7 +738,14 @@ struct ChatView: View {
             for try await event in stream {
                 switch event {
                 case .threadId(let id):
+                    if threadId == nil, let conversation {
+                        NotificationCenter.default.post(
+                            name: .chatThreadCreated,
+                            object: ChatThreadCreated(conversation: conversation, threadId: id)
+                        )
+                    }
                     threadId = id
+                    NotificationCenter.default.post(name: .chatThreadListChanged, object: id)
                     markInFlight(id)
                     input = ""
                     pendingImages = []
@@ -758,6 +770,7 @@ struct ChatView: View {
 
                 case .done(let reply, _):
                     sawDone = true
+                    NotificationCenter.default.post(name: .chatThreadListChanged, object: threadId)
                     activeTools = []
                     commitAssistant(reply: reply)
                     clearInFlight()

@@ -52,7 +52,7 @@ struct ZonePill: View {
                 .shadow(color: color.opacity(0.8), radius: 3)
             Text((prefix.map { "\($0) · " } ?? "") + zone.label.uppercased())
                 .font(Theme.FontStyle.sans(10.5, weight: .semibold))
-                .tracking(0.6)
+                .tracking(0.5)
                 .foregroundStyle(color)
         }
         .padding(.horizontal, 10)

@@ -7,7 +7,7 @@ struct WorkoutsTableView: View {
         VStack(alignment: .leading, spacing: 0) {
             Text("ALL WORKOUTS")
                 .font(Theme.FontStyle.sans(11, weight: .semibold))
-                .tracking(1.2)
+                .tracking(0.5)
                 .foregroundStyle(Theme.Palette.fg2)
                 .padding(.bottom, 8)
             if workouts.isEmpty {

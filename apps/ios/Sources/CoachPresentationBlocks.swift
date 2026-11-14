@@ -220,7 +220,7 @@ private struct CoachCardLabel: View {
     var body: some View {
         Text(text.uppercased())
             .font(Theme.FontStyle.sans(11, weight: .semibold))
-            .tracking(1.2)
+            .tracking(0.5)
             .foregroundStyle(Theme.Palette.fg2)
             .lineLimit(2)
             .fixedSize(horizontal: false, vertical: true)
@@ -301,31 +301,56 @@ private struct MetricStripView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(metric.label.uppercased())
                 .font(Theme.FontStyle.sans(11, weight: .semibold))
-                .tracking(0.9)
+                .tracking(0.45)
                 .foregroundStyle(Theme.Palette.fg2)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text(metric.displayValue)
-                    .font(Theme.FontStyle.mono(22, weight: .medium))
-                    .foregroundStyle(Theme.Palette.fg0)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                if showsUnit(metric) {
-                    Text(metric.unit)
-                        .font(Theme.FontStyle.mono(12))
-                        .foregroundStyle(Theme.Palette.fg3)
-                        .lineLimit(1)
+            // Narrow tiles (iPhone Duo's outer display, three across) put
+            // the unit under the value rather than truncating it.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    value(metric)
+                    unit(metric)
+                    arrow(metric)
                 }
-                if let arrow = Tone.arrow(metric.direction) {
-                    Image(systemName: arrow)
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Tone.color(metric.tone))
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        value(metric)
+                        arrow(metric)
+                    }
+                    unit(metric)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func value(_ metric: MetricStrip.Metric) -> some View {
+        Text(metric.displayValue)
+            .font(Theme.FontStyle.mono(22, weight: .medium))
+            .foregroundStyle(Theme.Palette.fg0)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+    }
+
+    @ViewBuilder
+    private func unit(_ metric: MetricStrip.Metric) -> some View {
+        if showsUnit(metric) {
+            Text(metric.unit)
+                .font(Theme.FontStyle.mono(12))
+                .foregroundStyle(Theme.Palette.fg3)
+                .lineLimit(1)
+        }
+    }
+
+    @ViewBuilder
+    private func arrow(_ metric: MetricStrip.Metric) -> some View {
+        if let arrow = Tone.arrow(metric.direction) {
+            Image(systemName: arrow)
+                .font(.system(size: 11, weight: .bold))
+                .foregroundStyle(Tone.color(metric.tone))
+        }
     }
 
     /// "11.9" + "strain" reads well; "54%" + "%" would double up. Suppress the

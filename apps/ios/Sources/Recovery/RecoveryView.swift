@@ -38,10 +38,12 @@ struct RecoveryView: View {
         case .loaded(let payload):
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(spacing: Theme.Spacing.sm) {
+                    // Inner display: score and its drivers beside the signal trends.
+                    FoldColumns {
                         RecoveryHeroCard(payload: payload)
                             .id(Focus.score)
                         RecoveryFactorsCardView(factors: payload.factors)
+                    } trailing: {
                         HRVTrendCardView(trend: payload.hrvTrend)
                             .id(Focus.hrv)
                         TrendChartView(
@@ -59,6 +61,7 @@ struct RecoveryView: View {
                     .padding(Theme.Spacing.md)
                 }
                 .scrollContentBackground(.hidden)
+                .measuresFold()
                 .task {
                     guard !didFocus else { return }
                     didFocus = true

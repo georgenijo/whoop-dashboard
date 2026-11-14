@@ -363,7 +363,7 @@ struct CoachChartCard: View {
         HStack(alignment: .top, spacing: Theme.Spacing.sm) {
             Text(block.title.uppercased())
                 .font(Theme.FontStyle.sans(11, weight: .semibold))
-                .tracking(1.2)
+                .tracking(0.5)
                 .foregroundStyle(Theme.Palette.fg2)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -666,7 +666,7 @@ struct CoachChartCard: View {
                 }
             }
             .font(Theme.FontStyle.sans(11, weight: .semibold))
-            .tracking(0.8)
+            .tracking(0.4)
             .foregroundStyle(Theme.Palette.fg3)
             .padding(.bottom, 8)
             ForEach(Array(block.labels.enumerated()), id: \.offset) { index, label in

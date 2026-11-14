@@ -32,11 +32,13 @@ struct SleepView: View {
             TrendsDetailError(title: "Sleep", message: message) { Task { await load() } }
         case .loaded(let payload):
             ScrollView {
-                VStack(spacing: Theme.Spacing.sm) {
+                // Inner display: last night beside need and performance.
+                FoldColumns {
                     SleepHeroCard(payload: payload)
                     if let latest = payload.latestSleep, let stages = latest.stages {
                         SleepStageDonutView(stages: stages, date: latest.date)
                     }
+                } trailing: {
                     if let latest = payload.latestSleep, let need = latest.needBreakdown {
                         SleepNeedBreakdownView(need: need, asleepMs: latest.stages.map { $0.lightMs + $0.deepMs + $0.remMs })
                     }
@@ -50,6 +52,7 @@ struct SleepView: View {
                 .padding(Theme.Spacing.md)
             }
             .scrollContentBackground(.hidden)
+            .measuresFold()
         }
     }
 

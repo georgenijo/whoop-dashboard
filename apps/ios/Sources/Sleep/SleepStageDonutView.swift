@@ -62,14 +62,20 @@ struct SleepStageDonutView: View {
                             Text(e.name)
                                 .font(Theme.FontStyle.sans(15))
                                 .foregroundStyle(Theme.Palette.fg1)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
                             Spacer(minLength: 4)
+                            // Durations and shares never wrap: "2h 09m" split
+                            // over two lines reads as two numbers.
                             Text(TrendsFormat.hoursMinutes(ms: e.ms))
                                 .font(Theme.FontStyle.mono(13, weight: .medium))
                                 .foregroundStyle(Theme.Palette.fg0)
+                                .fixedSize()
                             Text("\(Int((e.ms / inBed * 100).rounded()))%")
                                 .font(Theme.FontStyle.mono(11))
                                 .foregroundStyle(Theme.Palette.fg3)
-                                .frame(width: 32, alignment: .trailing)
+                                .fixedSize()
+                                .frame(minWidth: 36, alignment: .trailing)
                         }
                         .accessibilityElement(children: .combine)
                     }

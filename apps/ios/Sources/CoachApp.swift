@@ -1,11 +1,26 @@
 import SwiftUI
 
 enum DebugSession {
+    /// Reads a DEBUG override from the launch environment
+    /// (`SIMCTL_CHILD_<KEY>=…`) or, failing that, from a `-<KEY> <value>`
+    /// launch argument, which iOS exposes through UserDefaults' argument
+    /// domain. Launch-argument support lets device harnesses that only
+    /// forward arguments drive the same bypass.
+    private static func override(_ key: String) -> String? {
+        #if DEBUG
+        let value = ProcessInfo.processInfo.environment[key]
+            ?? UserDefaults.standard.string(forKey: key)
+        guard let value, !value.isEmpty else { return nil }
+        return value
+        #else
+        return nil
+        #endif
+    }
+
     static var token: String? {
         #if DEBUG
         guard
-            let token = ProcessInfo.processInfo.environment["COACH_DEBUG_TOKEN"],
-            !token.isEmpty
+            let token = override("COACH_DEBUG_TOKEN")
         else {
             return nil
         }
@@ -16,6 +31,25 @@ enum DebugSession {
     }
 
     static var isActive: Bool { token != nil }
+
+    /// Local-test override for the API host: launch with
+    /// SIMCTL_CHILD_COACH_API_BASE=http://localhost:3001 (or the
+    /// `-COACH_API_BASE` launch argument) to point a simulator
+    /// build at a local dev server. DEBUG-only; release builds always use prod.
+    static var apiBase: URL? {
+        #if DEBUG
+        guard
+            let raw = override("COACH_API_BASE"),
+            let url = URL(string: raw),
+            url.scheme != nil
+        else {
+            return nil
+        }
+        return url
+        #else
+        return nil
+        #endif
+    }
 }
 
 @main
