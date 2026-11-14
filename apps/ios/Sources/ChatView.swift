@@ -45,13 +45,28 @@ struct ChatView: View {
     /// `initialDraft` only pre-fills the composer; nothing is sent until the user taps send.
     /// `conversation` identifies a new chat to its container (CoachView), which
     /// is told the thread id once the server assigns one.
+    /// Fixed transcript for previews and rendering tests; skips the network.
+    struct Seed {
+        var messages: [ChatMessage] = []
+        var sending = false
+        var tools: [LiveToolActivity] = []
+    }
+
     init(threadId: Int?, initialTitle: String?, initialDraft: String? = nil, conversation: UUID? = nil,
-         onComposerInteraction: (() -> Void)? = nil) {
+         seed: Seed? = nil, onComposerInteraction: (() -> Void)? = nil) {
         self.initialTitle = initialTitle
         self.conversation = conversation
         self.onComposerInteraction = onComposerInteraction
         self._threadId = State(initialValue: threadId)
         self._input = State(initialValue: initialDraft ?? "")
+        if let seed {
+            var seeded = seed.messages.map { ChatRow.persisted($0) }
+            if seed.sending { seeded.append(.typing) }
+            self._rows = State(initialValue: seeded)
+            self._isSending = State(initialValue: seed.sending)
+            self._activeTools = State(initialValue: seed.tools)
+            self._didLoadInitial = State(initialValue: true)
+        }
     }
 
     /// Each starter names the data Coach reads for it.

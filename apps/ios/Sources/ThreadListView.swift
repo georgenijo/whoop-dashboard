@@ -5,6 +5,8 @@ struct ThreadListView: View {
     /// The thread shown beside the list on a regular width; nil when the
     /// list is the whole screen.
     var highlightedThreadId: Int?
+    /// Fixed threads for previews and rendering tests; skips the network.
+    var previewThreads: [ChatThread]? = nil
 
     @Environment(\.api) private var api
     @Environment(\.chatInFlight) private var inFlight
@@ -68,7 +70,14 @@ struct ThreadListView: View {
             .alert("Couldn’t delete conversation", isPresented: Binding(
                 get: { deleteError != nil }, set: { if !$0 { deleteError = nil } }
             )) { Button("OK") { deleteError = nil } } message: { Text(deleteError ?? "") }
-            .task { await load() }
+            .task {
+                if let previewThreads {
+                    threads = previewThreads
+                    phase = .loaded
+                } else {
+                    await load()
+                }
+            }
             .refreshable { await load() }
     }
 
@@ -295,6 +304,7 @@ struct ThreadListView: View {
 
     @MainActor
     private func load() async {
+        guard previewThreads == nil else { return }
         do {
             threads = try await ChatService(api: api).listThreads()
             phase = .loaded
