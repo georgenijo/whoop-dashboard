@@ -497,12 +497,12 @@ private struct ActionPlanView: View {
                 if index > 0 { LedgerRule() }
                 let layout = dynamicTypeSize.isAccessibilitySize
                     ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
-                    : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 14))
+                    : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 10))
                 layout {
                     Text(section.timeframe)
                         .font(Theme.FontStyle.sans(13, weight: .medium))
                         .foregroundStyle(Theme.Palette.fg2)
-                        .frame(width: dynamicTypeSize.isAccessibilitySize ? nil : 84, alignment: .leading)
+                        .frame(width: dynamicTypeSize.isAccessibilitySize ? nil : 76, alignment: .leading)
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(Array(section.items.enumerated()), id: \.offset) { _, item in
                             Text(MarkdownView.inline(item, emphasis: Theme.Palette.fg0))
