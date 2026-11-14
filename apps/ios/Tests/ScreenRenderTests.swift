@@ -200,6 +200,9 @@ final class ScreenRenderTests: XCTestCase {
         window.rootViewController = host
         window.makeKeyAndVisible()
         host.view.frame = window.bounds
+        host.view.layoutIfNeeded()
+        let insets = window.safeAreaInsets
+        host.additionalSafeAreaInsets = UIEdgeInsets(top: 0, left: -insets.left, bottom: 0, right: -insets.right)
         RunLoop.main.run(until: Date().addingTimeInterval(wait))
         host.view.layoutIfNeeded()
         let renderer = UIGraphicsImageRenderer(bounds: window.bounds, format: { let f = UIGraphicsImageRendererFormat(); f.scale = 3; return f }())

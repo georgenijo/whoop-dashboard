@@ -23,6 +23,7 @@ struct StatsView: View {
             content
                 .navigationTitle("Progress")
                 .navigationBarTitleDisplayMode(.inline)
+                .toolbar(.hidden, for: .navigationBar)
         }
         .task(id: range) { await load() }
         .onChange(of: scenePhase) { _, newPhase in

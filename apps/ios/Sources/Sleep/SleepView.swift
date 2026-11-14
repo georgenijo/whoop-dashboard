@@ -162,7 +162,7 @@ private struct SleepHeroCard: View {
                             .foregroundStyle(Theme.Palette.fg2)
                     }
                 }
-                HStack(spacing: 0) {
+                HStack(alignment: .top, spacing: 0) {
                     fact("In bed", TrendsFormat.hoursMinutes(ms: SleepLogic.inBedMs(stages)))
                     if let efficiency = SleepLogic.efficiencyPercent(stages) {
                         fact("Efficiency", "\(efficiency)%", note: "asleep ÷ in bed")

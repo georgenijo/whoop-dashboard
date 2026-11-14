@@ -87,9 +87,9 @@ struct TrendsView: View {
             link(.recovery(range, .score)) {
                 TrendsHubCard(title: "Recovery", unit: "%", accent: Theme.Palette.recovery,
                               points: p.recoveryTrend, showsZoneBands: true, yDomain: 0 ... 100,
-                              context: [today?.value.map { RecoveryZone(score: $0).label }, today?.delta?.label]) {
+                              context: [today?.value.map { RecoveryZone(score: $0).bandName }, today?.delta?.label]) {
                     if let score = today?.value {
-                        Text(RecoveryZone(score: score).label)
+                        Text(RecoveryZone(score: score).bandName)
                             .font(Theme.FontStyle.mono(11, weight: .semibold))
                             .foregroundStyle(RecoveryZone(score: score).color)
                     }

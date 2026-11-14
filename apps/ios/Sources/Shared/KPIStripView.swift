@@ -53,7 +53,7 @@ struct KPIStripView: View {
         let shared = sharedContext
         VStack(alignment: .leading, spacing: 0) {
             if let title {
-                LedgerHeader(title: title, subtitle: shared.map { "change" + $0 })
+                LedgerHeader(title: title, subtitle: shared.map { "change " + $0 })
                     .overlay(alignment: .bottom) {
                         Rectangle().fill(Theme.Palette.borderSubtle).frame(height: 1)
                     }
