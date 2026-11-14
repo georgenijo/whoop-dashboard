@@ -61,18 +61,20 @@ struct DashboardView: View {
 
     @ViewBuilder
     private var headerCaption: some View {
-        if case .loaded(let payload) = phase, let date = payload.dataDate.flatMap(ChartDate.parse) {
-            let label = date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
-            HStack(spacing: 6) {
+        if case .loaded(let payload) = phase,
+           let line = TodayFormat.freshness(dataDate: payload.dataDate, updatedAt: payload.recoveryHero.updatedAt,
+                                            isFallback: payload.isFallback) {
+            HStack(spacing: 8) {
                 Circle()
                     .fill(payload.isFallback ? Theme.Palette.warning : Theme.Palette.recovery)
-                    .frame(width: 6, height: 6)
-                Text(payload.isFallback ? "No reading for today · latest \(label)" : label)
-                    .font(Theme.FontStyle.mono(11, weight: .medium))
+                    .frame(width: 8, height: 8)
+                Text(line)
+                    .font(Theme.FontStyle.sans(15))
                     .foregroundStyle(payload.isFallback ? Theme.Palette.warning : Theme.Palette.fg2)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(payload.isFallback ? "Showing latest data from \(label)" : "Data for \(label)")
+            .accessibilityLabel(payload.isFallback ? "Showing latest data. \(line)" : line)
         }
     }
 
@@ -150,11 +152,13 @@ struct DashboardView: View {
                     records(payload.prs)
                 }
             } trailing: {
-                Text("Measurements")
-                    .font(Theme.FontStyle.sans(15, weight: .medium))
-                    .foregroundStyle(Theme.Palette.fg0)
-                    .padding(.top, Theme.Spacing.xs)
-                KPIStripView(tiles: vitals(payload.kpi), columns: 2) { tile in
+                KPIStripView(
+                    tiles: vitals(payload.kpi),
+                    columns: 2,
+                    title: "Measurements",
+                    inProgress: TodayFormat.isPartialDay(dataDate: payload.dataDate, isFallback: payload.isFallback)
+                        ? [.strain, .steps] : []
+                ) { tile in
                     detail = tile.href
                 }
                 if sizeClass != .regular {
@@ -179,44 +183,56 @@ struct DashboardView: View {
         return order.compactMap { key in tiles.first { $0.key == key } }
     }
 
-    @ViewBuilder
-    private func records(_ prs: DashboardPayload.PRs) -> some View {
-        if prs.bestHrv != nil || prs.lowestRhr != nil || prs.recoveryStreak != nil || prs.sleepPerfStreak != nil || prs.loggingStreak != nil {
-            DisclosureGroup("Personal records") {
-                VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                    if let row = prs.bestHrv {
-                        recordRow("Highest HRV", value: "\(Int(row.value.rounded())) ms", date: row.date)
-                    }
-                    if let row = prs.lowestRhr {
-                        recordRow("Lowest resting heart rate", value: "\(Int(row.value.rounded())) bpm", date: row.date)
-                    }
-                    if let row = prs.recoveryStreak {
-                        recordRow("Recovery at least 80%", value: "\(row.count) days", date: row.endDate)
-                    }
-                    if let row = prs.sleepPerfStreak {
-                        recordRow("Sleep performance at least 85%", value: "\(row.count) days", date: row.endDate)
-                    }
-                    if let row = prs.loggingStreak {
-                        recordRow("Logging streak", value: "\(row.count) days", date: row.endDate)
-                    }
-                }
-                .padding(.top, Theme.Spacing.sm)
-            }
-            .font(Theme.FontStyle.sans(15, weight: .medium))
-            .foregroundStyle(Theme.Palette.fg1)
-            .glassCard()
-        }
+    private struct Record: Identifiable {
+        let id: String
+        let title: String
+        let value: Int
+        let unit: String
+        let note: String
     }
 
-    private func recordRow(_ title: String, value: String, date: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(Theme.FontStyle.sans(13))
-            Text(value).font(Theme.FontStyle.mono(20, weight: .semibold))
-            Text(ChartDate.parse(date).map { $0.formatted(date: .abbreviated, time: .omitted) } ?? date)
-                .font(Theme.FontStyle.sans(11))
-                .foregroundStyle(Theme.Palette.fg2)
+    static func recordItems(_ prs: DashboardPayload.PRs) -> [(id: String, title: String, value: Int, unit: String, note: String)] {
+        func day(_ raw: String) -> String {
+            ChartDate.parse(raw).map { $0.formatted(.dateTime.month(.abbreviated).day()) } ?? raw
         }
-        .accessibilityElement(children: .combine)
+        var items: [(id: String, title: String, value: Int, unit: String, note: String)] = []
+        if let r = prs.bestHrv { items.append(("hrv", "Highest HRV", Int(r.value.rounded()), "ms", day(r.date))) }
+        if let r = prs.lowestRhr { items.append(("rhr", "Lowest resting HR", Int(r.value.rounded()), "bpm", day(r.date))) }
+        if let r = prs.recoveryStreak { items.append(("rec", "Recovery 80%+ streak", r.count, r.count == 1 ? "day" : "days", "ended " + day(r.endDate))) }
+        if let r = prs.sleepPerfStreak { items.append(("sleep", "Sleep 85%+ streak", r.count, r.count == 1 ? "day" : "days", "ended " + day(r.endDate))) }
+        if let r = prs.loggingStreak { items.append(("log", "Logging streak", r.count, r.count == 1 ? "day" : "days", "through " + day(r.endDate))) }
+        return items
+    }
+
+    @ViewBuilder
+    private func records(_ prs: DashboardPayload.PRs) -> some View {
+        let items = Self.recordItems(prs).map { Record(id: $0.id, title: $0.title, value: $0.value, unit: $0.unit, note: $0.note) }
+        if !items.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                LedgerHeader(title: "Personal records")
+                LedgerRule()
+                LedgerGrid(items: items, columns: 2) { item in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(item.title)
+                            .font(Theme.FontStyle.sans(13))
+                            .foregroundStyle(Theme.Palette.fg2)
+                        HStack(alignment: .firstTextBaseline, spacing: 3) {
+                            Text("\(item.value)")
+                                .font(Theme.FontStyle.mono(22, weight: .medium))
+                                .foregroundStyle(Theme.Palette.fg0)
+                            Text(item.unit)
+                                .font(Theme.FontStyle.mono(11))
+                                .foregroundStyle(Theme.Palette.fg2)
+                        }
+                        Text(item.note)
+                            .font(Theme.FontStyle.sans(13))
+                            .foregroundStyle(Theme.Palette.fg3)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            .glassCard(padding: 0)
+        }
     }
 
     private func errorCard(_ message: String) -> some View {

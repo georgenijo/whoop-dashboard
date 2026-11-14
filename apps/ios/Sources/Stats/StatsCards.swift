@@ -6,10 +6,9 @@ struct CardLabel: View {
     init(_ text: String) { self.text = text }
 
     var body: some View {
-        Text(text.uppercased())
-            .font(Theme.FontStyle.sans(11, weight: .semibold))
-            .tracking(0.5)
-            .foregroundStyle(Theme.Palette.fg2)
+        Text(text)
+            .font(Theme.FontStyle.sans(15, weight: .medium))
+            .foregroundStyle(Theme.Palette.fg0)
             .accessibilityAddTraits(.isHeader)
     }
 }
@@ -19,45 +18,43 @@ struct CardLabel: View {
 struct AllTimeHero: View {
     let allTime: StatsPayload.AllTime
     let historyFloor: String?
+    var embedded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                CardLabel("All time")
-                Spacer()
-                if let since = StatsFormat.monthYear(fromDay: historyFloor) {
-                    Text("since \(since)")
-                        .font(Theme.FontStyle.mono(11))
-                        .foregroundStyle(Theme.Palette.fg3)
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    CardLabel("All time")
+                    if let since = StatsFormat.monthYear(fromDay: historyFloor) {
+                        Text("since \(since)")
+                            .font(Theme.FontStyle.sans(13))
+                            .foregroundStyle(Theme.Palette.fg3)
+                    }
+                    Spacer(minLength: 0)
                 }
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(StatsFormat.grouped(Double(allTime.workouts)))
+                        .font(Theme.FontStyle.mono(56, weight: .medium))
+                        .foregroundStyle(Theme.Palette.fg0)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .contentTransition(.numericText())
+                    Text(allTime.workouts == 1 ? "workout" : "workouts")
+                        .font(Theme.FontStyle.sans(17, weight: .medium))
+                        .foregroundStyle(Theme.Palette.fg2)
+                }
+                .padding(.top, 6)
             }
+            .padding(Theme.Spacing.lg)
 
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(StatsFormat.grouped(Double(allTime.workouts)))
-                    .font(Theme.FontStyle.mono(56, weight: .medium))
-                    .foregroundStyle(Theme.Palette.fg0)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                    .contentTransition(.numericText())
-                Text(allTime.workouts == 1 ? "workout" : "workouts")
-                    .font(Theme.FontStyle.sans(17, weight: .medium))
-                    .foregroundStyle(Theme.Palette.fg2)
-            }
-            .padding(.top, 6)
-
-            Rectangle()
-                .fill(Theme.Palette.borderSubtle)
-                .frame(height: 1)
-                .padding(.top, 14)
-                .padding(.bottom, 16)
-
-            HStack(alignment: .top, spacing: Theme.Spacing.sm) {
+            LedgerRule()
+            HStack(alignment: .top, spacing: 0) {
                 stat(StatsFormat.hours(seconds: allTime.activeSeconds), unit: "h", label: "Active")
                 stat(StatsFormat.miles(meters: allTime.distanceM), unit: "mi", label: "Distance")
                 stat(StatsFormat.calories(kilojoules: allTime.kilojoules), unit: "cal", label: "Energy")
             }
         }
-        .glassCard(tint: .recovery, padding: Theme.Spacing.lg)
+        .cardChrome(embedded: embedded, padding: 0)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("All time")
         .accessibilityValue(
@@ -80,12 +77,15 @@ struct AllTimeHero: View {
             }
             .lineLimit(1)
             .minimumScaleFactor(0.7)
-            Text(label.uppercased())
-                .font(Theme.FontStyle.sans(11, weight: .semibold))
-                .tracking(0.5)
-                .foregroundStyle(Theme.Palette.fg3)
+            Text(label)
+                .font(Theme.FontStyle.sans(13))
+                .foregroundStyle(Theme.Palette.fg2)
         }
+        .padding(Theme.Spacing.md)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .trailing) {
+            if label != "Energy" { Rectangle().fill(Theme.Palette.borderSubtle).frame(width: 1) }
+        }
     }
 }
 
@@ -94,18 +94,12 @@ struct AllTimeHero: View {
 struct YearOverYearCard: View {
     let yoy: StatsPayload.YoY
     let historyFloor: String?
+    var embedded = false
 
     private var summary: String? {
-        let changes = yoy.metrics.compactMap { StatsFormat.change(current: $0.current, prior: $0.prior) }
-        guard !changes.isEmpty else { return nil }
-        let ahead = changes.filter { $0.direction == .up }.count
-        let behind = changes.filter { $0.direction == .down }.count
-        let prior = String(yoy.priorYear)
-        if ahead == changes.count { return "All measures are higher than \(prior) so far." }
-        if behind == changes.count { return "All measures are lower than \(prior) so far." }
-        if ahead == 0 && behind == 0 { return "Level with \(prior) so far." }
-        if ahead == 0 { return "\(behind) of \(changes.count) measures are lower than \(prior)." }
-        return "\(ahead) of \(changes.count) measures are higher than \(prior)."
+        StatsFormat.yoyVerdict(
+            changes: yoy.metrics.compactMap { StatsFormat.change(current: $0.current, prior: $0.prior) },
+            priorYear: yoy.priorYear)
     }
 
     private var priorYearIsPartial: Bool {
@@ -115,17 +109,17 @@ struct YearOverYearCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
                 CardLabel("\(String(yoy.year)) vs \(String(yoy.priorYear))")
-                Spacer()
                 Text(yoy.periodLabel)
-                    .font(Theme.FontStyle.mono(11))
+                    .font(Theme.FontStyle.sans(13))
                     .foregroundStyle(Theme.Palette.fg3)
+                Spacer(minLength: 0)
             }
 
             if let summary {
                 Text(summary)
-                    .font(Theme.FontStyle.sans(15))
+                    .font(Theme.FontStyle.sans(17))
                     .foregroundStyle(Theme.Palette.fg1)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 8)
@@ -145,7 +139,7 @@ struct YearOverYearCard: View {
                     .padding(.top, 16)
             }
         }
-        .glassCard(padding: Theme.Spacing.lg)
+        .cardChrome(embedded: embedded, padding: Theme.Spacing.lg)
     }
 }
 
@@ -168,7 +162,12 @@ private struct YoYRow: View {
                 Text(metric.label)
                     .font(Theme.FontStyle.sans(15, weight: .medium))
                     .foregroundStyle(Theme.Palette.fg1)
-                Spacer()
+                Spacer(minLength: 8)
+                if metric.spark.count >= 2 {
+                    PaceSpark(values: metric.spark)
+                        .frame(width: 96, height: 22)
+                        .accessibilityHidden(true)
+                }
                 if let change { DeltaBadge(change: change) }
             }
             bar(year: year, value: metric.current, isCurrent: true)
@@ -200,8 +199,8 @@ private struct YoYRow: View {
                 .frame(minWidth: 38, alignment: .leading)
             GeometryReader { geo in
                 let fraction = (value ?? 0) / scale
-                Capsule()
-                    .fill(isCurrent ? AnyShapeStyle(Theme.Palette.recovery) : AnyShapeStyle(Theme.Palette.fg4))
+                Rectangle()
+                    .fill(isCurrent ? AnyShapeStyle(Theme.Palette.recovery) : AnyShapeStyle(Theme.Palette.fg4.opacity(0.55)))
                     .frame(width: value == nil ? 0 : max(geo.size.width * fraction, 4))
                     .frame(maxHeight: .infinity)
             }
@@ -222,8 +221,8 @@ private struct DeltaBadge: View {
 
     private var color: Color {
         switch change.direction {
-        case .up: return Theme.Palette.success
-        case .down: return Theme.Palette.rhr
+        case .up: return Theme.Palette.fg0
+        case .down: return Theme.Palette.fg0
         case .flat: return Theme.Palette.fg2
         }
     }
@@ -246,7 +245,27 @@ private struct DeltaBadge: View {
         .foregroundStyle(color)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(color.opacity(0.14), in: Capsule())
+        .overlay(Rectangle().strokeBorder(Theme.Palette.borderDefault, lineWidth: 1))
+    }
+}
+
+/// Monthly pace of the current year, from the payload's per-month `spark`.
+private struct PaceSpark: View {
+    let values: [Double]
+
+    var body: some View {
+        GeometryReader { geo in
+            let lo = values.min() ?? 0
+            let hi = max(values.max() ?? 1, lo + 0.0001)
+            Path { path in
+                for (i, v) in values.enumerated() {
+                    let x = geo.size.width * CGFloat(i) / CGFloat(max(values.count - 1, 1))
+                    let y = geo.size.height * (1 - CGFloat((v - lo) / (hi - lo)))
+                    if i == 0 { path.move(to: CGPoint(x: x, y: y)) } else { path.addLine(to: CGPoint(x: x, y: y)) }
+                }
+            }
+            .stroke(Theme.Palette.recovery, style: StrokeStyle(lineWidth: 1.75, lineCap: .round, lineJoin: .round))
+        }
     }
 }
 
@@ -254,6 +273,7 @@ private struct DeltaBadge: View {
 
 struct RecordsCard: View {
     let records: [StatsPayload.Record]
+    var embedded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -261,15 +281,10 @@ struct RecordsCard: View {
                 .padding(.bottom, 6)
             ForEach(Array(records.enumerated()), id: \.element.id) { index, record in
                 RecordRow(record: record)
-                if index < records.count - 1 {
-                    Rectangle()
-                        .fill(Theme.Palette.borderSubtle)
-                        .frame(height: 1)
-                        .padding(.leading, 50)
-                }
+                if index < records.count - 1 { LedgerRule() }
             }
         }
-        .glassCard(padding: Theme.Spacing.lg)
+        .cardChrome(embedded: embedded, padding: Theme.Spacing.lg)
     }
 }
 
@@ -278,13 +293,13 @@ private struct RecordRow: View {
 
     private var style: (icon: String, tint: Color) {
         switch record.key {
-        case "longest_session": return ("stopwatch.fill", Theme.Palette.info)
-        case "most_calories": return ("flame.fill", Theme.Palette.strain)
-        case "highest_strain": return ("bolt.fill", Theme.Palette.brandStrain)
+        case "longest_session": return ("stopwatch", Theme.Palette.info)
+        case "most_calories": return ("flame", Theme.Palette.strain)
+        case "highest_strain": return ("bolt", Theme.Palette.brandStrain)
         case "biggest_week": return ("calendar", Theme.Palette.recovery)
-        case "top_hr": return ("heart.fill", Theme.Palette.rhr)
-        case "most_sessions_month": return ("trophy.fill", Theme.Palette.hrv)
-        default: return ("star.fill", Theme.Palette.fg2)
+        case "top_hr": return ("heart", Theme.Palette.rhr)
+        case "most_sessions_month": return ("trophy", Theme.Palette.hrv)
+        default: return ("star", Theme.Palette.fg2)
         }
     }
 
@@ -292,10 +307,10 @@ private struct RecordRow: View {
         let style = style
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: style.icon)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 15, weight: .regular))
                 .foregroundStyle(style.tint)
-                .frame(width: 36, height: 36)
-                .background(style.tint.opacity(0.14), in: Circle())
+                .frame(width: 28, height: 36)
+                .accessibilityHidden(true)
             // The value is the point of the row: it keeps its full width and the
             // label/metadata truncate first. If even that can't fit (narrow
             // phone, accessibility text), the value drops under the label.
@@ -358,6 +373,8 @@ private struct RecordRow: View {
 struct SportBreakdownCard: View {
     let items: [StatsPayload.SportCount]
     let days: Int
+    var window: StatsFormat.Window? = nil
+    var embedded = false
 
     @State private var expanded = false
 
@@ -379,7 +396,15 @@ struct SportBreakdownCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            CardLabel("By sport")
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                CardLabel("Last \(days) days")
+                if let window, let caption = StatsFormat.windowCaption(window) {
+                    Text(caption)
+                        .font(Theme.FontStyle.sans(13))
+                        .foregroundStyle(Theme.Palette.fg3)
+                }
+                Spacer(minLength: 0)
+            }
 
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("\(total)")
@@ -392,18 +417,13 @@ struct SportBreakdownCard: View {
             }
             .padding(.top, 6)
 
-            Text(context)
-                .font(Theme.FontStyle.sans(15))
-                .foregroundStyle(Theme.Palette.fg1)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 2)
-
             VStack(spacing: 0) {
                 ForEach(visible) { item in
                     row(item)
                 }
             }
             .padding(.top, 12)
+            .overlay(alignment: .top) { LedgerRule().padding(.top, 12) }
 
             if items.count > Self.collapsedCount {
                 Button {
@@ -426,11 +446,11 @@ struct SportBreakdownCard: View {
                 .padding(.bottom, -8)
             }
         }
-        .glassCard(padding: Theme.Spacing.lg)
+        .cardChrome(embedded: embedded, padding: Theme.Spacing.lg)
     }
 
     private func row(_ item: StatsPayload.SportCount) -> some View {
-        let color = Color(hex: item.colorHex)
+        let color = SportPalette.color(for: item.sport)
         let fraction = Double(item.count) / Double(maxCount)
         let share = total > 0 ? Int((Double(item.count) / Double(total) * 100).rounded()) : 0
         return VStack(alignment: .leading, spacing: 7) {
@@ -451,8 +471,8 @@ struct SportBreakdownCard: View {
             }
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(Color.white.opacity(0.05))
-                    Capsule()
+                    Rectangle().fill(Theme.Palette.bg3)
+                    Rectangle()
                         .fill(color)
                         .frame(width: max(geo.size.width * fraction, 6))
                 }
@@ -471,6 +491,7 @@ struct SportBreakdownCard: View {
 struct MonthlyVolumeCard: View {
     let trend: [StatsPayload.TrendMonth]
     let window: StatsFormat.Window
+    var embedded = false
 
     @State private var selectedMonth: String?
 
@@ -488,12 +509,16 @@ struct MonthlyVolumeCard: View {
         return StatsFormat.isCurrentMonth(month.month, window: window) ? " · so far" : " · partial"
     }
 
-    private var hasPartial: Bool { trend.contains(where: isPartial) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             VStack(alignment: .leading, spacing: 6) {
-                CardLabel("Monthly volume")
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    CardLabel("Monthly volume")
+                    Text("workouts per month")
+                        .font(Theme.FontStyle.sans(13))
+                        .foregroundStyle(Theme.Palette.fg3)
+                }
                 if let focus {
                     HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.sm) {
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
@@ -503,7 +528,7 @@ struct MonthlyVolumeCard: View {
                                 .contentTransition(.numericText())
                             Text("workouts")
                                 .font(Theme.FontStyle.mono(13))
-                                .foregroundStyle(Theme.Palette.info)
+                                .foregroundStyle(Theme.Palette.fg2)
                         }
                         Spacer(minLength: 0)
                         VStack(alignment: .trailing, spacing: 2) {
@@ -523,13 +548,13 @@ struct MonthlyVolumeCard: View {
 
             chart
 
-            if hasPartial {
-                Text("Faded bars are partial months.")
-                    .font(Theme.FontStyle.mono(11))
+            if let caption = StatsFormat.partialCaption(trend: trend.map { ($0.month, isPartial($0)) }, window: window) {
+                Text(caption)
+                    .font(Theme.FontStyle.sans(13))
                     .foregroundStyle(Theme.Palette.fg3)
             }
         }
-        .glassCard(padding: Theme.Spacing.lg)
+        .cardChrome(embedded: embedded, padding: Theme.Spacing.lg)
     }
 
     private var chart: some View {
@@ -540,7 +565,12 @@ struct MonthlyVolumeCard: View {
                 width: .ratio(trend.count <= 2 ? 0.4 : 0.6)
             )
             .clipShape(RoundedRectangle(cornerRadius: 4))
-            .foregroundStyle(Theme.Palette.info.opacity(opacity(for: month)))
+            .foregroundStyle(Theme.Palette.strain.opacity(opacity(for: month)))
+            .annotation(position: .top, spacing: 4) {
+                Text("\(month.count)")
+                    .font(Theme.FontStyle.mono(13, weight: .medium))
+                    .foregroundStyle(Theme.Palette.fg1)
+            }
             // Per-bar values so VoiceOver can reach every month's strain, not
             // just the one selected by touch.
             .accessibilityLabel(StatsFormat.monthLong(month.month) + partialSuffix(month))
@@ -551,9 +581,16 @@ struct MonthlyVolumeCard: View {
             AxisMarks { value in
                 AxisValueLabel {
                     if let raw = value.as(String.self) {
-                        Text(StatsFormat.monthShort(raw))
-                            .font(Theme.FontStyle.mono(11))
-                            .foregroundStyle(raw == selectedMonth ? Theme.Palette.fg0 : Theme.Palette.fg3)
+                        VStack(spacing: 2) {
+                            Text(StatsFormat.monthShort(raw))
+                                .font(Theme.FontStyle.mono(11))
+                                .foregroundStyle(raw == selectedMonth ? Theme.Palette.fg0 : Theme.Palette.fg2)
+                            if let strain = trend.first(where: { $0.month == raw })?.avgStrain {
+                                Text("strain \(strain.formatted(.number.precision(.fractionLength(1))))")
+                                    .font(Theme.FontStyle.mono(11))
+                                    .foregroundStyle(Theme.Palette.fg3)
+                            }
+                        }
                     }
                 }
             }
@@ -585,6 +622,6 @@ struct MonthlyVolumeCard: View {
 
     private func opacity(for month: StatsPayload.TrendMonth) -> Double {
         if let selectedMonth { return month.month == selectedMonth ? 1 : 0.3 }
-        return isPartial(month) ? 0.4 : 0.9
+        return isPartial(month) ? 0.28 : 0.9
     }
 }

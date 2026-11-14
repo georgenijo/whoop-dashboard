@@ -3,8 +3,7 @@ import SwiftUI
 struct StatsView: View {
     @Environment(\.api) private var api
     @Environment(\.scenePhase) private var scenePhase
-    // 90 days by default: the monthly chart needs at least three months to say anything.
-    @State private var range: DateRange = .d90
+    @Binding var range: DateRange
     @State private var phase: Phase = .loading
     @State private var loadedRange: DateRange?
     @State private var lastFetched: Date?
@@ -37,7 +36,7 @@ struct StatsView: View {
     private var content: some View {
         switch phase {
         case .loading:
-            StatsContent(payload: .placeholder, range: $range, isRefreshing: false)
+            StatsContent(payload: .placeholder, range: range, isRefreshing: false)
                 .redacted(reason: .placeholder)
                 .allowsHitTesting(false)
                 .accessibilityElement(children: .ignore)
@@ -54,7 +53,7 @@ struct StatsView: View {
                 .measuresFold()
                 .refreshable { await load() }
             } else {
-                StatsContent(payload: payload, range: $range, loadedRange: loadedRange,
+                StatsContent(payload: payload, range: range, loadedRange: loadedRange,
                              isRefreshing: isLoading && loadedRange != range)
                     .refreshable { await load() }
             }
@@ -142,7 +141,7 @@ struct StatsView: View {
 private struct StatsContent: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
     let payload: StatsPayload
-    @Binding var range: DateRange
+    let range: DateRange
     var loadedRange: DateRange?
     let isRefreshing: Bool
 
@@ -155,30 +154,25 @@ private struct StatsContent: View {
             // Inner display: all-time on one side of the fold, the selected
             // window on the other.
             FoldColumns {
-                VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text("Recent activity")
-                            .font(Theme.FontStyle.sans(20, weight: .semibold))
-                            .foregroundStyle(Theme.Palette.fg0)
-                            .accessibilityAddTraits(.isHeader)
-                        Spacer()
-                        if isRefreshing {
-                            ProgressView()
-                                .controlSize(.small)
-                                .tint(Theme.Palette.fg2)
-                        }
+                LedgerGroup {
+                    AllTimeHero(allTime: payload.allTime, historyFloor: payload.historyFloor, embedded: true)
+                    if !payload.yoy.metrics.isEmpty {
+                        LedgerRule()
+                        YearOverYearCard(yoy: payload.yoy, historyFloor: payload.historyFloor, embedded: true)
                     }
-                    RangePicker(selection: $range)
                 }
-                .padding(.top, sizeClass == .regular ? 0 : Theme.Spacing.lg)
-
+            } trailing: {
                 Group {
                     if hasWindowData {
-                        if !payload.bySport.isEmpty {
-                            SportBreakdownCard(items: payload.bySport, days: windowDays)
-                        }
-                        if !payload.trend.isEmpty {
-                            MonthlyVolumeCard(trend: payload.trend, window: payload.window(fallbackDays: windowDays))
+                        LedgerGroup {
+                            if !payload.bySport.isEmpty {
+                                SportBreakdownCard(items: payload.bySport, days: windowDays,
+                                                   window: payload.window(fallbackDays: windowDays), embedded: true)
+                            }
+                            if !payload.bySport.isEmpty, !payload.trend.isEmpty { LedgerRule() }
+                            if !payload.trend.isEmpty {
+                                MonthlyVolumeCard(trend: payload.trend, window: payload.window(fallbackDays: windowDays), embedded: true)
+                            }
                         }
                     } else {
                         QuietWindowCard(days: windowDays)
@@ -186,11 +180,6 @@ private struct StatsContent: View {
                 }
                 .opacity(isRefreshing ? 0.45 : 1)
                 .animation(.snappy, value: isRefreshing)
-            } trailing: {
-                AllTimeHero(allTime: payload.allTime, historyFloor: payload.historyFloor)
-                if !payload.yoy.metrics.isEmpty {
-                    YearOverYearCard(yoy: payload.yoy, historyFloor: payload.historyFloor)
-                }
                 if !payload.records.isEmpty {
                     RecordsCard(records: payload.records)
                 }
@@ -245,8 +234,8 @@ struct InlineErrorCard: View {
                     .font(Theme.FontStyle.sans(15, weight: .semibold))
                     .foregroundStyle(Theme.Palette.fg0)
                     .frame(maxWidth: .infinity, minHeight: 44)
-                    .background(Capsule().fill(Theme.Palette.bg4))
-                    .overlay(Capsule().strokeBorder(Theme.Palette.borderStrong, lineWidth: 0.5))
+                    .background(Rectangle().fill(Theme.Palette.bg3))
+                    .overlay(Rectangle().strokeBorder(Theme.Palette.borderStrong, lineWidth: 1))
             }
             .buttonStyle(.plain)
             .padding(.top, 4)
@@ -257,8 +246,7 @@ struct InlineErrorCard: View {
 }
 
 #Preview("Stats — sample") {
-    @Previewable @State var range: DateRange = .d90
-    StatsContent(payload: .placeholder, range: $range, isRefreshing: false)
+    StatsContent(payload: .placeholder, range: .d90, isRefreshing: false)
         .background(Color.black)
         .preferredColorScheme(.dark)
 }

@@ -6,6 +6,12 @@ import SwiftUI
 struct KPIStripView: View {
     let tiles: [KPITile]
     var columns: Int = 3
+    /// When set, the grid carries its own header row ("Measurements" plus the
+    /// shared comparison) inside the ledger instead of a floating label.
+    var title: String? = nil
+    /// Tiles whose day is still accumulating; they read "so far · N yesterday"
+    /// rather than a delta against a full day.
+    var inProgress: Set<KPITile.Key> = []
     var onTap: ((KPITile) -> Void)? = nil
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -46,6 +52,12 @@ struct KPIStripView: View {
     var body: some View {
         let shared = sharedContext
         VStack(alignment: .leading, spacing: 0) {
+            if let title {
+                LedgerHeader(title: title, subtitle: shared.map { "change" + $0 })
+                    .overlay(alignment: .bottom) {
+                        Rectangle().fill(Theme.Palette.borderSubtle).frame(height: 1)
+                    }
+            }
             ForEach(Array(rows.enumerated()), id: \.offset) { index, row in
                 HStack(spacing: 0) {
                     ForEach(row) { tile in
@@ -66,7 +78,7 @@ struct KPIStripView: View {
                     }
                 }
             }
-            if let shared {
+            if let shared, title == nil {
                 Text("Change \(shared)")
                     .font(Theme.FontStyle.mono(11))
                     .foregroundStyle(Theme.Palette.fg3)
@@ -85,12 +97,12 @@ struct KPIStripView: View {
     private func cell(_ tile: KPITile, showContext: Bool) -> some View {
         if let onTap, tile.href != nil {
             Button { onTap(tile) } label: {
-                KPICell(tile: tile, tappable: true, showContext: showContext)
+                KPICell(tile: tile, tappable: true, showContext: showContext, partial: inProgress.contains(tile.key))
             }
             .buttonStyle(KPIPressStyle())
             .accessibilityHint("Opens \(tile.label) details")
         } else {
-            KPICell(tile: tile, tappable: false, showContext: showContext)
+            KPICell(tile: tile, tappable: false, showContext: showContext, partial: inProgress.contains(tile.key))
         }
     }
 }
@@ -135,6 +147,7 @@ private struct KPICell: View {
     let tile: KPITile
     let tappable: Bool
     let showContext: Bool
+    var partial = false
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -142,7 +155,11 @@ private struct KPICell: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
+                Rectangle()
+                    .fill(tile.key.accent)
+                    .frame(width: 8, height: 8)
+                    .accessibilityHidden(true)
                 Text(tile.label)
                     .font(Theme.FontStyle.sans(13, weight: .medium))
                     .foregroundStyle(Theme.Palette.fg2)
@@ -182,7 +199,14 @@ private struct KPICell: View {
 
     @ViewBuilder
     private var deltaRow: some View {
-        if let delta = tile.delta {
+        if partial {
+            Text(TodayFormat.soFar(value: tile.value, deltaLabel: tile.delta?.label, precision: tile.precision))
+                .font(Theme.FontStyle.mono(11, weight: .medium))
+                .foregroundStyle(Theme.Palette.fg3)
+                .lineLimit(wraps ? nil : 1)
+                .minimumScaleFactor(wraps ? 1 : 0.8)
+                .fixedSize(horizontal: false, vertical: wraps)
+        } else if let delta = tile.delta {
             let text = KPIDeltaText(delta)
             let context = showContext && !text.context.isEmpty ? " " + text.shortContext : ""
             (Text(text.amount).foregroundStyle(deltaColor(delta.dir))
@@ -213,7 +237,9 @@ private struct KPICell: View {
     private var accessibilityValue: String {
         guard tile.value != nil else { return "No data" }
         var parts = ["\(formattedValue) \(tile.unit)"]
-        if let delta = tile.delta {
+        if partial {
+            parts.append(TodayFormat.soFar(value: tile.value, deltaLabel: tile.delta?.label, precision: tile.precision))
+        } else if let delta = tile.delta {
             parts.append(delta.label.replacingOccurrences(of: "↑", with: "up")
                 .replacingOccurrences(of: "↓", with: "down"))
         }

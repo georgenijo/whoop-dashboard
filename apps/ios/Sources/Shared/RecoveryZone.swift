@@ -29,6 +29,22 @@ enum RecoveryZone {
         }
     }
 
+    var bandName: String {
+        switch self {
+        case .compromised: return "Low"
+        case .adequate: return "Moderate"
+        case .primed: return "High"
+        }
+    }
+
+    var bandRange: String {
+        switch self {
+        case .compromised: return "0–33"
+        case .adequate: return "34–66"
+        case .primed: return "67–100"
+        }
+    }
+
     var guidance: String {
         switch self {
         case .compromised: return "Recovery's low. Keep today easy — rest or active recovery."

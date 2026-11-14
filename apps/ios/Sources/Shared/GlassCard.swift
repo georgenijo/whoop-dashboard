@@ -39,7 +39,7 @@ struct GlassCardModifier: ViewModifier {
             .background(background)
             .overlay(
                 RoundedRectangle(cornerRadius: radius)
-                    .strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1)
+                    .strokeBorder(Theme.Palette.borderDefault, lineWidth: 1)
             )
             .clipShape(RoundedRectangle(cornerRadius: radius))
     }
