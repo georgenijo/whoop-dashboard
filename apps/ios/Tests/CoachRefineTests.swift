@@ -262,4 +262,27 @@ final class CoachRefineTests: XCTestCase {
         XCTAssertTrue(cancelled)
         XCTAssertTrue(control.stopped)
     }
+
+    func testStoppedTurnResolvesFromAnySuccessfulProbe() {
+        let before = [message(10, .user), message(11, .assistant)]
+        let userOnly = before + [message(12, .user)]
+        XCTAssertEqual(ChatRecovery.resolution(before, afterMessageId: 11, stopped: true), .absent,
+                       "nothing saved resolves as absent so the draft can be restored")
+        XCTAssertEqual(ChatRecovery.resolution(userOnly, afterMessageId: 11, stopped: true), .persisted,
+                       "a user-only saved turn is shown, not waited on")
+        XCTAssertEqual(ChatRecovery.resolution(userOnly + [message(13, .assistant)], afterMessageId: 11, stopped: true), .persisted)
+        XCTAssertEqual(ChatRecovery.resolution(userOnly, afterMessageId: 11, stopped: false), .pending,
+                       "a normal turn still needs a finished reply")
+        XCTAssertEqual(ChatRecovery.resolution(userOnly + [message(13, .assistant)], afterMessageId: 11, stopped: false), .persisted)
+    }
+
+    @MainActor
+    func testUnknownStopRegistersTheThreadWithItsBaseline() {
+        let store = ChatInFlightStore()
+        store.markStopped(threadId: 5, baselineMessageId: 11, pendingText: "Skip leg day?")
+        XCTAssertEqual(store.inFlight[5]?.baselineMessageId, 11)
+        XCTAssertEqual(store.inFlight[5]?.pendingText, "Skip leg day?")
+        XCTAssertEqual(store.inFlight[5]?.stopped, true)
+        XCTAssertEqual(ThreadListLogic.rowState(for: 5, inFlight: store.inFlight), .replying(question: "Skip leg day?"))
+    }
 }

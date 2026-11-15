@@ -170,10 +170,13 @@ struct CoachApp: App {
         for (id, turn) in turns {
             do {
                 let detail = try await ChatService(api: api).threadDetail(id: id)
-                if ChatRecovery.hasNewAssistantReply(
+                // A stopped turn found absent is left for the mounted thread to
+                // resolve, since only it can restore the draft.
+                if ChatRecovery.resolution(
                     detail.messages,
-                    afterMessageId: turn.baselineMessageId
-                ) {
+                    afterMessageId: turn.baselineMessageId,
+                    stopped: turn.stopped
+                ) == .persisted {
                     store.inFlight.removeValue(forKey: id)
                     NotificationCenter.default.post(name: .chatThreadNeedsRefresh, object: id)
                 }

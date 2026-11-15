@@ -218,7 +218,7 @@ struct ChatView: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Theme.Palette.accent)
             }
-            Text(status == .checking ? "Checking for reply…" : "Reply is still running…")
+            Text(status == .checking ? "Checking for reply…" : (stoppedTurnPending ? "Couldn’t confirm your stopped message…" : "Reply is still running…"))
                 .font(Theme.FontStyle.sans(11.5))
                 .foregroundStyle(Theme.Palette.fg2)
             Spacer()
@@ -702,6 +702,11 @@ struct ChatView: View {
         }.first
     }
 
+    private var stoppedTurnPending: Bool {
+        guard let threadId else { return false }
+        return chatInFlight.inFlight[threadId]?.stopped == true
+    }
+
     private var recoveryBaselineMessageId: Int? {
         guard
             let threadId,
@@ -1022,6 +1027,11 @@ struct ChatView: View {
                 return false
             }
             streamingAssistant = nil
+            chatInFlight.markStopped(
+                threadId: threadId,
+                baselineMessageId: baselineMessageId,
+                pendingText: draft.text
+            )
             recoveryStatus = .waiting
             sendError = "Stopped. Couldn’t confirm whether Coach saved your question. Use Check now before sending again."
         }
@@ -1041,6 +1051,7 @@ struct ChatView: View {
     private func reconcileDroppedTurn(baselineMessageId: Int?) async {
         guard let threadId else { return }
         recoveryStatus = .checking
+        let stopped = chatInFlight.inFlight[threadId]?.stopped ?? false
 
         var previousOffset = 0
         for probeOffset in [0, 1, 2, 5] {
@@ -1062,18 +1073,42 @@ struct ChatView: View {
 
             do {
                 let detail = try await ChatService(api: api).threadDetail(id: threadId)
-                if ChatRecovery.hasNewAssistantReply(
+                switch ChatRecovery.resolution(
                     detail.messages,
-                    afterMessageId: baselineMessageId
+                    afterMessageId: baselineMessageId,
+                    stopped: stopped
                 ) {
+                case .persisted:
                     if let optimisticDraft {
                         clearDraft(ifMatching: optimisticDraft)
                     }
                     rows = detail.messages.map { .persisted($0) }
+                    if stopped {
+                        currentTitle = detail.thread.title
+                        NotificationCenter.default.post(name: .chatThreadListChanged, object: threadId)
+                    }
                     chatInFlight.inFlight.removeValue(forKey: threadId)
                     recoveryStatus = nil
                     loadError = nil
+                    sendError = nil
                     return
+                case .absent:
+                    let pendingText = chatInFlight.inFlight[threadId]?.pendingText
+                    let draft = optimisticDraft ?? ChatDraft(text: pendingText ?? "", images: [])
+                    rows = detail.messages.map { .persisted($0) }
+                    let restored = ChatComposerRules.restoring(
+                        draft,
+                        over: ChatDraft(text: input, images: pendingImages)
+                    )
+                    input = restored.text
+                    pendingImages = restored.images
+                    chatInFlight.inFlight.removeValue(forKey: threadId)
+                    recoveryStatus = nil
+                    loadError = nil
+                    sendError = "Stopped before Coach replied. Your message is back in the box."
+                    return
+                case .pending:
+                    break
                 }
             } catch {
                 // Network may still be reconnecting. Continue the bounded probes

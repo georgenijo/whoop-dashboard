@@ -257,6 +257,29 @@ struct SSEError: Decodable {
 }
 
 enum ChatRecovery {
+    enum TurnResolution: Equatable {
+        /// The server saved the turn (or, for a normal turn, its reply).
+        case persisted
+        /// A stopped turn was confirmed never saved.
+        case absent
+        /// A normal turn is still running.
+        case pending
+    }
+
+    /// Resolves one successful history fetch. A stopped turn never produces a
+    /// reply, so any saved message resolves it as persisted and an unchanged
+    /// history proves it absent; a normal turn needs a finished reply.
+    static func resolution(
+        _ messages: [ChatMessage],
+        afterMessageId baselineMessageId: Int?,
+        stopped: Bool
+    ) -> TurnResolution {
+        if stopped {
+            return hasPersistedTurn(messages, afterMessageId: baselineMessageId) ? .persisted : .absent
+        }
+        return hasNewAssistantReply(messages, afterMessageId: baselineMessageId) ? .persisted : .pending
+    }
+
     enum StopOutcome: Equatable {
         /// History holds a message newer than the turn's baseline.
         case persisted
@@ -314,6 +337,10 @@ struct ChatInFlightTurn {
     /// The question awaiting its reply, shown as the preview of the thread's
     /// row in the conversation list while the reply is in flight.
     var pendingText: String? = nil
+    /// The user stopped this turn and persistence has not been confirmed yet.
+    /// Recovery then resolves by what the server saved (question, partial
+    /// answer, or nothing) rather than waiting for a finished reply.
+    var stopped = false
 }
 
 /// Lets the view cancel the in-flight request without cancelling the task
@@ -345,6 +372,16 @@ final class ChatInFlightStore {
     var inFlight: [Int: ChatInFlightTurn] = [:]
 
     nonisolated init() {}
+
+    /// Registers an unresolved stopped turn, including when the thread id
+    /// header never arrived and the turn was never marked in flight.
+    func markStopped(threadId: Int, baselineMessageId: Int?, pendingText: String?) {
+        inFlight[threadId] = ChatInFlightTurn(
+            baselineMessageId: baselineMessageId,
+            pendingText: pendingText,
+            stopped: true
+        )
+    }
 }
 
 extension Notification.Name {
