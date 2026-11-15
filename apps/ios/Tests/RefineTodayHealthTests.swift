@@ -32,13 +32,25 @@ final class RefineTodayHealthTests: XCTestCase {
         XCTAssertNil(TodayFormat.signedAmount(of: "no arrow"))
     }
 
-    func testPartialDayOnlyWhenPayloadIsToday() {
+    func testSoFarRequiresARealYesterdayComparison() {
+        // "vs 6 days ago" must not be relabeled as yesterday.
+        XCTAssertNil(TodayFormat.soFar(value: 1000, deltaLabel: "↓ 4000 vs 6 days ago", precision: 0))
+        XCTAssertNil(TodayFormat.soFar(value: 1000, deltaLabel: "↓ 4000", precision: 0))
+        XCTAssertEqual(TodayFormat.soFar(value: 1000, deltaLabel: "↓ 4000 vs yesterday", precision: 0),
+                       "so far · 5,000 yesterday")
+    }
+
+    func testEachMetricIsPartialOnlyWhenItsOwnReadingIsToday() {
         let now = Date()
         let today = ChartDate.key(now)
-        XCTAssertTrue(TodayFormat.isPartialDay(dataDate: today, isFallback: false, now: now))
-        XCTAssertFalse(TodayFormat.isPartialDay(dataDate: today, isFallback: true, now: now))
-        XCTAssertFalse(TodayFormat.isPartialDay(dataDate: "2020-01-01", isFallback: false, now: now))
-        XCTAssertFalse(TodayFormat.isPartialDay(dataDate: nil, isFallback: false, now: now))
+        let yesterday = ChartDate.key(now.addingTimeInterval(-86_400))
+        // Today's recovery with yesterday's steps: steps is a completed day.
+        let keys = TodayFormat.partialKeys(metricDates: [.steps: yesterday, .strain: today], isFallback: false, now: now)
+        XCTAssertEqual(keys, [.strain])
+        XCTAssertEqual(TodayFormat.partialKeys(metricDates: [.steps: today, .strain: today], isFallback: true, now: now), [])
+        XCTAssertEqual(TodayFormat.partialKeys(metricDates: [:], isFallback: false, now: now), [])
+        // Only accumulating metrics qualify.
+        XCTAssertEqual(TodayFormat.partialKeys(metricDates: [.hrv: today], isFallback: false, now: now), [])
     }
 
     func testFreshnessLineIsOneLine() throws {
@@ -115,6 +127,31 @@ final class RefineTodayHealthTests: XCTestCase {
         XCTAssertEqual(MetricChart.completeValues(points, partialDate: nil), [10, 14, 1])
     }
 
+    func testPreviousDayValueNeedsTheRealPreviousDay() {
+        let points = [TrendPoint(date: "2026-11-12", raw: 9, ma7: nil, ma30: nil),
+                      TrendPoint(date: "2026-11-14", raw: 2, ma7: nil, ma30: nil)]
+        // Nov 13 is missing, so Nov 12 must not be called "yesterday".
+        XCTAssertNil(MetricChart.previousDayValue(points: points, of: "2026-11-14"))
+        let full = points + [TrendPoint(date: "2026-11-13", raw: 7, ma7: nil, ma30: nil)]
+        XCTAssertEqual(MetricChart.previousDayValue(points: full, of: "2026-11-14"), 7)
+    }
+
+    func testRecentAverageExcludesThePartialDay() {
+        var points = (1...7).map { TrendPoint(date: String(format: "2026-11-%02d", $0), raw: 10_000, ma7: nil, ma30: nil) }
+        points.append(TrendPoint(date: "2026-11-08", raw: 1_000, ma7: nil, ma30: nil))
+        XCTAssertEqual(TrendsStats.recentAverage(points, excluding: "2026-11-08"), 10_000)
+        XCTAssertEqual(try XCTUnwrap(TrendsStats.recentAverage(points)), 8_714.2857, accuracy: 0.01)
+    }
+
+    func testVoiceOverSummaryAnnouncesPartialLatestAndSkipsItInTheAverage() {
+        let show: (Double) -> String = { String(Int($0.rounded())) }
+        let summary = TrendsA11y.summary(values: Array(repeating: 10_000, count: 7), unit: "", show: show,
+                                         context: [], partialLatest: 1_000)
+        XCTAssertEqual(summary, "Latest 1000 so far today, a partial day, average of completed days 10000")
+        XCTAssertEqual(TrendsA11y.summary(values: [40, 50], unit: "ms", show: show, context: []),
+                       "Latest 50 ms, average 45")
+    }
+
     func testRangeCaptionCountsTheWindowInclusively() {
         let now = ISO8601DateFormatter().date(from: "2026-11-14T12:00:00Z")!
         let caption = TrendsFormat.rangeCaption(days: 30, now: now, calendar: utc)
@@ -174,14 +211,52 @@ final class RefineTodayHealthTests: XCTestCase {
             hrvTrend: .init(points: hrv, anomalies: []),
             rhrTrend: [],
             spo2Trend: nil)
-        let factors = RecoveryLogic.factors(payload)
-        XCTAssertEqual(factors.map(\.label), ["HRV", "Sleep"])
+        let factors = RecoveryLogic.factors(payload, baseline: payload)
+        XCTAssertEqual(factors.map(\.label), ["HRV", "Time in bed"])
         XCTAssertEqual(factors[0].delta, "↓ 5 ms")
         XCTAssertEqual(factors[0].average, "46")
         XCTAssertEqual(factors[0].unit, "ms")
         XCTAssertEqual(factors[1].value, "5h 18m")
         XCTAssertEqual(factors[1].unit, "")
         XCTAssertNil(factors[1].average)
+    }
+
+    private func recoveryPayload(days: Int, hrv: Double) -> RecoveryPayload {
+        let points = (0..<days).map { i -> TrendPoint in
+            TrendPoint(date: ChartDate.key(Date().addingTimeInterval(Double(-i) * 86_400)), raw: hrv, ma7: nil, ma30: nil)
+        }
+        return RecoveryPayload(
+            rangeLabel: "", kpi: [
+                KPITile(key: .hrv, label: "HRV", value: 41, unit: "ms", precision: 0, delta: nil, href: nil, colorHex: "#000"),
+                KPITile(key: .sleep, label: "Sleep", value: 5.3, unit: "h", precision: 1, delta: nil, href: nil, colorHex: "#000")
+            ],
+            recoveryTrend: points, hrvTrend: .init(points: points, anomalies: []), rhrTrend: [], spo2Trend: nil)
+    }
+
+    func testBaselineNeverFollowsTheRangePicker() {
+        let seven = recoveryPayload(days: 7, hrv: 40)
+        let thirty = recoveryPayload(days: 30, hrv: 70)
+        // A 7-day range uses only the fetched 30-day history, never itself.
+        XCTAssertNil(RecoveryLogic.baselinePayload(rangeDays: 7, current: seven, fetched: nil))
+        XCTAssertEqual(RecoveryLogic.baselinePayload(rangeDays: 7, current: seven, fetched: thirty)?.hrvTrend.points.count, 30)
+        XCTAssertEqual(RecoveryLogic.baselinePayload(rangeDays: 90, current: thirty, fetched: nil)?.hrvTrend.points.count, 30)
+        // Without a baseline there is no "avg", rather than a 7-day one labeled 30.
+        XCTAssertNil(RecoveryLogic.factors(seven, baseline: nil)[0].average)
+        XCTAssertEqual(RecoveryLogic.factors(seven, baseline: thirty)[0].average, "70")
+    }
+
+    func testSleepBaselineTrendFollowsTheSameRule() {
+        let short = [TrendPoint(date: "2026-11-14", raw: 50, ma7: nil, ma30: nil)]
+        let long = [TrendPoint(date: "2026-11-13", raw: 80, ma7: nil, ma30: nil)]
+        XCTAssertNil(SleepLogic.baselineTrend(rangeDays: 14, current: short, fetched: nil))
+        XCTAssertEqual(SleepLogic.baselineTrend(rangeDays: 14, current: short, fetched: long)?.first?.raw, 80)
+        XCTAssertEqual(SleepLogic.baselineTrend(rangeDays: 30, current: long, fetched: nil)?.first?.raw, 80)
+    }
+
+    func testRecoveryCaptionSaysInBed() {
+        let caption = RecoveryLogic.caption(recoveryPayload(days: 10, hrv: 46))
+        XCTAssertTrue(caption?.hasSuffix("after 5h 18m in bed") == true)
+        XCTAssertFalse(caption?.contains("asleep") == true)
     }
 
     func testSleepStagePercentsIncludeAwakeAndAddUp() {

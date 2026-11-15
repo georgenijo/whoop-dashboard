@@ -84,6 +84,18 @@ struct MetricChart: View {
         self.hasAnyRaw = series.contains { $0.raw != nil }
     }
 
+    /// The value recorded on the calendar day before `dateKey`, or nil when
+    /// that day has no reading. A gap must not be papered over with an older
+    /// day and called "yesterday".
+    static func previousDayValue(points: [TrendPoint], of dateKey: String) -> Double? {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        guard let date = ChartDate.parse(dateKey),
+              let previous = calendar.date(byAdding: .day, value: -1, to: date) else { return nil }
+        let key = ChartDate.key(previous)
+        return points.first { $0.date == key }?.raw
+    }
+
     /// Raw values of finished days: the day still accumulating is left out of
     /// the average, the y-domain floor and the 7-day trend.
     static func completeValues(_ points: [TrendPoint], partialDate: String?) -> [Double] {
@@ -168,7 +180,7 @@ struct MetricChart: View {
         guard let day else { return "" }
         let label = day.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
         if selectedDate != nil { return label }
-        if day.partial, let yesterday = days.last(where: { !$0.partial && $0.raw != nil }), let raw = yesterday.raw {
+        if day.partial, let raw = Self.previousDayValue(points: points, of: day.key) {
             return "Yesterday \(display(raw))"
         }
         return day.key == ChartDate.key(Date()) ? label : "Latest · \(label)"

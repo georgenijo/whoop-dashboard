@@ -26,12 +26,6 @@ enum TodayFormat {
         return "Synced " + date.formatted(.dateTime.month(.abbreviated).day())
     }
 
-    /// Whether the payload's day is still accumulating (strain, steps).
-    static func isPartialDay(dataDate: String?, isFallback: Bool, now: Date = Date()) -> Bool {
-        guard !isFallback, let dataDate else { return false }
-        return dataDate == ChartDate.key(now)
-    }
-
     /// Signed change encoded in a delta label such as "↓ 8211 vs yesterday".
     /// The arrow glyph is the truth here, not the improvement signal in `dir`.
     static func signedAmount(of label: String) -> Double? {
@@ -43,11 +37,29 @@ enum TodayFormat {
         return first == "↑" ? magnitude : -magnitude
     }
 
-    /// "so far · 14.6 yesterday" for a metric that is still accumulating.
-    /// Yesterday's value is derived from today's value and the delta, so a
-    /// partial day never reads as a large drop.
-    static func soFar(value: Double?, deltaLabel: String?, precision: Int) -> String {
-        guard let value, let deltaLabel, let change = signedAmount(of: deltaLabel) else { return "so far" }
+    /// Metrics that are still accumulating: the ones whose own latest reading
+    /// is dated today. Each metric is judged by its own date; the dashboard's
+    /// recovery date says nothing about steps or strain.
+    static func partialKeys(metricDates: [KPITile.Key: String], isFallback: Bool, now: Date = Date()) -> Set<KPITile.Key> {
+        guard !isFallback else { return [] }
+        let today = ChartDate.key(now)
+        return Set(metricDates.filter { $0.key.accumulatesDuringDay && $0.value == today }.map(\.key))
+    }
+
+    /// Text for a metric that is still accumulating.
+    ///
+    /// - "so far · 14.6 yesterday" when the delta is an actual comparison with
+    ///   the previous calendar day; yesterday's value is derived from today's
+    ///   value and the change.
+    /// - "so far" when there is no comparison to show.
+    /// - nil when the delta compares against some other day (e.g. "vs 6 days
+    ///   ago"); the caller then keeps the real delta and its context rather
+    ///   than mislabeling it as yesterday.
+    static func soFar(value: Double?, deltaLabel: String?, precision: Int) -> String? {
+        guard let value, let deltaLabel else { return "so far" }
+        guard let change = signedAmount(of: deltaLabel) else { return "so far" }
+        let context = KPIDeltaText(.init(label: deltaLabel, dir: .flat)).context
+        guard context == "vs yesterday" else { return nil }
         let yesterday = max(0, value - change)
         let text = yesterday.formatted(.number.precision(.fractionLength(precision)).locale(Locale(identifier: "en_US")))
         return "so far · \(text) yesterday"

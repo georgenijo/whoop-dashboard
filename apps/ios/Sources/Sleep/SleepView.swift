@@ -7,6 +7,9 @@ struct SleepView: View {
     /// Bumped by every load (range change, pull-to-refresh, Retry); only the
     /// newest request may commit, so an older refresh can't overwrite a new range.
     @State private var loadGeneration = 0
+    /// Fixed 30-day payload for the performance baseline, fetched only when the
+    /// range picker is narrower than 30 days.
+    @State private var baseline: SleepPayload?
 
     init(initialRange: DateRange = .d30) {
         _range = State(initialValue: initialRange)
@@ -31,6 +34,7 @@ struct SleepView: View {
             }
             .toolbarBackground(.hidden, for: .navigationBar)
             .task(id: range) { await load() }
+            .task(id: range) { await loadBaseline() }
             .refreshable { await load() }
     }
 
@@ -56,7 +60,9 @@ struct SleepView: View {
                             LedgerRule()
                             SleepStageBarView(stages: stages, embedded: true)
                         }
-                        SleepPerformanceCard(payload: payload)
+                        SleepPerformanceCard(
+                            payload: payload,
+                            baselineTrend: SleepLogic.baselineTrend(rangeDays: range.days, current: payload.performanceTrend, fetched: baseline?.performanceTrend))
                     }
                 } trailing: {
                     LedgerGroup {
@@ -97,6 +103,15 @@ struct SleepView: View {
     }
 
     @MainActor
+    private func loadBaseline() async {
+        baseline = nil
+        guard range.days < SleepLogic.baselineDays else { return }
+        let fetched = try? await SleepService(api: api).load(range: .d30)
+        guard !Task.isCancelled else { return }
+        baseline = fetched
+    }
+
+    @MainActor
     private func load() async {
         loadGeneration += 1
         let generation = loadGeneration
@@ -114,6 +129,14 @@ struct SleepView: View {
 }
 
 enum SleepLogic {
+    static let baselineDays = 30
+
+    /// Performance history a 30-day average may use: the current series when
+    /// the range spans 30 days, otherwise the separately fetched one.
+    static func baselineTrend(rangeDays: Int, current: [TrendPoint], fetched: [TrendPoint]?) -> [TrendPoint]? {
+        rangeDays >= baselineDays ? current : fetched
+    }
+
     static func asleepMs(_ stages: SleepPayload.LatestSleep.Stages) -> Double {
         stages.lightMs + stages.deepMs + stages.remMs
     }
@@ -202,6 +225,7 @@ private struct SleepHeroCard: View {
 /// "need met" or efficiency.
 private struct SleepPerformanceCard: View {
     let payload: SleepPayload
+    let baselineTrend: [TrendPoint]?
 
     private var latest: Double? { payload.performanceTrend.last(where: { $0.raw != nil })?.raw }
 
@@ -227,7 +251,7 @@ private struct SleepPerformanceCard: View {
                                 .font(Theme.FontStyle.mono(15))
                                 .foregroundStyle(Theme.Palette.fg2)
                         }
-                        if let average = RecoveryHeroView.thirtyDayAverage(payload.performanceTrend) {
+                        if let average = baselineTrend.flatMap({ RecoveryHeroView.thirtyDayAverage($0) }) {
                             Text("30-day average \(Int(average.rounded()))%")
                                 .font(Theme.FontStyle.sans(15))
                                 .foregroundStyle(Theme.Palette.fg2)

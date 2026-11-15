@@ -153,6 +153,12 @@ private struct KPICell: View {
 
     private var wraps: Bool { dynamicTypeSize.isAccessibilitySize }
 
+    /// Non-nil only for an accumulating metric whose comparison is with
+    /// yesterday (or absent); otherwise the real delta and its context show.
+    private var soFarText: String? {
+        partial ? TodayFormat.soFar(value: tile.value, deltaLabel: tile.delta?.label, precision: tile.precision) : nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
@@ -199,8 +205,8 @@ private struct KPICell: View {
 
     @ViewBuilder
     private var deltaRow: some View {
-        if partial {
-            Text(TodayFormat.soFar(value: tile.value, deltaLabel: tile.delta?.label, precision: tile.precision))
+        if let soFar = soFarText {
+            Text(soFar)
                 .font(Theme.FontStyle.mono(11, weight: .medium))
                 .foregroundStyle(Theme.Palette.fg3)
                 .lineLimit(wraps ? nil : 1)
@@ -237,8 +243,8 @@ private struct KPICell: View {
     private var accessibilityValue: String {
         guard tile.value != nil else { return "No data" }
         var parts = ["\(formattedValue) \(tile.unit)"]
-        if partial {
-            parts.append(TodayFormat.soFar(value: tile.value, deltaLabel: tile.delta?.label, precision: tile.precision))
+        if let soFar = soFarText {
+            parts.append(soFar)
         } else if let delta = tile.delta {
             parts.append(delta.label.replacingOccurrences(of: "↑", with: "up")
                 .replacingOccurrences(of: "↓", with: "down"))

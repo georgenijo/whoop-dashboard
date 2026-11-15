@@ -56,16 +56,29 @@ struct TrendsHubCard<Footer: View>: View {
 
     private var accessibilitySummary: String {
         let show: (Double) -> String = { format?($0) ?? $0.formatted(.number.precision(.fractionLength(precision))) }
-        return TrendsA11y.summary(values: points.compactMap(\.raw), unit: unit, show: show, context: context)
+        let partialLatest = points.first { $0.date == partialDate }?.raw
+        return TrendsA11y.summary(values: MetricChart.completeValues(points, partialDate: partialDate), unit: unit,
+                                  show: show, context: context, partialLatest: partialLatest)
     }
 }
 
 enum TrendsA11y {
-    static func summary(values: [Double], unit: String, show: (Double) -> String, context: [String?]) -> String {
+    /// `values` are completed days only. A day still accumulating is passed as
+    /// `partialLatest`, announced as the latest value "so far" and kept out of
+    /// the average, matching what the chart plots.
+    static func summary(values: [Double], unit: String, show: (Double) -> String, context: [String?],
+                        partialLatest: Double? = nil) -> String {
         var parts: [String] = []
-        if let last = values.last {
+        let unitText = unit.isEmpty ? "" : " \(unit)"
+        if let partialLatest {
+            var text = "Latest \(show(partialLatest))\(unitText) so far today, a partial day"
+            if !values.isEmpty {
+                text += ", average of completed days \(show(values.reduce(0, +) / Double(values.count)))"
+            }
+            parts.append(text)
+        } else if let last = values.last {
             let average = values.reduce(0, +) / Double(values.count)
-            parts.append("Latest \(show(last))\(unit.isEmpty ? "" : " \(unit)"), average \(show(average))")
+            parts.append("Latest \(show(last))\(unitText), average \(show(average))")
         } else {
             parts.append("No data")
         }

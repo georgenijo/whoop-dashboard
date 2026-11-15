@@ -10,6 +10,9 @@ struct RecoveryView: View {
     /// newest request may commit, so an older refresh can't overwrite a new range.
     @State private var loadGeneration = 0
     @State private var didFocus = false
+    /// A fixed 30-day payload for the baseline, fetched only when the range
+    /// picker is narrower than 30 days; the baseline never follows the picker.
+    @State private var baseline: RecoveryPayload?
     private let focus: Focus
 
     init(initialRange: DateRange = .d30, focus: Focus = .score) {
@@ -36,6 +39,7 @@ struct RecoveryView: View {
             }
             .toolbarBackground(.hidden, for: .navigationBar)
             .task(id: range) { await load() }
+            .task(id: range) { await loadBaseline() }
             .refreshable { await load() }
     }
 
@@ -57,10 +61,12 @@ struct RecoveryView: View {
                     // Inner display: score and its drivers beside the signal trends.
                     FoldColumns {
                         LedgerGroup {
-                            RecoveryHeroCard(payload: payload)
+                            RecoveryHeroCard(payload: payload, baseline: RecoveryLogic.baselinePayload(rangeDays: range.days, current: payload, fetched: baseline))
                                 .id(Focus.score)
                             LedgerRule()
-                            RecoveryFactorsCardView(factors: RecoveryLogic.factors(payload), embedded: true)
+                            RecoveryFactorsCardView(
+                                factors: RecoveryLogic.factors(payload, baseline: RecoveryLogic.baselinePayload(rangeDays: range.days, current: payload, fetched: baseline)),
+                                embedded: true)
                         }
                     } trailing: {
                         LedgerGroup {
@@ -97,6 +103,15 @@ struct RecoveryView: View {
     }
 
     @MainActor
+    private func loadBaseline() async {
+        baseline = nil
+        guard range.days < RecoveryLogic.baselineDays else { return }
+        let fetched = try? await RecoveryService(api: api).load(range: .d30)
+        guard !Task.isCancelled else { return }
+        baseline = fetched
+    }
+
+    @MainActor
     private func load() async {
         loadGeneration += 1
         let generation = loadGeneration
@@ -117,6 +132,8 @@ struct RecoveryView: View {
 /// 30-day average, the scale, then guidance.
 private struct RecoveryHeroCard: View {
     let payload: RecoveryPayload
+    /// Nil while a 30-day history isn't available; the comparison is then hidden.
+    let baseline: RecoveryPayload?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var today: KPITile? { payload.kpi.first { $0.key == .recovery } }
@@ -151,7 +168,7 @@ private struct RecoveryHeroCard: View {
                                 .font(Theme.FontStyle.sans(20, weight: .semibold))
                                 .foregroundStyle(zone.color)
                         }
-                        if let baseline = RecoveryHeroView.thirtyDayAverage(payload.recoveryTrend) {
+                        if let baseline = baseline.flatMap({ RecoveryHeroView.thirtyDayAverage($0.recoveryTrend) }) {
                             let text = RecoveryHeroView.baselineText(score: score, baseline: baseline)
                             (Text(text.delta).font(Theme.FontStyle.mono(15, weight: .medium)).foregroundColor(Theme.Palette.fg0)
                                 + Text(" " + text.rest).font(Theme.FontStyle.sans(15)).foregroundColor(Theme.Palette.fg2))
@@ -177,23 +194,34 @@ private struct RecoveryHeroCard: View {
 }
 
 enum RecoveryLogic {
+    static let baselineDays = 30
+
+    /// The payload a 30-day average may be computed from: the current one when
+    /// the range already spans 30 days, otherwise the separately fetched one
+    /// (nil until it arrives, so nothing is mislabeled meanwhile).
+    static func baselinePayload(rangeDays: Int, current: RecoveryPayload, fetched: RecoveryPayload?) -> RecoveryPayload? {
+        rangeDays >= baselineDays ? current : fetched
+    }
+
     /// "Sat, Nov 14 · after 5h 18m asleep" from the latest recovery day and the
     /// sleep tile, when both exist.
     static func caption(_ payload: RecoveryPayload) -> String? {
         guard let date = payload.recoveryTrend.last(where: { $0.raw != nil })?.date else { return nil }
         var parts = [TrendsFormat.day(date)]
         if let hours = payload.kpi.first(where: { $0.key == .sleep })?.value {
-            parts.append("after \(TrendsFormat.hoursMinutes(hours: hours)) asleep")
+            parts.append("after \(TrendsFormat.hoursMinutes(hours: hours)) in bed")
         }
         return parts.joined(separator: " · ")
     }
 
-    static func factors(_ payload: RecoveryPayload) -> [RecoveryFactorsCardView.Factor] {
-        let averages: [KPITile.Key: [TrendPoint]] = [
-            .hrv: payload.hrvTrend.points,
-            .rhr: payload.rhrTrend,
-            .spo2: (payload.spo2Trend?.points ?? []).map { TrendPoint(date: $0.date, raw: $0.value, ma7: nil, ma30: nil) }
-        ]
+    static func factors(_ payload: RecoveryPayload, baseline: RecoveryPayload?) -> [RecoveryFactorsCardView.Factor] {
+        let averages: [KPITile.Key: [TrendPoint]] = baseline.map { base in
+            [
+                .hrv: base.hrvTrend.points,
+                .rhr: base.rhrTrend,
+                .spo2: (base.spo2Trend?.points ?? []).map { TrendPoint(date: $0.date, raw: $0.value, ma7: nil, ma30: nil) }
+            ]
+        } ?? [:]
         return payload.kpi.filter { $0.key != .recovery }.map { tile in
             let value: String
             var unit = tile.unit
@@ -226,6 +254,7 @@ enum RecoveryLogic {
         switch tile.key {
         case .rhr: return "Resting HR"
         case .spo2: return "SpO₂"
+        case .sleep: return "Time in bed"
         default: return tile.label
         }
     }

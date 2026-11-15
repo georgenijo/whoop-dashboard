@@ -191,9 +191,9 @@ struct TrendsView: View {
             }
         case .loaded(let p):
             let tile = p.kpi.first { $0.key == .steps }
-            let avg = TrendsStats.recentAverage(p.stepsTrend).map { "7-day avg \($0.formatted(.number.precision(.fractionLength(0))))" }
+            let avg = TrendsStats.recentAverage(p.stepsTrend, excluding: TrendsStats.partialDate(p.stepsTrend)).map { "7-day avg \($0.formatted(.number.precision(.fractionLength(0))))" }
             link(.steps(range)) {
-                TrendsHubCard(title: "Steps", subtitle: "Apple Health + Whoop", unit: "", accent: Theme.Palette.steps,
+                TrendsHubCard(title: "Steps", subtitle: "Apple Health", unit: "", accent: Theme.Palette.steps,
                               points: p.stepsTrend,
                               partialDate: TrendsStats.partialDate(p.stepsTrend), style: .bars,
                               context: [tile?.delta?.label, avg]) {

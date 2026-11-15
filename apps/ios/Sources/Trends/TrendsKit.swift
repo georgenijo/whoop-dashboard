@@ -45,8 +45,8 @@ struct TrendsCardState<Value> {
 enum TrendsStats {
     /// Mean of the most recent `days` points that have data, independent of
     /// whether today has synced yet.
-    static func recentAverage(_ points: [TrendPoint], days: Int = 7) -> Double? {
-        let recent = points.sorted { $0.date < $1.date }.compactMap(\.raw).suffix(days)
+    static func recentAverage(_ points: [TrendPoint], days: Int = 7, excluding partialDate: String? = nil) -> Double? {
+        let recent = points.filter { $0.date != partialDate }.sorted { $0.date < $1.date }.compactMap(\.raw).suffix(days)
         guard !recent.isEmpty else { return nil }
         return recent.reduce(0, +) / Double(recent.count)
     }

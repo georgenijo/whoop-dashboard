@@ -12,6 +12,8 @@ struct DashboardView: View {
     @State private var loadGeneration = 0
     @State private var refreshError: String?
     @State private var detail: KPITile.Href?
+    /// Date of each accumulating metric's own latest reading (steps, strain).
+    @State private var metricDates: [KPITile.Key: String] = [:]
 
     private static let staleInterval: TimeInterval = 300
 
@@ -156,8 +158,7 @@ struct DashboardView: View {
                     tiles: vitals(payload.kpi),
                     columns: 2,
                     title: "Measurements",
-                    inProgress: TodayFormat.isPartialDay(dataDate: payload.dataDate, isFallback: payload.isFallback)
-                        ? [.strain, .steps] : []
+                    inProgress: TodayFormat.partialKeys(metricDates: metricDates, isFallback: payload.isFallback)
                 ) { tile in
                     detail = tile.href
                 }
@@ -285,6 +286,7 @@ struct DashboardView: View {
             withAnimation(reduceMotion ? nil : .snappy) { phase = .loaded(payload) }
             refreshError = nil
             lastFetched = Date()
+            Task { await loadMetricDates(generation: generation) }
             return
         } catch APIError.unauthorized {
             failure = "Your session expired. Sign in again."
@@ -303,6 +305,22 @@ struct DashboardView: View {
         } else {
             phase = .error(failure)
         }
+    }
+
+    /// Each metric's own reading date comes from its detail endpoint, since the
+    /// dashboard payload only dates recovery. Unknown dates simply leave the
+    /// metric showing its ordinary comparison.
+    @MainActor
+    private func loadMetricDates(generation: Int) async {
+        let api = api
+        async let strain = try? StrainService(api: api).load(range: .d7).today.date
+        async let steps = try? StepsService(api: api).load(range: .d7).today.date
+        let (strainDate, stepsDate) = await (strain, steps)
+        guard generation == loadGeneration else { return }
+        var dates: [KPITile.Key: String] = [:]
+        if let strainDate { dates[.strain] = strainDate }
+        if let stepsDate { dates[.steps] = stepsDate }
+        metricDates = dates
     }
 
     private static let placeholder: DashboardPayload = {
