@@ -202,7 +202,7 @@ enum InsightDate {
     }
 }
 
-private struct InsightFullSheet: View {
+struct InsightFullSheet: View {
     let insight: DashboardPayload.AIInsight
     var historical = false
     @Environment(\.dismiss) private var dismiss

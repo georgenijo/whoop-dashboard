@@ -26,6 +26,39 @@ final class DailyBriefTests: XCTestCase {
         XCTAssertFalse(DashboardPayload.AIInsight(text: "Invalid date", createdAt: "unknown", isStale: false).isCurrent)
     }
 
+    func testTodayBriefNeverPromotesHistoricalOrFallbackAdvice() {
+        let now = ISO8601DateFormatter().string(from: Date())
+        let yesterday = ISO8601DateFormatter().string(from: Date().addingTimeInterval(-86_400))
+        for insight in [
+            DashboardPayload.AIInsight(text: "Old recommendation", createdAt: yesterday, isStale: false),
+            DashboardPayload.AIInsight(text: "Stale recommendation", createdAt: now, isStale: true),
+            DashboardPayload.AIInsight(text: "Undated recommendation", createdAt: nil, isStale: false)
+        ] {
+            let content = TodayBriefContent(insight: insight, isFallback: false)
+            XCTAssertNil(content.current)
+            XCTAssertEqual(content.previous?.text, insight.text)
+        }
+        let fresh = DashboardPayload.AIInsight(text: "Fresh advice", createdAt: now, isStale: false)
+        let fallback = TodayBriefContent(insight: fresh, isFallback: true)
+        XCTAssertNil(fallback.current)
+        XCTAssertEqual(fallback.previous?.text, fresh.text)
+        XCTAssertTrue(fallback.prompt.contains("what is missing"))
+        let current = TodayBriefContent(insight: fresh, isFallback: false)
+        XCTAssertEqual(current.current?.text, fresh.text)
+        XCTAssertNil(current.previous)
+    }
+
+    func testTodayBriefTreatsBlankAnalysisAsMissing() {
+        let now = ISO8601DateFormatter().string(from: Date())
+        for text: String? in [nil, "", " \n "] {
+            let content = TodayBriefContent(
+                insight: .init(text: text, createdAt: now, isStale: false), isFallback: false)
+            XCTAssertNil(content.current)
+            XCTAssertNil(content.previous)
+            XCTAssertTrue(content.prompt.contains("Review today's"))
+        }
+    }
+
     func testNecessaryTextMeetsContrastInBothAppearances() {
         for appearance in [UIUserInterfaceStyle.light, .dark] {
             let traits = UITraitCollection(userInterfaceStyle: appearance)

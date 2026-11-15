@@ -5,12 +5,12 @@ struct DashboardView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.api) private var api
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.horizontalSizeClass) private var sizeClass
     @State private var phase: Phase = .loading
     @State private var lastFetched: Date?
     @State private var isLoading = false
     @State private var loadGeneration = 0
     @State private var refreshError: String?
+    @State private var showsHistory = false
     @State private var detail: KPITile.Href?
     /// Date of each accumulating metric's own latest reading (steps, strain).
     @State private var metricDates: [KPITile.Key: String] = [:]
@@ -62,9 +62,8 @@ struct DashboardView: View {
     }
 
     @ViewBuilder
-    private var headerCaption: some View {
-        if case .loaded(let payload) = phase,
-           let line = TodayFormat.freshness(dataDate: payload.dataDate, updatedAt: payload.recoveryHero.updatedAt,
+    private func headerCaption(_ payload: DashboardPayload) -> some View {
+        if let line = TodayFormat.freshness(dataDate: payload.dataDate, updatedAt: payload.recoveryHero.updatedAt,
                                             isFallback: payload.isFallback) {
             HStack(spacing: 8) {
                 Circle()
@@ -80,42 +79,49 @@ struct DashboardView: View {
         }
     }
 
-    @ViewBuilder
     private var content: some View {
-        switch phase {
-        case .loading:
-            ScrollView {
-                sections(Self.placeholder, interactive: false)
-                    .redacted(reason: .placeholder)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
+        // Read the viewport and fold in the same layout pass. A cached width
+        // can briefly retain the open display's columns after the view shrinks.
+        GeometryReader { viewport in
+            let fold = FoldGeometry(width: viewport.size.width, hinge: FoldGeometry.hinge(in: viewport))
+            Group {
+                switch phase {
+                case .loading:
+                    ScrollView {
+                        sections(Self.placeholder, interactive: false)
+                            .frame(width: viewport.size.width, alignment: .leading)
+                            .redacted(reason: .placeholder)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
+                    .scrollDisabled(true)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Loading today")
+                    .accessibilityAddTraits(.updatesFrequently)
+                case .loaded(let payload):
+                    ScrollView {
+                        sections(payload, interactive: true)
+                            .frame(width: viewport.size.width, alignment: .leading)
+                    }
+                case .error(let message):
+                    ScrollView {
+                        errorCard(message)
+                            .inLeadingFoldColumn()
+                            .padding(.horizontal, Theme.Spacing.md)
+                            .padding(.top, Theme.Spacing.xs)
+                            .frame(width: viewport.size.width, alignment: .leading)
+                    }
+                }
             }
-            .measuresFold()
-            .scrollDisabled(true)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Loading today")
-            .accessibilityAddTraits(.updatesFrequently)
-        case .loaded(let payload):
-            ScrollView {
-                sections(payload, interactive: true)
-            }
-            .measuresFold()
-        case .error(let message):
-            ScrollView {
-                errorCard(message)
-                    .inLeadingFoldColumn()
-                    .padding(.horizontal, Theme.Spacing.md)
-                    .padding(.top, Theme.Spacing.xs)
-            }
-            .measuresFold()
+            .environment(\.foldGeometry, fold)
         }
     }
 
     /// One hierarchy in both poses: dated state and recommendation first,
     /// supporting measurements and historical evidence second.
-    private func sections(_ payload: DashboardPayload, interactive: Bool) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            headerCaption
+    func sections(_ payload: DashboardPayload, interactive: Bool) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
+            headerCaption(payload)
                 .inLeadingFoldColumn()
             if let refreshError {
                 VStack(alignment: .leading, spacing: 6) {
@@ -129,45 +135,28 @@ struct DashboardView: View {
                 .foregroundStyle(Theme.Palette.fg1)
                 .glassCard()
             }
-            FoldColumns {
-                RecoveryHeroView(
-                    hero: payload.recoveryHero,
-                    trend: payload.recoveryTrend,
-                    onTap: interactive ? { detail = .recovery } : nil,
-                    showsGuidance: payload.isFallback || payload.aiInsight?.isCurrent != true,
-                    isHistorical: payload.isFallback
-                )
-                if let insight = payload.aiInsight, insight.isCurrent, !payload.isFallback {
-                    AIInsightCardView(insight: insight)
-                }
-                if payload.isFallback {
-                    Button {
-                        NotificationCenter.default.post(name: .coachComposeRequested, object: "Help me understand my latest data and what is missing before suggesting today's training.")
-                    } label: {
-                        Label("Review my data with Coach", systemImage: "bubble.left")
-                            .font(Theme.FontStyle.sans(15, weight: .medium))
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            FoldColumns(spacing: Theme.Spacing.xl) {
+                TodayBriefView(content: TodayBriefContent(insight: payload.aiInsight, isFallback: payload.isFallback))
+                DisclosureGroup(isExpanded: $showsHistory) {
+                    VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+                        RecoveryTrendCardView(points: payload.recoveryTrend)
+                        records(payload.prs)
                     }
+                    .padding(.top, Theme.Spacing.sm)
+                } label: {
+                    Text("History & personal records")
+                        .font(Theme.FontStyle.sans(13, weight: .medium))
+                        .foregroundStyle(Theme.Palette.fg2)
+                        .frame(minHeight: 44, alignment: .leading)
                 }
-                if sizeClass == .regular {
-                    RecoveryTrendCardView(points: payload.recoveryTrend)
-                    records(payload.prs)
-                }
+                .tint(Theme.Palette.fg3)
+                .accessibilityIdentifier("today-history")
             } trailing: {
-                KPIStripView(
-                    tiles: vitals(payload.kpi),
-                    columns: 2,
-                    title: "Measurements",
+                TodaySignalsView(
+                    payload: payload,
                     inProgress: TodayFormat.partialKeys(metricDates: metricDates, isFallback: payload.isFallback)
-                ) { tile in
-                    detail = tile.href
-                }
-                if sizeClass != .regular {
-                    RecoveryTrendCardView(points: payload.recoveryTrend)
-                    records(payload.prs)
-                }
-                if let insight = payload.aiInsight, !insight.isCurrent || payload.isFallback {
-                    AIInsightCardView(insight: insight, historical: true)
+                ) { href in
+                    if interactive { detail = href }
                 }
             }
         }
@@ -175,13 +164,6 @@ struct DashboardView: View {
         .padding(.top, Theme.Spacing.xxs)
         .padding(.bottom, Theme.Spacing.xl)
         .sensoryFeedback(.selection, trigger: detail)
-    }
-
-    /// The hero already carries recovery, so the grid shows the six vitals
-    /// that explain it.
-    private func vitals(_ tiles: [KPITile]) -> [KPITile] {
-        let order: [KPITile.Key] = [.hrv, .rhr, .sleep, .strain, .steps, .spo2]
-        return order.compactMap { key in tiles.first { $0.key == key } }
     }
 
     private struct Record: Identifiable {

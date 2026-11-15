@@ -25,6 +25,19 @@ struct FoldGeometry: Equatable, Sendable {
     var hinge: ClosedRange<CGFloat>?
 
     static let none = FoldGeometry()
+
+    static func hinge(in proxy: GeometryProxy) -> ClosedRange<CGFloat>? {
+        guard #available(iOS 27.1, *) else { return nil }
+        let width = proxy.size.width
+        // A vertical division band that actually crosses this container.
+        let band = proxy
+            .reservedRegions(kind: .division, options: .includeInactive)
+            .map(\.frame)
+            .filter { $0.height > $0.width && $0.maxX > 0 && $0.minX < width }
+            .min { abs($0.midX - width / 2) < abs($1.midX - width / 2) }
+        guard let band else { return nil }
+        return band.minX ... band.maxX
+    }
 }
 
 private struct FoldGeometryKey: EnvironmentKey {
@@ -56,7 +69,7 @@ private struct MeasuresFold: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onGeometryChange(for: FoldGeometry.self) { proxy in
-                FoldGeometry(width: proxy.size.width, hinge: Self.hinge(in: proxy))
+                FoldGeometry(width: proxy.size.width, hinge: FoldGeometry.hinge(in: proxy))
             } action: { newValue in
                 geometry = newValue
             }
@@ -67,19 +80,6 @@ private struct MeasuresFold: ViewModifier {
         guard geometry.width > 0 else { return inherited }
         if geometry.hinge == nil, inherited.hinge != nil { return inherited }
         return geometry
-    }
-
-    private static func hinge(in proxy: GeometryProxy) -> ClosedRange<CGFloat>? {
-        guard #available(iOS 27.1, *) else { return nil }
-        let width = proxy.size.width
-        // A vertical division band that actually crosses this container.
-        let band = proxy
-            .reservedRegions(kind: .division, options: .includeInactive)
-            .map(\.frame)
-            .filter { $0.height > $0.width && $0.maxX > 0 && $0.minX < width }
-            .min { abs($0.midX - width / 2) < abs($1.midX - width / 2) }
-        guard let band else { return nil }
-        return band.minX ... band.maxX
     }
 }
 
