@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 struct PlansResponse: Decodable {
     let plans: [WorkoutPlan]
@@ -43,11 +44,27 @@ enum RecoveryBand {
         }
     }
 
-    var colorHex: String {
+    var color: Color {
         switch self {
-        case .high: return "#00d4aa"
-        case .mid: return "#ffaa00"
-        case .low: return "#ff0043"
+        case .high: return Theme.Palette.zoneGreen
+        case .mid: return Theme.Palette.zoneYellow
+        case .low: return Theme.Palette.zoneRed
+        }
+    }
+
+    var range: String {
+        switch self {
+        case .high: return "67–100%"
+        case .mid: return "34–66%"
+        case .low: return "0–33%"
+        }
+    }
+
+    var ruleLabel: String {
+        switch self {
+        case .high: return "High"
+        case .mid: return "Moderate"
+        case .low: return "Low"
         }
     }
 }
@@ -181,13 +198,12 @@ extension WorkoutPlan.Intensity {
         }
     }
 
-    var colorHex: String {
+    var color: Color {
         switch self {
-        case .hard: return "#ff0043"
-        case .moderate: return "#ffaa00"
-        case .reduced: return "#00aaff"
-        case .rest: return "#6b6b74"
-        case .unknown: return "#6b6b74"
+        case .hard: return Theme.Palette.rhr
+        case .moderate: return Theme.Palette.strain
+        case .reduced: return Theme.Palette.respiration
+        case .rest, .unknown: return Theme.Palette.fg3
         }
     }
 }

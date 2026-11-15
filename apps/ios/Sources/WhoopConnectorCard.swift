@@ -33,10 +33,7 @@ struct WhoopConnectorCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             HStack(alignment: .top, spacing: Theme.Spacing.sm) {
-                Image(systemName: "waveform.path.ecg")
-                    .font(.title3)
-                    .foregroundStyle(Theme.Palette.recovery)
-                    .frame(width: 32, height: 32)
+                LedgerIcon(systemName: "waveform.path.ecg")
                 VStack(alignment: .leading, spacing: 6) {
                     name
                     statusBadge
@@ -63,6 +60,7 @@ struct WhoopConnectorCard: View {
                 }
             } else if loadError != nil {
                 Button("Retry") { Task { await refresh(force: true) } }
+                    .tint(Theme.Palette.accent)
                     .frame(minHeight: 44)
             }
             if reconnecting { ProgressView("Updating connection…") }
@@ -93,9 +91,9 @@ struct WhoopConnectorCard: View {
     private var statusBadge: some View {
         if let status = connector?.status {
             HStack(spacing: 4) {
-                Circle()
-                    .fill(badgeColor(for: status))
-                    .frame(width: 6, height: 6)
+                Image(systemName: badgeSymbol(for: status))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(badgeColor(for: status))
                 Text(badgeLabel(for: status))
                     .font(Theme.FontStyle.sans(13, weight: .medium))
                     .foregroundStyle(badgeColor(for: status))
@@ -120,6 +118,14 @@ struct WhoopConnectorCard: View {
         case .connected: return Theme.Palette.success
         case .needsReconnect: return Theme.Palette.warning
         case .disconnected: return Theme.Palette.fg3
+        }
+    }
+
+    private func badgeSymbol(for status: WhoopConnectorStatus) -> String {
+        switch status {
+        case .connected: return "checkmark"
+        case .needsReconnect: return "exclamationmark.triangle"
+        case .disconnected: return "minus"
         }
     }
 

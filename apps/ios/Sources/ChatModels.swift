@@ -278,6 +278,9 @@ enum ChatRecovery {
 
 struct ChatInFlightTurn {
     let baselineMessageId: Int?
+    /// The question awaiting its reply, shown as the preview of the thread's
+    /// row in the conversation list while the reply is in flight.
+    var pendingText: String? = nil
 }
 
 @MainActor

@@ -78,7 +78,7 @@ struct PlansView: View {
                 .foregroundStyle(Theme.Palette.fg2)
                 .fixedSize(horizontal: false, vertical: true)
             Button("Build a plan with Coach") {
-                NotificationCenter.default.post(name: .coachComposeRequested, object: "Help me build a training plan that adjusts to my recovery. Ask about my goals, schedule and available equipment first.")
+                CoachCompose.request(PlansPresentation.newPlanDraft)
             }
             .buttonStyle(.borderedProminent)
             .tint(Theme.Palette.accent)
@@ -119,7 +119,6 @@ struct PlansView: View {
 }
 
 struct PlansContent: View {
-    @Environment(\.horizontalSizeClass) private var sizeClass
     let plans: [WorkoutPlan]
     let recovery: PlanRecovery?
 
@@ -131,57 +130,41 @@ struct PlansContent: View {
         plans.contains(where: { $0.isActive })
     }
 
-    private var savedPlans: [WorkoutPlan] {
-        guard let hero = heroPlan else { return plans }
-        return plans.filter { $0.id != hero.id }
-    }
-
     var body: some View {
         ScrollView {
-            // Inner display: today's session and readiness beside the
-            // saved splits.
+            // Inner display: today's session and the week beside the saved
+            // plans, split at the fold.
             FoldColumns {
                 if let hero = heroPlan {
-                    NavigationLink {
-                        PlanDetailView(plan: hero)
-                    } label: {
-                        VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
-                            TodaySessionHero(plan: hero, isActive: heroIsActive, today: recovery?.today)
-                            Label("View exercises and sessions", systemImage: "arrow.right")
-                                .font(Theme.FontStyle.sans(15, weight: .semibold))
-                                .padding(.horizontal, Theme.Spacing.md)
-                        }
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-
-                    if let week = recovery?.week, !week.isEmpty {
-                        WeekReadinessStrip(week: week, todayDate: recovery?.today?.date)
-                    }
+                    TodayHero(plan: hero, isActive: heroIsActive, today: recovery?.today)
                 }
             } trailing: {
-                if !savedPlans.isEmpty {
-                    CardLabel("Saved splits")
-                        .padding(.top, sizeClass == .regular ? 0 : Theme.Spacing.md)
-                        .padding(.leading, 4)
-
-                    VStack(spacing: Theme.Spacing.xs) {
-                        ForEach(savedPlans) { plan in
-                            NavigationLink {
-                                PlanDetailView(plan: plan)
-                            } label: {
-                                SplitRow(plan: plan)
-                            }
-                            .buttonStyle(PressableCardStyle())
-                        }
-                    }
+                if let week = recovery?.week, !week.isEmpty {
+                    WeekLedger(week: week, todayDate: recovery?.today?.date)
                 }
+                SavedPlansLedger(plans: plans, recovery: recovery)
             }
             .padding(.horizontal, Theme.Spacing.md)
             .padding(.bottom, Theme.Spacing.xxl)
         }
         .measuresFold()
         .scrollIndicators(.hidden)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    CoachCompose.request(PlansPresentation.newPlanDraft)
+                } label: {
+                    Label("New plan with Coach", systemImage: "plus")
+                }
+                .tint(Theme.Palette.accent)
+            }
+        }
+    }
+}
+
+enum CoachCompose {
+    static func request(_ draft: String) {
+        NotificationCenter.default.post(name: .coachComposeRequested, object: draft)
     }
 }
 
@@ -196,193 +179,364 @@ struct PressableCardStyle: ButtonStyle {
     }
 }
 
-private struct TodaySessionHero: View {
+/// Zone shown as a square mark plus words, never colour alone.
+private struct BandChip: View {
+    let score: Double
+    let band: RecoveryBand
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Rectangle().fill(band.color).frame(width: 9, height: 9)
+            Text("Recovery \(PlansPresentation.percent(score)) · \(band.label)")
+                .font(Theme.FontStyle.sans(13))
+                .foregroundStyle(Theme.Palette.fg1)
+                .lineLimit(1)
+        }
+        .fixedSize(horizontal: true, vertical: false)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Recovery \(Int(score.rounded())) percent, \(band.label)")
+    }
+}
+
+private struct TodayHero: View {
     let plan: WorkoutPlan
     let isActive: Bool
     let today: PlanRecovery.Today?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var band: RecoveryBand? {
         guard let today else { return nil }
         return RecoveryBand(serverBand: today.band, score: today.recoveryScore)
     }
 
+    private var sessions: [(number: Int, day: WorkoutPlan.Day)] {
+        zip(PlansPresentation.sessionNumbers(plan.plan.days), plan.plan.days)
+            .compactMap { number, day in number.map { ($0, day) } }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .center) {
-                CardLabel(isActive ? "Today's session" : "Most recent plan")
-                Spacer()
-                if let today {
-                    ReadinessPill(score: today.recoveryScore)
+            VStack(alignment: .leading, spacing: 0) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        heroTitle
+                        Spacer(minLength: 8)
+                        heroChip
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        heroTitle
+                        heroChip
+                    }
                 }
-            }
 
-            Text(plan.title)
-                .font(Theme.FontStyle.sans(24, weight: .bold))
-                .foregroundStyle(Theme.Palette.fg0)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 12)
-
-            if let line = sessionLine {
-                Text(line)
-                    .font(Theme.FontStyle.sans(15))
-                    .foregroundStyle(Theme.Palette.fg1)
+                Text(plan.title)
+                    .font(Theme.FontStyle.sans(26, weight: .medium))
+                    .foregroundStyle(Theme.Palette.fg0)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 6)
-            }
+                    .padding(.top, 14)
+                    .accessibilityAddTraits(.isHeader)
 
-            HStack(spacing: Theme.Spacing.xs) {
-                MetaTag(text: "\(plan.plan.days.count)-day")
-                if let tag = plan.tag {
-                    MetaTag(text: tag)
+                Text(subtitle)
+                    .font(Theme.FontStyle.sans(15))
+                    .foregroundStyle(Theme.Palette.fg2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 4)
+
+                if let band {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(band.color)
+                            .padding(.top, 2)
+                            .accessibilityHidden(true)
+                        Text(band.guidance)
+                            .font(Theme.FontStyle.sans(15))
+                            .foregroundStyle(Theme.Palette.fg1)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(Theme.Spacing.sm)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Theme.Palette.bg2)
+                    .overlay(Rectangle().strokeBorder(CoachLedger.rule, lineWidth: 1))
+                    .padding(.top, 16)
+                } else if let why = plan.plan.why ?? plan.description {
+                    Text(why)
+                        .font(Theme.FontStyle.sans(15))
+                        .foregroundStyle(Theme.Palette.fg1)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 16)
                 }
             }
-            .padding(.top, 14)
+            .padding(Theme.Spacing.md)
+
+            ForEach(Array(sessions.enumerated()), id: \.offset) { _, entry in
+                CoachLedgerRule()
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text("\(entry.number)")
+                        .font(Theme.FontStyle.mono(13))
+                        .foregroundStyle(Theme.Palette.fg3)
+                        .frame(width: 20, alignment: .leading)
+                    Text(entry.day.name)
+                        .font(Theme.FontStyle.sans(15))
+                        .foregroundStyle(Theme.Palette.fg0)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 8)
+                    IntensityMark(intensity: entry.day.intensity)
+                }
+                .padding(.horizontal, Theme.Spacing.md)
+                .padding(.vertical, 12)
+                .frame(minHeight: 44)
+                .accessibilityElement(children: .combine)
+            }
+
+            CoachLedgerRule()
+            heroActions
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(tint: .recovery, padding: Theme.Spacing.lg)
-        .accessibilityElement(children: .combine)
+        .coachLedgerOutline()
     }
 
-    private var sessionLine: String? {
-        if let band { return band.guidance }
-        if let why = plan.plan.why { return why }
-        return plan.description
+    private var heroTitle: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(isActive ? "Today" : "Most recent plan")
+                .font(Theme.FontStyle.sans(15, weight: .semibold))
+                .foregroundStyle(Theme.Palette.fg0)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+            if let date = today.flatMap({ PlansPresentation.dayParts($0.date) }) {
+                Text("\(date.weekday), \(date.day)")
+                    .font(Theme.FontStyle.sans(13))
+                    .foregroundStyle(Theme.Palette.fg3)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var heroChip: some View {
+        if let today, let band {
+            BandChip(score: today.recoveryScore, band: band)
+        }
+    }
+
+    private var subtitle: String {
+        var parts = [PlansPresentation.countText(plan)]
+        if let tag = plan.tag { parts.append(tag) }
+        return parts.joined(separator: " · ")
+    }
+
+    private var needsEasierDay: Bool { band == .mid || band == .low }
+
+    private var askDraft: String {
+        guard let today else { return PlansPresentation.askDraft(planTitle: plan.title, score: nil) }
+        return needsEasierDay
+            ? PlansPresentation.swapDraft(planTitle: plan.title, score: today.recoveryScore)
+            : PlansPresentation.askDraft(planTitle: plan.title, score: today.recoveryScore)
+    }
+
+    @ViewBuilder
+    private var heroActions: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 0))
+            : AnyLayout(HStackLayout(spacing: 0))
+        layout {
+            Button {
+                CoachCompose.request(askDraft)
+            } label: {
+                Label(needsEasierDay ? "Swap for Zone 2" : "Ask Coach", systemImage: "bubble.left")
+                    .font(Theme.FontStyle.sans(15, weight: .medium))
+                    .foregroundStyle(Theme.Palette.accent)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(ChatPressStyle())
+            .accessibilityHint("Opens Coach with a draft message. Nothing is sent until you send it.")
+
+            if dynamicTypeSize.isAccessibilitySize {
+                CoachLedgerRule()
+            } else {
+                Rectangle().fill(CoachLedger.rule).frame(width: 1, height: 52)
+            }
+
+            NavigationLink {
+                PlanDetailView(plan: plan, recovery: today.map { PlanRecovery(today: $0, week: []) })
+            } label: {
+                HStack(spacing: 6) {
+                    Text("Open plan")
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .font(Theme.FontStyle.sans(15, weight: .medium))
+                .foregroundStyle(Theme.Palette.fg0)
+                .frame(maxWidth: .infinity, minHeight: 52)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(ChatPressStyle())
+        }
     }
 }
 
-private struct ReadinessPill: View {
-    let score: Double
+/// Intensity as a square mark plus its word.
+struct IntensityMark: View {
+    let intensity: WorkoutPlan.Intensity
 
     var body: some View {
-        let zone = RecoveryZone(score: score)
         HStack(spacing: 6) {
-            Circle()
-                .fill(zone.color)
-                .frame(width: 6, height: 6)
-            Text("\(Int(score.rounded()))%")
-                .font(Theme.FontStyle.mono(12, weight: .semibold))
-            Text(zone.label)
-                .font(Theme.FontStyle.sans(12, weight: .medium))
+            Rectangle().fill(intensity.color).frame(width: 9, height: 9)
+            Text(intensity.label)
+                .font(Theme.FontStyle.sans(13))
+                .foregroundStyle(Theme.Palette.fg2)
         }
-        .foregroundStyle(zone.color)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(zone.color.opacity(0.14), in: Capsule())
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Recovery \(Int(score.rounded())) percent, \(zone.label)")
+        .accessibilityLabel("\(intensity.label) intensity")
     }
 }
 
-private struct WeekReadinessStrip: View {
+private struct WeekLedger: View {
     let week: [PlanRecovery.Day]
     let todayDate: String?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var slots: [PlanRecovery.Day] { Array(week.suffix(7)) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            CardLabel("This week")
-
-            HStack(spacing: 0) {
-                ForEach(Array(slots.enumerated()), id: \.offset) { _, day in
-                    let isToday = day.date == todayDate
-                    VStack(spacing: 8) {
-                        Text(weekdayLabel(day.date))
-                            .font(Theme.FontStyle.sans(11, weight: isToday ? .bold : .medium))
-                            .foregroundStyle(isToday ? Theme.Palette.fg0 : Theme.Palette.fg3)
-                        readinessDot(score: day.recoveryScore, isToday: isToday)
-                        Text("\(Int(day.recoveryScore.rounded()))")
-                            .font(Theme.FontStyle.mono(11, weight: isToday ? .semibold : .regular))
-                            .foregroundStyle(isToday ? Theme.Palette.fg1 : Theme.Palette.fg3)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("\(weekdayLabel(day.date)), recovery \(Int(day.recoveryScore.rounded())) percent")
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("This week")
+                    .font(Theme.FontStyle.sans(15, weight: .semibold))
+                    .foregroundStyle(Theme.Palette.fg0)
+                if let range = PlansPresentation.weekRange(slots) {
+                    Text(range)
+                        .font(Theme.FontStyle.sans(13))
+                        .foregroundStyle(Theme.Palette.fg3)
+                }
+                Spacer(minLength: 8)
+                if !dynamicTypeSize.isAccessibilitySize {
+                    Text("daily recovery")
+                        .font(Theme.FontStyle.sans(13))
+                        .foregroundStyle(Theme.Palette.fg3)
                 }
             }
-            .padding(.top, 14)
+            .padding(Theme.Spacing.md)
+            .accessibilityAddTraits(.isHeader)
+
+            ForEach(Array(slots.enumerated()), id: \.offset) { _, day in
+                CoachLedgerRule()
+                row(day)
+            }
         }
-        .glassCard(padding: Theme.Spacing.md)
+        .coachLedgerOutline()
     }
 
-    private func weekdayLabel(_ date: String) -> String {
-        let prefix = String(date.prefix(10))
-        let f = DateFormatter()
-        f.calendar = Calendar(identifier: .gregorian)
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(identifier: "UTC")
-        f.dateFormat = "yyyy-MM-dd"
-        guard let d = f.date(from: prefix) else { return "·" }
-        let names = ["S", "M", "T", "W", "T", "F", "S"]
-        var cal = Calendar(identifier: .gregorian)
-        cal.timeZone = TimeZone(identifier: "UTC")!
-        let weekday = cal.component(.weekday, from: d)
-        return names[(weekday - 1) % 7]
-    }
-
-    @ViewBuilder
-    private func readinessDot(score: Double, isToday: Bool) -> some View {
-        let color = Color(hex: RecoveryBand(score: score).colorHex)
-        Circle()
-            .fill(color.opacity(isToday ? 0.35 : 0.18))
-            .overlay(
-                Circle().strokeBorder(color.opacity(isToday ? 0.9 : 0.5), lineWidth: 1.5)
-            )
-            .frame(width: 24, height: 24)
+    private func row(_ day: PlanRecovery.Day) -> some View {
+        let isToday = day.date == todayDate
+        let zone = RecoveryZone(score: day.recoveryScore)
+        let parts = PlansPresentation.dayParts(day.date)
+        return HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(parts?.weekday ?? "·")
+                    .font(Theme.FontStyle.sans(15, weight: isToday ? .semibold : .regular))
+                    .foregroundStyle(Theme.Palette.fg0)
+                Text(parts?.day ?? "")
+                    .font(Theme.FontStyle.sans(12))
+                    .foregroundStyle(Theme.Palette.fg3)
+            }
+            .frame(width: 64, alignment: .leading)
+            if isToday {
+                Text("Today")
+                    .font(Theme.FontStyle.sans(13, weight: .medium))
+                    .foregroundStyle(Theme.Palette.accent)
+            }
+            Spacer(minLength: 8)
+            HStack(spacing: 6) {
+                Rectangle().fill(zone.color).frame(width: 9, height: 9)
+                Text("\(Int(day.recoveryScore.rounded()))%")
+                    .font(Theme.FontStyle.mono(14, weight: .medium))
+                    .foregroundStyle(Theme.Palette.fg0)
+                Text(zone.label)
+                    .font(Theme.FontStyle.sans(13))
+                    .foregroundStyle(Theme.Palette.fg2)
+            }
+        }
+        .padding(.horizontal, Theme.Spacing.md)
+        .padding(.vertical, 8)
+        .frame(minHeight: 48)
+        .background(isToday ? Theme.Palette.bg3 : .clear)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(parts?.weekday ?? "") \(parts?.day ?? ""), recovery \(Int(day.recoveryScore.rounded())) percent, \(zone.label)\(isToday ? ", today" : "")")
     }
 }
 
-private struct SplitRow: View {
+private struct SavedPlansLedger: View {
+    let plans: [WorkoutPlan]
+    let recovery: PlanRecovery?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Saved plans")
+                    .font(Theme.FontStyle.sans(15, weight: .semibold))
+                    .foregroundStyle(Theme.Palette.fg0)
+                Spacer()
+                Text("\(plans.count)")
+                    .font(Theme.FontStyle.mono(13))
+                    .foregroundStyle(Theme.Palette.fg3)
+            }
+            .padding(Theme.Spacing.md)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+
+            ForEach(plans) { plan in
+                CoachLedgerRule()
+                NavigationLink {
+                    PlanDetailView(plan: plan, recovery: recovery)
+                } label: {
+                    SavedPlanRow(plan: plan)
+                }
+                .buttonStyle(ChatPressStyle())
+            }
+        }
+        .coachLedgerOutline()
+    }
+}
+
+private struct SavedPlanRow: View {
     let plan: WorkoutPlan
-
-    private var accent: Color {
-        Color(hex: plan.plan.days.first.map { $0.intensity.colorHex } ?? "#7b61ff")
-    }
-
-    private var meta: String {
-        var parts: [String] = ["\(plan.plan.days.count)-day"]
-        if let tag = plan.tag { parts.append(tag) }
-        return parts.joined(separator: " · ")
-    }
 
     var body: some View {
         HStack(spacing: Theme.Spacing.sm) {
-            Capsule()
-                .fill(accent)
-                .frame(width: 4, height: 32)
             VStack(alignment: .leading, spacing: 3) {
                 Text(plan.title)
-                    .font(Theme.FontStyle.sans(15, weight: .semibold))
+                    .font(Theme.FontStyle.sans(17, weight: .medium))
                     .foregroundStyle(Theme.Palette.fg0)
-                    .lineLimit(1)
-                Text(meta)
+                    .multilineTextAlignment(.leading)
+                Text(PlansPresentation.savedMeta(plan))
                     .font(Theme.FontStyle.sans(13))
-                    .foregroundStyle(Theme.Palette.fg3)
-                    .lineLimit(1)
+                    .foregroundStyle(Theme.Palette.fg2)
+                    .multilineTextAlignment(.leading)
             }
-            Spacer()
+            Spacer(minLength: 8)
+            if plan.isActive { ActiveTag() }
             Image(systemName: "chevron.right")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.Palette.fg3)
         }
-        .frame(minHeight: 44)
-        .glassCard(padding: Theme.Spacing.md)
+        .padding(.horizontal, Theme.Spacing.md)
+        .padding(.vertical, 12)
+        .frame(minHeight: 56)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
 }
 
-struct MetaTag: View {
-    let text: String
-
+struct ActiveTag: View {
     var body: some View {
-        Text(text)
-            .font(Theme.FontStyle.sans(12, weight: .semibold))
-            .foregroundStyle(Theme.Palette.fg2)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Color.white.opacity(0.05), in: Capsule())
-            .overlay(Capsule().strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1))
+        Text("Active")
+            .font(Theme.FontStyle.sans(12, weight: .medium))
+            .foregroundStyle(Theme.Palette.recovery)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .overlay(Rectangle().strokeBorder(Theme.Palette.recovery, lineWidth: 1))
     }
 }
 

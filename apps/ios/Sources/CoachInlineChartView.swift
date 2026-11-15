@@ -278,6 +278,7 @@ struct CoachChartCard: View {
             }
         }
         .glassCard(padding: Theme.Spacing.md)
+        .overlay(Rectangle().strokeBorder(Theme.Palette.borderDefault, lineWidth: 1))
     }
 
     // MARK: Derived
@@ -360,31 +361,44 @@ struct CoachChartCard: View {
     // MARK: Header
 
     private var titleRow: some View {
-        HStack(alignment: .top, spacing: Theme.Spacing.sm) {
-            Text(block.title.uppercased())
-                .font(Theme.FontStyle.sans(11, weight: .semibold))
-                .tracking(0.5)
-                .foregroundStyle(Theme.Palette.fg2)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.sm) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(block.title)
+                    .font(Theme.FontStyle.sans(13, weight: .medium))
+                    .foregroundStyle(Theme.Palette.fg1)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let baseline = baselineNote {
+                    Text(baseline)
+                        .font(Theme.FontStyle.sans(11))
+                        .foregroundStyle(Theme.Palette.fg3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             Button {
                 withAnimation(.snappy) { showsTable.toggle() }
             } label: {
-                Image(systemName: showsTable ? "chart.bar.xaxis" : "tablecells")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Theme.Palette.fg2)
-                    .frame(width: 34, height: 26)
-                    .background(Color.white.opacity(0.06), in: Capsule())
-                    .frame(width: 44, height: 44)
+                Label(showsTable ? "Chart" : "Table",
+                      systemImage: showsTable ? "chart.xyaxis.line" : "tablecells")
+                    .font(Theme.FontStyle.sans(13, weight: .medium))
+                    .foregroundStyle(Theme.Palette.accent)
+                    .frame(minHeight: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .padding(.vertical, -12)
-            .padding(.trailing, -6)
             .accessibilityLabel(showsTable ? "Show chart" : "Show table")
             .sensoryFeedback(.selection, trigger: showsTable)
         }
+    }
+
+    /// Names the dashed reference line so the line is never unexplained.
+    private var baselineNote: String? {
+        guard let reference = block.references.first else { return nil }
+        let value = CoachNumber.format(reference.value)
+        let unit = reference.unit.isEmpty ? "" : " \(reference.unit)"
+        return "dashed line: \(value)\(unit) \(reference.label.lowercased())"
     }
 
     private var headline: some View {
