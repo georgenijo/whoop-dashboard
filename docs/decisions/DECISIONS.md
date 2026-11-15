@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-11-14: Remove the first inference round trip for clear recent reads
+
+**Decision:** Optimize end-to-end Coach response time by supplying a real, bounded local read before the first Anthropic inference for fully recognized, self-contained first-turn health questions. Keep the selected model, reasoning and output limits unchanged. Leave follow-ups, images, ambiguous dates/instructions, explicit refreshes and empty/error reads on the ordinary tool loop.
+
+**Rationale:** Measurements showed sub-millisecond SQL reads but roughly 5–6 seconds per reply and two inference calls. Fetching known data once avoids paying a model call just to select that read; it does not cache answers, suppress missing-data recovery or fabricate model tool history. Treat raw rows as user-priority context and retain actual tool telemetry.
+
+**Status:** active
+
+**References:** apps/web/src/lib/coach/recent-read.ts, apps/web/src/lib/coach/loop.ts, docs/verification/2026-11-14-coach-reply-speed.md
+
+---
+
 ## 2026-11-14: Defer reply cancellation from the Duo redesign
 
 **Decision:** Ship the Coach, Plans and Settings redesign without the new Stop reply control. Preserve the existing send and dropped-stream recovery behavior. Revisit cancellation separately with reliable server-side turn identity and explicit persistence acknowledgement.
