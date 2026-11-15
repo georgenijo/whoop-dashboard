@@ -7,6 +7,9 @@ struct SleepView: View {
     /// Bumped by every load (range change, pull-to-refresh, Retry); only the
     /// newest request may commit, so an older refresh can't overwrite a new range.
     @State private var loadGeneration = 0
+    /// Fixed 30-day payload for the performance baseline, fetched only when the
+    /// range picker is narrower than 30 days.
+    @State private var baseline: SleepPayload?
 
     init(initialRange: DateRange = .d30) {
         _range = State(initialValue: initialRange)
@@ -14,13 +17,29 @@ struct SleepView: View {
 
     var body: some View {
         content
-            .safeAreaInset(edge: .top, spacing: 0) { TrendsRangeBar(range: $range) }
+            .safeAreaInset(edge: .top, spacing: 0) { TrendsRangeBar(range: $range, caption: headerCaption) }
             .navigationTitle("Sleep")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.visible, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        NotificationCenter.default.post(name: .coachComposeRequested, object: "How did I sleep last night, and what would help me sleep better tonight?")
+                    } label: {
+                        Label("Ask Coach", systemImage: "bubble.left")
+                            .labelStyle(.iconOnly)
+                            .frame(minWidth: 44, minHeight: 44)
+                    }
+                }
+            }
             .toolbarBackground(.hidden, for: .navigationBar)
             .task(id: range) { await load() }
             .refreshable { await load() }
+    }
+
+    private var headerCaption: String? {
+        guard let latest = state.value?.latestSleep else { return nil }
+        return "\(TrendsFormat.day(latest.date)) · main sleep"
     }
 
     @ViewBuilder
@@ -34,20 +53,46 @@ struct SleepView: View {
             ScrollView {
                 // Inner display: last night beside need and performance.
                 FoldColumns {
-                    SleepHeroCard(payload: payload)
-                    if let latest = payload.latestSleep, let stages = latest.stages {
-                        SleepStageDonutView(stages: stages, date: latest.date)
+                    LedgerGroup {
+                        SleepHeroCard(latest: payload.latestSleep)
+                        if let stages = payload.latestSleep?.stages {
+                            LedgerRule()
+                            SleepStageBarView(stages: stages, embedded: true)
+                        }
+                        SleepPerformanceCard(
+                            payload: payload,
+                            baselineTrend: SleepLogic.baselineTrend(rangeDays: state.loadedRange?.days, current: payload.performanceTrend, fetched: baseline?.performanceTrend))
                     }
                 } trailing: {
-                    if let latest = payload.latestSleep, let need = latest.needBreakdown {
-                        SleepNeedBreakdownView(need: need, asleepMs: latest.stages.map { $0.lightMs + $0.deepMs + $0.remMs })
+                    LedgerGroup {
+                        MetricChart(
+                            title: "Time in bed",
+                            unit: "",
+                            accent: Theme.Palette.sleepDeep,
+                            points: payload.durationTrend.map { TrendPoint(date: $0.date, raw: $0.rawHours, ma7: $0.ma7, ma30: nil) },
+                            style: .bars,
+                            height: 150,
+                            subtitle: "\(range.days) days",
+                            showsLegend: false,
+                            format: { TrendsFormat.hoursMinutes(hours: $0) }
+                        )
+                        .padding(Theme.Spacing.md)
+                        LedgerRule()
+                        MetricChart(
+                            title: "Sleep performance",
+                            unit: "%",
+                            accent: Theme.Palette.sleepDeep,
+                            points: payload.performanceTrend,
+                            height: 150,
+                            subtitle: "\(range.days) days",
+                            showsLegend: false
+                        )
+                        .padding(Theme.Spacing.md)
+                        if let need = payload.latestSleep?.needBreakdown {
+                            LedgerRule()
+                            SleepNeedBreakdownView(need: need, embedded: true)
+                        }
                     }
-                    TrendChartView(
-                        title: "Sleep performance",
-                        unit: "%",
-                        colorHex: "#7b61ff",
-                        points: payload.performanceTrend
-                    )
                 }
                 .padding(Theme.Spacing.md)
             }
@@ -63,8 +108,18 @@ struct SleepView: View {
         let range = range
         state.beginLoad()
         do {
+            // The 30-day baseline is refreshed together with the current
+            // readings, so pull-to-refresh and Retry recover it too.
+            let api = api
+            async let base: SleepPayload? = range.days < SleepLogic.baselineDays ? try? SleepService(api: api).load(range: .d30) : nil
             let payload = try await SleepService(api: api).load(range: range)
+            let fetchedBaseline = await base
             guard generation == loadGeneration else { return }
+            if range.days >= SleepLogic.baselineDays {
+                baseline = nil
+            } else if let fetchedBaseline {
+                baseline = fetchedBaseline
+            }
             state.succeed(payload, range: range)
         } catch {
             guard generation == loadGeneration, !Task.isCancelled else { return }
@@ -73,75 +128,141 @@ struct SleepView: View {
     }
 }
 
+enum SleepLogic {
+    static let baselineDays = 30
+
+    /// Performance history a 30-day average may use: the current series when
+    /// the range spans 30 days, otherwise the separately fetched one.
+    static func baselineTrend(rangeDays: Int?, current: [TrendPoint], fetched: [TrendPoint]?) -> [TrendPoint]? {
+        guard let rangeDays else { return nil }
+        return rangeDays >= baselineDays ? current : fetched
+    }
+
+    static func asleepMs(_ stages: SleepPayload.LatestSleep.Stages) -> Double {
+        stages.lightMs + stages.deepMs + stages.remMs
+    }
+
+    static func inBedMs(_ stages: SleepPayload.LatestSleep.Stages) -> Double {
+        asleepMs(stages) + stages.awakeMs
+    }
+
+    /// Time asleep divided by time in bed, as a whole percent.
+    static func efficiencyPercent(_ stages: SleepPayload.LatestSleep.Stages) -> Int? {
+        let inBed = inBedMs(stages)
+        guard inBed > 0 else { return nil }
+        return Int((asleepMs(stages) / inBed * 100).rounded())
+    }
+}
+
+/// Last night: one measure, time asleep, against what the night needed.
 private struct SleepHeroCard: View {
-    let payload: SleepPayload
+    let latest: SleepPayload.LatestSleep?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            if let latest = payload.latestSleep {
-                VStack(alignment: .leading, spacing: 8) {
-                    TrendsCardLabel("Latest sleep", trailing: TrendsFormat.day(latest.date))
-                    if let stages = latest.stages {
-                        Text(TrendsFormat.hoursMinutes(ms: stages.lightMs + stages.deepMs + stages.remMs))
-                            .font(Theme.FontStyle.display(36, weight: .semibold))
-                            .foregroundStyle(Theme.Palette.fg0)
-                        Text("Time asleep")
-                            .font(Theme.FontStyle.sans(15, weight: .medium))
-                            .foregroundStyle(Theme.Palette.fg1)
-                        Text("\(TrendsFormat.hoursMinutes(ms: stages.lightMs + stages.deepMs + stages.remMs + stages.awakeMs)) in bed, including awake time")
-                            .font(Theme.FontStyle.sans(13))
-                            .foregroundStyle(Theme.Palette.fg2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    } else {
-                        Text("Sleep stages aren’t available for this night. The history below shows recorded time in bed.")
-                            .font(Theme.FontStyle.sans(15))
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+            HStack {
+                Text("Last night")
+                    .font(Theme.FontStyle.sans(15, weight: .medium))
+                    .foregroundStyle(Theme.Palette.fg0)
+                Spacer()
+                Text("Time asleep")
+                    .font(Theme.FontStyle.sans(13))
+                    .foregroundStyle(Theme.Palette.fg3)
+            }
+            if let stages = latest?.stages {
+                let layout = dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+                    : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 10))
+                layout {
+                    Text(TrendsFormat.hoursMinutes(ms: SleepLogic.asleepMs(stages)))
+                        .font(Theme.FontStyle.display(56, weight: .medium))
+                        .foregroundStyle(Theme.Palette.fg0)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                    if let need = latest?.needBreakdown {
+                        Text("of \(TrendsFormat.hoursMinutes(ms: SleepNeedBreakdownView.total(need))) needed")
+                            .font(Theme.FontStyle.sans(17))
                             .foregroundStyle(Theme.Palette.fg2)
                     }
                 }
-                Divider().overlay(Theme.Palette.borderSubtle)
-            }
-            MetricChart(
-                title: "Time in bed history",
-                unit: "",
-                accent: Theme.Palette.sleepDeep,
-                points: payload.durationTrend.map { TrendPoint(date: $0.date, raw: $0.rawHours, ma7: $0.ma7, ma30: nil) },
-                style: .bars,
-                height: 190,
-                format: { TrendsFormat.hoursMinutes(hours: $0) }
-            )
-            TrendsStatGrid(tiles: tiles)
-                .padding(.top, Theme.Spacing.sm)
-                .overlay(alignment: .top) {
-                    Rectangle().fill(Theme.Palette.borderSubtle).frame(height: 1)
+                HStack(alignment: .top, spacing: 0) {
+                    fact("In bed", TrendsFormat.hoursMinutes(ms: SleepLogic.inBedMs(stages)))
+                    if let efficiency = SleepLogic.efficiencyPercent(stages) {
+                        fact("Efficiency", "\(efficiency)%", note: "asleep ÷ in bed")
+                    }
                 }
+                .padding(.top, Theme.Spacing.xs)
+            } else {
+                Text("Sleep stages aren’t available for this night.")
+                    .font(Theme.FontStyle.sans(15))
+                    .foregroundStyle(Theme.Palette.fg2)
+            }
         }
-        .glassCard(tint: .sleep, padding: Theme.Spacing.md)
+        .padding(Theme.Spacing.lg)
+        .accessibilityElement(children: .contain)
     }
 
-    private var tiles: [TrendsStat] {
-        let nights = payload.durationTrend.compactMap { p in p.rawHours.map { (date: p.date, hours: $0) } }
-        let longest = nights.max { $0.hours < $1.hours }
-        let full = nights.filter { $0.hours >= 7 }.count
-        return [
-            TrendsStat(
-                id: "avg7",
-                label: "Avg in bed",
-                value: payload.durationTrend.last(where: { $0.ma7 != nil })?.ma7.map { TrendsFormat.hoursMinutes(hours: $0) } ?? "—",
-                caption: "rolling"
-            ),
-            TrendsStat(
-                id: "long",
-                label: "Longest in bed",
-                value: longest.map { TrendsFormat.hoursMinutes(hours: $0.hours) } ?? "—",
-                caption: longest.map { TrendsFormat.day($0.date) }
-            ),
-            TrendsStat(
-                id: "7h",
-                label: "7h+ in bed",
-                value: nights.isEmpty ? "—" : "\(full)",
-                caption: nights.isEmpty ? nil : "of \(nights.count)"
-            )
-        ]
+    private func fact(_ label: String, _ value: String, note: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(Theme.FontStyle.sans(13))
+                .foregroundStyle(Theme.Palette.fg2)
+            Text(value)
+                .font(Theme.FontStyle.mono(22, weight: .medium))
+                .foregroundStyle(Theme.Palette.fg0)
+            if let note {
+                Text(note)
+                    .font(Theme.FontStyle.sans(13))
+                    .foregroundStyle(Theme.Palette.fg3)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// One performance number that defines itself, so it isn't confused with
+/// "need met" or efficiency.
+private struct SleepPerformanceCard: View {
+    let payload: SleepPayload
+    let baselineTrend: [TrendPoint]?
+
+    private var latest: Double? { payload.performanceTrend.last(where: { $0.raw != nil })?.raw }
+
+    var body: some View {
+        if let latest {
+            VStack(alignment: .leading, spacing: 0) {
+                LedgerRule()
+                VStack(alignment: .leading, spacing: Theme.Spacing.xs) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text("Sleep performance")
+                            .font(Theme.FontStyle.sans(15, weight: .medium))
+                            .foregroundStyle(Theme.Palette.fg0)
+                        Text("time asleep ÷ sleep need")
+                            .font(Theme.FontStyle.sans(13))
+                            .foregroundStyle(Theme.Palette.fg3)
+                    }
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        HStack(alignment: .firstTextBaseline, spacing: 2) {
+                            Text("\(Int(latest.rounded()))")
+                                .font(Theme.FontStyle.mono(40, weight: .medium))
+                                .foregroundStyle(Theme.Palette.fg0)
+                            Text("%")
+                                .font(Theme.FontStyle.mono(15))
+                                .foregroundStyle(Theme.Palette.fg2)
+                        }
+                        if let average = baselineTrend.flatMap({ RecoveryHeroView.thirtyDayAverage($0) }) {
+                            Text("30-day average \(Int(average.rounded()))%")
+                                .font(Theme.FontStyle.sans(15))
+                                .foregroundStyle(Theme.Palette.fg2)
+                        }
+                    }
+                }
+                .padding(Theme.Spacing.lg)
+            }
+            .accessibilityElement(children: .combine)
+        }
     }
 }
 

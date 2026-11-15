@@ -29,6 +29,16 @@ struct MetricChart: View {
     /// Days to call out (anomalies). Drawn as rings on the raw series.
     var markers: [Marker] = []
     var height: CGFloat = 180
+    /// Secondary label beside the title ("time asleep", "30 days").
+    var subtitle: String? = nil
+    /// Hub cards share one legend in the page header; detail cards keep theirs.
+    var showsLegend = true
+    /// Calendar day (yyyy-MM-dd) that is still accumulating. It is drawn
+    /// faded and left out of the 7-day trend and the period average, so a
+    /// half-finished day never reads as a real low.
+    var partialDate: String? = nil
+    /// Faint recovery-zone shading behind the line (0–100 scale only).
+    var showsZoneBands = false
     /// Formats values for the headline and scrub readout. Defaults to
     /// fixed `precision` digits with grouping.
     var format: ((Double) -> String)? = nil
@@ -39,14 +49,22 @@ struct MetricChart: View {
     // Preparing calendar dates in init keeps formatter work out of drag updates.
     // The view receives a new series whenever its parent supplies new points.
     private let series: [Day]
+    /// Complete days only; drives the average and the y-domain.
     private let rawValues: [Double]
+    private let hasAnyRaw: Bool
 
     init(
         title: String, unit: String, accent: Color, points: [TrendPoint],
         style: Style = .line, precision: Int = 0,
         yDomain: ClosedRange<Double>? = nil, markers: [Marker] = [],
-        height: CGFloat = 180, format: ((Double) -> String)? = nil
+        height: CGFloat = 180, subtitle: String? = nil, showsLegend: Bool = true,
+        partialDate: String? = nil, showsZoneBands: Bool = false,
+        format: ((Double) -> String)? = nil
     ) {
+        self.subtitle = subtitle
+        self.showsLegend = showsLegend
+        self.partialDate = partialDate
+        self.showsZoneBands = showsZoneBands
         self.title = title
         self.unit = unit
         self.accent = accent
@@ -59,20 +77,40 @@ struct MetricChart: View {
         self.format = format
         self.series = points.compactMap { point in
             guard let date = ChartDate.parse(point.date) else { return nil }
-            return Day(key: point.date, date: date, raw: point.raw, trend: point.ma7)
+            let partial = point.date == partialDate
+            return Day(key: point.date, date: date, raw: point.raw, trend: partial ? nil : point.ma7, partial: partial)
         }
-        self.rawValues = series.compactMap(\.raw)
+        self.rawValues = Self.completeValues(points, partialDate: partialDate)
+        self.hasAnyRaw = series.contains { $0.raw != nil }
+    }
+
+    /// The value recorded on the calendar day before `dateKey`, or nil when
+    /// that day has no reading. A gap must not be papered over with an older
+    /// day and called "yesterday".
+    static func previousDayValue(points: [TrendPoint], of dateKey: String) -> Double? {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .current
+        guard let date = ChartDate.parse(dateKey),
+              let previous = calendar.date(byAdding: .day, value: -1, to: date) else { return nil }
+        let key = ChartDate.key(previous)
+        return points.first { $0.date == key }?.raw
+    }
+
+    /// Raw values of finished days: the day still accumulating is left out of
+    /// the average, the y-domain floor and the 7-day trend.
+    static func completeValues(_ points: [TrendPoint], partialDate: String?) -> [Double] {
+        points.filter { $0.date != partialDate }.compactMap(\.raw)
     }
 
     var body: some View {
         let days = series
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             header(days: days, rawValues: rawValues)
-            if rawValues.isEmpty {
+            if !hasAnyRaw {
                 empty
             } else {
                 chart(days: days, rawValues: rawValues)
-                legend(hasTrend: days.contains { $0.trend != nil })
+                if showsLegend { legend(hasTrend: days.contains { $0.trend != nil }) }
             }
         }
     }
@@ -84,9 +122,16 @@ struct MetricChart: View {
         let average = rawValues.isEmpty ? nil : rawValues.reduce(0, +) / Double(rawValues.count)
         let focus = focusDay(in: days)
         VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(Theme.FontStyle.sans(13, weight: .medium))
-                .foregroundStyle(Theme.Palette.fg2)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title)
+                    .font(Theme.FontStyle.sans(15, weight: .medium))
+                    .foregroundStyle(Theme.Palette.fg0)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(Theme.FontStyle.sans(13))
+                        .foregroundStyle(Theme.Palette.fg3)
+                }
+            }
             HStack(alignment: .firstTextBaseline, spacing: Theme.Spacing.sm) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text(focus?.raw.map(display) ?? "—")
@@ -98,10 +143,15 @@ struct MetricChart: View {
                             .font(Theme.FontStyle.mono(13))
                             .foregroundStyle(Theme.Palette.fg2)
                     }
+                    if focus?.partial == true, selectedDate == nil {
+                        Text("so far")
+                            .font(Theme.FontStyle.sans(15))
+                            .foregroundStyle(Theme.Palette.fg2)
+                    }
                 }
                 Spacer(minLength: 0)
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text(focusCaption(focus))
+                    Text(focusCaption(focus, days: days))
                         .font(Theme.FontStyle.mono(11, weight: .medium))
                         .foregroundStyle(selectedDate == nil ? Theme.Palette.fg2 : Theme.Palette.fg0)
                     Text(secondaryCaption(focus: focus, average: average))
@@ -126,10 +176,14 @@ struct MetricChart: View {
         return days.last(where: { $0.raw != nil })
     }
 
-    private func focusCaption(_ day: Day?) -> String {
+    private func focusCaption(_ day: Day?, days: [Day]) -> String {
         guard let day else { return "" }
         let label = day.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
-        return selectedDate == nil ? "Latest · \(label)" : label
+        if selectedDate != nil { return label }
+        if day.partial, let raw = Self.previousDayValue(points: points, of: day.key) {
+            return "Yesterday \(display(raw))"
+        }
+        return day.key == ChartDate.key(Date()) ? label : "Latest · \(label)"
     }
 
     private func secondaryCaption(focus: Day?, average: Double?) -> String {
@@ -137,7 +191,7 @@ struct MetricChart: View {
             return "7d avg \(display(trend))"
         }
         guard let average else { return "" }
-        return "period avg \(display(average))"
+        return "avg \(display(average))"
     }
 
     private func display(_ value: Double) -> String {
@@ -148,16 +202,26 @@ struct MetricChart: View {
     // MARK: Chart
 
     private func chart(days: [Day], rawValues: [Double]) -> some View {
-        let average = rawValues.reduce(0, +) / Double(rawValues.count)
+        let average = rawValues.isEmpty ? 0 : rawValues.reduce(0, +) / Double(rawValues.count)
         let hasTrend = days.contains { $0.trend != nil }
-        let domain = yDomain ?? paddedDomain(days: days, rawValues: rawValues)
+        let domain = yDomain ?? paddedDomain(days: days, rawValues: days.compactMap(\.raw))
         let focus = selectedDate.flatMap { _ in focusDay(in: days) }
         let markerDates = Set(markers.map(\.date))
 
         return Chart {
-            RuleMark(y: .value("Average", average))
+            if showsZoneBands {
+                ForEach(0..<3, id: \.self) { i in
+                    let zone = ZoneScale.zones[i]
+                    let bounds = [(0.0, 33.5), (33.5, 66.5), (66.5, 100.0)][i]
+                    RectangleMark(yStart: .value("Band start", bounds.0), yEnd: .value("Band end", bounds.1))
+                        .foregroundStyle(zone.color.opacity(0.07))
+                }
+            }
+            if !rawValues.isEmpty {
+                RuleMark(y: .value("Average", average))
                 .foregroundStyle(Theme.Palette.fg3.opacity(0.7))
                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 4]))
+            }
 
             ForEach(days) { day in
                 rawMarks(day, focus: focus, hasTrend: hasTrend)
@@ -303,12 +367,17 @@ struct MetricChart: View {
         guard let last = series.last(where: { $0.raw != nil }), let value = last.raw else {
             return "No readings available"
         }
+        let partialNote = last.partial ? " so far today" : ""
+        guard !rawValues.isEmpty else {
+            return "Latest \(display(value)) \(unit)\(partialNote), \(last.date.formatted(date: .abbreviated, time: .omitted))."
+        }
         let average = rawValues.reduce(0, +) / Double(rawValues.count)
-        return "\(rawValues.count) readings. Latest \(display(value)) \(unit), \(last.date.formatted(date: .abbreviated, time: .omitted)). Period average \(display(average)) \(unit)."
+        return "\(rawValues.count) readings. Latest \(display(value)) \(unit)\(partialNote), \(last.date.formatted(date: .abbreviated, time: .omitted)). Period average \(display(average)) \(unit)."
     }
 
     private func barOpacity(day: Day, focus: Day?, hasTrend: Bool) -> Double {
         if let focus { return focus.date == day.date ? 1 : 0.3 }
+        if day.partial { return 0.3 }
         return hasTrend ? 0.8 : 0.9
     }
 
@@ -354,6 +423,7 @@ struct MetricChart: View {
         let date: Date
         let raw: Double?
         let trend: Double?
+        var partial = false
         var id: Date { date }
     }
 }

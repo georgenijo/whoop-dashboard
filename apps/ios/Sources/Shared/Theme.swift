@@ -24,7 +24,8 @@ enum Theme {
         static let fg3 = adaptive("#6A645F", "#A29B95")
         // Quiet text still carries information and meets the body-text target.
         static let fg4 = fg3
-        static let borderSubtle = adaptive("#E8E4DF", "#1C1A18")
+        // In-group rules: #1C1A18 is about 1.2:1 on black and vanishes on OLED.
+        static let borderSubtle = adaptive("#E8E4DF", "#2A2622")
         static let borderDefault = adaptive("#CCC5BE", "#36312D")
         static let borderStrong = adaptive("#9C8B7E", "#75675C")
         static let accent = adaptive("#806047", "#C5AC98")
@@ -40,6 +41,7 @@ enum Theme {
         static let sleepLight = recovery
         static let respiration = adaptive("#246784", "#8AC8E2")
         static let spo2 = recovery
+        static let steps = respiration
         static let skinTemp = strain
         static let zoneRed = rhr
         static let zoneYellow = strain

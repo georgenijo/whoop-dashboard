@@ -13,7 +13,8 @@ enum TrendsRoute: Hashable {
 /// same range.
 struct TrendsView: View {
     @Environment(\.api) private var api
-    @State private var range: DateRange = .d30
+    @Binding var range: DateRange
+    @Binding var path: [TrendsRoute]
     @State private var recovery = TrendsCardState<RecoveryPayload>()
     @State private var sleep = TrendsCardState<SleepPayload>()
     @State private var strain = TrendsCardState<StrainPayload>()
@@ -22,17 +23,22 @@ struct TrendsView: View {
     @State private var generations: [Card: Int] = [:]
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 // Inner display: recovery signals on one side of the fold,
                 // sleep and training load on the other.
                 FoldColumns {
-                    recoveryCards
+                    LedgerGroup { recoveryCards }
                 } trailing: {
-                    sleepCard
-                    strainCard
-                    stepsCard
-                    workoutsCard
+                    LedgerGroup {
+                        sleepCard
+                        LedgerRule()
+                        strainCard
+                        LedgerRule()
+                        stepsCard
+                        LedgerRule()
+                        workoutsCard
+                    }
                 }
                 .padding(.horizontal, Theme.Spacing.md)
                 .padding(.top, Theme.Spacing.xs)
@@ -41,12 +47,8 @@ struct TrendsView: View {
             }
             .measuresFold()
             .scrollContentBackground(.hidden)
-            .safeAreaInset(edge: .top, spacing: 0) {
-                TrendsRangeBar(range: $range)
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .refreshable { await loadAll() }
-            .navigationTitle("Trends")
-                .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: TrendsRoute.self) { route in
                 destination(route)
             }
@@ -71,27 +73,30 @@ struct TrendsView: View {
     private var recoveryCards: some View {
         switch recovery.phase {
         case .loading:
-            TrendsChartPlaceholder(title: "Recovery", chartHeight: 120)
-            TrendsChartPlaceholder(title: "HRV", chartHeight: 120)
-            TrendsChartPlaceholder(title: "Resting heart rate", chartHeight: 120)
+            TrendsChartPlaceholder(title: "Recovery", chartHeight: 120, embedded: true)
+            LedgerRule()
+            TrendsChartPlaceholder(title: "HRV", chartHeight: 120, embedded: true)
+            LedgerRule()
+            TrendsChartPlaceholder(title: "Resting heart rate", chartHeight: 120, embedded: true)
         case .failed(let message):
-            TrendsErrorCard(title: "Recovery", message: message) {
+            TrendsErrorCard(title: "Recovery", message: message, embedded: true) {
                 Task { await load(.recovery, $recovery, range: range) { try await RecoveryService(api: api).load(range: $0) } }
             }
         case .loaded(let p):
             let today = p.kpi.first { $0.key == .recovery }
             link(.recovery(range, .score)) {
                 TrendsHubCard(title: "Recovery", unit: "%", accent: Theme.Palette.recovery,
-                              points: p.recoveryTrend, yDomain: 0 ... 100,
-                              context: [today?.value.map { RecoveryZone(score: $0).label }, today?.delta?.label]) {
+                              points: p.recoveryTrend, showsZoneBands: true, yDomain: 0 ... 100,
+                              context: [today?.value.map { RecoveryZone(score: $0).bandName }, today?.delta?.label]) {
                     if let score = today?.value {
-                        Text(RecoveryZone(score: score).label)
+                        Text(RecoveryZone(score: score).bandName)
                             .font(Theme.FontStyle.mono(11, weight: .semibold))
                             .foregroundStyle(RecoveryZone(score: score).color)
                     }
                     TrendsDeltaLabel(delta: today?.delta)
                 }
             }
+            LedgerRule()
             let hrv = p.kpi.first { $0.key == .hrv }
             link(.recovery(range, .hrv)) {
                 TrendsHubCard(title: "HRV", unit: "ms", accent: Theme.Palette.hrv,
@@ -106,6 +111,7 @@ struct TrendsView: View {
                     }
                 }
             }
+            LedgerRule()
             let rhr = p.kpi.first { $0.key == .rhr }
             link(.recovery(range, .rhr)) {
                 TrendsHubCard(title: "Resting heart rate", unit: "bpm", accent: Theme.Palette.rhr,
@@ -121,16 +127,16 @@ struct TrendsView: View {
     private var sleepCard: some View {
         switch sleep.phase {
         case .loading:
-            TrendsChartPlaceholder(title: "Sleep", chartHeight: 120)
+            TrendsChartPlaceholder(title: "Sleep", chartHeight: 120, embedded: true)
         case .failed(let message):
-            TrendsErrorCard(title: "Sleep", message: message) {
+            TrendsErrorCard(title: "Sleep", message: message, embedded: true) {
                 Task { await load(.sleep, $sleep, range: range) { try await SleepService(api: api).load(range: $0) } }
             }
         case .loaded(let p):
             let tile = p.kpi.first { $0.key == .sleep }
             let performance = p.performanceTrend.last(where: { $0.raw != nil })?.raw
             link(.sleep(range)) {
-                TrendsHubCard(title: "Sleep", unit: "", accent: Theme.Palette.sleepDeep,
+                TrendsHubCard(title: "Sleep", subtitle: "time in bed", unit: "", accent: Theme.Palette.sleepDeep,
                               points: p.durationTrend.map { TrendPoint(date: $0.date, raw: $0.rawHours, ma7: $0.ma7, ma30: nil) },
                               style: .bars,
                               format: { TrendsFormat.hoursMinutes(hours: $0) },
@@ -150,9 +156,9 @@ struct TrendsView: View {
     private var strainCard: some View {
         switch strain.phase {
         case .loading:
-            TrendsChartPlaceholder(title: "Strain", chartHeight: 120)
+            TrendsChartPlaceholder(title: "Strain", chartHeight: 120, embedded: true)
         case .failed(let message):
-            TrendsErrorCard(title: "Strain", message: message) {
+            TrendsErrorCard(title: "Strain", message: message, embedded: true) {
                 Task { await load(.strain, $strain, range: range) { try await StrainService(api: api).load(range: $0) } }
             }
         case .loaded(let p):
@@ -160,7 +166,8 @@ struct TrendsView: View {
             let kcal = p.today.totalKcal.map { kcalLabel($0, dateKey: p.today.date) }
             link(.strain(range)) {
                 TrendsHubCard(title: "Strain", unit: "", accent: Theme.Palette.strain,
-                              points: p.strainTrend, style: .bars, precision: 1,
+                              points: p.strainTrend,
+                              partialDate: TrendsStats.partialDate(p.strainTrend), style: .bars, precision: 1,
                               context: [tile?.delta?.label, kcal]) {
                     TrendsDeltaLabel(delta: tile?.delta)
                     if let kcal {
@@ -177,17 +184,18 @@ struct TrendsView: View {
     private var stepsCard: some View {
         switch steps.phase {
         case .loading:
-            TrendsChartPlaceholder(title: "Steps", chartHeight: 120)
+            TrendsChartPlaceholder(title: "Steps", chartHeight: 120, embedded: true)
         case .failed(let message):
-            TrendsErrorCard(title: "Steps", message: message) {
+            TrendsErrorCard(title: "Steps", message: message, embedded: true) {
                 Task { await load(.steps, $steps, range: range) { try await StepsService(api: api).load(range: $0) } }
             }
         case .loaded(let p):
             let tile = p.kpi.first { $0.key == .steps }
-            let avg = TrendsStats.recentAverage(p.stepsTrend).map { "7-day avg \($0.formatted(.number.precision(.fractionLength(0))))" }
+            let avg = TrendsStats.recentAverage(p.stepsTrend, excluding: TrendsStats.partialDate(p.stepsTrend)).map { "7-day avg \($0.formatted(.number.precision(.fractionLength(0))))" }
             link(.steps(range)) {
-                TrendsHubCard(title: "Steps", unit: "", accent: Theme.Palette.info,
-                              points: p.stepsTrend, style: .bars,
+                TrendsHubCard(title: "Steps", subtitle: "Apple Health", unit: "", accent: Theme.Palette.steps,
+                              points: p.stepsTrend,
+                              partialDate: TrendsStats.partialDate(p.stepsTrend), style: .bars,
                               context: [tile?.delta?.label, avg]) {
                     TrendsDeltaLabel(delta: tile?.delta)
                     if let avg {
@@ -204,9 +212,9 @@ struct TrendsView: View {
     private var workoutsCard: some View {
         switch workouts.phase {
         case .loading:
-            TrendsChartPlaceholder(title: "Workouts", chartHeight: 40)
+            TrendsChartPlaceholder(title: "Workouts", chartHeight: 40, embedded: true)
         case .failed(let message):
-            TrendsErrorCard(title: "Workouts", message: message) {
+            TrendsErrorCard(title: "Workouts", message: message, embedded: true) {
                 Task { await load(.workouts, $workouts, range: range) { try await WorkoutsService(api: api).load(range: $0) } }
             }
         case .loaded(let p):
@@ -283,6 +291,8 @@ struct TrendsView: View {
 }
 
 #Preview {
-    TrendsView()
+    @Previewable @State var range: DateRange = .d30
+    @Previewable @State var path: [TrendsRoute] = []
+    TrendsView(range: $range, path: $path)
         .preferredColorScheme(.dark)
 }

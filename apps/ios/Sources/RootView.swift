@@ -41,23 +41,26 @@ struct RootView: View {
 
 /// Each analytical destination is created only when selected. Visiting Today
 /// should not fetch and render every historical chart in the background.
-private struct ActivityView: View {
-    enum Section: String, CaseIterable { case trends = "Trends", progress = "Progress", workouts = "Workouts" }
+struct ActivityView: View {
+    typealias Section = ActivityHeader.Section
     @State private var section: Section = .trends
+    // Each segment keeps its own window: Trends reads recent days, Progress
+    // needs enough months for the monthly chart to say anything.
+    @State private var trendsRange: DateRange = .d30
+    @State private var statsRange: DateRange = .d90
+    @State private var trendsPath: [TrendsRoute] = []
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("Activity", selection: $section) {
-                ForEach(Section.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .inLeadingFoldColumn()
-            .padding(.horizontal, Theme.Spacing.md)
-            .padding(.vertical, Theme.Spacing.xs)
+            ActivityHeader(
+                section: $section,
+                range: section == .progress ? $statsRange : $trendsRange,
+                showsRange: section == .progress || trendsPath.isEmpty
+            )
             Group {
                 switch section {
-                case .trends: TrendsView()
-                case .progress: StatsView()
+                case .trends: TrendsView(range: $trendsRange, path: $trendsPath)
+                case .progress: StatsView(range: $statsRange)
                 case .workouts: NavigationStack { WorkoutsView() }
                 }
             }

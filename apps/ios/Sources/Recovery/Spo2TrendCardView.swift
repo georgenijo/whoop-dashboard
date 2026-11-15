@@ -2,6 +2,8 @@ import SwiftUI
 
 struct Spo2TrendCardView: View {
     let trend: RecoveryPayload.Spo2Trend
+    var days: Int = 30
+    var embedded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
@@ -11,7 +13,10 @@ struct Spo2TrendCardView: View {
                 accent: Theme.Palette.spo2,
                 points: trend.points.map { TrendPoint(date: $0.date, raw: $0.value, ma7: nil, ma30: nil) },
                 precision: 1,
-                yDomain: trend.yMin ... trend.yMax
+                yDomain: trend.yMin ... trend.yMax,
+                height: 150,
+                subtitle: "\(days) days",
+                showsLegend: false
             )
             if let low = trend.lowest, let best = trend.best {
                 Text(String(format: "Low %.1f%%  ·  Best %.1f%%", low, best))
@@ -19,6 +24,6 @@ struct Spo2TrendCardView: View {
                     .foregroundStyle(Theme.Palette.fg3)
             }
         }
-        .glassCard(padding: Theme.Spacing.md)
+        .cardChrome(embedded: embedded)
     }
 }
