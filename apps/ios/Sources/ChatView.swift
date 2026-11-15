@@ -754,6 +754,10 @@ struct ChatView: View {
         // reconciliation failed. Establish fresh server IDs before another
         // turn so dropped-stream recovery cannot mistake that older reply for
         // the new turn's response.
+        // Stop state is reset before the first suspension so a Stop tapped
+        // during the history refresh below is honoured, not overwritten.
+        stopRequested = false
+        streamControl.cancel = nil
         isSending = true
         if rows.contains(where: { if case .completed = $0 { return true }; return false }) {
             await loadHistory()
@@ -763,10 +767,14 @@ struct ChatView: View {
                 return
             }
         }
+        guard !stopRequested else {
+            // Stopped before anything was sent; the draft is untouched.
+            isSending = false
+            return
+        }
 
         sendError = nil
         recoveryStatus = nil
-        stopRequested = false
         let sentDraft = ChatDraft(text: input, images: pendingImages)
         let baselineMessageId = latestPersistedMessageId
         let optimisticId = UUID()
@@ -975,22 +983,47 @@ struct ChatView: View {
         streamBuffer.pending = ""
         activeTools = []
         recoveryStatus = nil
-        if let threadId {
-            for delay in [0.4, 1.0, 2.0] {
-                try? await Task.sleep(for: .seconds(delay))
-                guard let detail = try? await ChatService(api: api).threadDetail(id: threadId) else { continue }
-                if ChatRecovery.hasPersistedTurn(detail.messages, afterMessageId: baselineMessageId) {
-                    rows = detail.messages.map { .persisted($0) }
-                    currentTitle = detail.thread.title
-                    clearMarker()
-                    NotificationCenter.default.post(name: .chatThreadListChanged, object: threadId)
-                    return
-                }
+        guard let threadId else {
+            // The thread id never arrived, so there is nothing to ask the
+            // server about. It may still have saved the message: restore the
+            // draft but do not claim it was never sent.
+            handleUnconfirmedThreadDrop(optimisticId: optimisticId, draft: draft)
+            clearMarker()
+            return
+        }
+        var fetches: [[ChatMessage]?] = []
+        for delay in [0.4, 1.0, 2.0] {
+            try? await Task.sleep(for: .seconds(delay))
+            let detail = try? await ChatService(api: api).threadDetail(id: threadId)
+            fetches.append(detail?.messages)
+            if let detail, ChatRecovery.hasPersistedTurn(detail.messages, afterMessageId: baselineMessageId) {
+                rows = detail.messages.map { .persisted($0) }
+                currentTitle = detail.thread.title
+                clearMarker()
+                NotificationCenter.default.post(name: .chatThreadListChanged, object: threadId)
+                return
             }
         }
-        rollbackOptimistic(optimisticId: optimisticId, restore: draft)
-        clearMarker()
-        sendError = "Stopped before Coach replied. Your message is back in the box."
+        switch ChatRecovery.stopOutcome(fetches: fetches, afterMessageId: baselineMessageId) {
+        case .persisted:
+            break
+        case .absent:
+            rollbackOptimistic(optimisticId: optimisticId, restore: draft)
+            clearMarker()
+            sendError = "Stopped before Coach replied. Your message is back in the box."
+        case .unknown:
+            // Persistence could not be confirmed. Keep the question on screen,
+            // keep the thread marked in flight, and let the existing recovery
+            // bar re-check (and offer "Check now") instead of resending.
+            rows.removeAll { row in
+                if case .typing = row { return true }
+                if case .streaming = row { return true }
+                return false
+            }
+            streamingAssistant = nil
+            recoveryStatus = .waiting
+            sendError = "Stopped. Couldn’t confirm whether Coach saved your question. Use Check now before sending again."
+        }
     }
 
     @MainActor

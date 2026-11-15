@@ -257,6 +257,26 @@ struct SSEError: Decodable {
 }
 
 enum ChatRecovery {
+    enum StopOutcome: Equatable {
+        /// History holds a message newer than the turn's baseline.
+        case persisted
+        /// A history fetch succeeded last and showed nothing new.
+        case absent
+        /// No fetch could confirm either way; the turn may still be saved.
+        case unknown
+    }
+
+    /// `fetches` are the history results in probe order; nil is a failed
+    /// request. Only a successful final fetch with nothing new proves the
+    /// server saved nothing; failures never do.
+    static func stopOutcome(fetches: [[ChatMessage]?], afterMessageId baselineMessageId: Int?) -> StopOutcome {
+        for case let messages? in fetches where hasPersistedTurn(messages, afterMessageId: baselineMessageId) {
+            return .persisted
+        }
+        if let last = fetches.last, last != nil { return .absent }
+        return .unknown
+    }
+
     /// After the user stops a reply the server persists the question (and any
     /// partial answer) when it sees the disconnect. True once history holds a
     /// message newer than the one the turn started from.

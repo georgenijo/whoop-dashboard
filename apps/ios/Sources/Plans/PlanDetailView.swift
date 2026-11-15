@@ -11,16 +11,15 @@ struct PlanDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+            // Inner display: the title and rationale sit left of the fold,
+            // the sessions right of it; nothing spans the hinge.
+            FoldColumns(spacing: Theme.Spacing.md) {
                 header
-                // Inner display: the rationale beside the sessions.
-                FoldColumns(spacing: Theme.Spacing.md) {
-                    whyCard
-                    recoveryGuide
-                    adjustButton
-                } trailing: {
-                    sessionLedger
-                }
+                whyCard
+                recoveryGuide
+                adjustButton
+            } trailing: {
+                sessionLedger
             }
             .padding(.horizontal, Theme.Spacing.md)
             .padding(.bottom, Theme.Spacing.xxl)
@@ -222,8 +221,8 @@ struct PlanDetailView: View {
 
             ForEach(Array(plan.plan.days.enumerated()), id: \.offset) { index, day in
                 LedgerRule()
-                if let number = numbers[index] {
-                    sessionRow(index: index, number: number, day: day)
+                if PlansPresentation.hasDetails(day) {
+                    sessionRow(index: index, number: numbers[index], day: day)
                 } else {
                     restRow(day)
                 }
@@ -232,7 +231,7 @@ struct PlanDetailView: View {
         .coachLedgerOutline()
     }
 
-    private func sessionRow(index: Int, number: Int, day: WorkoutPlan.Day) -> some View {
+    private func sessionRow(index: Int, number: Int?, day: WorkoutPlan.Day) -> some View {
         let isOpen = expanded.contains(index)
         return VStack(alignment: .leading, spacing: 0) {
             Button {
@@ -241,11 +240,16 @@ struct PlanDetailView: View {
                 }
             } label: {
                 HStack(alignment: .top, spacing: 12) {
-                    Text("\(number)")
+                    Text(number.map(String.init) ?? "–")
                         .font(Theme.FontStyle.mono(15))
-                        .foregroundStyle(Theme.Palette.fg1)
+                        .foregroundStyle(number == nil ? Theme.Palette.fg3 : Theme.Palette.fg1)
                         .frame(width: 32, height: 32)
-                        .overlay(Rectangle().strokeBorder(Theme.Palette.borderStrong, lineWidth: 1))
+                        .overlay(
+                            Rectangle().strokeBorder(
+                                number == nil ? Theme.Palette.borderDefault : Theme.Palette.borderStrong,
+                                style: StrokeStyle(lineWidth: 1, dash: number == nil ? [3, 3] : [])
+                            )
+                        )
                         .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(day.name)
@@ -272,7 +276,7 @@ struct PlanDetailView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(ChatPressStyle())
-            .accessibilityLabel("Session \(number), \(day.name)")
+            .accessibilityLabel(number.map { "Session \($0), \(day.name)" } ?? day.name)
             .accessibilityValue("\(day.intensity.label) intensity, \(isOpen ? "expanded" : "collapsed")")
             .accessibilityHint("Shows the exercises")
 

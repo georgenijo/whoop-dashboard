@@ -38,6 +38,10 @@ enum PlansPresentation {
         day.intensity != .rest && !day.exercises.isEmpty
     }
 
+    /// Any day with exercises is expandable, whatever its intensity: a rest
+    /// day can still carry stretching or mobility work.
+    static func hasDetails(_ day: WorkoutPlan.Day) -> Bool { !day.exercises.isEmpty }
+
     /// 1-based session numbers aligned with `days`; nil for rest days.
     static func sessionNumbers(_ days: [WorkoutPlan.Day]) -> [Int?] {
         var next = 0

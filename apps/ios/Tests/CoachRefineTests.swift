@@ -227,4 +227,25 @@ final class CoachRefineTests: XCTestCase {
         XCTAssertEqual(MetricStripColumns.count(width: 450, metrics: 4, accessibilitySize: false), 2, "no orphan cell in a 3+1 grid")
         XCTAssertEqual(MetricStripColumns.count(width: 450, metrics: 6, accessibilitySize: false), 3)
     }
+
+    // MARK: Review follow-ups
+
+    func testStopOutcomeNeverTreatsFailedFetchesAsAbsence() {
+        let old = [message(10, .user), message(11, .assistant)]
+        XCTAssertEqual(ChatRecovery.stopOutcome(fetches: [nil, nil, nil], afterMessageId: 11), .unknown)
+        XCTAssertEqual(ChatRecovery.stopOutcome(fetches: [], afterMessageId: 11), .unknown)
+        XCTAssertEqual(ChatRecovery.stopOutcome(fetches: [old, old, nil], afterMessageId: 11), .unknown,
+                       "a failed final probe leaves persistence unconfirmed")
+        XCTAssertEqual(ChatRecovery.stopOutcome(fetches: [nil, nil, old], afterMessageId: 11), .absent)
+        XCTAssertEqual(ChatRecovery.stopOutcome(fetches: [old, old + [message(12, .user)], nil], afterMessageId: 11), .persisted)
+    }
+
+    func testRestDaysWithExercisesStayExpandable() {
+        let stretching = day("Rest", .rest, exercises: 2)
+        let empty = day("Rest", .rest, exercises: 0)
+        XCTAssertTrue(PlansPresentation.hasDetails(stretching))
+        XCTAssertFalse(PlansPresentation.hasDetails(empty))
+        XCTAssertEqual(PlansPresentation.sessionNumbers([stretching, day("Push", .hard, exercises: 1)]), [nil, 1],
+                       "numbering is independent of expandability")
+    }
 }
