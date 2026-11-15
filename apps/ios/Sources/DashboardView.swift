@@ -8,7 +8,8 @@ struct DashboardView: View {
     @State private var phase: Phase = .loading
     @State private var lastFetched: Date?
     @State private var isLoading = false
-    @State private var loadGeneration = 0
+    @State private var loads = DashboardLoadCoordinator()
+    @State private var briefIsWriting = false
     @State private var refreshError: String?
     @State private var showsHistory = false
     @State private var detail: KPITile.Href?
@@ -48,12 +49,14 @@ struct DashboardView: View {
             }
         }
         .task { await load(showSpinner: true) }
+        .task(id: pollKey) { await pollWhileWriting() }
         .onReceive(NotificationCenter.default.publisher(for: .coachDataDidSync)) { _ in
             Task { await load(showSpinner: false) }
         }
         .onChange(of: scenePhase) { _, newPhase in
             guard newPhase == .active else { return }
             guard !isLoading else { return }
+            if briefIsWriting { Task { await load(showSpinner: false) }; return }
             if let last = lastFetched, Date().timeIntervalSince(last) < Self.staleInterval {
                 return
             }
@@ -120,7 +123,7 @@ struct DashboardView: View {
     /// One hierarchy in both poses: dated state and recommendation first,
     /// supporting measurements and historical evidence second.
     func sections(_ payload: DashboardPayload, interactive: Bool) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.lg) {
+        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             headerCaption(payload)
                 .inLeadingFoldColumn()
             if let refreshError {
@@ -135,28 +138,36 @@ struct DashboardView: View {
                 .foregroundStyle(Theme.Palette.fg1)
                 .glassCard()
             }
-            FoldColumns(spacing: Theme.Spacing.xl) {
-                TodayBriefView(content: TodayBriefContent(insight: payload.aiInsight, isFallback: payload.isFallback))
-                DisclosureGroup(isExpanded: $showsHistory) {
-                    VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-                        RecoveryTrendCardView(points: payload.recoveryTrend)
-                        records(payload.prs)
-                    }
-                    .padding(.top, Theme.Spacing.sm)
-                } label: {
-                    Text("History & personal records")
-                        .font(Theme.FontStyle.sans(13, weight: .medium))
-                        .foregroundStyle(Theme.Palette.fg2)
-                        .frame(minHeight: 44, alignment: .leading)
+            let brief = TodayBriefContent(
+                insight: payload.aiInsight, isFallback: payload.isFallback, isRefreshing: payload.insightRefreshing)
+            // A current brief leads. Without one the readings lead and the brief
+            // is a single compact row, so nothing pushes the numbers off screen.
+            if brief.leadsToday {
+                FoldColumns(spacing: Theme.Spacing.md) {
+                    TodayBriefView(content: brief)
+                    historyDisclosure(payload)
+                } trailing: {
+                    signals(payload, interactive: interactive)
                 }
-                .tint(Theme.Palette.fg3)
-                .accessibilityIdentifier("today-history")
-            } trailing: {
-                TodaySignalsView(
-                    payload: payload,
-                    inProgress: TodayFormat.partialKeys(metricDates: metricDates, isFallback: payload.isFallback)
-                ) { href in
-                    if interactive { detail = href }
+            } else if brief.rowAboveReadings {
+                FoldColumns(spacing: Theme.Spacing.md) {
+                    TodayBriefRow(content: brief, above: true)
+                    signals(payload, interactive: interactive)
+                } trailing: {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if let previous = brief.previous { TodayPreviousRow(previous: previous) }
+                        historyDisclosure(payload)
+                    }
+                }
+            } else {
+                FoldColumns(spacing: Theme.Spacing.md) {
+                    signals(payload, interactive: interactive)
+                } trailing: {
+                    VStack(alignment: .leading, spacing: 0) {
+                        TodayBriefRow(content: brief)
+                        if let previous = brief.previous { TodayPreviousRow(previous: previous) }
+                        historyDisclosure(payload)
+                    }
                 }
             }
         }
@@ -164,6 +175,33 @@ struct DashboardView: View {
         .padding(.top, Theme.Spacing.xxs)
         .padding(.bottom, Theme.Spacing.xl)
         .sensoryFeedback(.selection, trigger: detail)
+    }
+
+    private func signals(_ payload: DashboardPayload, interactive: Bool) -> some View {
+        TodaySignalsView(
+            payload: payload,
+            inProgress: TodayFormat.partialKeys(metricDates: metricDates, isFallback: payload.isFallback)
+        ) { href in
+            if interactive { detail = href }
+        }
+    }
+
+    private func historyDisclosure(_ payload: DashboardPayload) -> some View {
+        DisclosureGroup(isExpanded: $showsHistory) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.md) {
+                RecoveryTrendCardView(points: payload.recoveryTrend)
+                records(payload.prs)
+            }
+            .padding(.top, Theme.Spacing.sm)
+        } label: {
+            Text("History & personal records")
+                .font(Theme.FontStyle.sans(13, weight: .medium))
+                .foregroundStyle(Theme.Palette.fg2)
+                .frame(minHeight: 44, alignment: .leading)
+        }
+        .tint(Theme.Palette.fg3)
+        .overlay(alignment: .top) { LedgerRule() }
+        .accessibilityIdentifier("today-history")
     }
 
     private struct Record: Identifiable {
@@ -248,11 +286,19 @@ struct DashboardView: View {
     }
 
     @MainActor
-    private func load(showSpinner: Bool) async {
-        loadGeneration += 1
-        let generation = loadGeneration
+    private func load(showSpinner: Bool, polling: Bool = false) async {
+        let generation: Int
+        if polling {
+            guard let token = loads.beginPoll() else { return }
+            generation = token
+        } else {
+            generation = loads.beginExplicit()
+        }
         isLoading = true
-        defer { if generation == loadGeneration { isLoading = false } }
+        defer {
+            if !polling { loads.endExplicit() }
+            if loads.isCurrent(generation) { isLoading = false }
+        }
 
         let hadLoadedData: Bool
         if case .loaded = phase { hadLoadedData = true } else { hadLoadedData = false }
@@ -264,8 +310,11 @@ struct DashboardView: View {
         let failure: String
         do {
             let payload = try await DashboardServiceV2(api: api).load(range: .d30)
-            guard generation == loadGeneration else { return }
+            guard loads.isCurrent(generation) else { return }
             withAnimation(reduceMotion ? nil : .snappy) { phase = .loaded(payload) }
+            briefIsWriting = TodayBriefContent(
+                insight: payload.aiInsight, isFallback: payload.isFallback, isRefreshing: payload.insightRefreshing
+            ).shouldPoll
             refreshError = nil
             lastFetched = Date()
             Task { await loadMetricDates(generation: generation) }
@@ -281,11 +330,44 @@ struct DashboardView: View {
         } catch {
             failure = "Something went wrong. Pull down or tap Retry."
         }
-        guard generation == loadGeneration else { return }
+        guard loads.shouldSurfaceFailure(token: generation, polling: polling) else { return }
         if hadLoadedData {
             refreshError = failure
         } else {
             phase = .error(failure)
+        }
+    }
+
+    private struct PollKey: Equatable {
+        let active: Bool
+        let writing: Bool
+        let suspended: Bool
+    }
+
+    /// Polling is suspended while an explicit load is in flight and re-armed
+    /// (a fresh schedule) when it settles, because the key changes both times.
+    private var pollKey: PollKey {
+        PollKey(active: scenePhase == .active, writing: briefIsWriting, suspended: loads.explicitInFlight > 0)
+    }
+
+    /// Bounded: at most four re-fetches at 6, 12, 24 and 48 seconds from arming,
+    /// ending early once the brief is no longer being written. SwiftUI cancels
+    /// this task when the key changes or the view goes away.
+    @MainActor
+    private func pollWhileWriting() async {
+        let key = pollKey
+        guard key.writing, key.active, !key.suspended else { return }
+        var schedule = BriefPollSchedule()
+        schedule.arm(at: Date())
+        while let deadline = schedule.nextDeadline {
+            let wait = deadline.timeIntervalSinceNow
+            if wait > 0 {
+                do { try await Task.sleep(for: .seconds(wait)) } catch { return }
+            }
+            if Task.isCancelled { return }
+            schedule.recordAttempt()
+            await load(showSpinner: false, polling: true)
+            if Task.isCancelled || !briefIsWriting { return }
         }
     }
 
@@ -300,7 +382,7 @@ struct DashboardView: View {
         let (strainTrend, stepsTrend) = await (strain, steps)
         let strainDate = strainTrend.flatMap(TrendsStats.latestReadingDate)
         let stepsDate = stepsTrend.flatMap(TrendsStats.latestReadingDate)
-        guard generation == loadGeneration else { return }
+        guard loads.isCurrent(generation) else { return }
         var dates: [KPITile.Key: String] = [:]
         if let strainDate { dates[.strain] = strainDate }
         if let stepsDate { dates[.steps] = stepsDate }

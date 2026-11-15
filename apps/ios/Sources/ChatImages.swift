@@ -35,6 +35,11 @@ enum ChatComposerRules {
             )
     }
 
+    /// Starter prompts are for an empty composer; once there is a draft they only crowd it.
+    static func showsStarters(text: String, imageCount: Int) -> Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && imageCount == 0
+    }
+
     static func restoring(_ sent: ChatDraft, over current: ChatDraft) -> ChatDraft {
         ChatDraft(
             text: current.text.isEmpty ? sent.text : current.text,

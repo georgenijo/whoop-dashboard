@@ -1,5 +1,6 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
+import { after } from "next/server";
 import {
   getHealthContext,
   getLatestInsight,
@@ -10,6 +11,7 @@ import { getInsightToday as insightToday, saveInsight } from "@/lib/db/summary";
 import { getGenerationFailure, type GenerationErrorClass } from "@/lib/db/ai-generation";
 import { isSettingLockActive, releaseSettingLock, type SettingLock } from "@/lib/db/settings";
 import { resolveCatalogModel } from "@/lib/coach/model-resolution";
+import { resolveApiKeyForUser } from "@/lib/coach/api-key";
 import { insightModel } from "@/lib/coach/model-defaults";
 import { DEFAULT_COACH_EFFORT, anthropicReasoningConfig } from "@/lib/coach/provider";
 import {
@@ -102,6 +104,33 @@ export function acquireInsightRegenerationLock(
 ): SettingLock | null {
   if (!status.isStale) return null;
   return acquireGenerationLock(status.userId, "insight", apiKey);
+}
+
+export type InsightRefresh = {
+  status: InsightStatus;
+  refreshing: boolean;
+};
+
+// The one request-time entry point for brief generation, shared by the web
+// Overview and /api/ios/dashboard. Resolves the BYOK key, takes the same lock
+// and retry/backoff gate, and schedules generation in after() so the caller
+// never waits on the model. Missing credentials are persisted as a visible
+// failure by the gate rather than thrown. Must run inside a request scope.
+export function scheduleInsightRegeneration(userId: number, hasData: boolean): InsightRefresh {
+  const before = getInsightStatus(userId, hasData);
+  let apiKey: string | null = null;
+  try {
+    apiKey = resolveApiKeyForUser(userId).key;
+  } catch {
+    apiKey = null;
+  }
+  const lock = acquireInsightRegenerationLock(before, apiKey);
+  const status = getInsightStatus(userId, hasData);
+  if (lock !== null && apiKey !== null) {
+    const key = apiKey;
+    after(() => regenerateInsight(userId, key, lock));
+  }
+  return { status, refreshing: status.isRegenerating || lock !== null };
 }
 
 export async function regenerateInsight(

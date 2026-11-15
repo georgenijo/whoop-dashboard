@@ -5,7 +5,7 @@ import {
   getRecoveryTrend,
   getLatestWhoopDataTimestamp,
 } from "@/lib/db";
-import { getInsightStatus } from "@/lib/insights";
+import { scheduleInsightRegeneration } from "@/lib/insights";
 import { buildKPITiles, type KPITile } from "@/lib/ios/kpi";
 import { parseRange, localToday } from "@/lib/ios/range";
 import { rollingMean } from "@/lib/analytics/trends";
@@ -49,6 +49,8 @@ type DashboardResponse = {
   is_fallback: boolean;
   recovery_hero: RecoveryHero;
   ai_insight: AiInsight;
+  insight_refreshing: boolean;
+  insight_error: string | null;
   kpi: KPITile[];
   prs: PRPayload;
   recovery_trend: RecoveryTrendPoint[];
@@ -74,7 +76,12 @@ export async function GET(req: Request) {
       ma7: ma7[i],
     }));
 
-    const insightStatus = getInsightStatus(user.id, overview.hasData);
+    // Same lock/backoff/missing-key gate as the web Overview; generation runs
+    // in after(), so this response never waits on the model.
+    const { status: insightStatus, refreshing } = scheduleInsightRegeneration(
+      user.id,
+      overview.hasData,
+    );
     const ai_insight: AiInsight = insightStatus.insight
       ? {
           text: insightStatus.insight.insight,
@@ -114,6 +121,8 @@ export async function GET(req: Request) {
       is_fallback,
       recovery_hero,
       ai_insight,
+      insight_refreshing: refreshing,
+      insight_error: insightStatus.errorClass,
       kpi: buildKPITiles(overview),
       prs,
       recovery_trend,

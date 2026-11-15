@@ -21,6 +21,10 @@ struct ChatView: View {
     @State private var rows: [ChatRow] = []
     @State private var currentTitle: String?
     @State private var input: String = ""
+    /// Width the composer field was last laid out at. A multi-line field keeps the
+    /// height it measured at its first width, so a draft injected while the
+    /// screen is still settling would leave it too tall.
+    @State private var composerFieldWidth: CGFloat = 0
     @State private var isSending = false
     @State private var loadError: String?
     @State private var sendError: String?
@@ -314,7 +318,6 @@ struct ChatView: View {
         } else if rows.isEmpty {
             ScrollView {
                 emptyAsk
-                    .containerRelativeFrame(.vertical)
             }
             .scrollDismissesKeyboard(.interactively)
         } else {
@@ -433,6 +436,7 @@ struct ChatView: View {
                     .foregroundStyle(Theme.Palette.fg2)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            if ChatComposerRules.showsStarters(text: input, imageCount: pendingImages.count) {
             VStack(spacing: 0) {
                 ForEach(Array(Self.starterPrompts.enumerated()), id: \.offset) { index, starter in
                     Button {
@@ -450,6 +454,7 @@ struct ChatView: View {
                                     .font(Theme.FontStyle.sans(11))
                                     .foregroundStyle(Theme.Palette.fg3)
                                     .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
                             }
                             Spacer(minLength: 8)
                             Image(systemName: "chevron.right")
@@ -470,12 +475,13 @@ struct ChatView: View {
                 }
             }
             .coachLedgerOutline()
+            }
         }
         .padding(.horizontal, Theme.Spacing.lg)
         .padding(.top, Theme.Spacing.xl)
         .padding(.bottom, Theme.Spacing.md)
         .frame(maxWidth: 640, alignment: .topLeading)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     private var composer: some View {
@@ -557,6 +563,7 @@ struct ChatView: View {
                     .disabled(isSending)
                     .textFieldStyle(.plain)
                     .focused($isComposerFocused)
+                    .id(Int(composerFieldWidth.rounded()))
                     .padding(.horizontal, 4)
                     .accessibilityIdentifier("chat-message-input")
 
@@ -607,6 +614,12 @@ struct ChatView: View {
                     .sensoryFeedback(.impact(weight: .light), trigger: isSending) { _, sending in sending }
                 }
             }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            // Replacing the field drops focus; give it back if it had it.
+            let hadFocus = isComposerFocused
+            composerFieldWidth = width
+            if hadFocus { Task { @MainActor in isComposerFocused = true } }
         }
         .padding(.horizontal, 10)
         .padding(.top, 10)
