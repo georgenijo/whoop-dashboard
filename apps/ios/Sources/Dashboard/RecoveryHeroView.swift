@@ -38,23 +38,19 @@ struct RecoveryHeroView: View {
 
     private func card(tappable: Bool) -> some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            let headerLayout = dynamicTypeSize.isAccessibilitySize
-                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
-                : AnyLayout(HStackLayout(spacing: 6))
-            headerLayout {
+            HStack(spacing: 6) {
                 Text(isHistorical ? "Latest recovery" : "Recovery")
-                    .font(Theme.FontStyle.sans(13, weight: .medium))
-                    .foregroundStyle(Theme.Palette.fg2)
-                if !dynamicTypeSize.isAccessibilitySize { Spacer() }
-                if let updated = updatedCaption {
-                    Text(updated)
-                        .font(Theme.FontStyle.mono(11))
-                        .foregroundStyle(Theme.Palette.fg3)
-                }
-                if tappable && !dynamicTypeSize.isAccessibilitySize {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Theme.Palette.fg3)
+                    .font(Theme.FontStyle.sans(15, weight: .medium))
+                    .foregroundStyle(Theme.Palette.fg0)
+                Spacer()
+                if tappable {
+                    HStack(spacing: 6) {
+                        Text("Details")
+                            .font(Theme.FontStyle.sans(13))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundStyle(Theme.Palette.fg3)
                 }
             }
 
@@ -64,17 +60,12 @@ struct RecoveryHeroView: View {
             layout {
                 RecoveryScore(score: hero.score)
 
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 8) {
                     if let score = hero.score {
-                        Text(score < 34 ? "Lower recovery" : score < 67 ? "Moderate recovery" : "Higher recovery")
-                            .font(Theme.FontStyle.sans(17, weight: .semibold))
+                        Text("\(RecoveryZone(score: score).bandName) recovery")
+                            .font(Theme.FontStyle.sans(20, weight: .semibold))
                             .foregroundStyle(Theme.Palette.fg0)
-                        if showsGuidance {
-                            Text(isHistorical ? "This reading describes your last recorded day, not your readiness today." : RecoveryZone(score: score).guidance)
-                                .font(Theme.FontStyle.sans(15))
-                                .foregroundStyle(Theme.Palette.fg1)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
+                            .fixedSize(horizontal: false, vertical: true)
                         if let baseline {
                             baselineRow(score: score, baseline: baseline)
                         }
@@ -89,6 +80,16 @@ struct RecoveryHeroView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+
+            if let score = hero.score {
+                ZoneScale(score: score)
+                if showsGuidance {
+                    Text(isHistorical ? "This reading describes your last recorded day, not your readiness today." : RecoveryZone(score: score).guidance)
+                        .font(Theme.FontStyle.sans(15))
+                        .foregroundStyle(Theme.Palette.fg1)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         }
         .multilineTextAlignment(.leading)
         .glassCard(tint: heroTint, padding: Theme.Spacing.lg)
@@ -97,27 +98,17 @@ struct RecoveryHeroView: View {
 
     private var heroTint: GlassTint { .recovery }
 
-    private func baselineRow(score: Double, baseline: Double) -> some View {
+    static func baselineText(score: Double, baseline: Double) -> (delta: String, rest: String) {
         let diff = score.rounded() - baseline.rounded()
         let sign = diff > 0 ? "+" : diff < 0 ? "−" : "±"
-        let color = Theme.Palette.fg2
-        return HStack(spacing: 5) {
-            Text("\(sign)\(Int(abs(diff)))")
-                .font(Theme.FontStyle.mono(13, weight: .medium))
-                .foregroundStyle(color)
-            Text("vs 30-day avg \(Int(baseline.rounded()))%")
-                .font(Theme.FontStyle.mono(11))
-                .foregroundStyle(Theme.Palette.fg3)
-        }
-        .fixedSize(horizontal: false, vertical: true)
+        return ("\(sign)\(Int(abs(diff)))", "vs 30-day average of \(Int(baseline.rounded()))%")
     }
 
-    private var updatedCaption: String? {
-        guard let date = InsightDate.parse(hero.updatedAt) else { return nil }
-        if Calendar.current.isDateInToday(date) {
-            return "Synced " + date.formatted(date: .omitted, time: .shortened)
-        }
-        return "Synced " + date.formatted(.dateTime.month(.abbreviated).day())
+    private func baselineRow(score: Double, baseline: Double) -> some View {
+        let text = Self.baselineText(score: score, baseline: baseline)
+        return (Text(text.delta).font(Theme.FontStyle.mono(15, weight: .medium)).foregroundColor(Theme.Palette.fg0)
+            + Text(" " + text.rest).font(Theme.FontStyle.sans(15)).foregroundColor(Theme.Palette.fg2))
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 

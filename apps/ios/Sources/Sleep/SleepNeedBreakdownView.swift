@@ -1,115 +1,72 @@
 import SwiftUI
 
-/// Sleep need, read as a sum: what you needed, what made up that need, and
-/// how much of it you actually got.
+/// Sleep need, read as a sum: the parts add up to the total the hero cites.
 struct SleepNeedBreakdownView: View {
     let need: SleepPayload.LatestSleep.NeedBreakdown
-    var asleepMs: Double? = nil
+    var embedded = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    private struct Part: Identifiable {
+    struct Part: Identifiable, Equatable {
         let label: String
         let sign: String
         let ms: Double
-        let color: Color
         var id: String { label }
     }
 
-    private var parts: [Part] {
-        var p = [
-            Part(label: "Baseline", sign: "", ms: need.baselineMs, color: Theme.Palette.sleepDeep),
-            Part(label: "Sleep debt", sign: "+", ms: need.debtMs, color: Theme.Palette.warning),
-            Part(label: "From strain", sign: "+", ms: need.strainMs, color: Theme.Palette.rhr)
+    static func parts(_ need: SleepPayload.LatestSleep.NeedBreakdown) -> [Part] {
+        var parts = [
+            Part(label: "Baseline", sign: "", ms: need.baselineMs),
+            Part(label: "From strain", sign: "+", ms: need.strainMs),
+            Part(label: "Sleep debt", sign: "+", ms: need.debtMs)
         ]
-        if need.napMs > 0 {
-            p.append(Part(label: "Nap credit", sign: "−", ms: need.napMs, color: Theme.Palette.recovery))
-        }
-        return p
+        parts.append(Part(label: "Nap credit", sign: need.napMs > 0 ? "−" : "", ms: need.napMs))
+        return parts
     }
 
-    private var totalNeed: Double {
+    static func total(_ need: SleepPayload.LatestSleep.NeedBreakdown) -> Double {
         max(0, need.baselineMs + need.debtMs + need.strainMs - need.napMs)
     }
 
-    private var fraction: Double? {
-        guard let asleepMs, totalNeed > 0 else { return nil }
-        return min(1, max(0, asleepMs / totalNeed))
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.md) {
-            TrendsCardLabel("Sleep need")
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), alignment: .leading)], alignment: .leading, spacing: 16) {
-                figure(label: "Needed", value: TrendsFormat.hoursMinutes(ms: totalNeed), color: Theme.Palette.fg0)
-                if let asleepMs {
-                    figure(label: "Asleep", value: TrendsFormat.hoursMinutes(ms: asleepMs), color: Theme.Palette.fg0)
-                }
-                if let fraction {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(Int((fraction * 100).rounded()))%")
-                            .font(Theme.FontStyle.mono(22, weight: .medium))
-                            .foregroundStyle(fraction >= 0.85 ? Theme.Palette.success : Theme.Palette.warning)
-                        Text("of need met")
-                            .font(Theme.FontStyle.mono(11))
-                            .foregroundStyle(Theme.Palette.fg3)
-                    }
-                }
+        VStack(alignment: .leading, spacing: 0) {
+            LedgerHeader(title: "Sleep need", subtitle: "last night")
+            ForEach(Self.parts(need)) { part in
+                LedgerRule()
+                row(label: part.label, value: Self.format(part), emphasized: false)
             }
-            if let fraction {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Theme.Palette.bg4)
-                        Capsule()
-                            .fill(Theme.Palette.sleepDeep)
-                            .frame(width: max(8, geo.size.width * fraction))
-                    }
-                }
-                .frame(height: 8)
-                .accessibilityHidden(true)
-            }
-            Text("Need met compares time asleep with estimated need. Sleep performance is a separate score reported by Whoop and may differ.")
-                .font(Theme.FontStyle.sans(13))
-                .foregroundStyle(Theme.Palette.fg2)
-                .fixedSize(horizontal: false, vertical: true)
-            VStack(spacing: 12) {
-                ForEach(parts) { part in
-                    let layout = dynamicTypeSize.isAccessibilitySize
-                        ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
-                        : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))
-                    layout {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(part.color)
-                            .frame(width: 10, height: 10)
-                        Text(part.label)
-                            .font(Theme.FontStyle.sans(15))
-                            .foregroundStyle(Theme.Palette.fg1)
-                        if !dynamicTypeSize.isAccessibilitySize { Spacer() }
-                        Text("\(part.sign)\(part.sign.isEmpty ? "" : " ")\(TrendsFormat.hoursMinutes(ms: part.ms))")
-                            .font(Theme.FontStyle.mono(13, weight: .medium))
-                            .foregroundStyle(Theme.Palette.fg1)
-                    }
-                    .accessibilityElement(children: .combine)
-                }
-            }
+            LedgerRule()
+            row(label: "Total needed", value: TrendsFormat.hoursMinutes(ms: Self.total(need)), emphasized: true)
             if need.debtMs > 0 {
-                Text("Sleep debt adds to this estimate of need; it isn’t the same as last night’s shortfall.")
+                Text("Sleep debt raises the estimate of need; it isn’t last night’s shortfall.")
                     .font(Theme.FontStyle.sans(13))
-                    .foregroundStyle(Theme.Palette.fg2)
+                    .foregroundStyle(Theme.Palette.fg3)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(Theme.Spacing.md)
             }
         }
-        .glassCard(tint: .sleep, padding: Theme.Spacing.md)
+        .cardChrome(embedded: embedded, padding: 0)
     }
 
-    private func figure(label: String, value: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(value)
-                .font(Theme.FontStyle.mono(22, weight: .medium))
-                .foregroundStyle(color)
+    static func format(_ part: Part) -> String {
+        let text = TrendsFormat.hoursMinutes(ms: part.ms)
+        return part.sign.isEmpty ? text : "\(part.sign)\(text)"
+    }
+
+    private func row(label: String, value: String, emphasized: Bool) -> some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))
+        return layout {
             Text(label)
-                .font(Theme.FontStyle.mono(11))
-                .foregroundStyle(Theme.Palette.fg3)
+                .font(Theme.FontStyle.sans(17, weight: emphasized ? .semibold : .regular))
+                .foregroundStyle(emphasized ? Theme.Palette.fg0 : Theme.Palette.fg1)
+            if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 8) }
+            Text(value)
+                .font(Theme.FontStyle.mono(17, weight: emphasized ? .semibold : .medium))
+                .foregroundStyle(Theme.Palette.fg0)
         }
+        .padding(.horizontal, Theme.Spacing.md)
+        .padding(.vertical, 14)
         .accessibilityElement(children: .combine)
     }
 }

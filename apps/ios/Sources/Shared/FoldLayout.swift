@@ -49,6 +49,9 @@ extension View {
 
 private struct MeasuresFold: ViewModifier {
     @State private var geometry = FoldGeometry.none
+    /// A geometry supplied from above (previews and render tests) seeds the
+    /// layout until the first real measurement arrives.
+    @Environment(\.foldGeometry) private var inherited
 
     func body(content: Content) -> some View {
         content
@@ -57,7 +60,13 @@ private struct MeasuresFold: ViewModifier {
             } action: { newValue in
                 geometry = newValue
             }
-            .environment(\.foldGeometry, geometry)
+            .environment(\.foldGeometry, resolved)
+    }
+
+    private var resolved: FoldGeometry {
+        guard geometry.width > 0 else { return inherited }
+        if geometry.hinge == nil, inherited.hinge != nil { return inherited }
+        return geometry
     }
 
     private static func hinge(in proxy: GeometryProxy) -> ClosedRange<CGFloat>? {

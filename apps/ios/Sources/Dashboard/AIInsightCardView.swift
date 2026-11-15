@@ -6,70 +6,106 @@ struct AIInsightCardView: View {
     private var isCurrent: Bool { insight.isCurrent && !historical }
 
     @State private var showFull = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private var digest: InsightDigest? {
         insight.text.map(InsightDigest.init(markdown:))
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            header
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
+                header
 
-            if !isCurrent, insight.text?.isEmpty == false {
-                Text("Historical advice · current readings may differ.")
-                    .font(Theme.FontStyle.sans(13))
-                    .foregroundStyle(Theme.Palette.fg2)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else if let digest, !digest.isEmpty {
-                digestBody(digest)
-            } else if let text = insight.text, !text.isEmpty {
-                Text("Open the full analysis for details.")
-                    .font(Theme.FontStyle.sans(15))
-                    .foregroundStyle(Theme.Palette.fg2)
-            } else {
-                Text("No daily analysis is available yet. You can ask Coach to review your latest data.")
-                    .font(Theme.FontStyle.sans(15))
-                    .foregroundStyle(Theme.Palette.fg2)
+                if !isCurrent, insight.text?.isEmpty == false {
+                    Text("Historical advice · current readings may differ.")
+                        .font(Theme.FontStyle.sans(13))
+                        .foregroundStyle(Theme.Palette.fg2)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else if let digest, !digest.isEmpty {
+                    digestBody(digest)
+                } else if let text = insight.text, !text.isEmpty {
+                    Text("Open the full analysis for details.")
+                        .font(Theme.FontStyle.sans(15))
+                        .foregroundStyle(Theme.Palette.fg2)
+                } else {
+                    Text("No daily analysis is available yet. You can ask Coach to review your latest data.")
+                        .font(Theme.FontStyle.sans(15))
+                        .foregroundStyle(Theme.Palette.fg2)
+                }
             }
+            .padding(Theme.Spacing.lg)
 
             if let text = insight.text, !text.isEmpty {
-                Divider().overlay(Theme.Palette.borderSubtle)
-                Button { showFull = true } label: {
-                    HStack {
-                        Text(isCurrent ? "Read full analysis" : "Read previous analysis")
-                            .font(Theme.FontStyle.sans(15, weight: .medium))
-                            .foregroundStyle(Theme.Palette.fg0)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Theme.Palette.fg3)
-                    }
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Opens the full coach analysis")
+                LedgerRule()
+                footer
             }
         }
-        .glassCard(tint: .ai, padding: Theme.Spacing.md)
+        .glassCard(tint: .ai, padding: 0)
         .sheet(isPresented: $showFull) {
             InsightFullSheet(insight: insight, historical: historical)
         }
     }
 
+    /// "Full analysis" and "Ask Coach" share one ruled row. Each half is a
+    /// 44 pt-minimum target; at accessibility sizes they stack.
+    private var footer: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
+            : AnyLayout(HStackLayout(spacing: 0))
+        return layout {
+            Button { showFull = true } label: {
+                HStack {
+                    Text(isCurrent ? "Full analysis" : "Read previous analysis")
+                        .font(Theme.FontStyle.sans(15, weight: .medium))
+                        .foregroundStyle(Theme.Palette.fg0)
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.Palette.fg3)
+                }
+                .padding(.horizontal, Theme.Spacing.lg)
+                .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens the full coach analysis")
+
+            if isCurrent {
+                if dynamicTypeSize.isAccessibilitySize {
+                    LedgerRule()
+                } else {
+                    Rectangle().fill(Theme.Palette.borderSubtle).frame(width: 1, height: 52)
+                }
+                Button {
+                    NotificationCenter.default.post(name: .coachComposeRequested, object: Self.askCoachPrompt)
+                } label: {
+                    Label("Ask Coach", systemImage: "bubble.left")
+                        .font(Theme.FontStyle.sans(15, weight: .medium))
+                        .foregroundStyle(Theme.Palette.accent)
+                        .padding(.horizontal, Theme.Spacing.lg)
+                        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Starts a Coach chat about today's brief")
+            }
+        }
+    }
+
+    static let askCoachPrompt = "Walk me through today's brief. What should I change about training and sleep, and why?"
+
     private var header: some View {
-        HStack(alignment: .center, spacing: 6) {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(isCurrent ? "Daily brief" : "Previous analysis")
-                .font(Theme.FontStyle.sans(11, weight: .semibold))
-                .tracking(0)
-                .foregroundStyle(Theme.Palette.fg2)
-            Spacer(minLength: 8)
+                .font(Theme.FontStyle.sans(13, weight: .medium))
+                .foregroundStyle(Theme.Palette.fg0)
             if let written = InsightDate.short(insight.createdAt) {
-                Text(written)
-                    .font(Theme.FontStyle.mono(11))
+                Text("Written \(written)")
+                    .font(Theme.FontStyle.sans(13))
                     .foregroundStyle(Theme.Palette.fg3)
             }
-
+            Spacer(minLength: 0)
         }
     }
 
@@ -77,24 +113,25 @@ struct AIInsightCardView: View {
     private func digestBody(_ digest: InsightDigest) -> some View {
         if let headline = digest.headline {
             MarkdownView(content: headline)
-                .font(Theme.FontStyle.sans(17, weight: .medium))
+                .font(Theme.FontStyle.sans(18, weight: .medium))
                 .foregroundStyle(Theme.Palette.fg0)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         if !digest.actions.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 12) {
                 Text("Suggested today")
-                    .font(Theme.FontStyle.sans(11, weight: .semibold))
-                    .tracking(0)
+                    .font(Theme.FontStyle.sans(13, weight: .medium))
                     .foregroundStyle(Theme.Palette.fg3)
+                    .padding(.top, 4)
                 ForEach(Array(digest.actions.enumerated()), id: \.offset) { index, action in
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
                         Text("\(index + 1)")
                             .font(Theme.FontStyle.mono(11, weight: .medium))
-                            .foregroundStyle(Theme.Palette.accent)
-                            .frame(width: 18, height: 18)
-                            .background(Theme.Palette.bg2, in: Rectangle())
-                            .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 5 }
+                            .foregroundStyle(Theme.Palette.fg1)
+                            .frame(width: 22, height: 22)
+                            .overlay(Rectangle().strokeBorder(Theme.Palette.borderSubtle, lineWidth: 1))
+                            .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 6 }
+                            .accessibilityHidden(true)
                         MarkdownView(content: action)
                             .font(Theme.FontStyle.sans(15))
                             .foregroundStyle(Theme.Palette.fg1)

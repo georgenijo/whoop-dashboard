@@ -45,10 +45,23 @@ struct TrendsCardState<Value> {
 enum TrendsStats {
     /// Mean of the most recent `days` points that have data, independent of
     /// whether today has synced yet.
-    static func recentAverage(_ points: [TrendPoint], days: Int = 7) -> Double? {
-        let recent = points.sorted { $0.date < $1.date }.compactMap(\.raw).suffix(days)
+    static func recentAverage(_ points: [TrendPoint], days: Int = 7, excluding partialDate: String? = nil) -> Double? {
+        let recent = points.filter { $0.date != partialDate }.sorted { $0.date < $1.date }.compactMap(\.raw).suffix(days)
         guard !recent.isEmpty else { return nil }
         return recent.reduce(0, +) / Double(recent.count)
+    }
+
+    /// Date of the newest point that actually has a reading. The strain and
+    /// steps endpoints stamp `today.date` with the server's today whether or
+    /// not a reading exists, so freshness must come from the series itself.
+    static func latestReadingDate(_ points: [TrendPoint]) -> String? {
+        points.filter { $0.raw != nil }.map(\.date).max()
+    }
+
+    /// The latest point's date when it is today, i.e. a day still accumulating.
+    static func partialDate(_ points: [TrendPoint], now: Date = Date()) -> String? {
+        let today = ChartDate.key(now)
+        return points.contains { $0.date == today && $0.raw != nil } ? today : nil
     }
 
     /// "Today" only when the measurement is from today; otherwise "Latest · <day>".
@@ -260,15 +273,15 @@ struct TrendsCardPressStyle: ButtonStyle {
 struct TrendsErrorCard: View {
     let title: String
     let message: String
+    var embedded = false
     let retry: () -> Void
 
     var body: some View {
         HStack(alignment: .center, spacing: Theme.Spacing.sm) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(title.uppercased())
-                    .font(Theme.FontStyle.sans(11, weight: .semibold))
-                    .tracking(0.5)
-                    .foregroundStyle(Theme.Palette.fg2)
+                Text(title)
+                    .font(Theme.FontStyle.sans(15, weight: .medium))
+                    .foregroundStyle(Theme.Palette.fg0)
                 Text(message)
                     .font(Theme.FontStyle.sans(15))
                     .foregroundStyle(Theme.Palette.fg1)
@@ -281,13 +294,13 @@ struct TrendsErrorCard: View {
                     .foregroundStyle(Theme.Palette.fg0)
                     .padding(.horizontal, 16)
                     .frame(minHeight: 44)
-                    .background(Capsule().fill(Theme.Palette.bg4))
-                    .overlay(Capsule().strokeBorder(Theme.Palette.borderStrong, lineWidth: 0.5))
+                    .background(Rectangle().fill(Theme.Palette.bg3))
+                    .overlay(Rectangle().strokeBorder(Theme.Palette.borderStrong, lineWidth: 1))
             }
             .buttonStyle(.plain)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(padding: Theme.Spacing.md)
+        .cardChrome(embedded: embedded)
     }
 }
 
@@ -295,13 +308,13 @@ struct TrendsErrorCard: View {
 struct TrendsChartPlaceholder: View {
     let title: String
     var chartHeight: CGFloat = 180
+    var embedded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
-            Text(title.uppercased())
-                .font(Theme.FontStyle.sans(11, weight: .semibold))
-                .tracking(0.5)
-                .foregroundStyle(Theme.Palette.fg2)
+            Text(title)
+                .font(Theme.FontStyle.sans(15, weight: .medium))
+                .foregroundStyle(Theme.Palette.fg0)
             HStack(alignment: .firstTextBaseline) {
                 Text("00.0")
                     .font(Theme.FontStyle.mono(30, weight: .medium))
@@ -315,7 +328,7 @@ struct TrendsChartPlaceholder: View {
                 .frame(height: chartHeight)
                 .trendsShimmer()
         }
-        .glassCard(padding: Theme.Spacing.md)
+        .cardChrome(embedded: embedded)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Loading \(title)")
     }
@@ -363,16 +376,33 @@ struct TrendsDetailError: View {
 /// Pinned range control shared by the hub and every detail page.
 struct TrendsRangeBar: View {
     @Binding var range: DateRange
+    /// With a caption, it takes the leading pane and the range the trailing
+    /// one, so the control sits above the data it drives.
+    var caption: String? = nil
 
     var body: some View {
         // Use the actual usable pane beside the fold, including the rail's
         // asymmetry. The cover display naturally remains a single column.
-        RangePicker(selection: $range)
-            .inLeadingFoldColumn()
-            .padding(.horizontal, Theme.Spacing.md)
-            .padding(.vertical, Theme.Spacing.xs)
-            .background(Theme.Palette.bg0.opacity(0.92))
-            .measuresFold()
+        Group {
+            if let caption {
+                FoldColumns {
+                    Text(caption)
+                        .font(Theme.FontStyle.sans(15))
+                        .foregroundStyle(Theme.Palette.fg2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                } trailing: {
+                    RangePicker(selection: $range)
+                }
+            } else {
+                RangePicker(selection: $range)
+                    .inLeadingFoldColumn()
+            }
+        }
+        .padding(.horizontal, Theme.Spacing.md)
+        .padding(.vertical, Theme.Spacing.xs)
+        .background(Theme.Palette.bg0.opacity(0.92))
+        .measuresFold()
     }
 }
 

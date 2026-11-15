@@ -1,4 +1,4 @@
-import Foundation
+import SwiftUI
 
 enum StatsFormat {
     private static let metersPerMile = 1609.344
@@ -87,6 +87,38 @@ enum StatsFormat {
         // Round only the displayed magnitude: −0.1% must not read as "+0%" ahead.
         let rounded = Int(pct.rounded())
         return rounded == 0 ? .flat : .percent(rounded)
+    }
+
+    /// One-line verdict for the year-over-year card, e.g. "Ahead of 2025 on 3 of 4 measures so far."
+    static func yoyVerdict(changes: [Change], priorYear: Int) -> String? {
+        guard !changes.isEmpty else { return nil }
+        let ahead = changes.filter { $0.direction == .up }.count
+        let behind = changes.filter { $0.direction == .down }.count
+        let n = changes.count
+        let prior = String(priorYear)
+        if ahead == 0 && behind == 0 { return "Level with \(prior) so far." }
+        if n == 1 { return ahead == 1 ? "Ahead of \(prior) so far." : "Behind \(prior) so far." }
+        if ahead == n { return "Ahead of \(prior) on all \(n) measures so far." }
+        if behind == n { return "Behind \(prior) on all \(n) measures so far." }
+        if ahead == 0 { return "Behind \(prior) on \(behind) of \(n) measures so far." }
+        return "Ahead of \(prior) on \(ahead) of \(n) measures so far."
+    }
+
+    /// "Aug 17 – Nov 14" for an inclusive yyyy-MM-dd window.
+    static func windowCaption(_ window: Window) -> String? {
+        guard let start = isoDay.date(from: window.start), let end = isoDay.date(from: window.end) else { return nil }
+        let style = Date.FormatStyle().month(.abbreviated).day()
+        return "\(start.formatted(style)) – \(end.formatted(style))"
+    }
+
+    /// Caption under the monthly chart naming what the faded bars are.
+    static func partialCaption(trend: [(month: String, partial: Bool)], window: Window) -> String? {
+        let partials = trend.filter { $0.partial }
+        guard !partials.isEmpty else { return nil }
+        if partials.count == 1, isCurrentMonth(partials[0].month, window: window) {
+            return "Faded bar: \(monthLong(partials[0].month)) so far."
+        }
+        return "Faded bars are partial months."
     }
 
     private static let isoDay: DateFormatter = {
@@ -194,5 +226,21 @@ enum StatsFormat {
             }
         }
         return RecordValue(parts: [.init(number: trimmed, unit: nil)])
+    }
+}
+
+/// Sport series use the theme palette rather than server-sent hex values, so
+/// every chart shares one set of colors in both appearances.
+enum SportPalette {
+    static func color(for sport: String) -> Color {
+        let key = sport.lowercased()
+        if key.contains("weight") || key.contains("strength") || key.contains("lift") || key.contains("functional") { return Theme.Palette.hrv }
+        if key.contains("run") { return Theme.Palette.strain }
+        if key.contains("soccer") || key.contains("football") { return Theme.Palette.recovery }
+        if key.contains("walk") || key.contains("hik") { return Theme.Palette.respiration }
+        if key.contains("cycl") || key.contains("bike") || key.contains("spin") { return Theme.Palette.rhr }
+        if key.contains("swim") || key.contains("row") { return Theme.Palette.sleepDeep }
+        let fallback = [Theme.Palette.brandStrain, Theme.Palette.accent, Theme.Palette.hrZone5, Theme.Palette.fg2]
+        return fallback[key.unicodeScalars.reduce(0) { ($0 + Int($1.value)) % 9973 } % fallback.count]
     }
 }

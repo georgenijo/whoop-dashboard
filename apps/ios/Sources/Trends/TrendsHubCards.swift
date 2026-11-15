@@ -4,9 +4,14 @@ import SwiftUI
 /// so the whole card is one clean tap target; scrubbing lives on the detail page.
 struct TrendsHubCard<Footer: View>: View {
     let title: String
+    var subtitle: String? = nil
     let unit: String
     let accent: Color
     let points: [TrendPoint]
+    /// Day still accumulating (today's strain or steps): faded, and left out
+    /// of the trend and the average.
+    var partialDate: String? = nil
+    var showsZoneBands = false
     var style: MetricChart.Style = .line
     var precision: Int = 0
     var yDomain: ClosedRange<Double>? = nil
@@ -29,6 +34,10 @@ struct TrendsHubCard<Footer: View>: View {
                 yDomain: yDomain,
                 markers: markers,
                 height: 112,
+                subtitle: subtitle,
+                showsLegend: false,
+                partialDate: partialDate,
+                showsZoneBands: showsZoneBands,
                 format: format
             )
             .allowsHitTesting(false)
@@ -37,9 +46,9 @@ struct TrendsHubCard<Footer: View>: View {
                 Spacer(minLength: 0)
             }
         }
-        .glassCard(padding: Theme.Spacing.md)
+        .padding(Theme.Spacing.md)
         .overlay(alignment: .topTrailing) { TrendsChevron().padding(Theme.Spacing.md) }
-        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.xl))
+        .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityValue(accessibilitySummary)
@@ -47,16 +56,29 @@ struct TrendsHubCard<Footer: View>: View {
 
     private var accessibilitySummary: String {
         let show: (Double) -> String = { format?($0) ?? $0.formatted(.number.precision(.fractionLength(precision))) }
-        return TrendsA11y.summary(values: points.compactMap(\.raw), unit: unit, show: show, context: context)
+        let partialLatest = points.first { $0.date == partialDate }?.raw
+        return TrendsA11y.summary(values: MetricChart.completeValues(points, partialDate: partialDate), unit: unit,
+                                  show: show, context: context, partialLatest: partialLatest)
     }
 }
 
 enum TrendsA11y {
-    static func summary(values: [Double], unit: String, show: (Double) -> String, context: [String?]) -> String {
+    /// `values` are completed days only. A day still accumulating is passed as
+    /// `partialLatest`, announced as the latest value "so far" and kept out of
+    /// the average, matching what the chart plots.
+    static func summary(values: [Double], unit: String, show: (Double) -> String, context: [String?],
+                        partialLatest: Double? = nil) -> String {
         var parts: [String] = []
-        if let last = values.last {
+        let unitText = unit.isEmpty ? "" : " \(unit)"
+        if let partialLatest {
+            var text = "Latest \(show(partialLatest))\(unitText) so far today, a partial day"
+            if !values.isEmpty {
+                text += ", average of completed days \(show(values.reduce(0, +) / Double(values.count)))"
+            }
+            parts.append(text)
+        } else if let last = values.last {
             let average = values.reduce(0, +) / Double(values.count)
-            parts.append("Latest \(show(last))\(unit.isEmpty ? "" : " \(unit)"), average \(show(average))")
+            parts.append("Latest \(show(last))\(unitText), average \(show(average))")
         } else {
             parts.append("No data")
         }
@@ -87,10 +109,9 @@ struct WorkoutsSummaryCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             HStack {
-                Text("WORKOUTS")
-                    .font(Theme.FontStyle.sans(11, weight: .semibold))
-                    .tracking(0.5)
-                    .foregroundStyle(Theme.Palette.fg2)
+                Text("Workouts")
+                    .font(Theme.FontStyle.sans(15, weight: .medium))
+                    .foregroundStyle(Theme.Palette.fg0)
                 Spacer()
                 TrendsChevron()
             }
@@ -123,8 +144,8 @@ struct WorkoutsSummaryCard: View {
                 legend
             }
         }
-        .glassCard(padding: Theme.Spacing.md)
-        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.xl))
+        .padding(Theme.Spacing.md)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
 
@@ -134,7 +155,7 @@ struct WorkoutsSummaryCard: View {
             HStack(spacing: 2) {
                 ForEach(sports) { sport in
                     Rectangle()
-                        .fill(Color(hex: sport.colorHex))
+                        .fill(SportPalette.color(for: sport.sport))
                         .frame(width: max(2, (geo.size.width - CGFloat(sports.count - 1) * 2) * CGFloat(sport.sessions) / CGFloat(total)))
                 }
             }
@@ -160,7 +181,7 @@ struct WorkoutsSummaryCard: View {
             ForEach(shown) { sport in
                 HStack(spacing: 5) {
                     Circle()
-                        .fill(Color(hex: sport.colorHex))
+                        .fill(SportPalette.color(for: sport.sport))
                         .frame(width: 7, height: 7)
                     Text(TrendsFormat.sport(sport.sport))
                         .font(Theme.FontStyle.sans(13))
