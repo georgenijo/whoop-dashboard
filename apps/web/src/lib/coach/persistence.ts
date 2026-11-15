@@ -119,6 +119,7 @@ export async function runAndPersistCoachTurn(
       provider: selection.provider,
       model: selection.model,
       effort: detailState.effort ?? null,
+      ...(detailState.prefetch ? { prefetch: detailState.prefetch } : {}),
       timing: {
         persistence_ms: detailState.persistence_ms ?? null,
         first_text_ms: detailState.first_text_ms ?? null,
