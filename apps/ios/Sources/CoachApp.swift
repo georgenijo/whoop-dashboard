@@ -170,24 +170,15 @@ struct CoachApp: App {
         for (id, turn) in turns {
             do {
                 let detail = try await ChatService(api: api).threadDetail(id: id)
-                switch ChatRecovery.resolution(
+                if ChatRecovery.hasNewAssistantReply(
                     detail.messages,
-                    afterMessageId: turn.baselineMessageId,
-                    stoppedQuestion: turn.stoppedQuestion
+                    afterMessageId: turn.baselineMessageId
                 ) {
-                case .persisted:
-                    store.resolveStopped(threadId: id, persisted: true)
+                    store.inFlight.removeValue(forKey: id)
                     NotificationCenter.default.post(name: .chatThreadNeedsRefresh, object: id)
-                case .absent:
-                    // Confirmed never saved: stop showing it as replying
-                    // everywhere; the draft is restored when the thread opens.
-                    store.resolveStopped(threadId: id, persisted: false)
-                    NotificationCenter.default.post(name: .chatThreadNeedsRefresh, object: id)
-                case .pending:
-                    // Else: turn still running server-side. Keep the marker; the
-                    // next foreground retries.
-                    break
                 }
+                // Else: turn still running server-side. Keep the marker; the
+                // next foreground retries.
             } catch {
                 // Transient (offline / 5xx). Keep the marker; retry next foreground.
             }

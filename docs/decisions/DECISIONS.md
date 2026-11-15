@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-11-14: Defer reply cancellation from the Duo redesign
+
+**Decision:** Ship the Coach, Plans and Settings redesign without the new Stop reply control. Preserve the existing send and dropped-stream recovery behavior. Revisit cancellation separately with reliable server-side turn identity and explicit persistence acknowledgement.
+
+**Rationale:** Repeated review found that client-side text/attachment matching could mistake another device's message for a stopped turn, lose a photo draft, or restore an already-saved question as unsent. Cancellation needs a stronger client/server contract than this visual redesign provides.
+
+**Status:** deferred
+
+**References:** PR #619, apps/ios/Sources/ChatView.swift, apps/ios/Sources/ChatModels.swift
+
+---
+
 ## 2026-11-14: Adopt Fleet Warehouse's visual language for Coach
 
 **Decision:** Use Fleet Warehouse's DM Sans, neutral light/dark surfaces, warm gray text, restrained brown action accent, and thin ruled data groups in the native Coach app. Keep health colors semantic, native Duo navigation, Dynamic Type, and separate fold columns. Replace decorative recovery rings and large chat suggestion containers with readable values and compact rows.

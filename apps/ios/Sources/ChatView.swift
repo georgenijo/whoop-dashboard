@@ -38,8 +38,6 @@ struct ChatView: View {
     @State private var attachmentCache = ChatAttachmentCache()
     @State private var scrollState = ChatScrollState()
     @State private var jumpRequest = 0
-    @State private var stopRequested = false
-    @State private var streamControl = ChatStreamControl()
     @FocusState private var isComposerFocused: Bool
 
     /// `initialDraft` only pre-fills the composer; nothing is sent until the user taps send.
@@ -173,18 +171,13 @@ struct ChatView: View {
                 // reopening this thread; re-arm the bar/send-block from the shared store.
                 if let threadId, chatInFlight.inFlight[threadId] != nil {
                     await reconcileDroppedTurn(baselineMessageId: recoveryBaselineMessageId)
-                } else {
-                    restoreStoppedDraftIfNeeded()
                 }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .chatThreadNeedsRefresh)) { note in
             guard let id = note.object as? Int, id == threadId, !isSending else { return }
             recoveryStatus = nil
-            Task {
-                await loadHistory()
-                restoreStoppedDraftIfNeeded()
-            }
+            Task { await loadHistory() }
         }
         .onChange(of: photoPickerItems) { _, items in
             guard !items.isEmpty else { return }
@@ -223,7 +216,7 @@ struct ChatView: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Theme.Palette.accent)
             }
-            Text(status == .checking ? "Checking for reply…" : (stoppedTurnPending ? "Couldn’t confirm your stopped message…" : "Reply is still running…"))
+            Text(status == .checking ? "Checking for reply…" : "Reply is still running…")
                 .font(Theme.FontStyle.sans(11.5))
                 .foregroundStyle(Theme.Palette.fg2)
             Spacer()
@@ -584,53 +577,34 @@ struct ChatView: View {
                     .accessibilityLabel("Attach photos")
                     .accessibilityValue("\(pendingImages.count) of 3 selected")
 
-                    CoachModelPicker(disabled: isSending)
-
                     Spacer(minLength: 4)
 
-                    if isSending {
-                        Text(stopRequested ? "Stopping…" : "Stop")
-                            .font(Theme.FontStyle.sans(13, weight: .medium))
-                            .foregroundStyle(Theme.Palette.fg2)
-                            .accessibilityHidden(true)
-                        Button {
-                            stopReply()
-                        } label: {
-                            ZStack {
-                                Circle().fill(Theme.Palette.fg0)
-                                Image(systemName: "stop.fill")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundStyle(Theme.Palette.bg0)
-                            }
-                            .frame(width: 34, height: 34)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(ChatPressStyle())
-                        .disabled(stopRequested)
-                        .opacity(stopRequested ? 0.5 : 1)
-                        .accessibilityLabel("Stop reply")
-                        .accessibilityHint("Stops Coach. The question and any partial answer are kept.")
-                        .accessibilityIdentifier("chat-stop-reply")
-                    } else {
-                        Button {
-                            Task { await send() }
-                        } label: {
-                            ZStack {
-                                Circle()
-                                    .fill(canSend ? Theme.Palette.accent : Theme.Palette.bg3)
+                    CoachModelPicker(disabled: isSending)
+
+                    Button {
+                        Task { await send() }
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(canSend ? Theme.Palette.accent : Theme.Palette.bg3)
+                            if isSending {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .tint(Theme.Palette.fg2)
+                            } else {
                                 Image(systemName: "arrow.up")
                                     .font(.system(size: 15, weight: .bold))
                                     .foregroundStyle(canSend ? Theme.Palette.bg0 : Theme.Palette.fg3)
                             }
-                            .frame(width: 34, height: 34)
-                            .frame(width: 44, height: 44)
-                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(ChatPressStyle())
-                        .disabled(!canSend)
-                        .accessibilityLabel("Send message")
+                        .frame(width: 34, height: 34)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(ChatPressStyle())
+                    .disabled(!canSend)
+                    .accessibilityLabel(isSending ? "Sending" : "Send message")
+                    .sensoryFeedback(.impact(weight: .light), trigger: isSending) { _, sending in sending }
                 }
             }
         }
@@ -707,29 +681,6 @@ struct ChatView: View {
         }.first
     }
 
-    private var stoppedTurnPending: Bool {
-        guard let threadId else { return false }
-        return chatInFlight.inFlight[threadId]?.stopped == true
-    }
-
-    /// A stopped turn that was confirmed never saved while this thread was not
-    /// on screen: put its text and images back in the composer.
-    @MainActor
-    private func restoreStoppedDraftIfNeeded() {
-        guard
-            let threadId,
-            chatInFlight.inFlight[threadId] == nil,
-            let draft = chatInFlight.takeStoppedDraft(threadId: threadId)
-        else { return }
-        let restored = ChatComposerRules.restoring(
-            draft,
-            over: ChatDraft(text: input, images: pendingImages)
-        )
-        input = restored.text
-        pendingImages = restored.images
-        sendError = "Stopped before Coach replied. Your message is back in the box."
-    }
-
     private var recoveryBaselineMessageId: Int? {
         guard
             let threadId,
@@ -782,10 +733,6 @@ struct ChatView: View {
         // reconciliation failed. Establish fresh server IDs before another
         // turn so dropped-stream recovery cannot mistake that older reply for
         // the new turn's response.
-        // Stop state is reset before the first suspension so a Stop tapped
-        // during the history refresh below is honoured, not overwritten.
-        stopRequested = false
-        streamControl.arm()
         isSending = true
         if rows.contains(where: { if case .completed = $0 { return true }; return false }) {
             await loadHistory()
@@ -794,12 +741,6 @@ struct ChatView: View {
                 isSending = false
                 return
             }
-        }
-        guard !streamControl.stopped else {
-            stopRequested = false
-            // Stopped before anything was sent; the draft is untouched.
-            isSending = false
-            return
         }
 
         sendError = nil
@@ -854,8 +795,7 @@ struct ChatView: View {
             let stream = ChatService(api: api).send(
                 threadId: threadId,
                 content: trimmed,
-                images: sentDraft.images,
-                control: streamControl
+                images: sentDraft.images
             )
             for try await event in stream {
                 switch event {
@@ -923,13 +863,6 @@ struct ChatView: View {
                 // The completed turn already contains its full answer and blocks.
                 // History refresh only reconciles server IDs and title metadata.
                 await loadHistory()
-            } else if stopRequested && !sawError {
-                await finishStoppedTurn(
-                    optimisticId: optimisticId,
-                    draft: sentDraft,
-                    baselineMessageId: baselineMessageId,
-                    clearMarker: clearInFlight
-                )
             } else if !sawError {
                 flushStreamingText()
                 // Stream ended without `done` or an SSE `error`: a transport drop.
@@ -949,13 +882,6 @@ struct ChatView: View {
                     )
                 }
             }
-        } catch where stopRequested {
-            await finishStoppedTurn(
-                optimisticId: optimisticId,
-                draft: sentDraft,
-                baselineMessageId: baselineMessageId,
-                clearMarker: clearInFlight
-            )
         } catch APIError.unauthorized {
             rollbackOptimistic(optimisticId: optimisticId, restore: sentDraft)
             clearInFlight()
@@ -994,80 +920,6 @@ struct ChatView: View {
         }
     }
 
-    /// Stop cancels only the client's request. The server sees the disconnect,
-    /// stops its tool loop and persists the question plus any partial answer
-    /// (work log status "aborted"). Nothing is shown from the local stream:
-    /// the transcript is replaced by what the server saved, so the stopped
-    /// turn can neither duplicate nor disappear. If the server saved nothing
-    /// (stopped before it started), the draft is restored instead.
-    @MainActor
-    private func finishStoppedTurn(
-        optimisticId: UUID,
-        draft: ChatDraft,
-        baselineMessageId: Int?,
-        clearMarker: () -> Void
-    ) async {
-        streamFlushTask?.cancel()
-        streamFlushTask = nil
-        streamBuffer.pending = ""
-        activeTools = []
-        recoveryStatus = nil
-        guard let threadId else {
-            // The thread id never arrived, so there is nothing to ask the
-            // server about. It may still have saved the message: restore the
-            // draft but do not claim it was never sent.
-            handleUnconfirmedThreadDrop(optimisticId: optimisticId, draft: draft)
-            clearMarker()
-            return
-        }
-        let question = StoppedQuestion(draft)
-        var fetches: [[ChatMessage]?] = []
-        for delay in [0.4, 1.0, 2.0] {
-            try? await Task.sleep(for: .seconds(delay))
-            let detail = try? await ChatService(api: api).threadDetail(id: threadId)
-            fetches.append(detail?.messages)
-            if let detail, ChatRecovery.persistedStoppedTurn(detail.messages, afterMessageId: baselineMessageId, question: question) {
-                rows = detail.messages.map { .persisted($0) }
-                currentTitle = detail.thread.title
-                clearMarker()
-                NotificationCenter.default.post(name: .chatThreadListChanged, object: threadId)
-                return
-            }
-        }
-        switch ChatRecovery.stopOutcome(fetches: fetches, afterMessageId: baselineMessageId, question: question) {
-        case .persisted:
-            break
-        case .absent:
-            rollbackOptimistic(optimisticId: optimisticId, restore: draft)
-            clearMarker()
-            sendError = "Stopped before Coach replied. Your message is back in the box."
-        case .unknown:
-            // Persistence could not be confirmed. Keep the question on screen,
-            // keep the thread marked in flight, and let the existing recovery
-            // bar re-check (and offer "Check now") instead of resending.
-            rows.removeAll { row in
-                if case .typing = row { return true }
-                if case .streaming = row { return true }
-                return false
-            }
-            streamingAssistant = nil
-            chatInFlight.markStopped(
-                threadId: threadId,
-                baselineMessageId: baselineMessageId,
-                draft: draft
-            )
-            recoveryStatus = .waiting
-            sendError = "Stopped. Couldn’t confirm whether Coach saved your question. Use Check now before sending again."
-        }
-    }
-
-    @MainActor
-    private func stopReply() {
-        guard isSending else { return }
-        stopRequested = true
-        streamControl.stop()
-    }
-
     /// Reconcile a foreground transport drop without making the user leave and
     /// reopen the thread. Four bounded probes cover the common race where the
     /// server persists shortly after the transport disappears.
@@ -1075,7 +927,6 @@ struct ChatView: View {
     private func reconcileDroppedTurn(baselineMessageId: Int?) async {
         guard let threadId else { return }
         recoveryStatus = .checking
-        let stoppedQuestion = chatInFlight.inFlight[threadId]?.stoppedQuestion
 
         var previousOffset = 0
         for probeOffset in [0, 1, 2, 5] {
@@ -1097,42 +948,18 @@ struct ChatView: View {
 
             do {
                 let detail = try await ChatService(api: api).threadDetail(id: threadId)
-                switch ChatRecovery.resolution(
+                if ChatRecovery.hasNewAssistantReply(
                     detail.messages,
-                    afterMessageId: baselineMessageId,
-                    stoppedQuestion: stoppedQuestion
+                    afterMessageId: baselineMessageId
                 ) {
-                case .persisted:
                     if let optimisticDraft {
                         clearDraft(ifMatching: optimisticDraft)
                     }
                     rows = detail.messages.map { .persisted($0) }
-                    if stoppedQuestion != nil {
-                        currentTitle = detail.thread.title
-                        NotificationCenter.default.post(name: .chatThreadListChanged, object: threadId)
-                    }
-                    chatInFlight.resolveStopped(threadId: threadId, persisted: true)
+                    chatInFlight.inFlight.removeValue(forKey: threadId)
                     recoveryStatus = nil
                     loadError = nil
-                    sendError = nil
                     return
-                case .absent:
-                    let stored = chatInFlight.takeStoppedDraft(threadId: threadId)
-                    let draft = optimisticDraft ?? stored ?? ChatDraft(text: "", images: [])
-                    rows = detail.messages.map { .persisted($0) }
-                    let restored = ChatComposerRules.restoring(
-                        draft,
-                        over: ChatDraft(text: input, images: pendingImages)
-                    )
-                    input = restored.text
-                    pendingImages = restored.images
-                    chatInFlight.resolveStopped(threadId: threadId, persisted: false)
-                    recoveryStatus = nil
-                    loadError = nil
-                    sendError = "Stopped before Coach replied. Your message is back in the box."
-                    return
-                case .pending:
-                    break
                 }
             } catch {
                 // Network may still be reconnecting. Continue the bounded probes

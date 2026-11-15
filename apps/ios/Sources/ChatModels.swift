@@ -257,71 +257,6 @@ struct SSEError: Decodable {
 }
 
 enum ChatRecovery {
-    /// After Stop the server persists the question (and any partial answer)
-    /// when it sees the disconnect. Only a user message newer than the
-    /// baseline whose content matches the stopped question counts, so a
-    /// message from another device cannot stand in for it.
-    static func persistedStoppedTurn(
-        _ messages: [ChatMessage],
-        afterMessageId baselineMessageId: Int?,
-        question: StoppedQuestion
-    ) -> Bool {
-        messages.contains { message in
-            guard message.role == .user else { return false }
-            if let baselineMessageId, message.id <= baselineMessageId { return false }
-            guard message.content.trimmingCharacters(in: .whitespacesAndNewlines) == question.text else { return false }
-            return !question.hasAttachments || !message.attachments.isEmpty
-        }
-    }
-
-    enum TurnResolution: Equatable {
-        /// The server saved the turn (or, for a normal turn, its reply).
-        case persisted
-        /// A stopped turn was confirmed never saved.
-        case absent
-        /// A normal turn is still running.
-        case pending
-    }
-
-    /// Resolves one successful history fetch. A stopped turn never produces a
-    /// reply: its own question saved resolves it as persisted, and a history
-    /// without that question proves it absent. A normal turn (nil question)
-    /// needs a finished reply.
-    static func resolution(
-        _ messages: [ChatMessage],
-        afterMessageId baselineMessageId: Int?,
-        stoppedQuestion: StoppedQuestion?
-    ) -> TurnResolution {
-        if let stoppedQuestion {
-            return persistedStoppedTurn(messages, afterMessageId: baselineMessageId, question: stoppedQuestion) ? .persisted : .absent
-        }
-        return hasNewAssistantReply(messages, afterMessageId: baselineMessageId) ? .persisted : .pending
-    }
-
-    enum StopOutcome: Equatable {
-        /// History holds the stopped question.
-        case persisted
-        /// A history fetch succeeded last and did not hold it.
-        case absent
-        /// No fetch could confirm either way; the turn may still be saved.
-        case unknown
-    }
-
-    /// `fetches` are the history results in probe order; nil is a failed
-    /// request. Only a successful final fetch without the question proves the
-    /// server saved nothing; failures never do.
-    static func stopOutcome(
-        fetches: [[ChatMessage]?],
-        afterMessageId baselineMessageId: Int?,
-        question: StoppedQuestion
-    ) -> StopOutcome {
-        for case let messages? in fetches where persistedStoppedTurn(messages, afterMessageId: baselineMessageId, question: question) {
-            return .persisted
-        }
-        if let last = fetches.last, last != nil { return .absent }
-        return .unknown
-    }
-
     static func hasNewAssistantReply(
         _ messages: [ChatMessage],
         afterMessageId baselineMessageId: Int?
@@ -346,47 +281,6 @@ struct ChatInFlightTurn {
     /// The question awaiting its reply, shown as the preview of the thread's
     /// row in the conversation list while the reply is in flight.
     var pendingText: String? = nil
-    /// The user stopped this turn and persistence has not been confirmed yet.
-    /// Recovery then resolves by what the server saved (question, partial
-    /// answer, or nothing) rather than waiting for a finished reply.
-    var stoppedQuestion: StoppedQuestion? = nil
-    var stopped: Bool { stoppedQuestion != nil }
-}
-
-/// What the user sent before pressing Stop, used to recognise that exact turn
-/// in history so another session's message is never mistaken for it.
-struct StoppedQuestion: Equatable {
-    let text: String
-    let hasAttachments: Bool
-
-    init(text: String, hasAttachments: Bool) {
-        self.text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.hasAttachments = hasAttachments
-    }
-
-    init(_ draft: ChatDraft) {
-        self.init(text: draft.text, hasAttachments: !draft.images.isEmpty)
-    }
-}
-
-/// Lets the view cancel the in-flight request without cancelling the task
-/// that reconciles afterwards.
-final class ChatStreamControl {
-    var cancel: (() -> Void)?
-    private(set) var stopped = false
-
-    /// Starts a new send; clears any previous Stop.
-    func arm() {
-        stopped = false
-        cancel = nil
-    }
-
-    /// Remembered even when no request exists yet, so a Stop during the
-    /// pre-send history refresh still prevents the send.
-    func stop() {
-        stopped = true
-        cancel?()
-    }
 }
 
 @MainActor
@@ -398,33 +292,6 @@ final class ChatInFlightStore {
     var inFlight: [Int: ChatInFlightTurn] = [:]
 
     nonisolated init() {}
-
-    /// Drafts of stopped turns, kept apart from active-turn status so a
-    /// confirmed-absent turn can stop showing as replying while its text and
-    /// images are still restored the next time the thread opens. Memory only.
-    var stoppedDrafts: [Int: ChatDraft] = [:]
-
-    /// Registers an unresolved stopped turn, including when the thread id
-    /// header never arrived and the turn was never marked in flight.
-    func markStopped(threadId: Int, baselineMessageId: Int?, draft: ChatDraft) {
-        inFlight[threadId] = ChatInFlightTurn(
-            baselineMessageId: baselineMessageId,
-            pendingText: draft.text,
-            stoppedQuestion: StoppedQuestion(draft)
-        )
-        stoppedDrafts[threadId] = draft
-    }
-
-    /// Clears the active-turn status. A saved turn also drops its draft; an
-    /// absent one keeps it for restoration.
-    func resolveStopped(threadId: Int, persisted: Bool) {
-        inFlight.removeValue(forKey: threadId)
-        if persisted { stoppedDrafts.removeValue(forKey: threadId) }
-    }
-
-    func takeStoppedDraft(threadId: Int) -> ChatDraft? {
-        stoppedDrafts.removeValue(forKey: threadId)
-    }
 }
 
 extension Notification.Name {
