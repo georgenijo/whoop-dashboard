@@ -173,13 +173,18 @@ struct ChatView: View {
                 // reopening this thread; re-arm the bar/send-block from the shared store.
                 if let threadId, chatInFlight.inFlight[threadId] != nil {
                     await reconcileDroppedTurn(baselineMessageId: recoveryBaselineMessageId)
+                } else {
+                    restoreStoppedDraftIfNeeded()
                 }
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .chatThreadNeedsRefresh)) { note in
             guard let id = note.object as? Int, id == threadId, !isSending else { return }
             recoveryStatus = nil
-            Task { await loadHistory() }
+            Task {
+                await loadHistory()
+                restoreStoppedDraftIfNeeded()
+            }
         }
         .onChange(of: photoPickerItems) { _, items in
             guard !items.isEmpty else { return }
@@ -707,6 +712,24 @@ struct ChatView: View {
         return chatInFlight.inFlight[threadId]?.stopped == true
     }
 
+    /// A stopped turn that was confirmed never saved while this thread was not
+    /// on screen: put its text and images back in the composer.
+    @MainActor
+    private func restoreStoppedDraftIfNeeded() {
+        guard
+            let threadId,
+            chatInFlight.inFlight[threadId] == nil,
+            let draft = chatInFlight.takeStoppedDraft(threadId: threadId)
+        else { return }
+        let restored = ChatComposerRules.restoring(
+            draft,
+            over: ChatDraft(text: input, images: pendingImages)
+        )
+        input = restored.text
+        pendingImages = restored.images
+        sendError = "Stopped before Coach replied. Your message is back in the box."
+    }
+
     private var recoveryBaselineMessageId: Int? {
         guard
             let threadId,
@@ -997,12 +1020,13 @@ struct ChatView: View {
             clearMarker()
             return
         }
+        let question = StoppedQuestion(draft)
         var fetches: [[ChatMessage]?] = []
         for delay in [0.4, 1.0, 2.0] {
             try? await Task.sleep(for: .seconds(delay))
             let detail = try? await ChatService(api: api).threadDetail(id: threadId)
             fetches.append(detail?.messages)
-            if let detail, ChatRecovery.hasPersistedTurn(detail.messages, afterMessageId: baselineMessageId) {
+            if let detail, ChatRecovery.persistedStoppedTurn(detail.messages, afterMessageId: baselineMessageId, question: question) {
                 rows = detail.messages.map { .persisted($0) }
                 currentTitle = detail.thread.title
                 clearMarker()
@@ -1010,7 +1034,7 @@ struct ChatView: View {
                 return
             }
         }
-        switch ChatRecovery.stopOutcome(fetches: fetches, afterMessageId: baselineMessageId) {
+        switch ChatRecovery.stopOutcome(fetches: fetches, afterMessageId: baselineMessageId, question: question) {
         case .persisted:
             break
         case .absent:
@@ -1030,7 +1054,7 @@ struct ChatView: View {
             chatInFlight.markStopped(
                 threadId: threadId,
                 baselineMessageId: baselineMessageId,
-                pendingText: draft.text
+                draft: draft
             )
             recoveryStatus = .waiting
             sendError = "Stopped. Couldn’t confirm whether Coach saved your question. Use Check now before sending again."
@@ -1051,7 +1075,7 @@ struct ChatView: View {
     private func reconcileDroppedTurn(baselineMessageId: Int?) async {
         guard let threadId else { return }
         recoveryStatus = .checking
-        let stopped = chatInFlight.inFlight[threadId]?.stopped ?? false
+        let stoppedQuestion = chatInFlight.inFlight[threadId]?.stoppedQuestion
 
         var previousOffset = 0
         for probeOffset in [0, 1, 2, 5] {
@@ -1076,25 +1100,25 @@ struct ChatView: View {
                 switch ChatRecovery.resolution(
                     detail.messages,
                     afterMessageId: baselineMessageId,
-                    stopped: stopped
+                    stoppedQuestion: stoppedQuestion
                 ) {
                 case .persisted:
                     if let optimisticDraft {
                         clearDraft(ifMatching: optimisticDraft)
                     }
                     rows = detail.messages.map { .persisted($0) }
-                    if stopped {
+                    if stoppedQuestion != nil {
                         currentTitle = detail.thread.title
                         NotificationCenter.default.post(name: .chatThreadListChanged, object: threadId)
                     }
-                    chatInFlight.inFlight.removeValue(forKey: threadId)
+                    chatInFlight.resolveStopped(threadId: threadId, persisted: true)
                     recoveryStatus = nil
                     loadError = nil
                     sendError = nil
                     return
                 case .absent:
-                    let pendingText = chatInFlight.inFlight[threadId]?.pendingText
-                    let draft = optimisticDraft ?? ChatDraft(text: pendingText ?? "", images: [])
+                    let stored = chatInFlight.takeStoppedDraft(threadId: threadId)
+                    let draft = optimisticDraft ?? stored ?? ChatDraft(text: "", images: [])
                     rows = detail.messages.map { .persisted($0) }
                     let restored = ChatComposerRules.restoring(
                         draft,
@@ -1102,7 +1126,7 @@ struct ChatView: View {
                     )
                     input = restored.text
                     pendingImages = restored.images
-                    chatInFlight.inFlight.removeValue(forKey: threadId)
+                    chatInFlight.resolveStopped(threadId: threadId, persisted: false)
                     recoveryStatus = nil
                     loadError = nil
                     sendError = "Stopped before Coach replied. Your message is back in the box."

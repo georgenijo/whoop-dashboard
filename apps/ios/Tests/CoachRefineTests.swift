@@ -107,13 +107,24 @@ final class CoachRefineTests: XCTestCase {
         ChatMessage(id: id, role: role, content: "x", createdAt: .now)
     }
 
-    func testStoppedTurnIsPersistedOnceHistoryHoldsNewerMessages() {
+    private func message(_ id: Int, _ role: ChatMessage.Role, _ content: String, attachments: Bool = false) -> ChatMessage {
+        ChatMessage(
+            id: id, role: role, content: content, createdAt: .now,
+            attachments: attachments
+                ? [ChatAttachment(id: "a", url: "u", mimeType: "image/jpeg", width: 1, height: 1, sizeBytes: 1)]
+                : []
+        )
+    }
+
+    func testStoppedTurnIsPersistedOnlyWhenItsOwnQuestionIsSaved() {
         let before = [message(10, .user), message(11, .assistant)]
-        XCTAssertFalse(ChatRecovery.hasPersistedTurn(before, afterMessageId: 11))
-        let after = before + [message(12, .user), message(13, .assistant)]
-        XCTAssertTrue(ChatRecovery.hasPersistedTurn(after, afterMessageId: 11))
-        XCTAssertTrue(ChatRecovery.hasPersistedTurn([message(1, .user)], afterMessageId: nil))
-        XCTAssertFalse(ChatRecovery.hasPersistedTurn([], afterMessageId: nil))
+        let question = StoppedQuestion(text: " Skip leg day? ", hasAttachments: false)
+        XCTAssertFalse(ChatRecovery.persistedStoppedTurn(before, afterMessageId: 11, question: question))
+        let saved = before + [message(12, .user, "Skip leg day?")]
+        XCTAssertTrue(ChatRecovery.persistedStoppedTurn(saved, afterMessageId: 11, question: question))
+        let oldMatch = [message(5, .user, "Skip leg day?")] + before
+        XCTAssertFalse(ChatRecovery.persistedStoppedTurn(oldMatch, afterMessageId: 11, question: question),
+                       "an older identical question is not the stopped turn")
     }
 
     func testStreamControlCancelsOnce() {
@@ -231,13 +242,14 @@ final class CoachRefineTests: XCTestCase {
     // MARK: Review follow-ups
 
     func testStopOutcomeNeverTreatsFailedFetchesAsAbsence() {
+        let q = StoppedQuestion(text: "Q", hasAttachments: false)
         let old = [message(10, .user), message(11, .assistant)]
-        XCTAssertEqual(ChatRecovery.stopOutcome(fetches: [nil, nil, nil], afterMessageId: 11), .unknown)
-        XCTAssertEqual(ChatRecovery.stopOutcome(fetches: [], afterMessageId: 11), .unknown)
-        XCTAssertEqual(ChatRecovery.stopOutcome(fetches: [old, old, nil], afterMessageId: 11), .unknown,
+        XCTAssertEqual(ChatRecovery.stopOutcome(fetches: [nil, nil, nil], afterMessageId: 11, question: q), .unknown)
+        XCTAssertEqual(ChatRecovery.stopOutcome(fetches: [], afterMessageId: 11, question: q), .unknown)
+        XCTAssertEqual(ChatRecovery.stopOutcome(fetches: [old, old, nil], afterMessageId: 11, question: q), .unknown,
                        "a failed final probe leaves persistence unconfirmed")
-        XCTAssertEqual(ChatRecovery.stopOutcome(fetches: [nil, nil, old], afterMessageId: 11), .absent)
-        XCTAssertEqual(ChatRecovery.stopOutcome(fetches: [old, old + [message(12, .user)], nil], afterMessageId: 11), .persisted)
+        XCTAssertEqual(ChatRecovery.stopOutcome(fetches: [nil, nil, old], afterMessageId: 11, question: q), .absent)
+        XCTAssertEqual(ChatRecovery.stopOutcome(fetches: [old, old + [message(12, .user, "Q")], nil], afterMessageId: 11, question: q), .persisted)
     }
 
     func testRestDaysWithExercisesStayExpandable() {
@@ -263,26 +275,59 @@ final class CoachRefineTests: XCTestCase {
         XCTAssertTrue(control.stopped)
     }
 
-    func testStoppedTurnResolvesFromAnySuccessfulProbe() {
+    func testStoppedTurnResolvesByItsOwnQuestion() {
         let before = [message(10, .user), message(11, .assistant)]
-        let userOnly = before + [message(12, .user)]
-        XCTAssertEqual(ChatRecovery.resolution(before, afterMessageId: 11, stopped: true), .absent,
-                       "nothing saved resolves as absent so the draft can be restored")
-        XCTAssertEqual(ChatRecovery.resolution(userOnly, afterMessageId: 11, stopped: true), .persisted,
+        let q = StoppedQuestion(text: "A", hasAttachments: false)
+        let userOnly = before + [message(12, .user, "A")]
+        XCTAssertEqual(ChatRecovery.resolution(before, afterMessageId: 11, stoppedQuestion: q), .absent)
+        XCTAssertEqual(ChatRecovery.resolution(userOnly, afterMessageId: 11, stoppedQuestion: q), .persisted,
                        "a user-only saved turn is shown, not waited on")
-        XCTAssertEqual(ChatRecovery.resolution(userOnly + [message(13, .assistant)], afterMessageId: 11, stopped: true), .persisted)
-        XCTAssertEqual(ChatRecovery.resolution(userOnly, afterMessageId: 11, stopped: false), .pending,
+        XCTAssertEqual(ChatRecovery.resolution(userOnly + [message(13, .assistant, "r")], afterMessageId: 11, stoppedQuestion: q), .persisted)
+        XCTAssertEqual(ChatRecovery.resolution(userOnly, afterMessageId: 11, stoppedQuestion: nil), .pending,
                        "a normal turn still needs a finished reply")
-        XCTAssertEqual(ChatRecovery.resolution(userOnly + [message(13, .assistant)], afterMessageId: 11, stopped: false), .persisted)
+        XCTAssertEqual(ChatRecovery.resolution(userOnly + [message(13, .assistant, "r")], afterMessageId: 11, stoppedQuestion: nil), .persisted)
+    }
+
+    func testAnotherSessionsMessageDoesNotStandInForTheStoppedQuestion() {
+        let before = [message(10, .user), message(11, .assistant)]
+        let q = StoppedQuestion(text: "A", hasAttachments: false)
+        let otherDevice = before + [message(12, .user, "B"), message(13, .assistant, "reply to B")]
+        XCTAssertEqual(ChatRecovery.resolution(otherDevice, afterMessageId: 11, stoppedQuestion: q), .absent,
+                       "B proves nothing about A, so A is restored instead of discarded")
+        XCTAssertEqual(ChatRecovery.stopOutcome(fetches: [otherDevice], afterMessageId: 11, question: q), .absent)
+    }
+
+    func testImageOnlyStoppedQuestionMatchesSavedAttachmentMessage() {
+        let q = StoppedQuestion(text: "", hasAttachments: true)
+        let base = [message(11, .assistant)]
+        XCTAssertEqual(ChatRecovery.resolution(base + [message(12, .user, "", attachments: true)], afterMessageId: 11, stoppedQuestion: q), .persisted)
+        XCTAssertEqual(ChatRecovery.resolution(base + [message(12, .user, "")], afterMessageId: 11, stoppedQuestion: q), .absent)
     }
 
     @MainActor
-    func testUnknownStopRegistersTheThreadWithItsBaseline() {
+    func testUnknownStopRegistersTheThreadAndKeepsItsDraft() {
         let store = ChatInFlightStore()
-        store.markStopped(threadId: 5, baselineMessageId: 11, pendingText: "Skip leg day?")
+        let draft = ChatDraft(text: "Skip leg day?", images: [])
+        store.markStopped(threadId: 5, baselineMessageId: 11, draft: draft)
         XCTAssertEqual(store.inFlight[5]?.baselineMessageId, 11)
-        XCTAssertEqual(store.inFlight[5]?.pendingText, "Skip leg day?")
-        XCTAssertEqual(store.inFlight[5]?.stopped, true)
+        XCTAssertEqual(store.inFlight[5]?.stoppedQuestion, StoppedQuestion(draft))
+        XCTAssertEqual(store.stoppedDrafts[5], draft)
         XCTAssertEqual(ThreadListLogic.rowState(for: 5, inFlight: store.inFlight), .replying(question: "Skip leg day?"))
+    }
+
+    @MainActor
+    func testConfirmedAbsentStopClearsReplyingStatusButKeepsDraftForNextOpen() {
+        let store = ChatInFlightStore()
+        let draft = ChatDraft(text: "Skip leg day?", images: [])
+        store.markStopped(threadId: 5, baselineMessageId: 11, draft: draft)
+        store.resolveStopped(threadId: 5, persisted: false)
+        XCTAssertEqual(ThreadListLogic.rowState(for: 5, inFlight: store.inFlight), .idle,
+                       "no Replying row and delete is available again")
+        XCTAssertEqual(store.takeStoppedDraft(threadId: 5), draft)
+        XCTAssertNil(store.takeStoppedDraft(threadId: 5), "restored once")
+
+        store.markStopped(threadId: 6, baselineMessageId: nil, draft: draft)
+        store.resolveStopped(threadId: 6, persisted: true)
+        XCTAssertNil(store.takeStoppedDraft(threadId: 6), "a saved turn drops its draft")
     }
 }
