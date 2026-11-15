@@ -313,9 +313,11 @@ struct DashboardView: View {
     @MainActor
     private func loadMetricDates(generation: Int) async {
         let api = api
-        async let strain = try? StrainService(api: api).load(range: .d7).today.date
-        async let steps = try? StepsService(api: api).load(range: .d7).today.date
-        let (strainDate, stepsDate) = await (strain, steps)
+        async let strain = try? StrainService(api: api).load(range: .d7).strainTrend
+        async let steps = try? StepsService(api: api).load(range: .d7).stepsTrend
+        let (strainTrend, stepsTrend) = await (strain, steps)
+        let strainDate = strainTrend.flatMap(TrendsStats.latestReadingDate)
+        let stepsDate = stepsTrend.flatMap(TrendsStats.latestReadingDate)
         guard generation == loadGeneration else { return }
         var dates: [KPITile.Key: String] = [:]
         if let strainDate { dates[.strain] = strainDate }

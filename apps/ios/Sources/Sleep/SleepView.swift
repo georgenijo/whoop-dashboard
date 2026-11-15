@@ -34,7 +34,6 @@ struct SleepView: View {
             }
             .toolbarBackground(.hidden, for: .navigationBar)
             .task(id: range) { await load() }
-            .task(id: range) { await loadBaseline() }
             .refreshable { await load() }
     }
 
@@ -62,7 +61,7 @@ struct SleepView: View {
                         }
                         SleepPerformanceCard(
                             payload: payload,
-                            baselineTrend: SleepLogic.baselineTrend(rangeDays: range.days, current: payload.performanceTrend, fetched: baseline?.performanceTrend))
+                            baselineTrend: SleepLogic.baselineTrend(rangeDays: state.loadedRange?.days, current: payload.performanceTrend, fetched: baseline?.performanceTrend))
                     }
                 } trailing: {
                     LedgerGroup {
@@ -103,23 +102,24 @@ struct SleepView: View {
     }
 
     @MainActor
-    private func loadBaseline() async {
-        baseline = nil
-        guard range.days < SleepLogic.baselineDays else { return }
-        let fetched = try? await SleepService(api: api).load(range: .d30)
-        guard !Task.isCancelled else { return }
-        baseline = fetched
-    }
-
-    @MainActor
     private func load() async {
         loadGeneration += 1
         let generation = loadGeneration
         let range = range
         state.beginLoad()
         do {
+            // The 30-day baseline is refreshed together with the current
+            // readings, so pull-to-refresh and Retry recover it too.
+            let api = api
+            async let base: SleepPayload? = range.days < SleepLogic.baselineDays ? try? SleepService(api: api).load(range: .d30) : nil
             let payload = try await SleepService(api: api).load(range: range)
+            let fetchedBaseline = await base
             guard generation == loadGeneration else { return }
+            if range.days >= SleepLogic.baselineDays {
+                baseline = nil
+            } else if let fetchedBaseline {
+                baseline = fetchedBaseline
+            }
             state.succeed(payload, range: range)
         } catch {
             guard generation == loadGeneration, !Task.isCancelled else { return }
@@ -133,8 +133,9 @@ enum SleepLogic {
 
     /// Performance history a 30-day average may use: the current series when
     /// the range spans 30 days, otherwise the separately fetched one.
-    static func baselineTrend(rangeDays: Int, current: [TrendPoint], fetched: [TrendPoint]?) -> [TrendPoint]? {
-        rangeDays >= baselineDays ? current : fetched
+    static func baselineTrend(rangeDays: Int?, current: [TrendPoint], fetched: [TrendPoint]?) -> [TrendPoint]? {
+        guard let rangeDays else { return nil }
+        return rangeDays >= baselineDays ? current : fetched
     }
 
     static func asleepMs(_ stages: SleepPayload.LatestSleep.Stages) -> Double {

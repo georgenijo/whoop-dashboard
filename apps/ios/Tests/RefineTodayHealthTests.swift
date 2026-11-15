@@ -253,6 +253,33 @@ final class RefineTodayHealthTests: XCTestCase {
         XCTAssertEqual(SleepLogic.baselineTrend(rangeDays: 30, current: long, fetched: nil)?.first?.raw, 80)
     }
 
+    func testBaselineFollowsLoadedRangeNotPicker() {
+        let seven = recoveryPayload(days: 7, hrv: 40)
+        let thirty = recoveryPayload(days: 30, hrv: 70)
+        // Picker moved to 30d while the 7d payload is still shown: the fetched
+        // 30d baseline is used, never the 7-day series labelled as 30-day.
+        XCTAssertEqual(RecoveryLogic.baselinePayload(rangeDays: 7, current: seven, fetched: thirty)?.hrvTrend.points.count, 30)
+        XCTAssertNil(RecoveryLogic.baselinePayload(rangeDays: 7, current: seven, fetched: nil))
+        XCTAssertNil(RecoveryLogic.baselinePayload(rangeDays: nil, current: seven, fetched: thirty))
+        let short = [TrendPoint(date: "2026-11-14", raw: 50, ma7: nil, ma30: nil)]
+        let long = [TrendPoint(date: "2026-11-13", raw: 80, ma7: nil, ma30: nil)]
+        XCTAssertNil(SleepLogic.baselineTrend(rangeDays: 7, current: short, fetched: nil))
+        XCTAssertNil(SleepLogic.baselineTrend(rangeDays: nil, current: short, fetched: long))
+    }
+
+    func testLatestReadingDateIgnoresServerToday() {
+        let today = ChartDate.key(Date())
+        let yesterday = ChartDate.key(Date().addingTimeInterval(-86_400))
+        let series = [TrendPoint(date: yesterday, raw: 8000, ma7: nil, ma30: nil),
+                      TrendPoint(date: today, raw: nil, ma7: nil, ma30: nil)]
+        XCTAssertEqual(TrendsStats.latestReadingDate(series), yesterday)
+        let keys = TodayFormat.partialKeys(metricDates: [.steps: TrendsStats.latestReadingDate(series)!], isFallback: false, now: Date())
+        XCTAssertFalse(keys.contains(.steps))
+        let live = series + [TrendPoint(date: today, raw: 900, ma7: nil, ma30: nil)]
+        XCTAssertEqual(TrendsStats.latestReadingDate(live), today)
+        XCTAssertNil(TrendsStats.latestReadingDate([TrendPoint(date: today, raw: nil, ma7: nil, ma30: nil)]))
+    }
+
     func testRecoveryCaptionSaysInBed() {
         let caption = RecoveryLogic.caption(recoveryPayload(days: 10, hrv: 46))
         XCTAssertTrue(caption?.hasSuffix("after 5h 18m in bed") == true)

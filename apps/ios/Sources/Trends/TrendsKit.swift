@@ -51,6 +51,13 @@ enum TrendsStats {
         return recent.reduce(0, +) / Double(recent.count)
     }
 
+    /// Date of the newest point that actually has a reading. The strain and
+    /// steps endpoints stamp `today.date` with the server's today whether or
+    /// not a reading exists, so freshness must come from the series itself.
+    static func latestReadingDate(_ points: [TrendPoint]) -> String? {
+        points.filter { $0.raw != nil }.map(\.date).max()
+    }
+
     /// The latest point's date when it is today, i.e. a day still accumulating.
     static func partialDate(_ points: [TrendPoint], now: Date = Date()) -> String? {
         let today = ChartDate.key(now)

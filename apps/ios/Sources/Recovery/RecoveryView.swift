@@ -39,7 +39,6 @@ struct RecoveryView: View {
             }
             .toolbarBackground(.hidden, for: .navigationBar)
             .task(id: range) { await load() }
-            .task(id: range) { await loadBaseline() }
             .refreshable { await load() }
     }
 
@@ -61,11 +60,11 @@ struct RecoveryView: View {
                     // Inner display: score and its drivers beside the signal trends.
                     FoldColumns {
                         LedgerGroup {
-                            RecoveryHeroCard(payload: payload, baseline: RecoveryLogic.baselinePayload(rangeDays: range.days, current: payload, fetched: baseline))
+                            RecoveryHeroCard(payload: payload, baseline: RecoveryLogic.baselinePayload(rangeDays: state.loadedRange?.days, current: payload, fetched: baseline))
                                 .id(Focus.score)
                             LedgerRule()
                             RecoveryFactorsCardView(
-                                factors: RecoveryLogic.factors(payload, baseline: RecoveryLogic.baselinePayload(rangeDays: range.days, current: payload, fetched: baseline)),
+                                factors: RecoveryLogic.factors(payload, baseline: RecoveryLogic.baselinePayload(rangeDays: state.loadedRange?.days, current: payload, fetched: baseline)),
                                 embedded: true)
                         }
                     } trailing: {
@@ -103,23 +102,24 @@ struct RecoveryView: View {
     }
 
     @MainActor
-    private func loadBaseline() async {
-        baseline = nil
-        guard range.days < RecoveryLogic.baselineDays else { return }
-        let fetched = try? await RecoveryService(api: api).load(range: .d30)
-        guard !Task.isCancelled else { return }
-        baseline = fetched
-    }
-
-    @MainActor
     private func load() async {
         loadGeneration += 1
         let generation = loadGeneration
         let range = range
         state.beginLoad()
         do {
+            // The 30-day baseline is refreshed together with the current
+            // readings, so pull-to-refresh and Retry recover it too.
+            let api = api
+            async let base: RecoveryPayload? = range.days < RecoveryLogic.baselineDays ? try? RecoveryService(api: api).load(range: .d30) : nil
             let payload = try await RecoveryService(api: api).load(range: range)
+            let fetchedBaseline = await base
             guard generation == loadGeneration else { return }
+            if range.days >= RecoveryLogic.baselineDays {
+                baseline = nil
+            } else if let fetchedBaseline {
+                baseline = fetchedBaseline
+            }
             state.succeed(payload, range: range)
         } catch {
             guard generation == loadGeneration, !Task.isCancelled else { return }
@@ -199,8 +199,11 @@ enum RecoveryLogic {
     /// The payload a 30-day average may be computed from: the current one when
     /// the range already spans 30 days, otherwise the separately fetched one
     /// (nil until it arrives, so nothing is mislabeled meanwhile).
-    static func baselinePayload(rangeDays: Int, current: RecoveryPayload, fetched: RecoveryPayload?) -> RecoveryPayload? {
-        rangeDays >= baselineDays ? current : fetched
+    static func baselinePayload(rangeDays: Int?, current: RecoveryPayload, fetched: RecoveryPayload?) -> RecoveryPayload? {
+        // `rangeDays` is the range the shown payload was loaded for, not the
+        // picker's, so a pending range change can't relabel a short series.
+        guard let rangeDays else { return nil }
+        return rangeDays >= baselineDays ? current : fetched
     }
 
     /// "Sat, Nov 14 · after 5h 18m asleep" from the latest recovery day and the
