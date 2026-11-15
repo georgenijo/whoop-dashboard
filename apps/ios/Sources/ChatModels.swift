@@ -320,7 +320,20 @@ struct ChatInFlightTurn {
 /// that reconciles afterwards.
 final class ChatStreamControl {
     var cancel: (() -> Void)?
-    func stop() { cancel?() }
+    private(set) var stopped = false
+
+    /// Starts a new send; clears any previous Stop.
+    func arm() {
+        stopped = false
+        cancel = nil
+    }
+
+    /// Remembered even when no request exists yet, so a Stop during the
+    /// pre-send history refresh still prevents the send.
+    func stop() {
+        stopped = true
+        cancel?()
+    }
 }
 
 @MainActor

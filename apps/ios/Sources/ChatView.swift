@@ -757,7 +757,7 @@ struct ChatView: View {
         // Stop state is reset before the first suspension so a Stop tapped
         // during the history refresh below is honoured, not overwritten.
         stopRequested = false
-        streamControl.cancel = nil
+        streamControl.arm()
         isSending = true
         if rows.contains(where: { if case .completed = $0 { return true }; return false }) {
             await loadHistory()
@@ -767,7 +767,8 @@ struct ChatView: View {
                 return
             }
         }
-        guard !stopRequested else {
+        guard !streamControl.stopped else {
+            stopRequested = false
             // Stopped before anything was sent; the draft is untouched.
             isSending = false
             return

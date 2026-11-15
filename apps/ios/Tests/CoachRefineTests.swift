@@ -248,4 +248,18 @@ final class CoachRefineTests: XCTestCase {
         XCTAssertEqual(PlansPresentation.sessionNumbers([stretching, day("Push", .hard, exercises: 1)]), [nil, 1],
                        "numbering is independent of expandability")
     }
+
+    func testStopDuringPreSendRefreshIsRemembered() {
+        let control = ChatStreamControl()
+        control.arm()
+        control.stop()
+        XCTAssertTrue(control.stopped, "a Stop before any request exists must survive")
+        control.arm()
+        XCTAssertFalse(control.stopped, "a new send clears the previous Stop")
+        var cancelled = false
+        control.cancel = { cancelled = true }
+        control.stop()
+        XCTAssertTrue(cancelled)
+        XCTAssertTrue(control.stopped)
+    }
 }
