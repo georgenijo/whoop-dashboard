@@ -99,4 +99,79 @@ final class TodayBriefStateTests: XCTestCase {
         XCTAssertFalse(ChatComposerRules.showsStarters(text: "Why is my HRV low?", imageCount: 0))
         XCTAssertFalse(ChatComposerRules.showsStarters(text: "", imageCount: 1))
     }
+
+    // MARK: - Polling arbitration
+
+    func testPollIsBlockedWhileAnExplicitLoadIsInFlight() {
+        var loads = DashboardLoadCoordinator()
+        let explicit = loads.beginExplicit()
+        XCTAssertNil(loads.beginPoll())
+        XCTAssertEqual(loads.generation, explicit)
+        loads.endExplicit()
+        XCTAssertNotNil(loads.beginPoll())
+    }
+
+    func testSlowExplicitLoadIsAppliedAndNeverSupersededByAPoll() {
+        // The explicit load is still running when the six second poll comes due.
+        var loads = DashboardLoadCoordinator()
+        let explicit = loads.beginExplicit()
+        XCTAssertNil(loads.beginPoll(), "the poll must not start, so it cannot bump the generation")
+        XCTAssertTrue(loads.isCurrent(explicit))
+        loads.endExplicit()
+        XCTAssertTrue(loads.isCurrent(explicit), "the explicit result is applied")
+    }
+
+    func testFailedPollOverlappingAnExplicitLoadIsSilentAndExplicitResultApplies() {
+        var loads = DashboardLoadCoordinator()
+        let poll = try! XCTUnwrap(loads.beginPoll())
+        let explicit = loads.beginExplicit()
+        // The poll fails (or is cancelled) after the explicit load began.
+        XCTAssertFalse(loads.shouldSurfaceFailure(token: poll, polling: true))
+        // A poll that fails on its own is silent too.
+        var alone = DashboardLoadCoordinator()
+        let solo = try! XCTUnwrap(alone.beginPoll())
+        XCTAssertTrue(alone.isCurrent(solo))
+        XCTAssertFalse(alone.shouldSurfaceFailure(token: solo, polling: true))
+        // The explicit load succeeds and its result is applied; the poll's is not.
+        XCTAssertTrue(loads.isCurrent(explicit))
+        XCTAssertFalse(loads.isCurrent(poll))
+        XCTAssertTrue(loads.shouldSurfaceFailure(token: explicit, polling: false))
+        loads.endExplicit()
+    }
+
+    func testPollDeadlinesAreAnchoredToArmingAndBoundedAtFour() {
+        let start = Date(timeIntervalSince1970: 1_000)
+        var schedule = BriefPollSchedule()
+        XCTAssertNil(schedule.nextDeadline)
+        schedule.arm(at: start)
+        var offsets: [TimeInterval] = []
+        while let deadline = schedule.nextDeadline {
+            offsets.append(deadline.timeIntervalSince(start))
+            schedule.recordAttempt()
+        }
+        XCTAssertEqual(offsets, [6, 12, 24, 48])
+        XCTAssertNil(schedule.nextDeadline)
+    }
+
+    func testALateAttemptDoesNotPushLaterDeadlinesOut() {
+        let start = Date(timeIntervalSince1970: 1_000)
+        var schedule = BriefPollSchedule()
+        schedule.arm(at: start)
+        XCTAssertEqual(schedule.nextDeadline, start.addingTimeInterval(6))
+        schedule.recordAttempt()   // first poll ran long, finishing at t=15
+        XCTAssertEqual(schedule.nextDeadline, start.addingTimeInterval(12))
+        schedule.recordAttempt()
+        XCTAssertEqual(schedule.nextDeadline, start.addingTimeInterval(24))
+    }
+
+    func testRearmingStartsAFreshSchedule() {
+        let start = Date(timeIntervalSince1970: 1_000)
+        var schedule = BriefPollSchedule()
+        schedule.arm(at: start)
+        schedule.recordAttempt(); schedule.recordAttempt()
+        schedule.arm(at: start.addingTimeInterval(100))
+        XCTAssertEqual(schedule.nextDeadline, start.addingTimeInterval(106))
+        schedule.disarm()
+        XCTAssertNil(schedule.nextDeadline)
+    }
 }

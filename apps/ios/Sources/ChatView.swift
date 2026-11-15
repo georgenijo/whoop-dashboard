@@ -615,7 +615,12 @@ struct ChatView: View {
                 }
             }
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { composerFieldWidth = $0 }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            // Replacing the field drops focus; give it back if it had it.
+            let hadFocus = isComposerFocused
+            composerFieldWidth = width
+            if hadFocus { Task { @MainActor in isComposerFocused = true } }
+        }
         .padding(.horizontal, 10)
         .padding(.top, 10)
         .padding(.bottom, 4)

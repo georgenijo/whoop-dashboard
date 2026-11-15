@@ -8,10 +8,8 @@ struct DashboardView: View {
     @State private var phase: Phase = .loading
     @State private var lastFetched: Date?
     @State private var isLoading = false
-    @State private var loadGeneration = 0
+    @State private var loads = DashboardLoadCoordinator()
     @State private var briefIsWriting = false
-    /// Bumped by every load that is not itself a brief poll, restarting the poll schedule.
-    @State private var pollEpoch = 0
     @State private var refreshError: String?
     @State private var showsHistory = false
     @State private var detail: KPITile.Href?
@@ -289,11 +287,18 @@ struct DashboardView: View {
 
     @MainActor
     private func load(showSpinner: Bool, polling: Bool = false) async {
-        if !polling { pollEpoch += 1 }
-        loadGeneration += 1
-        let generation = loadGeneration
+        let generation: Int
+        if polling {
+            guard let token = loads.beginPoll() else { return }
+            generation = token
+        } else {
+            generation = loads.beginExplicit()
+        }
         isLoading = true
-        defer { if generation == loadGeneration { isLoading = false } }
+        defer {
+            if !polling { loads.endExplicit() }
+            if loads.isCurrent(generation) { isLoading = false }
+        }
 
         let hadLoadedData: Bool
         if case .loaded = phase { hadLoadedData = true } else { hadLoadedData = false }
@@ -305,7 +310,7 @@ struct DashboardView: View {
         let failure: String
         do {
             let payload = try await DashboardServiceV2(api: api).load(range: .d30)
-            guard generation == loadGeneration else { return }
+            guard loads.isCurrent(generation) else { return }
             withAnimation(reduceMotion ? nil : .snappy) { phase = .loaded(payload) }
             briefIsWriting = TodayBriefContent(
                 insight: payload.aiInsight, isFallback: payload.isFallback, isRefreshing: payload.insightRefreshing
@@ -325,8 +330,7 @@ struct DashboardView: View {
         } catch {
             failure = "Something went wrong. Pull down or tap Retry."
         }
-        if polling, Task.isCancelled { return }
-        guard generation == loadGeneration else { return }
+        guard loads.shouldSurfaceFailure(token: generation, polling: polling) else { return }
         if hadLoadedData {
             refreshError = failure
         } else {
@@ -335,27 +339,35 @@ struct DashboardView: View {
     }
 
     private struct PollKey: Equatable {
-        let epoch: Int
         let active: Bool
         let writing: Bool
+        let suspended: Bool
     }
 
+    /// Polling is suspended while an explicit load is in flight and re-armed
+    /// (a fresh schedule) when it settles, because the key changes both times.
     private var pollKey: PollKey {
-        PollKey(epoch: pollEpoch, active: scenePhase == .active, writing: briefIsWriting)
+        PollKey(active: scenePhase == .active, writing: briefIsWriting, suspended: loads.explicitInFlight > 0)
     }
 
-    /// Bounded: one re-fetch per delay in `BriefRefreshSchedule`, ending early
-    /// once the brief is no longer being written. SwiftUI cancels this task when
-    /// the key changes (a newer load, the scene leaving `.active`) or the view goes away.
+    /// Bounded: at most four re-fetches at 6, 12, 24 and 48 seconds from arming,
+    /// ending early once the brief is no longer being written. SwiftUI cancels
+    /// this task when the key changes or the view goes away.
     @MainActor
     private func pollWhileWriting() async {
-        guard briefIsWriting, scenePhase == .active else { return }
-        var attempt = 0
-        while let delay = BriefRefreshSchedule.delay(afterAttempt: attempt) {
-            do { try await Task.sleep(for: .seconds(delay)) } catch { return }
+        let key = pollKey
+        guard key.writing, key.active, !key.suspended else { return }
+        var schedule = BriefPollSchedule()
+        schedule.arm(at: Date())
+        while let deadline = schedule.nextDeadline {
+            let wait = deadline.timeIntervalSinceNow
+            if wait > 0 {
+                do { try await Task.sleep(for: .seconds(wait)) } catch { return }
+            }
+            if Task.isCancelled { return }
+            schedule.recordAttempt()
             await load(showSpinner: false, polling: true)
             if Task.isCancelled || !briefIsWriting { return }
-            attempt += 1
         }
     }
 
@@ -370,7 +382,7 @@ struct DashboardView: View {
         let (strainTrend, stepsTrend) = await (strain, steps)
         let strainDate = strainTrend.flatMap(TrendsStats.latestReadingDate)
         let stepsDate = stepsTrend.flatMap(TrendsStats.latestReadingDate)
-        guard generation == loadGeneration else { return }
+        guard loads.isCurrent(generation) else { return }
         var dates: [KPITile.Key: String] = [:]
         if let strainDate { dates[.strain] = strainDate }
         if let stepsDate { dates[.steps] = stepsDate }
