@@ -140,7 +140,7 @@ struct SettingsView: View {
         VStack(spacing: 0) {
             WhoopConnectorCard()
                 .padding(Theme.Spacing.md)
-            LedgerRule()
+            CoachLedgerRule()
             Button {
                 if let url = URL(string: "x-apple-health://") { openURL(url) }
             } label: {
@@ -171,7 +171,7 @@ struct SettingsView: View {
                     .accessibilityElement(children: .combine)
                 }
             }
-            LedgerRule()
+            CoachLedgerRule()
             Button {
                 triggerSync()
             } label: {
@@ -203,7 +203,7 @@ struct SettingsView: View {
                 }
             }
             .buttonStyle(ChatPressStyle())
-            LedgerRule()
+            CoachLedgerRule()
             SettingsRow(icon: "sparkle", title: "Default model",
                         detail: "Change it from the message box in any chat.") {
                 if let modelText {
@@ -214,7 +214,7 @@ struct SettingsView: View {
                 }
             }
             .accessibilityElement(children: .combine)
-            LedgerRule()
+            CoachLedgerRule()
             NavigationLink {
                 ProviderKeysView()
             } label: {
@@ -251,7 +251,7 @@ struct SettingsView: View {
                     .foregroundStyle(Theme.Palette.fg2)
             }
             .accessibilityElement(children: .combine)
-            LedgerRule()
+            CoachLedgerRule()
             Button(role: .destructive) {
                 confirmingSignOut = true
             } label: {

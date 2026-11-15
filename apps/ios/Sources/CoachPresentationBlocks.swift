@@ -324,7 +324,7 @@ private struct MetricStripView: View {
         }
         VStack(spacing: 0) {
             ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
-                if rowIndex > 0 { LedgerRule() }
+                if rowIndex > 0 { CoachLedgerRule() }
                 HStack(spacing: 0) {
                     ForEach(0..<columns, id: \.self) { column in
                         Group {
@@ -421,7 +421,7 @@ private struct ComparisonView: View {
                 .padding(.bottom, 6)
             ForEach(Array(comparison.items.enumerated()), id: \.offset) { index, item in
                 if index > 0 {
-                    LedgerRule()
+                    CoachLedgerRule()
                 }
                 row(item)
                     .padding(.vertical, 10)
@@ -500,7 +500,7 @@ private struct ActionPlanView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.bottom, 8)
             ForEach(Array(plan.sections.enumerated()), id: \.offset) { index, section in
-                if index > 0 { LedgerRule() }
+                if index > 0 { CoachLedgerRule() }
                 let layout = dynamicTypeSize.isAccessibilitySize
                     ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
                     : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 10))
@@ -628,7 +628,7 @@ private struct WorkoutPlanView: View {
             .padding(.bottom, 8)
             ForEach(Array(plan.exercises.enumerated()), id: \.offset) { index, exercise in
                 if index > 0 {
-                    LedgerRule()
+                    CoachLedgerRule()
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     layout {

@@ -257,15 +257,6 @@ struct SSEError: Decodable {
 }
 
 enum ChatRecovery {
-    enum TurnResolution: Equatable {
-        /// The server saved the turn (or, for a normal turn, its reply).
-        case persisted
-        /// A stopped turn was confirmed never saved.
-        case absent
-        /// A normal turn is still running.
-        case pending
-    }
-
     /// After Stop the server persists the question (and any partial answer)
     /// when it sees the disconnect. Only a user message newer than the
     /// baseline whose content matches the stopped question counts, so a

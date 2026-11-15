@@ -270,7 +270,7 @@ private struct TodayHero: View {
             .padding(Theme.Spacing.md)
 
             ForEach(Array(sessions.enumerated()), id: \.offset) { _, entry in
-                LedgerRule()
+                CoachLedgerRule()
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     Text("\(entry.number)")
                         .font(Theme.FontStyle.mono(13))
@@ -289,7 +289,7 @@ private struct TodayHero: View {
                 .accessibilityElement(children: .combine)
             }
 
-            LedgerRule()
+            CoachLedgerRule()
             heroActions
         }
         .coachLedgerOutline()
@@ -353,7 +353,7 @@ private struct TodayHero: View {
             .accessibilityHint("Opens Coach with a draft message. Nothing is sent until you send it.")
 
             if dynamicTypeSize.isAccessibilitySize {
-                LedgerRule()
+                CoachLedgerRule()
             } else {
                 Rectangle().fill(CoachLedger.rule).frame(width: 1, height: 52)
             }
@@ -421,7 +421,7 @@ private struct WeekLedger: View {
             .accessibilityAddTraits(.isHeader)
 
             ForEach(Array(slots.enumerated()), id: \.offset) { _, day in
-                LedgerRule()
+                CoachLedgerRule()
                 row(day)
             }
         }
@@ -487,7 +487,7 @@ private struct SavedPlansLedger: View {
             .accessibilityAddTraits(.isHeader)
 
             ForEach(plans) { plan in
-                LedgerRule()
+                CoachLedgerRule()
                 NavigationLink {
                     PlanDetailView(plan: plan, recovery: recovery)
                 } label: {

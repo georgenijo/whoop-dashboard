@@ -17,7 +17,7 @@ extension View {
     }
 }
 
-struct LedgerRule: View {
+struct CoachLedgerRule: View {
     var body: some View {
         Rectangle().fill(CoachLedger.rule).frame(height: 1)
     }

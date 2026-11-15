@@ -115,7 +115,7 @@ struct PlanDetailView: View {
                 }
 
                 if !stats.isEmpty {
-                    LedgerRule()
+                    CoachLedgerRule()
                     let layout = dynamicTypeSize.isAccessibilitySize
                         ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
                         : AnyLayout(HStackLayout(alignment: .top, spacing: 0))
@@ -155,7 +155,7 @@ struct PlanDetailView: View {
                 .padding(Theme.Spacing.md)
                 .accessibilityAddTraits(.isHeader)
             ForEach(Array([RecoveryBand.high, .mid, .low].enumerated()), id: \.offset) { _, band in
-                LedgerRule()
+                CoachLedgerRule()
                 let layout = dynamicTypeSize.isAccessibilitySize
                     ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
                     : AnyLayout(HStackLayout(alignment: .top, spacing: 14))
@@ -220,7 +220,7 @@ struct PlanDetailView: View {
             .accessibilityAddTraits(.isHeader)
 
             ForEach(Array(plan.plan.days.enumerated()), id: \.offset) { index, day in
-                LedgerRule()
+                CoachLedgerRule()
                 if PlansPresentation.hasDetails(day) {
                     sessionRow(index: index, number: numbers[index], day: day)
                 } else {

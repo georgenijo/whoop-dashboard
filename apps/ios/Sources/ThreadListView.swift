@@ -439,7 +439,7 @@ private struct ThreadRow: View {
         .padding(.vertical, 13)
         .contentShape(Rectangle())
         .overlay(alignment: .bottom) {
-            if showsDivider { LedgerRule() }
+            if showsDivider { CoachLedgerRule() }
         }
         .accessibilityElement(children: .combine)
     }
