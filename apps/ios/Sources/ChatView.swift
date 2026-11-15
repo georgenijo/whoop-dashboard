@@ -153,13 +153,17 @@ struct ChatView: View {
         .toolbarBackground(Theme.Palette.bg0, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
-            ToolbarItem(placement: .keyboard) {
-                Button {
-                    isComposerFocused = false
-                } label: {
-                    Label("Hide keyboard", systemImage: "keyboard.chevron.compact.down")
+            // A navigation-bar item (not `.keyboard`, which floats over the composer),
+            // so iPhone Duo's cover display puts it on the side rail with Back/New chat.
+            if isComposerFocused {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        isComposerFocused = false
+                    } label: {
+                        Label("Hide keyboard", systemImage: "keyboard.chevron.compact.down")
+                    }
+                    .accessibilityIdentifier("chat-dismiss-keyboard")
                 }
-                .accessibilityIdentifier("chat-dismiss-keyboard")
             }
         }
         .task {
