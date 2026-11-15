@@ -35,6 +35,10 @@ struct TodayBriefContent {
     /// A current brief leads Today; otherwise the readings do.
     var leadsToday: Bool { mode == .current }
 
+    /// A brief being written sits under the header, above the readings, so it is
+    /// visible and expands in place when it arrives. Other rows sit below them.
+    var rowAboveReadings: Bool { mode == .writing }
+
     /// Only a brief that is genuinely being written is worth re-fetching for.
     var shouldPoll: Bool { mode == .writing }
 
@@ -60,6 +64,7 @@ struct TodayBriefContent {
 /// The brief when it is not current: one compact row under the readings.
 struct TodayBriefRow: View {
     let content: TodayBriefContent
+    var above = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -87,7 +92,7 @@ struct TodayBriefRow: View {
         }
         .padding(.vertical, 6)
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .overlay(alignment: .top) { LedgerRule() }
+        .overlay(alignment: above ? .bottom : .top) { LedgerRule() }
         .accessibilityElement(children: content.mode == .writing ? .combine : .contain)
         .accessibilityAddTraits(content.mode == .writing ? .updatesFrequently : [])
         .accessibilityIdentifier("today-brief-row")

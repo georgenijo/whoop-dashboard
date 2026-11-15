@@ -151,6 +151,16 @@ struct DashboardView: View {
                 } trailing: {
                     signals(payload, interactive: interactive)
                 }
+            } else if brief.rowAboveReadings {
+                FoldColumns(spacing: Theme.Spacing.md) {
+                    TodayBriefRow(content: brief, above: true)
+                    signals(payload, interactive: interactive)
+                } trailing: {
+                    VStack(alignment: .leading, spacing: 0) {
+                        if let previous = brief.previous { TodayPreviousRow(previous: previous) }
+                        historyDisclosure(payload)
+                    }
+                }
             } else {
                 FoldColumns(spacing: Theme.Spacing.md) {
                     signals(payload, interactive: interactive)

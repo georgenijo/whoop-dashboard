@@ -54,6 +54,13 @@ final class TodayBriefStateTests: XCTestCase {
         XCTAssertEqual(content(createdAt: yesterday).mode, .unavailable)
     }
 
+    func testOnlyAWritingBriefSitsAboveTheReadings() {
+        XCTAssertTrue(TodayBriefContent(insight: nil, isFallback: false, isRefreshing: true).rowAboveReadings)
+        XCTAssertFalse(TodayBriefContent(insight: nil, isFallback: false).rowAboveReadings)
+        XCTAssertFalse(TodayBriefContent(insight: nil, isFallback: true, isRefreshing: true).rowAboveReadings)
+        XCTAssertFalse(content(createdAt: now, refreshing: true).rowAboveReadings)
+    }
+
     private func decode(_ extra: String) throws -> DashboardPayload {
         let json = """
         {"data_date":"2026-11-14","is_fallback":false,"recovery_hero":{},"ai_insight":null,
