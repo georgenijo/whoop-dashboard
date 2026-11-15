@@ -4,6 +4,28 @@ import { rmSync } from "node:fs";
 
 vi.mock("server-only", () => ({}));
 
+// after() only works inside a Next request scope; capture callbacks so tests
+// decide whether and when the scheduled generation runs.
+const scheduled = vi.hoisted(() => [] as Array<() => unknown>);
+vi.mock("next/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next/server")>();
+  return { ...actual, after: (fn: () => unknown) => { scheduled.push(fn); } };
+});
+const sdk = vi.hoisted(() => ({ create: vi.fn() }));
+vi.mock("@anthropic-ai/sdk", () => ({
+  default: class { messages = { create: sdk.create }; },
+}));
+vi.mock("@/lib/coach/model-resolution", () => ({
+  resolveCatalogModel: vi.fn(async () => ({ model: "test-model", option: null })),
+}));
+let apiKey: string | null = "test-key";
+vi.mock("@/lib/coach/api-key", () => ({
+  resolveApiKeyForUser: vi.fn(() => {
+    if (apiKey === null) throw new Error("no key");
+    return { key: apiKey, origin: "user" as const };
+  }),
+}));
+
 // Mock state — outer-scope mutability so the suite can flip auth on/off
 // without re-importing the module.
 let authShouldReject = false;
@@ -34,7 +56,18 @@ beforeAll(async () => {
 
 beforeEach(() => {
   authShouldReject = false;
+  apiKey = "test-key";
+  scheduled.length = 0;
+  sdk.create.mockReset();
   testDb.reset();
+  const d = testDb.db();
+  try {
+    d.prepare("DELETE FROM insights WHERE user_id = 1").run();
+    d.prepare("DELETE FROM ai_generation_state WHERE user_id = 1").run();
+    d.prepare("DELETE FROM app_settings WHERE key LIKE '%generation%'").run();
+  } finally {
+    d.close();
+  }
 });
 
 afterAll(() => {
@@ -102,5 +135,76 @@ describe("GET /api/ios/dashboard", () => {
     const prs = body.prs as Record<string, unknown>;
     expect(prs.best_hrv).toBeNull();
     expect(prs.lowest_rhr).toBeNull();
+  });
+
+  describe("daily brief generation", () => {
+    const get = async () =>
+      (await (await route.GET(makeIosRequest("/api/ios/dashboard?range=30d"))).json()) as Record<string, unknown>;
+    const seedData = () => testDb.seedRecovery("2026-05-10", { score: 75, hrv: 60, rhr: 50, spo2: 97 });
+
+    it("schedules generation once when stale and reports refreshing without waiting for the model", async () => {
+      seedData();
+      sdk.create.mockReturnValue(new Promise(() => {})); // never settles
+      const body = await get();
+      expect(body.insight_refreshing).toBe(true);
+      expect(body.insight_error).toBeNull();
+      expect(body.ai_insight).toBeNull();
+      expect(scheduled).toHaveLength(1);
+      expect(sdk.create).not.toHaveBeenCalled();
+    });
+
+    it("schedules nothing and reports not refreshing when the brief is fresh", async () => {
+      seedData();
+      const { saveInsight } = await import("@/lib/db/summary");
+      const { insightToday } = await import("@/lib/insights");
+      saveInsight(1, insightToday(1), "Fresh brief");
+      const body = await get();
+      expect(body.insight_refreshing).toBe(false);
+      expect(body.insight_error).toBeNull();
+      expect(body.ai_insight).toMatchObject({ text: "Fresh brief", is_stale: false });
+      expect(scheduled).toHaveLength(0);
+    });
+
+    it("does not schedule a second generation while the lock is held, and still reports refreshing", async () => {
+      seedData();
+      sdk.create.mockReturnValue(new Promise(() => {}));
+      expect((await get()).insight_refreshing).toBe(true);
+      const second = await get();
+      expect(second.insight_refreshing).toBe(true);
+      expect(scheduled).toHaveLength(1);
+    });
+
+    it("honors backoff after a failed generation and exposes the error class", async () => {
+      seedData();
+      sdk.create.mockRejectedValue(new Error("provider unavailable"));
+      expect((await get()).insight_refreshing).toBe(true);
+      await scheduled[0]();
+      for (let i = 0; i < 5; i++) {
+        const body = await get();
+        expect(body.insight_refreshing).toBe(false);
+        expect(body.insight_error).toBe("provider_error");
+      }
+      expect(scheduled).toHaveLength(1);
+      expect(sdk.create).toHaveBeenCalledTimes(1);
+    });
+
+    it("persists a visible no_key failure instead of throwing", async () => {
+      seedData();
+      apiKey = null;
+      const res = await route.GET(makeIosRequest("/api/ios/dashboard?range=30d"));
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body.insight_refreshing).toBe(false);
+      expect(body.insight_error).toBe("no_key");
+      expect(scheduled).toHaveLength(0);
+      expect(sdk.create).not.toHaveBeenCalled();
+    });
+
+    it("reports no refresh and no error on an empty DB", async () => {
+      const body = await get();
+      expect(body.insight_refreshing).toBe(false);
+      expect(body.insight_error).toBeNull();
+      expect(scheduled).toHaveLength(0);
+    });
   });
 });

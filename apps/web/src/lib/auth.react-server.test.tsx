@@ -94,14 +94,10 @@ vi.mock("@/lib/coach/api-key", () => ({
   }),
 }));
 vi.mock("@/lib/insights", () => ({
-  acquireInsightRegenerationLock: vi.fn(() => null),
-  getInsightStatus: vi.fn(() => ({
-    insight: null,
-    isRegenerating: false,
-    errorClass: null,
-    today: "2026-01-01",
+  scheduleInsightRegeneration: vi.fn(() => ({
+    status: { insight: null, isRegenerating: false, errorClass: null, today: "2026-01-01" },
+    refreshing: false,
   })),
-  regenerateInsight: vi.fn(),
 }));
 const stub = (name: string) => ({ default: () => <span data-stub={name} /> });
 vi.mock("@/components/chrome/Sidebar", () => stub("Sidebar"));

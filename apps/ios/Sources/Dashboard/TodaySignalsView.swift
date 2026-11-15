@@ -9,7 +9,7 @@ struct TodaySignalsView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        VStack(alignment: .leading, spacing: 20) {
             Button { onOpen(.recovery) } label: {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(payload.isFallback ? "Latest recovery" : "Recovery")
@@ -59,7 +59,6 @@ struct TodaySignalsView: View {
             group("Recovery signals", keys: [.sleep, .hrv, .rhr, .spo2])
             group("Daily activity", keys: [.strain, .steps])
         }
-        .padding(.top, 12)
     }
 
     @ViewBuilder

@@ -5,6 +5,10 @@ struct DashboardPayload: Decodable {
     let isFallback: Bool
     let recoveryHero: RecoveryHero
     let aiInsight: AIInsight?
+    /// A brief is being written for this user right now. Absent on servers that predate the field.
+    var insightRefreshing = false
+    /// Error class of the last failed generation while it is in backoff.
+    var insightError: String?
     let kpi: [KPITile]
     let prs: PRs
     let recoveryTrend: [TrendPoint]
@@ -78,8 +82,35 @@ struct DashboardPayload: Decodable {
         case isFallback = "is_fallback"
         case recoveryHero = "recovery_hero"
         case aiInsight = "ai_insight"
+        case insightRefreshing = "insight_refreshing"
+        case insightError = "insight_error"
         case kpi
         case prs
         case recoveryTrend = "recovery_trend"
+    }
+}
+
+extension DashboardPayload {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        dataDate = try c.decodeIfPresent(String.self, forKey: .dataDate)
+        isFallback = try c.decode(Bool.self, forKey: .isFallback)
+        recoveryHero = try c.decode(RecoveryHero.self, forKey: .recoveryHero)
+        aiInsight = try c.decodeIfPresent(AIInsight.self, forKey: .aiInsight)
+        insightRefreshing = try c.decodeIfPresent(Bool.self, forKey: .insightRefreshing) ?? false
+        insightError = try c.decodeIfPresent(String.self, forKey: .insightError)
+        kpi = try c.decode([KPITile].self, forKey: .kpi)
+        prs = try c.decode(PRs.self, forKey: .prs)
+        recoveryTrend = try c.decode([TrendPoint].self, forKey: .recoveryTrend)
+    }
+}
+
+/// While the server is writing today's brief, Today re-fetches on a short,
+/// bounded schedule and then stops; it never polls indefinitely.
+enum BriefRefreshSchedule {
+    static let delays: [TimeInterval] = [6, 12, 24, 48]
+
+    static func delay(afterAttempt attempt: Int) -> TimeInterval? {
+        delays.indices.contains(attempt) ? delays[attempt] : nil
     }
 }

@@ -1,6 +1,5 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { after } from "next/server";
 import { Suspense } from "react";
 import RecoveryHero from "@/components/overview/RecoveryHero";
 import KPIStrip from "@/components/overview/KPIStrip";
@@ -21,12 +20,7 @@ import {
 } from "@/lib/db";
 import { getIntegrationStatus } from "@/lib/db/integrations";
 import { requireAuthOrSignin } from "@/lib/auth";
-import { resolveApiKeyForUser } from "@/lib/coach/api-key";
-import {
-  acquireInsightRegenerationLock,
-  getInsightStatus,
-  regenerateInsight,
-} from "@/lib/insights";
+import { scheduleInsightRegeneration } from "@/lib/insights";
 import { resolveRangeWindow } from "@/lib/range";
 import { localToday } from "@/lib/date";
 
@@ -137,24 +131,10 @@ async function InsightSection({
   hasInsightData: boolean;
 }) {
   await yieldToStream();
-  let insightStatus = getInsightStatus(userId, hasInsightData);
-
-  // Resolve BYOK before scheduling; missing credentials are persisted as a
-  // visible failure by the same retry gate as provider failures.
-  let insightApiKey: string | null = null;
-  try {
-    insightApiKey = resolveApiKeyForUser(userId).key;
-  } catch {
-    insightApiKey = null;
-  }
-  const insightLock = acquireInsightRegenerationLock(insightStatus, insightApiKey);
-  insightStatus = getInsightStatus(userId, hasInsightData);
-  const insightRefreshing = insightStatus.isRegenerating || insightLock !== null;
-
-  if (insightLock !== null && insightApiKey !== null) {
-    const keyForAfter = insightApiKey;
-    after(() => regenerateInsight(userId, keyForAfter, insightLock));
-  }
+  const { status: insightStatus, refreshing: insightRefreshing } = scheduleInsightRegeneration(
+    userId,
+    hasInsightData,
+  );
 
   return (
     <AIInsightCard
