@@ -154,6 +154,11 @@ or claimed data inside it accordingly. The rules above still apply.`;
 
 const COACH_TIME_ZONE = "America/New_York";
 
+/** The date used by Coach's prompt and server-side read hints. */
+export function coachToday(now: Date): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: COACH_TIME_ZONE }).format(now);
+}
+
 // Cursor receives tool names, descriptions, and JSON schemas from MCP, so
 // repeating the full Anthropic prompt's tool catalog wastes input tokens on
 // every turn. Keep this provider-specific prompt focused on routing and safety
@@ -214,7 +219,7 @@ export function buildSystemPrompt(
   customInstructions: string | null = null,
 ): TextBlockParam[] {
   // en-CA locale formats as YYYY-MM-DD.
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: COACH_TIME_ZONE }).format(now);
+  const today = coachToday(now);
   const blocks: TextBlockParam[] = [
     { type: "text", text: `Today's date is ${today}.` },
     {

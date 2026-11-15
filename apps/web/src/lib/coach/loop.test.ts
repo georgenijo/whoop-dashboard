@@ -5,7 +5,7 @@
 // the coach loop built its system prompt without them. Persistence tests
 // could not catch that, because the gap was between the DB and the SDK call.
 // These tests assert against the params actually handed to the Anthropic SDK.
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Message } from "@anthropic-ai/sdk/resources/messages";
 
 const streamMock = vi.hoisted(() => vi.fn());
@@ -41,6 +41,7 @@ import { DEFAULT_SYSTEM_PROMPT } from "./prompts";
 import { executeToolResult } from "./tools";
 import { AnthropicModelCatalogError } from "./anthropic-models";
 import { BadApiKeyError } from "./api-key";
+import type { CoachConversationMessage } from "./image-types";
 
 type SystemBlock = { type: "text"; text: string; cache_control?: unknown };
 
@@ -309,5 +310,113 @@ describe("runAnthropicSdk phase timing (issue #585)", () => {
 
     expect(typeof detailState.first_text_ms).toBe("number");
     expect(detailState.first_text_ms).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe("server read before the first Anthropic inference", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-14T17:00:00Z"));
+    getUserSettingsMock.mockReturnValue({ coach_effort: "medium" });
+    vi.mocked(executeToolResult).mockReset();
+    streamMock.mockReturnValue(fakeStream());
+  });
+  afterEach(() => vi.useRealTimers());
+
+  async function runRead(options: { signal?: AbortSignal; history?: CoachConversationMessage[]; text?: string } = {}) {
+    const detailState: DetailState = { iterations: 0 };
+    const result = await runAnthropicSdk(7, 42,
+      { displayText: options.text ?? "How did I sleep last night?", modelText: options.text ?? "How did I sleep last night?", images: [] },
+      options.history ?? [], [],
+      { calls: 0, input_tokens_total: 0, output_tokens_total: 0, cache_creation_input_tokens_total: 0, cache_read_input_tokens_total: 0 },
+      detailState, "personal-key", "user", { signal: options.signal });
+    return { result, detailState };
+  }
+
+  it("provides scoped data before inference, preserving model, effort, and persisted user text", async () => {
+    vi.mocked(executeToolResult).mockImplementation(async (_id, tool) => ({
+      type: "tool_result", tool_use_id: tool.id,
+      content: '[{"date":"2026-11-14","performance":82}]',
+    }));
+    const { result, detailState } = await runRead();
+    expect(executeToolResult).toHaveBeenCalledWith(42, expect.objectContaining({
+      id: expect.stringMatching(/^server_prefetch_/), name: "query_sleep",
+      input: { start_date: "2026-11-14", end_date: "2026-11-14" },
+    }), expect.any(Array), expect.objectContaining({ userId: 7, turnState: expect.any(Object) }));
+    expect(streamMock).toHaveBeenCalledTimes(1);
+    const params = streamMock.mock.calls[0][0];
+    expect(params).toMatchObject({ model: "claude-sonnet-5-5", thinking: { type: "adaptive" }, output_config: { effort: "medium" } });
+    expect(params.messages.at(-1).role).toBe("user");
+    expect(JSON.stringify(params.messages.at(-1).content)).toContain('\\"performance\\":82');
+    expect(result.messages[0]).toMatchObject({ role: "user", content: "How did I sleep last night?", blocks: [{ type: "text", text: "How did I sleep last night?" }] });
+    expect(result.messages).toHaveLength(2);
+    expect(detailState.prefetch).toMatchObject({ source: "server", tool: "query_sleep", used: true });
+    expect(JSON.stringify(params.system)).not.toContain('"performance":82');
+  });
+
+  it.each([
+    ["empty", "[]", false], ["error", '{"error":"unavailable"}', true],
+    ["oversized", "x".repeat(20_001), false],
+  ])("keeps the first model request unmodified on %s data", async (_name, content, is_error) => {
+    vi.mocked(executeToolResult).mockResolvedValue({ type: "tool_result", tool_use_id: "unused", content, is_error });
+    const { detailState } = await runRead();
+    expect(detailState.prefetch?.used).toBe(false);
+    expect(streamMock.mock.calls[0][0].messages).toEqual([{ role: "user", content: [expect.objectContaining({ type: "text", text: "How did I sleep last night?" })] }]);
+  });
+
+  it("retains sync and re-query when the current read is empty", async () => {
+    vi.mocked(executeToolResult)
+      .mockResolvedValueOnce({ type: "tool_result", tool_use_id: "prefetch", content: "[]" })
+      .mockResolvedValueOnce({ type: "tool_result", tool_use_id: "sync", content: '{"success":true}' })
+      .mockResolvedValueOnce({ type: "tool_result", tool_use_id: "read", content: '[{"date":"2026-11-14"}]' });
+    streamMock.mockReset();
+    streamMock.mockReturnValueOnce(fakeStream({ stop_reason: "tool_use", content: [
+      { type: "tool_use", id: "sync", name: "trigger_whoop_sync", input: {}, caller: { type: "direct" } },
+    ] })).mockReturnValueOnce(fakeStream({ stop_reason: "tool_use", content: [
+      { type: "tool_use", id: "read", name: "query_sleep", input: { start_date: "2026-11-14", end_date: "2026-11-14" }, caller: { type: "direct" } },
+    ] })).mockReturnValueOnce(fakeStream());
+    await runRead();
+    expect(vi.mocked(executeToolResult).mock.calls.map(([, tool]) => tool.name))
+      .toEqual(["query_sleep", "trigger_whoop_sync", "query_sleep"]);
+    const states = vi.mocked(executeToolResult).mock.calls.map((call) => call[3].turnState);
+    expect(states[1]).toBe(states[0]); expect(states[2]).toBe(states[0]);
+    expect(streamMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("leaves an empty wrapped workout read on the ordinary model path", async () => {
+    vi.mocked(executeToolResult).mockResolvedValue({
+      type: "tool_result", tool_use_id: "prefetch",
+      content: '{"rows":[],"_meta":{"total_count":0,"truncated":false}}',
+    });
+    const { detailState } = await runRead({ text: "Show my workouts today" });
+    expect(detailState.prefetch).toMatchObject({ tool: "query_workouts", used: false });
+    expect(streamMock.mock.calls[0][0].messages[0].content).toHaveLength(1);
+  });
+
+  it("does not fetch or send private rows when the request opts out", async () => {
+    await runRead({ text: "How was my recovery today? Don't query my data; explain generally." });
+    expect(executeToolResult).not.toHaveBeenCalled();
+    expect(streamMock.mock.calls[0][0].messages[0].content).toHaveLength(1);
+  });
+
+  it("leaves follow-ups on the ordinary path", async () => {
+    await runRead({ history: [{ role: "user", contentBlocks: [{ type: "text", text: "Earlier question" }], images: [] }] });
+    expect(executeToolResult).not.toHaveBeenCalled();
+  });
+
+  it("starts no work for an already cancelled turn", async () => {
+    const controller = new AbortController(); controller.abort();
+    await expect(runRead({ signal: controller.signal })).rejects.toThrow();
+    expect(executeToolResult).not.toHaveBeenCalled(); expect(streamMock).not.toHaveBeenCalled();
+  });
+
+  it("passes cancellation through the read and starts no inference after cancellation", async () => {
+    const controller = new AbortController();
+    vi.mocked(executeToolResult).mockImplementation(async (_id, tool, _details, options) => {
+      expect(options.signal).toBe(controller.signal); controller.abort();
+      return { type: "tool_result", tool_use_id: tool.id, content: "[]" };
+    });
+    await expect(runRead({ signal: controller.signal })).rejects.toThrow();
+    expect(streamMock).not.toHaveBeenCalled();
   });
 });

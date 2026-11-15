@@ -1,4 +1,5 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import Anthropic, { APIError } from "@anthropic-ai/sdk";
 import type {
   ContentBlock,
@@ -22,7 +23,8 @@ import type {
   CoachConversationMessage,
   CoachUserTurn,
 } from "./image-types";
-import { buildSystemPrompt } from "./prompts";
+import { buildSystemPrompt, coachToday } from "./prompts";
+import { recentReadHasRows, selectRecentRead, withRecentRead } from "./recent-read";
 import { defaultChatModel } from "./model-defaults";
 import { AnthropicModelCatalogError, AnthropicModelUnavailableError, listAnthropicModelsForKey } from "./anthropic-models";
 import { effectiveAnthropicEffort } from "./anthropic-model-options";
@@ -54,6 +56,13 @@ export type DetailState = {
   // Time from provider-turn start to the first streamed assistant text. Set by
   // both the Anthropic loop and the Cursor ACP turn so /logs can compare them.
   first_text_ms?: number | null;
+  prefetch?: {
+    source: "server";
+    tool: string;
+    input: { start_date: string; end_date: string };
+    duration_ms: number;
+    used: boolean;
+  };
   cursor?: {
     transport?: "legacy" | "acp";
     acp?: {
@@ -324,7 +333,9 @@ export async function runAnthropicSdk(
   accumulator?: ChatMessageInsert[],
   model: string = defaultChatModel(),
 ): Promise<{ reply: string; iterations: number; messages: ChatMessageInsert[] }> {
+  options.signal?.throwIfAborted();
   const turnStartedAt = Date.now();
+  const now = new Date();
   // Per-turn state shared across all `executeToolResult` calls in this turn.
   // Currently used to hard-cap `trigger_whoop_sync` at one attempt per turn.
   const turnState = newToolTurnState();
@@ -412,7 +423,7 @@ export async function runAnthropicSdk(
   });
   detailState.effort = coachEffort;
   const systemPrompt = buildSystemPrompt(
-    new Date(),
+    now,
     userSettings?.coach_goals ?? null,
     userSettings?.system_prompt ?? null,
   );
@@ -425,7 +436,36 @@ export async function runAnthropicSdk(
       : [],
     attachments: turn.images,
   });
-  const conversation: MessageParam[] = buildAnthropicConversation(history, turn);
+  let conversation: MessageParam[] = buildAnthropicConversation(history, turn);
+
+  // A clear first-turn read can be fetched without spending an inference
+  // round-trip just to choose its tool. Context-dependent follow-ups, images,
+  // broader questions, and ambiguous dates retain the ordinary tool loop.
+  const recentRead = history.length === 0 && turn.images.length === 0
+    ? selectRecentRead(turn.modelText, coachToday(now))
+    : null;
+  if (recentRead) {
+    options.signal?.throwIfAborted();
+    const startedAt = Date.now();
+    const result = await executeToolResult(threadId, {
+      type: "tool_use",
+      id: `server_prefetch_${randomUUID()}`,
+      name: recentRead.name,
+      input: recentRead.input,
+      caller: { type: "direct" },
+    }, toolDetails, { userId, turnState, signal: options.signal, progress: options });
+    options.signal?.throwIfAborted();
+    const payload = typeof result.content === "string" ? result.content : "";
+    // On empty/error/oversized results, leave the normal inference and
+    // missing-data recovery path intact. Only the four local read tools can
+    // reach here; no sync, plan write, or WHOOP network refresh is prefetched.
+    const used = !result.is_error && payload.length <= 20_000 && recentReadHasRows(payload);
+    detailState.prefetch = {
+      source: "server", tool: recentRead.name, input: recentRead.input,
+      duration_ms: Date.now() - startedAt, used,
+    };
+    if (used) conversation = withRecentRead(conversation, recentRead, payload);
+  }
 
   const pendingAssistant: ChatMessageInsert = {
     role: "assistant",
