@@ -79,6 +79,35 @@ final class VoiceDictationTests: XCTestCase {
         ))
     }
 
+    func testRetainedFrameWindowCap() {
+        var window = RetainedFrameWindow(capFrames: 1000)
+        XCTAssertEqual(window.append(frames: 400), 0)
+        XCTAssertEqual(window.append(frames: 400), 0)
+        XCTAssertEqual(window.totalFrames, 800)
+        XCTAssertEqual(window.append(frames: 400), 1)
+        XCTAssertEqual(window.counts, [400, 400])
+        XCTAssertEqual(window.append(frames: 900), 2)
+        XCTAssertEqual(window.counts, [900])
+        XCTAssertEqual(window.append(frames: 2000), 1)
+        XCTAssertEqual(window.counts, [2000])
+    }
+
+    func testTranscriptPrefixComposition() {
+        XCTAssertEqual(DictationMath.composeTranscript(prefix: "", partial: "hello"), "hello")
+        XCTAssertEqual(DictationMath.composeTranscript(prefix: "hello", partial: "there"), "hello there")
+        XCTAssertEqual(DictationMath.composeTranscript(prefix: "hello", partial: ""), "hello")
+        XCTAssertEqual(DictationMath.composeTranscript(prefix: "hello ", partial: " there "), "hello there")
+    }
+
+    func testServerDeadlineAndFormatChange() {
+        XCTAssertEqual(DictationMath.serverDeadline(startingAt: 0), VoiceDictation.serverTimeLimit)
+        XCTAssertEqual(DictationMath.serverDeadline(startingAt: 20), 20 + VoiceDictation.serverTimeLimit)
+        XCTAssertEqual(DictationMath.serverDeadline(startingAt: -5), VoiceDictation.serverTimeLimit)
+        XCTAssertFalse(DictationMath.inputFormatChanged(oldRate: 48000, oldChannels: 1, newRate: 48000, newChannels: 1))
+        XCTAssertTrue(DictationMath.inputFormatChanged(oldRate: 48000, oldChannels: 1, newRate: 16000, newChannels: 1))
+        XCTAssertTrue(DictationMath.inputFormatChanged(oldRate: 48000, oldChannels: 1, newRate: 48000, newChannels: 2))
+    }
+
     func testBarCountFitsWidth() {
         XCTAssertEqual(DictationMath.barCount(forWidth: 0, barWidth: 2.5, spacing: 3), 1)
         XCTAssertEqual(DictationMath.barCount(forWidth: 2.5, barWidth: 2.5, spacing: 3), 1)
