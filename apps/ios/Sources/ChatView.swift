@@ -205,10 +205,19 @@ struct ChatView: View {
             Task { await loadHistory() }
         }
         .onChange(of: dictation.state) { _, state in
-            guard case .failed(let message) = state else { return }
-            input = ChatComposerRules.appendingTranscript(dictation.transcript, to: input)
-            sendError = message
-            dictation.acknowledgeFailure()
+            switch state {
+            case .failed(let message):
+                input = ChatComposerRules.appendingTranscript(dictation.transcript, to: input)
+                sendError = message
+                dictation.acknowledgeEnd()
+            case .finished:
+                input = ChatComposerRules.appendingTranscript(dictation.transcript, to: input)
+                dictationFinishCount += 1
+                dictation.acknowledgeEnd()
+                isComposerFocused = true
+            case .idle, .starting, .recording:
+                break
+            }
         }
         .onChange(of: dictation.reachedLimit) { _, reached in
             guard reached else { return }
@@ -715,6 +724,7 @@ struct ChatView: View {
 
             Text(DictationMath.formatElapsed(dictation.elapsed))
                 .font(Theme.FontStyle.mono(13, weight: .medium))
+                .fixedSize(horizontal: true, vertical: false)
                 .foregroundStyle(Theme.Palette.fg2)
                 .accessibilityLabel("Recording time")
                 .accessibilityValue(DictationMath.spokenElapsed(dictation.elapsed))
@@ -747,15 +757,15 @@ struct ChatView: View {
     }
 
     private func startDictation() {
+        onComposerInteraction?()
         isComposerFocused = false
         sendError = nil
         dictation.start()
     }
 
     private func finishDictation() {
-        guard !dictation.isFinishing, dictation.isActive else { return }
         Task { @MainActor in
-            let transcript = await dictation.finish()
+            guard let transcript = await dictation.finish() else { return }
             input = ChatComposerRules.appendingTranscript(transcript, to: input)
             dictationFinishCount += 1
             isComposerFocused = true
@@ -1801,15 +1811,23 @@ private struct DictationWaveform: View {
     let levels: [Float]
     let animates: Bool
 
+    private let barWidth: CGFloat = 2.5
+    private let spacing: CGFloat = 3
+
     var body: some View {
-        HStack(spacing: 3) {
-            ForEach(Array(levels.enumerated()), id: \.offset) { index, level in
-                Capsule()
-                    .fill(index >= levels.count - 6 ? Theme.Palette.fg2 : Theme.Palette.fg3)
-                    .frame(width: 2.5, height: max(3, CGFloat(level) * 28))
+        GeometryReader { proxy in
+            let fit = DictationMath.barCount(forWidth: proxy.size.width, barWidth: barWidth, spacing: spacing)
+            let shown = Array(levels.suffix(fit))
+            HStack(spacing: spacing) {
+                ForEach(Array(shown.enumerated()), id: \.offset) { index, level in
+                    Capsule()
+                        .fill(index >= shown.count - 6 ? Theme.Palette.fg2 : Theme.Palette.fg3)
+                        .frame(width: barWidth, height: max(3, CGFloat(level) * 28))
+                }
             }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .trailing)
+            .clipped()
+            .animation(animates ? .linear(duration: 0.08) : nil, value: levels)
         }
-        .frame(maxWidth: .infinity, alignment: .trailing)
-        .animation(animates ? .linear(duration: 0.08) : nil, value: levels)
     }
 }

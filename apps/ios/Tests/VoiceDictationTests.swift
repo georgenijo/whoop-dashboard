@@ -39,6 +39,24 @@ final class VoiceDictationTests: XCTestCase {
         XCTAssertEqual(ChatComposerRules.appendingTranscript("  ", to: ""), "")
     }
 
+    func testBarCountFitsWidth() {
+        XCTAssertEqual(DictationMath.barCount(forWidth: 0, barWidth: 2.5, spacing: 3), 1)
+        XCTAssertEqual(DictationMath.barCount(forWidth: 2.5, barWidth: 2.5, spacing: 3), 1)
+        XCTAssertEqual(DictationMath.barCount(forWidth: 8, barWidth: 2.5, spacing: 3), 2)
+        let count = DictationMath.barCount(forWidth: 100, barWidth: 2.5, spacing: 3)
+        XCTAssertLessThanOrEqual(CGFloat(count) * 2.5 + CGFloat(count - 1) * 3, 100)
+        XCTAssertEqual(DictationMath.barCount(forWidth: .nan, barWidth: 2.5, spacing: 3), 1)
+    }
+
+    @MainActor
+    func testFinishWithoutRecordingIsNotOwned() async {
+        let dictation = VoiceDictation()
+        let result = await dictation.finish()
+        XCTAssertNil(result)
+        dictation.cancel()
+        XCTAssertEqual(dictation.state, .idle)
+    }
+
     func testRingBufferKeepsFixedLength() {
         var ring = LevelRingBuffer(capacity: 4)
         XCTAssertEqual(ring.values, [0, 0, 0, 0])

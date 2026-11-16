@@ -28,6 +28,12 @@ enum DictationMath {
         return (sum / Float(samples.count)).squareRoot()
     }
 
+    /// How many bars of the given size fit in a width, never fewer than one.
+    static func barCount(forWidth width: CGFloat, barWidth: CGFloat, spacing: CGFloat) -> Int {
+        guard width.isFinite, width > 0 else { return 1 }
+        return max(1, Int(((width + spacing) / (barWidth + spacing)).rounded(.down)))
+    }
+
     static func formatElapsed(_ seconds: TimeInterval) -> String {
         let total = max(0, Int(seconds.isFinite ? seconds : 0))
         return String(format: "%d:%02d", total / 60, total % 60)
@@ -71,9 +77,12 @@ final class VoiceDictation {
         case starting
         case recording
         case failed(String)
+        /// The recognizer ended the session on its own with a usable transcript.
+        case finished
     }
 
-    static let barCount = 32
+    /// Upper bound on bars the waveform can draw; it shows however many fit.
+    static let barCount = 80
     /// Apple's server recognizer stops at about a minute; finish just before it.
     static let serverTimeLimit: TimeInterval = 55
     static let finalResultWait: TimeInterval = 1.5
@@ -88,7 +97,7 @@ final class VoiceDictation {
     var isActive: Bool {
         switch state {
         case .starting, .recording: return true
-        case .idle, .failed: return false
+        case .idle, .failed, .finished: return false
         }
     }
 
@@ -107,7 +116,7 @@ final class VoiceDictation {
     nonisolated init() {}
 
     func start() {
-        guard state == .idle || isFailed else { return }
+        guard !isActive, !isFinishing else { return }
         resetOutputs()
         state = .starting
         generation += 1
@@ -118,9 +127,10 @@ final class VoiceDictation {
     }
 
     /// Stops capture, gives the recognizer a moment to settle, and returns the best transcript.
-    func finish() async -> String {
-        guard isActive, !isFinishing else { return transcript }
-        startTask?.cancel()
+    /// Returns nil when this call did not own the finish: a finish was already under way,
+    /// nothing was recording, or the session was cancelled or replaced while waiting.
+    func finish() async -> String? {
+        guard state == .recording, !isFinishing else { return nil }
         isFinishing = true
         let token = generation
         stopCapture()
@@ -130,6 +140,7 @@ final class VoiceDictation {
         while !receivedFinal, task != nil, Date() < deadline, token == generation {
             try? await Task.sleep(nanoseconds: 50_000_000)
         }
+        guard token == generation else { return nil }
         let result = transcript
         teardown()
         isFinishing = false
@@ -147,19 +158,14 @@ final class VoiceDictation {
         state = .idle
     }
 
-    /// Clears a `.failed` state after the caller has surfaced it.
-    func acknowledgeFailure() {
-        guard isFailed else { return }
+    /// Clears a `.failed` or `.finished` state after the caller has consumed it.
+    func acknowledgeEnd() {
+        guard !isActive, state != .idle else { return }
         state = .idle
     }
 
     func takeLimitReached() {
         reachedLimit = false
-    }
-
-    private var isFailed: Bool {
-        if case .failed = state { return true }
-        return false
     }
 
     private func resetOutputs() {
@@ -171,11 +177,15 @@ final class VoiceDictation {
     }
 
     private func fail(_ message: String) {
+        endSession(.failed(message))
+    }
+
+    private func endSession(_ newState: State) {
         generation += 1
         task?.cancel()
         teardown()
         isFinishing = false
-        state = .failed(message)
+        state = newState
     }
 
     // MARK: Start
@@ -190,16 +200,17 @@ final class VoiceDictation {
             return
         }
 
-        let permission = await Self.requestPermissions()
-        guard token == generation, !Task.isCancelled else { return }
-        if let message = permission {
+        switch await requestPermissions(token: token) {
+        case .stale: return
+        case .denied(let message):
             fail(message)
             return
+        case .granted: break
         }
 
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.record, mode: .measurement, options: [])
+            try session.setCategory(.record, mode: .measurement, options: [.allowBluetooth])
             try session.setActive(true, options: [])
         } catch {
             fail("Couldn’t start the microphone. Check that no other app is recording.")
@@ -250,18 +261,31 @@ final class VoiceDictation {
         startClock(token: token)
     }
 
-    private static func requestPermissions() async -> String? {
+    private enum PermissionOutcome {
+        case granted
+        case denied(String)
+        case stale
+    }
+
+    private func isCurrent(_ token: Int) -> Bool {
+        token == generation && !Task.isCancelled
+    }
+
+    private func requestPermissions(token: Int) async -> PermissionOutcome {
+        guard isCurrent(token) else { return .stale }
         let speech = await withCheckedContinuation { (continuation: CheckedContinuation<SFSpeechRecognizerAuthorizationStatus, Never>) in
             SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0) }
         }
+        guard isCurrent(token) else { return .stale }
         guard speech == .authorized else {
-            return "Speech Recognition is off for Coach. Turn it on in Settings > Coach to dictate."
+            return .denied("Speech Recognition is off for Coach. Turn it on in Settings > Coach to dictate.")
         }
         let micGranted = await AVAudioApplication.requestRecordPermission()
+        guard isCurrent(token) else { return .stale }
         guard micGranted else {
-            return "Microphone access is off for Coach. Turn it on in Settings > Coach to dictate."
+            return .denied("Microphone access is off for Coach. Turn it on in Settings > Coach to dictate.")
         }
-        return nil
+        return .granted
     }
 
     // MARK: Audio and recognition callbacks
@@ -304,8 +328,13 @@ final class VoiceDictation {
         guard token == generation else { return }
         if let text, !text.isEmpty { transcript = text }
         if isFinal || failed { receivedFinal = true }
-        if failed, state == .recording, !isFinishing, transcript.isEmpty {
-            fail("Couldn’t hear anything. Please try again.")
+        guard (isFinal || failed), state == .recording, !isFinishing else { return }
+        if transcript.isEmpty {
+            fail(failed ? "Couldn’t hear anything. Please try again." : "Couldn’t hear anything.")
+        } else if failed {
+            fail("Dictation stopped early. Your words so far were kept.")
+        } else {
+            endSession(.finished)
         }
     }
 
