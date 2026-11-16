@@ -294,7 +294,10 @@ final class VoiceDictation {
         request?.endAudio()
 
         let deadline = Date().addingTimeInterval(Self.finalResultWait)
-        while !receivedFinal, task != nil, Date() < deadline, token == generation {
+        // Wait for the active attempt and any attempt still draining after a
+        // format restart, so words it has yet to deliver are not cancelled.
+        while (!receivedFinal && task != nil) || drainingAttempt != nil,
+              Date() < deadline, token == generation {
             try? await Task.sleep(nanoseconds: 50_000_000)
         }
         guard token == generation else { return nil }
