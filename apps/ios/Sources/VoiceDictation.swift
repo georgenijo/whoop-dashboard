@@ -35,6 +35,22 @@ enum DictationMath {
         return max(1, Int(((width + spacing) / (barWidth + spacing)).rounded(.down)))
     }
 
+    /// When a server recognition attempt begun at `elapsed` must be wrapped up.
+    static func serverDeadline(startingAt elapsed: TimeInterval) -> TimeInterval {
+        max(0, elapsed) + VoiceDictation.serverTimeLimit
+    }
+
+    /// Text recognized by earlier attempts stays in front of the current attempt's partials.
+    static func composeTranscript(prefix: String, partial: String) -> String {
+        ChatComposerRules.appendingTranscript(partial, to: prefix)
+    }
+
+    static func inputFormatChanged(
+        oldRate: Double, oldChannels: UInt32, newRate: Double, newChannels: UInt32
+    ) -> Bool {
+        oldRate != newRate || oldChannels != newChannels
+    }
+
     static func formatElapsed(_ seconds: TimeInterval) -> String {
         let total = max(0, Int(seconds.isFinite ? seconds : 0))
         return String(format: "%d:%02d", total / 60, total % 60)
@@ -89,22 +105,88 @@ enum DictationFallback {
     }
 }
 
+/// Tracks how many frames a bounded replay buffer holds; the oldest buffers drop first.
+struct RetainedFrameWindow: Equatable {
+    let capFrames: Int
+    private(set) var counts: [Int] = []
+
+    init(capFrames: Int) { self.capFrames = max(1, capFrames) }
+
+    var totalFrames: Int { counts.reduce(0, +) }
+
+    /// Returns how many of the oldest buffers were dropped to stay within the cap.
+    /// The newest buffer is always kept, even if it alone exceeds the cap.
+    @discardableResult
+    mutating func append(frames: Int) -> Int {
+        counts.append(max(0, frames))
+        var dropped = 0
+        while counts.count > 1, totalFrames > capFrames {
+            counts.removeFirst()
+            dropped += 1
+        }
+        return dropped
+    }
+}
+
 /// Lets the audio tap keep appending while the recognition request is swapped underneath it.
+/// While retaining, it keeps a bounded copy of recent audio so a replacement request can be
+/// primed with speech captured before the swap.
 final class RecognitionRequestBox: @unchecked Sendable {
+    static let retainedSeconds: Double = 10
+
     private let lock = NSLock()
     private var current: SFSpeechAudioBufferRecognitionRequest?
+    private var retaining = false
+    private var window: RetainedFrameWindow?
+    private var retained: [AVAudioPCMBuffer] = []
 
-    func set(_ request: SFSpeechAudioBufferRecognitionRequest?) {
+    /// Installs `request` as the append target. With `replay`, retained audio goes in first,
+    /// under the lock, so no new buffer can overtake it.
+    func swap(to request: SFSpeechAudioBufferRecognitionRequest?, replay: Bool, retain: Bool) {
         lock.lock()
+        defer { lock.unlock() }
+        if replay, let request {
+            for buffer in retained { request.append(buffer) }
+        }
         current = request
+        retained.removeAll()
+        window = nil
+        retaining = retain && request != nil
+    }
+
+    func stopRetaining() {
+        lock.lock()
+        retaining = false
+        retained.removeAll()
+        window = nil
         lock.unlock()
     }
 
     func append(_ buffer: AVAudioPCMBuffer) {
         lock.lock()
-        let request = current
-        lock.unlock()
-        request?.append(buffer)
+        defer { lock.unlock() }
+        if retaining, let copy = Self.copy(buffer) {
+            var tracker = window ?? RetainedFrameWindow(
+                capFrames: Int(buffer.format.sampleRate * Self.retainedSeconds)
+            )
+            let dropped = tracker.append(frames: Int(copy.frameLength))
+            retained.append(copy)
+            if dropped > 0 { retained.removeFirst(dropped) }
+            window = tracker
+        }
+        current?.append(buffer)
+    }
+
+    private static func copy(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        guard let source = buffer.floatChannelData, buffer.frameLength > 0,
+              let copy = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: buffer.frameLength),
+              let destination = copy.floatChannelData else { return nil }
+        copy.frameLength = buffer.frameLength
+        let bytes = Int(buffer.frameLength) * MemoryLayout<Float>.size
+        for channel in 0..<Int(buffer.format.channelCount) {
+            memcpy(destination[channel], source[channel], bytes)
+        }
+        return copy
     }
 }
 
@@ -169,6 +251,9 @@ final class VoiceDictation {
     @ObservationIgnored private var startedAt: Date?
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var attempt = 0
+    @ObservationIgnored private var attemptHasText = false
+    @ObservationIgnored private var committedPrefix = ""
+    @ObservationIgnored private var inputFormat: AVAudioFormat?
     @ObservationIgnored private var fellBackToServer = false
     @ObservationIgnored private let requestBox = RecognitionRequestBox()
     @ObservationIgnored private static let log = Logger(subsystem: "com.georgenijo.coach", category: "dictation")
@@ -236,6 +321,8 @@ final class VoiceDictation {
         levels.reset()
         elapsed = 0
         transcript = ""
+        committedPrefix = ""
+        attemptHasText = false
         receivedFinal = false
         reachedLimit = false
     }
@@ -259,9 +346,38 @@ final class VoiceDictation {
         next.addsPunctuation = true
         next.requiresOnDeviceRecognition = false
         request = next
-        requestBox.set(next)
+        requestBox.swap(to: next, replay: true, retain: false)
+        attemptHasText = false
         receivedFinal = false
-        timeLimit = Self.serverTimeLimit
+        timeLimit = Self.serverDeadline(startingAt: currentElapsed)
+        task = recognizer.recognitionTask(
+            with: next,
+            resultHandler: Self.resultHandler(for: self, token: token, attempt: attempt)
+        )
+    }
+
+    private var currentElapsed: TimeInterval {
+        startedAt.map { Date().timeIntervalSince($0) } ?? 0
+    }
+
+    /// The input format changed mid-session: keep what was recognized, then continue on a
+    /// fresh request so one request never sees two audio formats.
+    private func restartRecognition(token: Int) {
+        guard let recognizer, let old = request else { return }
+        let onDevice = old.requiresOnDeviceRecognition
+        committedPrefix = transcript
+        attemptHasText = false
+        attempt += 1
+        task?.cancel()
+        let next = SFSpeechAudioBufferRecognitionRequest()
+        next.shouldReportPartialResults = true
+        next.addsPunctuation = true
+        next.requiresOnDeviceRecognition = onDevice
+        request = next
+        requestBox.swap(to: next, replay: false, retain: onDevice && !fellBackToServer)
+        old.endAudio()
+        receivedFinal = false
+        if !onDevice { timeLimit = Self.serverDeadline(startingAt: currentElapsed) }
         task = recognizer.recognitionTask(
             with: next,
             resultHandler: Self.resultHandler(for: self, token: token, attempt: attempt)
@@ -338,8 +454,10 @@ final class VoiceDictation {
 
         self.recognizer = recognizer
         self.request = request
-        requestBox.set(request)
+        requestBox.swap(to: request, replay: false, retain: onDevice)
+        inputFormat = format
         fellBackToServer = false
+        attemptHasText = false
         attempt += 1
         let currentAttempt = attempt
         self.engine = engine
@@ -402,7 +520,8 @@ final class VoiceDictation {
             return
         }
         self.engine = engine
-        requestBox.set(nil)
+        requestBox.swap(to: nil, replay: false, retain: false)
+        inputFormat = format
         timeLimit = nil
         receivedFinal = true
         demoWords = Self.demoSentence.split(separator: " ").map(String.init)
@@ -492,7 +611,11 @@ final class VoiceDictation {
 
     private func receive(text: String?, isFinal: Bool, error: NSError?, token: Int, attempt: Int) {
         guard token == generation, attempt == self.attempt else { return }
-        if let text, !text.isEmpty { transcript = text }
+        if let text, !text.isEmpty {
+            attemptHasText = true
+            requestBox.stopRetaining()
+            transcript = DictationMath.composeTranscript(prefix: committedPrefix, partial: text)
+        }
         if isFinal || error != nil { receivedFinal = true }
         guard isFinal || error != nil, state == .recording, !isFinishing else { return }
 
@@ -501,7 +624,7 @@ final class VoiceDictation {
            DictationFallback.shouldFallBackToServer(
                onDevice: request?.requiresOnDeviceRecognition ?? false,
                alreadyFellBack: fellBackToServer,
-               hasTranscript: !transcript.isEmpty,
+               hasTranscript: attemptHasText,
                elapsed: startedAt.map { Date().timeIntervalSince($0) } ?? 0,
                kind: kind
            ) {
@@ -591,6 +714,14 @@ final class VoiceDictation {
             fail("No microphone input is available.", reason: "config_change_no_input")
             return
         }
+        if let old = inputFormat,
+           DictationMath.inputFormatChanged(
+               oldRate: old.sampleRate, oldChannels: old.channelCount,
+               newRate: format.sampleRate, newChannels: format.channelCount
+           ) {
+            restartRecognition(token: token)
+        }
+        inputFormat = format
         engine.inputNode.installTap(
             onBus: 0,
             bufferSize: 2048,
@@ -626,6 +757,8 @@ final class VoiceDictation {
         task?.cancel()
         task = nil
         request = nil
+        requestBox.swap(to: nil, replay: false, retain: false)
+        inputFormat = nil
         recognizer = nil
         startedAt = nil
         timeLimit = nil
