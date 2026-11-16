@@ -349,7 +349,7 @@ final class VoiceDictation {
         requestBox.swap(to: next, replay: true, retain: false)
         attemptHasText = false
         receivedFinal = false
-        timeLimit = Self.serverDeadline(startingAt: currentElapsed)
+        timeLimit = DictationMath.serverDeadline(startingAt: currentElapsed)
         task = recognizer.recognitionTask(
             with: next,
             resultHandler: Self.resultHandler(for: self, token: token, attempt: attempt)
@@ -377,7 +377,7 @@ final class VoiceDictation {
         requestBox.swap(to: next, replay: false, retain: onDevice && !fellBackToServer)
         old.endAudio()
         receivedFinal = false
-        if !onDevice { timeLimit = Self.serverDeadline(startingAt: currentElapsed) }
+        if !onDevice { timeLimit = DictationMath.serverDeadline(startingAt: currentElapsed) }
         task = recognizer.recognitionTask(
             with: next,
             resultHandler: Self.resultHandler(for: self, token: token, attempt: attempt)
