@@ -48,6 +48,26 @@ final class VoiceDictationTests: XCTestCase {
         XCTAssertEqual(DictationErrorKind.classify(domain: "NSURLErrorDomain", code: -1009), .other)
     }
 
+    func testServerFallbackDecision() {
+        func decide(
+            onDevice: Bool = true, fellBack: Bool = false, transcript: Bool = false,
+            elapsed: TimeInterval = 0.01, kind: DictationErrorKind
+        ) -> Bool {
+            DictationFallback.shouldFallBackToServer(
+                onDevice: onDevice, alreadyFellBack: fellBack,
+                hasTranscript: transcript, elapsed: elapsed, kind: kind
+            )
+        }
+        XCTAssertTrue(decide(kind: .other))
+        XCTAssertTrue(decide(elapsed: 12, kind: .other))
+        XCTAssertTrue(decide(elapsed: 0.5, kind: .noSpeech))
+        XCTAssertFalse(decide(elapsed: 4, kind: .noSpeech))
+        XCTAssertFalse(decide(kind: .cancelled))
+        XCTAssertFalse(decide(onDevice: false, kind: .other))
+        XCTAssertFalse(decide(fellBack: true, kind: .other))
+        XCTAssertFalse(decide(transcript: true, kind: .other))
+    }
+
     func testBarCountFitsWidth() {
         XCTAssertEqual(DictationMath.barCount(forWidth: 0, barWidth: 2.5, spacing: 3), 1)
         XCTAssertEqual(DictationMath.barCount(forWidth: 2.5, barWidth: 2.5, spacing: 3), 1)

@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import Observation
+import os
 import Speech
 
 enum DictationMath {
@@ -67,6 +68,46 @@ enum DictationErrorKind: Equatable {
     }
 }
 
+enum DictationFallback {
+    /// An on-device recognizer whose model is missing errors at once, before any text.
+    /// Retrying against Apple's server recognizer recovers; a late "no speech" does not need it.
+    static let startupWindow: TimeInterval = 1
+
+    static func shouldFallBackToServer(
+        onDevice: Bool,
+        alreadyFellBack: Bool,
+        hasTranscript: Bool,
+        elapsed: TimeInterval,
+        kind: DictationErrorKind
+    ) -> Bool {
+        guard onDevice, !alreadyFellBack, !hasTranscript else { return false }
+        switch kind {
+        case .cancelled: return false
+        case .noSpeech: return elapsed < startupWindow
+        case .other: return true
+        }
+    }
+}
+
+/// Lets the audio tap keep appending while the recognition request is swapped underneath it.
+final class RecognitionRequestBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var current: SFSpeechAudioBufferRecognitionRequest?
+
+    func set(_ request: SFSpeechAudioBufferRecognitionRequest?) {
+        lock.lock()
+        current = request
+        lock.unlock()
+    }
+
+    func append(_ buffer: AVAudioPCMBuffer) {
+        lock.lock()
+        let request = current
+        lock.unlock()
+        request?.append(buffer)
+    }
+}
+
 /// Fixed-length window of recent levels; the newest value is last.
 struct LevelRingBuffer: Equatable {
     let capacity: Int
@@ -127,6 +168,10 @@ final class VoiceDictation {
     @ObservationIgnored private var startTask: Task<Void, Never>?
     @ObservationIgnored private var startedAt: Date?
     @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var attempt = 0
+    @ObservationIgnored private var fellBackToServer = false
+    @ObservationIgnored private let requestBox = RecognitionRequestBox()
+    @ObservationIgnored private static let log = Logger(subsystem: "com.georgenijo.coach", category: "dictation")
     @ObservationIgnored private var sessionActive = false
     @ObservationIgnored private var receivedFinal = false
     @ObservationIgnored private var timeLimit: TimeInterval?
@@ -195,13 +240,41 @@ final class VoiceDictation {
         reachedLimit = false
     }
 
+    private func logWarn(_ message: String, details: [String: Any]) {
+        Self.log.warning("\(message, privacy: .public) \(String(describing: details), privacy: .public)")
+        ClientLogger.shared.warn(message, details: details)
+    }
+
+    private func fallBackToServer(after error: NSError, token: Int) {
+        guard let recognizer else {
+            fail("Couldn’t hear anything. Please try again.", reason: "fallback_no_recognizer", error: error)
+            return
+        }
+        logWarn("dictation_ondevice_fallback", details: ["domain": error.domain, "code": error.code])
+        fellBackToServer = true
+        attempt += 1
+        task?.cancel()
+        let next = SFSpeechAudioBufferRecognitionRequest()
+        next.shouldReportPartialResults = true
+        next.addsPunctuation = true
+        next.requiresOnDeviceRecognition = false
+        request = next
+        requestBox.set(next)
+        receivedFinal = false
+        timeLimit = Self.serverTimeLimit
+        task = recognizer.recognitionTask(
+            with: next,
+            resultHandler: Self.resultHandler(for: self, token: token, attempt: attempt)
+        )
+    }
+
     private func fail(_ message: String, reason: String = "setup", error: NSError? = nil) {
         var details: [String: Any] = ["reason": reason]
         if let error {
             details["domain"] = error.domain
             details["code"] = error.code
         }
-        ClientLogger.shared.warn("dictation_failed", details: details)
+        logWarn("dictation_failed", details: details)
         endSession(.failed(message))
     }
 
@@ -258,20 +331,24 @@ final class VoiceDictation {
 
         self.recognizer = recognizer
         self.request = request
+        requestBox.set(request)
+        fellBackToServer = false
+        attempt += 1
+        let currentAttempt = attempt
         self.engine = engine
         timeLimit = onDevice ? nil : Self.serverTimeLimit
         receivedFinal = false
 
         task = recognizer.recognitionTask(
             with: request,
-            resultHandler: Self.resultHandler(for: self, token: token)
+            resultHandler: Self.resultHandler(for: self, token: token, attempt: currentAttempt)
         )
 
         engine.inputNode.installTap(
             onBus: 0,
             bufferSize: 2048,
             format: format,
-            block: Self.tapBlock(for: self, request: request, token: token)
+            block: Self.tapBlock(for: self, box: requestBox, token: token)
         )
         installObservers(token: token, engine: engine)
         engine.prepare()
@@ -319,11 +396,11 @@ final class VoiceDictation {
     /// Built outside the main-actor context so the audio thread never trips an isolation check.
     private nonisolated static func tapBlock(
         for owner: VoiceDictation,
-        request: SFSpeechAudioBufferRecognitionRequest,
+        box: RecognitionRequestBox,
         token: Int
     ) -> AVAudioNodeTapBlock {
         { [weak owner] buffer, _ in
-            request.append(buffer)
+            box.append(buffer)
             var level: Float = 0
             if let channel = buffer.floatChannelData?[0], buffer.frameLength > 0 {
                 let samples = UnsafeBufferPointer(start: channel, count: Int(buffer.frameLength))
@@ -335,13 +412,14 @@ final class VoiceDictation {
 
     private nonisolated static func resultHandler(
         for owner: VoiceDictation,
-        token: Int
+        token: Int,
+        attempt: Int
     ) -> (SFSpeechRecognitionResult?, Error?) -> Void {
         { [weak owner] result, error in
             let text = result?.bestTranscription.formattedString
             let isFinal = result?.isFinal ?? false
             let nsError = error as NSError?
-            Task { @MainActor in owner?.receive(text: text, isFinal: isFinal, error: nsError, token: token) }
+            Task { @MainActor in owner?.receive(text: text, isFinal: isFinal, error: nsError, token: token, attempt: attempt) }
         }
     }
 
@@ -350,15 +428,26 @@ final class VoiceDictation {
         levels.append(level)
     }
 
-    private func receive(text: String?, isFinal: Bool, error: NSError?, token: Int) {
-        guard token == generation else { return }
+    private func receive(text: String?, isFinal: Bool, error: NSError?, token: Int, attempt: Int) {
+        guard token == generation, attempt == self.attempt else { return }
         if let text, !text.isEmpty { transcript = text }
         if isFinal || error != nil { receivedFinal = true }
         guard isFinal || error != nil, state == .recording, !isFinishing else { return }
 
         let kind = error.map { DictationErrorKind.classify(domain: $0.domain, code: $0.code) }
+        if let error, let kind,
+           DictationFallback.shouldFallBackToServer(
+               onDevice: request?.requiresOnDeviceRecognition ?? false,
+               alreadyFellBack: fellBackToServer,
+               hasTranscript: !transcript.isEmpty,
+               elapsed: startedAt.map { Date().timeIntervalSince($0) } ?? 0,
+               kind: kind
+           ) {
+            fallBackToServer(after: error, token: token)
+            return
+        }
         if let error {
-            ClientLogger.shared.warn("dictation_recognizer_error", details: [
+            logWarn("dictation_recognizer_error", details: [
                 "domain": error.domain,
                 "code": error.code,
                 "kind": String(describing: kind ?? .other),
@@ -427,7 +516,7 @@ final class VoiceDictation {
     /// A route or format change stops the engine; rebuild the tap on the new format and carry on.
     private func configurationChanged(token: Int) {
         guard token == generation, state == .recording || state == .starting, !isFinishing,
-              let engine, let request else { return }
+              let engine else { return }
         engine.inputNode.removeTap(onBus: 0)
         let format = engine.inputNode.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else {
@@ -438,7 +527,7 @@ final class VoiceDictation {
             onBus: 0,
             bufferSize: 2048,
             format: format,
-            block: Self.tapBlock(for: self, request: request, token: token)
+            block: Self.tapBlock(for: self, box: requestBox, token: token)
         )
         engine.prepare()
         do {
