@@ -343,7 +343,14 @@ struct CoachModelSelection: Equatable {
 /// built-in fallback model until its own settings request returned.
 @MainActor
 enum CoachModelSelectionCache {
+    /// Only server-confirmed values: set after a load or a successful save,
+    /// never from an optimistic edit.
     static var latest: CoachModelSelection?
+    /// Bumped when any save starts, so a load that began earlier discards its
+    /// result instead of overwriting the newer choice.
+    private(set) static var revision = 0
+
+    static func beginSave() { revision += 1 }
 }
 
 struct CoachModelSelectionService {

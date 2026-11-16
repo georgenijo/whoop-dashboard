@@ -14,9 +14,6 @@ struct CoachModelPicker: View {
     @State private var hasLoadedSettings = CoachModelSelectionCache.latest != nil
     @State private var isSaving = false
     @State private var errorMessage: String?
-    /// Bumped when a save settles, so a settings load that started before it
-    /// cannot overwrite the newer saved choice.
-    @State private var settingsRevision = 0
 
     private enum Presentation: String, Identifiable {
         case picker
@@ -76,13 +73,6 @@ struct CoachModelPicker: View {
         .onReceive(NotificationCenter.default.publisher(for: .coachSettingsDidChange)) { _ in
             Task { await load() }
         }
-        .onChange(of: isSaving) { wasSaving, saving in
-            // Saves update `selection` optimistically, then confirm or revert
-            // it. Only the settled value is shared with other conversations.
-            guard wasSaving, !saving else { return }
-            settingsRevision += 1
-            if hasLoadedSettings { CoachModelSelectionCache.latest = selection }
-        }
         .task {
             guard isLoading else { return }
             await load()
@@ -121,10 +111,11 @@ struct CoachModelPicker: View {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
-        let revision = settingsRevision
+        let revision = CoachModelSelectionCache.revision
         do {
             let loaded = try await CoachModelSelectionService(api: api).load()
-            guard revision == settingsRevision, !isSaving else { return }
+            // A save that started after this load began is newer; keep it.
+            guard revision == CoachModelSelectionCache.revision, !isSaving else { return }
             selection = loaded
             CoachModelSelectionCache.latest = loaded
             hasLoadedSettings = true
@@ -453,6 +444,7 @@ private struct CoachModelPickerSheet: View {
         let previous = selection.modelPref
         selection.modelPref = option.id
         isSaving = true
+        CoachModelSelectionCache.beginSave()
         errorMessage = nil
         defer { isSaving = false }
 
@@ -462,6 +454,7 @@ private struct CoachModelPickerSheet: View {
             selection.modelPref = saved.modelPref
             selection.effort = saved.coachEffort
             selection.cursorModelParams = saved.cursorModelParams
+            CoachModelSelectionCache.latest = selection
             dismiss()
         } catch is CancellationError {
             selection.modelPref = previous
@@ -580,6 +573,7 @@ private struct CoachEffortPicker: View {
         let previous = selection.effort
         selection.effort = effort
         isSaving = true
+        CoachModelSelectionCache.beginSave()
         errorMessage = nil
         defer { isSaving = false }
 
@@ -589,6 +583,7 @@ private struct CoachEffortPicker: View {
             selection.modelPref = saved.modelPref
             selection.effort = saved.coachEffort
             selection.cursorModelParams = saved.cursorModelParams
+            CoachModelSelectionCache.latest = selection
         } catch is CancellationError {
             selection.effort = previous
         } catch {
@@ -765,6 +760,7 @@ private struct CursorReasoningPicker: View {
             + [CursorModelParameterSelection(id: parameter.id, value: value)]
         selection.cursorModelParams[model.id] = next
         isSaving = true
+        CoachModelSelectionCache.beginSave()
         errorMessage = nil
         defer { isSaving = false }
 
@@ -774,6 +770,7 @@ private struct CursorReasoningPicker: View {
             selection.modelPref = saved.modelPref
             selection.effort = saved.coachEffort
             selection.cursorModelParams = saved.cursorModelParams
+            CoachModelSelectionCache.latest = selection
         } catch is CancellationError {
             selection.cursorModelParams = previous
         } catch {
