@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 import UserNotifications
 @testable import Coach
@@ -74,13 +75,20 @@ final class CoachRefineTests: XCTestCase {
 
     // MARK: Pane layout
 
-    func testPanesSplitAtTheFoldOnTheInnerDisplay() throws {
+    func testListOpensToTheFoldAndCanBeResized() throws {
         let layout = try XCTUnwrap(CoachPaneLayout.compute(
             fold: FoldGeometry(width: 867, hinge: 455 ... 495), regular: true))
-        XCTAssertEqual(layout.sidebarWidth, 495, "the conversation starts where the fold ends")
-        XCTAssertEqual(layout.listTrailingInset, 40, "list rows stop where the fold begins")
-        XCTAssertTrue(layout.pinsSidebar)
-        XCTAssertEqual(layout.sidebarWidth - layout.listTrailingInset, 455)
+        XCTAssertEqual(layout.idealWidth, 495, "the conversation starts where the fold ends")
+        XCTAssertEqual(layout.minWidth, 280)
+        XCTAssertEqual(layout.maxWidth, 567, "the conversation keeps a usable width")
+    }
+
+    func testListRowsStopAtTheFoldOnlyWhenThePaneEndsInIt() {
+        let hinge: ClosedRange<CGFloat> = 455 ... 495
+        XCTAssertEqual(CoachPaneLayout.listTrailingInset(listWidth: 495, hinge: hinge), 40)
+        XCTAssertEqual(CoachPaneLayout.listTrailingInset(listWidth: 400, hinge: hinge), 0)
+        XCTAssertEqual(CoachPaneLayout.listTrailingInset(listWidth: 560, hinge: hinge), 0)
+        XCTAssertEqual(CoachPaneLayout.listTrailingInset(listWidth: 495, hinge: nil), 0)
     }
 
     func testCompactWidthHasNoPaneLayout() {
@@ -88,17 +96,22 @@ final class CoachRefineTests: XCTestCase {
         XCTAssertNil(CoachPaneLayout.compute(fold: .none, regular: true))
     }
 
-    func testRegularWidthWithoutFoldUsesBoundedSidebarAndStaysClosable() throws {
+    func testRegularWidthWithoutFoldUsesBoundedSidebar() throws {
         let layout = try XCTUnwrap(CoachPaneLayout.compute(fold: FoldGeometry(width: 900, hinge: nil), regular: true))
-        XCTAssertEqual(layout.sidebarWidth, 360)
-        XCTAssertEqual(layout.listTrailingInset, 0)
-        XCTAssertFalse(layout.pinsSidebar)
+        XCTAssertEqual(layout.idealWidth, 360)
     }
 
     func testHingeThatStarvesAPaneFallsBack() throws {
         let layout = try XCTUnwrap(CoachPaneLayout.compute(
             fold: FoldGeometry(width: 867, hinge: 700 ... 740), regular: true))
-        XCTAssertFalse(layout.pinsSidebar)
+        XCTAssertEqual(layout.idealWidth, 346.8, accuracy: 0.01)
+    }
+
+    func testSideRailDropsTheBottomInset() {
+        XCTAssertTrue(ChatLayoutRules.hasSideRail(insets: EdgeInsets(top: 0, leading: 0, bottom: 34, trailing: 104), regularWidth: false))
+        XCTAssertFalse(ChatLayoutRules.hasSideRail(insets: EdgeInsets(top: 59, leading: 0, bottom: 34, trailing: 0), regularWidth: false))
+        XCTAssertFalse(ChatLayoutRules.hasSideRail(insets: EdgeInsets(top: 0, leading: 59, bottom: 21, trailing: 59), regularWidth: false))
+        XCTAssertTrue(ChatLayoutRules.hasSideRail(insets: EdgeInsets(), regularWidth: true))
     }
 
     // MARK: Plans

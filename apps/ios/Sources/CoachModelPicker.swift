@@ -6,10 +6,12 @@ struct CoachModelPicker: View {
 
     let disabled: Bool
 
-    @State private var selection = CoachModelSelection.fallback
+    // Seeded from the last selection this app saw so opening a conversation
+    // shows the saved model immediately, not the fallback until settings load.
+    @State private var selection = CoachModelSelectionCache.latest ?? .fallback
     @State private var presentation: Presentation?
     @State private var isLoading = true
-    @State private var hasLoadedSettings = false
+    @State private var hasLoadedSettings = CoachModelSelectionCache.latest != nil
     @State private var isSaving = false
     @State private var errorMessage: String?
 
@@ -28,7 +30,7 @@ struct CoachModelPicker: View {
                     ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
                     : AnyLayout(HStackLayout(spacing: 5))
                 layout {
-                    Text(selection.triggerLabel)
+                    Text(showsPlaceholder ? "Loading model" : selection.triggerLabel)
                         .lineLimit(1)
                     if let reasoningLabel = triggerReasoningLabel {
                         Text(reasoningLabel)
@@ -42,6 +44,7 @@ struct CoachModelPicker: View {
             }
             .font(Theme.FontStyle.sans(12.5, weight: .medium))
             .foregroundStyle(Theme.Palette.fg1)
+            .redacted(reason: showsPlaceholder ? .placeholder : [])
             .padding(.horizontal, 8)
             .frame(minHeight: 44)
             .contentShape(Rectangle())
@@ -70,14 +73,23 @@ struct CoachModelPicker: View {
         .onReceive(NotificationCenter.default.publisher(for: .coachSettingsDidChange)) { _ in
             Task { await load() }
         }
+        .onChange(of: selection) { _, newValue in
+            if hasLoadedSettings { CoachModelSelectionCache.latest = newValue }
+        }
         .task {
             guard isLoading else { return }
             await load()
         }
     }
 
+    /// Nothing loaded yet in this app session: show a placeholder rather
+    /// than a model name that may not be the saved one.
+    private var showsPlaceholder: Bool {
+        !hasLoadedSettings && isLoading
+    }
+
     private var accessibilityValue: String {
-        if isLoading {
+        if showsPlaceholder {
             return "Loading"
         }
         let model = selection.selectedOption
@@ -91,7 +103,8 @@ struct CoachModelPicker: View {
     }
 
     private var triggerReasoningLabel: String? {
-        selection.selectedOption.provider == .anthropic
+        if showsPlaceholder { return nil }
+        return selection.selectedOption.provider == .anthropic
             ? (selection.supportedEfforts.isEmpty ? nil : selection.effectiveEffort.label)
             : selection.selectedCursorReasoningLabel
     }
@@ -102,7 +115,9 @@ struct CoachModelPicker: View {
         errorMessage = nil
         defer { isLoading = false }
         do {
-            selection = try await CoachModelSelectionService(api: api).load()
+            let loaded = try await CoachModelSelectionService(api: api).load()
+            selection = loaded
+            CoachModelSelectionCache.latest = loaded
             hasLoadedSettings = true
             errorMessage = nil
         } catch is CancellationError {

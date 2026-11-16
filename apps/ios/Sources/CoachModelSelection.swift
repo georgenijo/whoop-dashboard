@@ -44,9 +44,11 @@ struct CoachModelOption: Identifiable, Equatable {
     let detail: String?
     let provider: CoachModelProvider
 
+    /// Mirrors the server's default chat model (`FALLBACK_CHAT_MODEL` in
+    /// apps/web/src/lib/coach/model-defaults.ts).
     static let claude = CoachModelOption(
-        id: "anthropic:claude-sonnet-4-6",
-        label: "Claude Sonnet 4.6",
+        id: "anthropic:claude-sonnet-5-5",
+        label: "Claude Sonnet 5.5",
         detail: "Balanced reasoning for thoughtful health coaching.",
         provider: .anthropic
     )
@@ -234,7 +236,7 @@ struct CursorCoachModel: Decodable, Identifiable, Equatable {
     }
 }
 
-struct CoachModelSelection {
+struct CoachModelSelection: Equatable {
     var modelPref: String
     var effort: CoachEffort
     var cursorStatus: CursorModelCatalogStatus
@@ -334,6 +336,14 @@ struct CoachModelSelection {
         else { return nil }
         return reasoning.displayLabel(for: selected.value)
     }
+}
+
+/// The last selection loaded from or saved to the server. Every conversation
+/// creates its own picker, so without this each new one would show the
+/// built-in fallback model until its own settings request returned.
+@MainActor
+enum CoachModelSelectionCache {
+    static var latest: CoachModelSelection?
 }
 
 struct CoachModelSelectionService {

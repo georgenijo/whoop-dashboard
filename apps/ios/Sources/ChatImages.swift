@@ -1,5 +1,6 @@
 import Foundation
 import ImageIO
+import SwiftUI
 import UIKit
 
 struct PendingChatImage: Identifiable, Hashable {
@@ -16,6 +17,18 @@ struct PendingChatImage: Identifiable, Hashable {
 struct ChatDraft: Equatable {
     var text: String
     var images: [PendingChatImage]
+}
+
+enum ChatLayoutRules {
+    /// A horizontal inset wider than a landscape iPhone's sensor housing
+    /// (about 60 pt) is the system side rail on iPhone Duo.
+    static let sideRailMinimumInset: CGFloat = 80
+
+    /// True when the system bars sit on a side rail rather than along the
+    /// bottom edge, so the bottom safe area has no home indicator to clear.
+    static func hasSideRail(insets: EdgeInsets, regularWidth: Bool) -> Bool {
+        regularWidth || max(insets.leading, insets.trailing) >= sideRailMinimumInset
+    }
 }
 
 enum ChatComposerRules {
