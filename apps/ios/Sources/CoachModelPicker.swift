@@ -446,7 +446,10 @@ private struct CoachModelPickerSheet: View {
         isSaving = true
         CoachModelSelectionCache.beginSave()
         errorMessage = nil
-        defer { isSaving = false }
+        defer {
+            isSaving = false
+            CoachModelSelectionCache.endSave()
+        }
 
         do {
             let saved = try await CoachModelSelectionService(api: api)
@@ -575,7 +578,10 @@ private struct CoachEffortPicker: View {
         isSaving = true
         CoachModelSelectionCache.beginSave()
         errorMessage = nil
-        defer { isSaving = false }
+        defer {
+            isSaving = false
+            CoachModelSelectionCache.endSave()
+        }
 
         do {
             let saved = try await CoachModelSelectionService(api: api)
@@ -762,7 +768,10 @@ private struct CursorReasoningPicker: View {
         isSaving = true
         CoachModelSelectionCache.beginSave()
         errorMessage = nil
-        defer { isSaving = false }
+        defer {
+            isSaving = false
+            CoachModelSelectionCache.endSave()
+        }
 
         do {
             let saved = try await CoachModelSelectionService(api: api)
