@@ -289,6 +289,13 @@ final class VoiceDictation {
     // MARK: Start
 
     private func beginRecording(token: Int) async {
+        #if DEBUG
+        demoWords = []
+        if DebugSession.override("COACH_DICTATION_DEMO") != nil {
+            await beginDemoRecording(token: token)
+            return
+        }
+        #endif
         guard let recognizer = SFSpeechRecognizer(locale: Locale.current) ?? SFSpeechRecognizer() else {
             if token == generation { fail("Speech recognition isn’t available for your language.") }
             return
@@ -363,6 +370,61 @@ final class VoiceDictation {
         state = .recording
         startClock(token: token)
     }
+
+    #if DEBUG
+    /// Simulators can't run speech recognition (no model asset), so the demo keeps the real
+    /// microphone tap, waveform and timer and reveals a canned sentence as fake partials.
+    private static let demoSentence = "How did I sleep this week, and should I train hard today?"
+    private static let demoRevealSeconds: TimeInterval = 3
+    @ObservationIgnored private var demoWords: [String] = []
+
+    private func beginDemoRecording(token: Int) async {
+        guard isCurrent(token) else { return }
+        let micGranted = await AVAudioApplication.requestRecordPermission()
+        guard isCurrent(token) else { return }
+        guard micGranted else {
+            fail("Microphone access is off for Coach. Turn it on in Settings > Coach to dictate.")
+            return
+        }
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.record, mode: .measurement, options: [.allowBluetooth])
+            try session.setActive(true, options: [])
+            sessionActive = true
+        } catch {
+            fail("Couldn’t start the microphone. Check that no other app is recording.")
+            return
+        }
+        let engine = AVAudioEngine()
+        let format = engine.inputNode.outputFormat(forBus: 0)
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            fail("No microphone input is available.")
+            return
+        }
+        self.engine = engine
+        requestBox.set(nil)
+        timeLimit = nil
+        receivedFinal = true
+        demoWords = Self.demoSentence.split(separator: " ").map(String.init)
+        engine.inputNode.installTap(
+            onBus: 0,
+            bufferSize: 2048,
+            format: format,
+            block: Self.tapBlock(for: self, box: requestBox, token: token)
+        )
+        installObservers(token: token, engine: engine)
+        engine.prepare()
+        do {
+            try engine.start()
+        } catch {
+            fail("Couldn’t start recording. Please try again.", reason: "engine_start_failed", error: error as NSError)
+            return
+        }
+        startedAt = Date()
+        state = .recording
+        startClock(token: token)
+    }
+    #endif
 
     private enum PermissionOutcome {
         case granted
@@ -488,6 +550,12 @@ final class VoiceDictation {
         guard state == .recording, !isFinishing, let startedAt else { return }
         elapsed = Date().timeIntervalSince(startedAt)
         if let timeLimit, elapsed >= timeLimit { reachedLimit = true }
+        #if DEBUG
+        if !demoWords.isEmpty {
+            let revealed = min(demoWords.count, Int(elapsed / Self.demoRevealSeconds * Double(demoWords.count)))
+            transcript = demoWords.prefix(revealed).joined(separator: " ")
+        }
+        #endif
     }
 
     private func installObservers(token: Int, engine: AVAudioEngine) {

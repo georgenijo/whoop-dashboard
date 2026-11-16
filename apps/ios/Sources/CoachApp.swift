@@ -6,7 +6,7 @@ enum DebugSession {
     /// launch argument, which iOS exposes through UserDefaults' argument
     /// domain. Launch-argument support lets device harnesses that only
     /// forward arguments drive the same bypass.
-    private static func override(_ key: String) -> String? {
+    static func override(_ key: String) -> String? {
         #if DEBUG
         let value = ProcessInfo.processInfo.environment[key]
             ?? UserDefaults.standard.string(forKey: key)
