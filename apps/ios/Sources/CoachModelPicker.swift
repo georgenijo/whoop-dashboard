@@ -14,6 +14,9 @@ struct CoachModelPicker: View {
     @State private var hasLoadedSettings = CoachModelSelectionCache.latest != nil
     @State private var isSaving = false
     @State private var errorMessage: String?
+    /// Bumped when a save settles, so a settings load that started before it
+    /// cannot overwrite the newer saved choice.
+    @State private var settingsRevision = 0
 
     private enum Presentation: String, Identifiable {
         case picker
@@ -73,8 +76,12 @@ struct CoachModelPicker: View {
         .onReceive(NotificationCenter.default.publisher(for: .coachSettingsDidChange)) { _ in
             Task { await load() }
         }
-        .onChange(of: selection) { _, newValue in
-            if hasLoadedSettings { CoachModelSelectionCache.latest = newValue }
+        .onChange(of: isSaving) { wasSaving, saving in
+            // Saves update `selection` optimistically, then confirm or revert
+            // it. Only the settled value is shared with other conversations.
+            guard wasSaving, !saving else { return }
+            settingsRevision += 1
+            if hasLoadedSettings { CoachModelSelectionCache.latest = selection }
         }
         .task {
             guard isLoading else { return }
@@ -114,8 +121,10 @@ struct CoachModelPicker: View {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
+        let revision = settingsRevision
         do {
             let loaded = try await CoachModelSelectionService(api: api).load()
+            guard revision == settingsRevision, !isSaving else { return }
             selection = loaded
             CoachModelSelectionCache.latest = loaded
             hasLoadedSettings = true
@@ -123,8 +132,11 @@ struct CoachModelPicker: View {
         } catch is CancellationError {
             return
         } catch {
-            hasLoadedSettings = false
-            errorMessage = "Couldn’t load your saved Coach settings."
+            // Settings already loaded in this session stay usable; only a
+            // picker with nothing loaded is blocked until a retry succeeds.
+            errorMessage = hasLoadedSettings
+                ? "Couldn’t refresh your Coach settings. Showing the last saved choice."
+                : "Couldn’t load your saved Coach settings."
         }
     }
 }

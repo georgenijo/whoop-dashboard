@@ -26,6 +26,10 @@ struct ChatView: View {
     /// screen is still settling would leave it too tall.
     @State private var composerFieldWidth: CGFloat = 0
     @State private var hasSideRail = false
+    /// Identifies the running dropped-reply recovery. Bumping it (on a send, a
+    /// history refresh or "Stop waiting") makes an older probe loop stand down
+    /// without touching rows or in-flight state.
+    @State private var recoveryGeneration = 0
     @State private var isSending = false
     @State private var loadError: String?
     @State private var sendError: String?
@@ -195,7 +199,7 @@ struct ChatView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .chatThreadNeedsRefresh)) { note in
             guard let id = note.object as? Int, id == threadId, !isSending else { return }
-            recoveryStatus = nil
+            endRecovery()
             Task { await loadHistory() }
         }
         .onChange(of: photoPickerItems) { _, items in
@@ -772,7 +776,7 @@ struct ChatView: View {
         }
 
         sendError = nil
-        recoveryStatus = nil
+        endRecovery()
         let sentDraft = ChatDraft(text: input, images: pendingImages)
         let baselineMessageId = latestPersistedMessageId
         let optimisticId = UUID()
@@ -968,9 +972,14 @@ struct ChatView: View {
     @MainActor
     private func reconcileDroppedTurn(baselineMessageId: Int?) async {
         guard let threadId else { return }
+        recoveryGeneration += 1
+        let generation = recoveryGeneration
+        let ownsRecovery = { generation == recoveryGeneration }
         recoveryStatus = .checking
         setRecoveryTypingRow(true)
-        defer { if recoveryStatus != .checking { setRecoveryTypingRow(false) } }
+        defer {
+            if ownsRecovery(), recoveryStatus != .checking { setRecoveryTypingRow(false) }
+        }
 
         var previousOffset = 0
         for probeOffset in Self.recoveryProbeOffsets {
@@ -980,10 +989,11 @@ struct ChatView: View {
                 do {
                     try await Task.sleep(nanoseconds: UInt64(delaySeconds) * 1_000_000_000)
                 } catch {
-                    recoveryStatus = nil
+                    if ownsRecovery() { recoveryStatus = nil }
                     return
                 }
             }
+            guard ownsRecovery() else { return }
             guard scenePhase == .active else {
                 // CoachApp owns silent reconciliation after backgrounding.
                 recoveryStatus = nil
@@ -992,6 +1002,7 @@ struct ChatView: View {
 
             do {
                 let detail = try await ChatService(api: api).threadDetail(id: threadId)
+                guard ownsRecovery() else { return }
                 if ChatRecovery.hasNewAssistantReply(
                     detail.messages,
                     afterMessageId: baselineMessageId
@@ -1011,7 +1022,18 @@ struct ChatView: View {
             }
         }
 
+        guard ownsRecovery() else { return }
         recoveryStatus = .waiting
+    }
+
+    /// Stops any running recovery and clears its status and typing row.
+    @MainActor
+    private func endRecovery() {
+        recoveryGeneration += 1
+        if recoveryStatus != nil {
+            recoveryStatus = nil
+            setRecoveryTypingRow(false)
+        }
     }
 
     @MainActor
@@ -1019,7 +1041,7 @@ struct ChatView: View {
         if let threadId {
             chatInFlight.inFlight.removeValue(forKey: threadId)
         }
-        recoveryStatus = nil
+        endRecovery()
         sendError = "Stopped checking. The reply may still appear in thread history."
     }
 
