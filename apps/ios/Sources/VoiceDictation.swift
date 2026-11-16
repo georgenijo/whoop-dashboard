@@ -127,6 +127,7 @@ final class VoiceDictation {
     @ObservationIgnored private var startTask: Task<Void, Never>?
     @ObservationIgnored private var startedAt: Date?
     @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var sessionActive = false
     @ObservationIgnored private var receivedFinal = false
     @ObservationIgnored private var timeLimit: TimeInterval?
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
@@ -236,6 +237,7 @@ final class VoiceDictation {
         do {
             try session.setCategory(.record, mode: .measurement, options: [.allowBluetooth])
             try session.setActive(true, options: [])
+            sessionActive = true
         } catch {
             fail("Couldn’t start the microphone. Check that no other app is recording.")
             return
@@ -470,6 +472,9 @@ final class VoiceDictation {
         recognizer = nil
         startedAt = nil
         timeLimit = nil
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        if sessionActive {
+            sessionActive = false
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
     }
 }
