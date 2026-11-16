@@ -51,50 +51,32 @@ final class VoiceDictationTests: XCTestCase {
     func testServerFallbackDecision() {
         func decide(
             onDevice: Bool = true, fellBack: Bool = false, transcript: Bool = false,
-            elapsed: TimeInterval = 0.01, kind: DictationErrorKind
+            age: TimeInterval = 0.01, kind: DictationErrorKind
         ) -> Bool {
             DictationFallback.shouldFallBackToServer(
                 onDevice: onDevice, alreadyFellBack: fellBack,
-                hasTranscript: transcript, elapsed: elapsed, kind: kind
+                hasTranscript: transcript, attemptAge: age, kind: kind
             )
         }
+        let cap = RecognitionRequestBox.retainedSeconds
         XCTAssertTrue(decide(kind: .other))
-        XCTAssertTrue(decide(elapsed: 12, kind: .other))
-        XCTAssertTrue(decide(elapsed: 0.5, kind: .noSpeech))
-        XCTAssertFalse(decide(elapsed: 4, kind: .noSpeech))
+        XCTAssertTrue(decide(age: cap, kind: .other))
+        XCTAssertFalse(decide(age: cap + 0.5, kind: .other))
+        XCTAssertFalse(decide(age: 12, kind: .other))
+        XCTAssertTrue(decide(age: 0.5, kind: .noSpeech))
+        XCTAssertFalse(decide(age: 4, kind: .noSpeech))
         XCTAssertFalse(decide(kind: .cancelled))
         XCTAssertFalse(decide(onDevice: false, kind: .other))
         XCTAssertFalse(decide(fellBack: true, kind: .other))
         XCTAssertFalse(decide(transcript: true, kind: .other))
     }
 
-    func testRetainedFrameWindowCap() {
-        var window = RetainedFrameWindow(capFrames: 1000)
-        XCTAssertEqual(window.append(frames: 400), 0)
-        XCTAssertEqual(window.append(frames: 400), 0)
-        XCTAssertEqual(window.totalFrames, 800)
-        XCTAssertEqual(window.append(frames: 400), 1)
-        XCTAssertEqual(window.counts, [400, 400])
-        XCTAssertEqual(window.append(frames: 900), 2)
-        XCTAssertEqual(window.counts, [900])
-        XCTAssertEqual(window.append(frames: 2000), 1)
-        XCTAssertEqual(window.counts, [2000])
-    }
-
-    func testTranscriptPrefixComposition() {
-        XCTAssertEqual(DictationMath.composeTranscript(prefix: "", partial: "hello"), "hello")
-        XCTAssertEqual(DictationMath.composeTranscript(prefix: "hello", partial: "there"), "hello there")
-        XCTAssertEqual(DictationMath.composeTranscript(prefix: "hello", partial: ""), "hello")
-        XCTAssertEqual(DictationMath.composeTranscript(prefix: "hello ", partial: " there "), "hello there")
-    }
-
-    func testServerDeadlineAndFormatChange() {
-        XCTAssertEqual(DictationMath.serverDeadline(startingAt: 0), VoiceDictation.serverTimeLimit)
-        XCTAssertEqual(DictationMath.serverDeadline(startingAt: 20), 20 + VoiceDictation.serverTimeLimit)
-        XCTAssertEqual(DictationMath.serverDeadline(startingAt: -5), VoiceDictation.serverTimeLimit)
-        XCTAssertFalse(DictationMath.inputFormatChanged(oldRate: 48000, oldChannels: 1, newRate: 48000, newChannels: 1))
-        XCTAssertTrue(DictationMath.inputFormatChanged(oldRate: 48000, oldChannels: 1, newRate: 16000, newChannels: 1))
-        XCTAssertTrue(DictationMath.inputFormatChanged(oldRate: 48000, oldChannels: 1, newRate: 48000, newChannels: 2))
+    func testRestartedAttemptJudgedByItsOwnAge() {
+        // 20 s into the session, but the restarted attempt is only 0.2 s old.
+        XCTAssertTrue(DictationFallback.shouldFallBackToServer(
+            onDevice: true, alreadyFellBack: false, hasTranscript: false,
+            attemptAge: 0.2, kind: .noSpeech
+        ))
     }
 
     func testBarCountFitsWidth() {

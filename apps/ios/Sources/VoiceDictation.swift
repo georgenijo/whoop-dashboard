@@ -93,13 +93,15 @@ enum DictationFallback {
         onDevice: Bool,
         alreadyFellBack: Bool,
         hasTranscript: Bool,
-        elapsed: TimeInterval,
+        attemptAge: TimeInterval,
         kind: DictationErrorKind
     ) -> Bool {
         guard onDevice, !alreadyFellBack, !hasTranscript else { return false }
+        // Replay keeps only the last few seconds; a later fallback would silently drop the start.
+        guard attemptAge <= RecognitionRequestBox.retainedSeconds else { return false }
         switch kind {
         case .cancelled: return false
-        case .noSpeech: return elapsed < startupWindow
+        case .noSpeech: return attemptAge < startupWindow
         case .other: return true
         }
     }
@@ -252,6 +254,12 @@ final class VoiceDictation {
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var attempt = 0
     @ObservationIgnored private var attemptHasText = false
+    @ObservationIgnored private var attemptStartedAt: Date?
+    @ObservationIgnored private var livePartial = ""
+    @ObservationIgnored private var drainBase = ""
+    @ObservationIgnored private var drainingAttempt: Int?
+    @ObservationIgnored private var drainingTask: SFSpeechRecognitionTask?
+    @ObservationIgnored private var drainTimeout: Task<Void, Never>?
     @ObservationIgnored private var committedPrefix = ""
     @ObservationIgnored private var inputFormat: AVAudioFormat?
     @ObservationIgnored private var fellBackToServer = false
@@ -322,6 +330,8 @@ final class VoiceDictation {
         elapsed = 0
         transcript = ""
         committedPrefix = ""
+        livePartial = ""
+        drainBase = ""
         attemptHasText = false
         receivedFinal = false
         reachedLimit = false
@@ -340,6 +350,8 @@ final class VoiceDictation {
         logWarn("dictation_ondevice_fallback", details: ["domain": error.domain, "code": error.code])
         fellBackToServer = true
         attempt += 1
+        attemptStartedAt = Date()
+        livePartial = ""
         task?.cancel()
         let next = SFSpeechAudioBufferRecognitionRequest()
         next.shouldReportPartialResults = true
@@ -356,6 +368,15 @@ final class VoiceDictation {
         )
     }
 
+    /// Stops waiting on a replaced attempt's last words.
+    private func endDrain() {
+        drainTimeout?.cancel()
+        drainTimeout = nil
+        drainingTask?.cancel()
+        drainingTask = nil
+        drainingAttempt = nil
+    }
+
     private var currentElapsed: TimeInterval {
         startedAt.map { Date().timeIntervalSince($0) } ?? 0
     }
@@ -365,10 +386,15 @@ final class VoiceDictation {
     private func restartRecognition(token: Int) {
         guard let recognizer, let old = request else { return }
         let onDevice = old.requiresOnDeviceRecognition
+        endDrain()
+        drainBase = committedPrefix
         committedPrefix = transcript
+        livePartial = ""
         attemptHasText = false
+        drainingAttempt = task == nil ? nil : attempt
+        drainingTask = task
         attempt += 1
-        task?.cancel()
+        attemptStartedAt = Date()
         let next = SFSpeechAudioBufferRecognitionRequest()
         next.shouldReportPartialResults = true
         next.addsPunctuation = true
@@ -376,6 +402,13 @@ final class VoiceDictation {
         request = next
         requestBox.swap(to: next, replay: false, retain: onDevice && !fellBackToServer)
         old.endAudio()
+        if drainingAttempt != nil {
+            drainTimeout = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(Self.finalResultWait * 1_000_000_000))
+                guard !Task.isCancelled, let self, token == self.generation else { return }
+                self.endDrain()
+            }
+        }
         receivedFinal = false
         if !onDevice { timeLimit = DictationMath.serverDeadline(startingAt: currentElapsed) }
         task = recognizer.recognitionTask(
@@ -458,6 +491,7 @@ final class VoiceDictation {
         inputFormat = format
         fellBackToServer = false
         attemptHasText = false
+        attemptStartedAt = Date()
         attempt += 1
         let currentAttempt = attempt
         self.engine = engine
@@ -610,10 +644,21 @@ final class VoiceDictation {
     }
 
     private func receive(text: String?, isFinal: Bool, error: NSError?, token: Int, attempt: Int) {
-        guard token == generation, attempt == self.attempt else { return }
+        guard token == generation else { return }
+        if attempt != self.attempt {
+            // A replaced attempt may still deliver words spoken just before the swap.
+            guard attempt == drainingAttempt else { return }
+            if let text, !text.isEmpty {
+                committedPrefix = DictationMath.composeTranscript(prefix: drainBase, partial: text)
+                transcript = DictationMath.composeTranscript(prefix: committedPrefix, partial: livePartial)
+            }
+            if isFinal || error != nil { endDrain() }
+            return
+        }
         if let text, !text.isEmpty {
             attemptHasText = true
             requestBox.stopRetaining()
+            livePartial = text
             transcript = DictationMath.composeTranscript(prefix: committedPrefix, partial: text)
         }
         if isFinal || error != nil { receivedFinal = true }
@@ -625,7 +670,7 @@ final class VoiceDictation {
                onDevice: request?.requiresOnDeviceRecognition ?? false,
                alreadyFellBack: fellBackToServer,
                hasTranscript: attemptHasText,
-               elapsed: startedAt.map { Date().timeIntervalSince($0) } ?? 0,
+               attemptAge: attemptStartedAt.map { Date().timeIntervalSince($0) } ?? 0,
                kind: kind
            ) {
             fallBackToServer(after: error, token: token)
@@ -754,6 +799,7 @@ final class VoiceDictation {
 
     private func teardown() {
         stopCapture()
+        endDrain()
         task?.cancel()
         task = nil
         request = nil
