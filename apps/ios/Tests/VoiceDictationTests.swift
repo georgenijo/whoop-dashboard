@@ -39,6 +39,15 @@ final class VoiceDictationTests: XCTestCase {
         XCTAssertEqual(ChatComposerRules.appendingTranscript("  ", to: ""), "")
     }
 
+    func testRecognizerErrorClassification() {
+        XCTAssertEqual(DictationErrorKind.classify(domain: "kAFAssistantErrorDomain", code: 1110), .noSpeech)
+        XCTAssertEqual(DictationErrorKind.classify(domain: "kAFAssistantErrorDomain", code: 203), .noSpeech)
+        XCTAssertEqual(DictationErrorKind.classify(domain: "kAFAssistantErrorDomain", code: 216), .cancelled)
+        XCTAssertEqual(DictationErrorKind.classify(domain: "kAFAssistantErrorDomain", code: 301), .cancelled)
+        XCTAssertEqual(DictationErrorKind.classify(domain: "kAFAssistantErrorDomain", code: 1101), .other)
+        XCTAssertEqual(DictationErrorKind.classify(domain: "NSURLErrorDomain", code: -1009), .other)
+    }
+
     func testBarCountFitsWidth() {
         XCTAssertEqual(DictationMath.barCount(forWidth: 0, barWidth: 2.5, spacing: 3), 1)
         XCTAssertEqual(DictationMath.barCount(forWidth: 2.5, barWidth: 2.5, spacing: 3), 1)

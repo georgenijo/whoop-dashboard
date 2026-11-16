@@ -49,6 +49,24 @@ enum DictationMath {
     }
 }
 
+enum DictationErrorKind: Equatable {
+    case noSpeech
+    case cancelled
+    case other
+
+    static func classify(domain: String, code: Int) -> DictationErrorKind {
+        switch (domain, code) {
+        case ("kAFAssistantErrorDomain", 1110), ("kAFAssistantErrorDomain", 203):
+            return .noSpeech
+        case ("kAFAssistantErrorDomain", 216), ("kAFAssistantErrorDomain", 301),
+             ("kAFAssistantErrorDomain", 1107), (NSCocoaErrorDomain, NSUserCancelledError):
+            return .cancelled
+        default:
+            return .other
+        }
+    }
+}
+
 /// Fixed-length window of recent levels; the newest value is last.
 struct LevelRingBuffer: Equatable {
     let capacity: Int
@@ -176,7 +194,13 @@ final class VoiceDictation {
         reachedLimit = false
     }
 
-    private func fail(_ message: String) {
+    private func fail(_ message: String, reason: String = "setup", error: NSError? = nil) {
+        var details: [String: Any] = ["reason": reason]
+        if let error {
+            details["domain"] = error.domain
+            details["code"] = error.code
+        }
+        ClientLogger.shared.warn("dictation_failed", details: details)
         endSession(.failed(message))
     }
 
@@ -247,15 +271,15 @@ final class VoiceDictation {
             format: format,
             block: Self.tapBlock(for: self, request: request, token: token)
         )
+        installObservers(token: token, engine: engine)
         engine.prepare()
         do {
             try engine.start()
         } catch {
-            fail("Couldn’t start recording. Please try again.")
+            fail("Couldn’t start recording. Please try again.", reason: "engine_start_failed", error: error as NSError)
             return
         }
 
-        installObservers(token: token)
         startedAt = Date()
         state = .recording
         startClock(token: token)
@@ -314,8 +338,8 @@ final class VoiceDictation {
         { [weak owner] result, error in
             let text = result?.bestTranscription.formattedString
             let isFinal = result?.isFinal ?? false
-            let failed = error != nil
-            Task { @MainActor in owner?.receive(text: text, isFinal: isFinal, failed: failed, token: token) }
+            let nsError = error as NSError?
+            Task { @MainActor in owner?.receive(text: text, isFinal: isFinal, error: nsError, token: token) }
         }
     }
 
@@ -324,17 +348,35 @@ final class VoiceDictation {
         levels.append(level)
     }
 
-    private func receive(text: String?, isFinal: Bool, failed: Bool, token: Int) {
+    private func receive(text: String?, isFinal: Bool, error: NSError?, token: Int) {
         guard token == generation else { return }
         if let text, !text.isEmpty { transcript = text }
-        if isFinal || failed { receivedFinal = true }
-        guard (isFinal || failed), state == .recording, !isFinishing else { return }
-        if transcript.isEmpty {
-            fail(failed ? "Couldn’t hear anything. Please try again." : "Couldn’t hear anything.")
-        } else if failed {
-            fail("Dictation stopped early. Your words so far were kept.")
+        if isFinal || error != nil { receivedFinal = true }
+        guard isFinal || error != nil, state == .recording, !isFinishing else { return }
+
+        let kind = error.map { DictationErrorKind.classify(domain: $0.domain, code: $0.code) }
+        if let error {
+            ClientLogger.shared.warn("dictation_recognizer_error", details: [
+                "domain": error.domain,
+                "code": error.code,
+                "kind": String(describing: kind ?? .other),
+                "has_transcript": !transcript.isEmpty,
+                "on_device": request?.requiresOnDeviceRecognition ?? false,
+            ])
+        }
+
+        if !transcript.isEmpty {
+            if kind == nil || kind == .noSpeech || kind == .cancelled {
+                endSession(.finished)
+            } else {
+                fail("Dictation stopped early. Your words so far were kept.", reason: "recognizer_error", error: error)
+            }
+        } else if kind == .cancelled {
+            endSession(.idle)
+        } else if kind == .noSpeech || kind == nil {
+            fail("Didn’t catch any speech. Try again.", reason: "no_speech", error: error)
         } else {
-            endSession(.finished)
+            fail("Couldn’t hear anything. Please try again.", reason: "recognizer_error", error: error)
         }
     }
 
@@ -357,7 +399,7 @@ final class VoiceDictation {
         if let timeLimit, elapsed >= timeLimit { reachedLimit = true }
     }
 
-    private func installObservers(token: Int) {
+    private func installObservers(token: Int, engine: AVAudioEngine) {
         removeObservers()
         let center = NotificationCenter.default
         observers.append(center.addObserver(
@@ -369,15 +411,39 @@ final class VoiceDictation {
             Task { @MainActor in self?.interrupted(token: token) }
         })
         observers.append(center.addObserver(
-            forName: .AVAudioEngineConfigurationChange, object: nil, queue: .main
+            forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in self?.interrupted(token: token) }
+            Task { @MainActor in self?.configurationChanged(token: token) }
         })
     }
 
     private func interrupted(token: Int) {
-        guard token == generation, state == .recording, !isFinishing else { return }
-        fail("Recording was interrupted.")
+        guard token == generation, state == .recording || state == .starting, !isFinishing else { return }
+        fail("Recording was interrupted.", reason: "session_interrupted")
+    }
+
+    /// A route or format change stops the engine; rebuild the tap on the new format and carry on.
+    private func configurationChanged(token: Int) {
+        guard token == generation, state == .recording || state == .starting, !isFinishing,
+              let engine, let request else { return }
+        engine.inputNode.removeTap(onBus: 0)
+        let format = engine.inputNode.outputFormat(forBus: 0)
+        guard format.sampleRate > 0, format.channelCount > 0 else {
+            fail("No microphone input is available.", reason: "config_change_no_input")
+            return
+        }
+        engine.inputNode.installTap(
+            onBus: 0,
+            bufferSize: 2048,
+            format: format,
+            block: Self.tapBlock(for: self, request: request, token: token)
+        )
+        engine.prepare()
+        do {
+            try engine.start()
+        } catch {
+            fail("Recording was interrupted.", reason: "config_change_restart_failed", error: error as NSError)
+        }
     }
 
     private func removeObservers() {
