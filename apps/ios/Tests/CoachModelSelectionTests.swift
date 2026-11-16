@@ -103,7 +103,7 @@ final class CoachModelSelectionTests: XCTestCase {
         )
 
         XCTAssertEqual(selection.selectedOption, .claude)
-        XCTAssertEqual(selection.triggerLabel, "Sonnet 4.6")
+        XCTAssertEqual(selection.triggerLabel, "Sonnet 5.5")
     }
 
     func testSelectedAnthropicModelKeepsItsIdentity() {
@@ -131,7 +131,7 @@ final class CoachModelSelectionTests: XCTestCase {
         let data = Data(
             """
             {
-              "model_pref": "anthropic:claude-sonnet-4-6",
+              "model_pref": "anthropic:claude-sonnet-5-5",
               "coach_effort": "max",
               "cursor_available": true
             }

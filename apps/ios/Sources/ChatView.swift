@@ -25,6 +25,11 @@ struct ChatView: View {
     /// height it measured at its first width, so a draft injected while the
     /// screen is still settling would leave it too tall.
     @State private var composerFieldWidth: CGFloat = 0
+    @State private var hasSideRail = false
+    /// Identifies the running dropped-reply recovery. Bumping it (on a send, a
+    /// history refresh or "Stop waiting") makes an older probe loop stand down
+    /// without touching rows or in-flight state.
+    @State private var recoveryGeneration = 0
     @State private var isSending = false
     @State private var loadError: String?
     @State private var sendError: String?
@@ -126,8 +131,11 @@ struct ChatView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 VStack(spacing: 0) {
-                    if let recoveryStatus {
-                        recoveryBar(recoveryStatus)
+                    // While checking, the reply shows as the usual inline
+                    // "Coach · Working" row; the bar only appears once the
+                    // reply is overdue and the person may want to act.
+                    if recoveryStatus == .waiting {
+                        recoveryBar(.waiting)
                     }
                     if let loadError, !rows.isEmpty {
                         sendErrorBanner("History couldn’t refresh. Your current reply is still shown. \(loadError)", onDismiss: { self.loadError = nil })
@@ -145,9 +153,16 @@ struct ChatView: View {
                     .offset(y: -54)
                 }
             }
-        // The expanded Duo layout has a side rail and no bottom home indicator.
-        // Retain the compact display's home-indicator inset and all keyboard avoidance.
-        .ignoresSafeArea(.container, edges: sizeClass == .regular ? .bottom : [])
+        // iPhone Duo draws its system bars on a side rail on both displays, so
+        // the bottom inset holds no home indicator and only leaves a gap under
+        // the composer. Ordinary iPhones keep it. Keyboard avoidance is kept.
+        .ignoresSafeArea(.container, edges: hasSideRail ? .bottom : [])
+        .onGeometryChange(for: Bool.self) { proxy in
+            ChatLayoutRules.hasSideRail(
+                insets: proxy.safeAreaInsets,
+                regularWidth: sizeClass == .regular
+            )
+        } action: { hasSideRail = $0 }
         .navigationTitle(currentTitle ?? initialTitle ?? "New chat")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Theme.Palette.bg0, for: .navigationBar)
@@ -184,7 +199,7 @@ struct ChatView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .chatThreadNeedsRefresh)) { note in
             guard let id = note.object as? Int, id == threadId, !isSending else { return }
-            recoveryStatus = nil
+            endRecovery()
             Task { await loadHistory() }
         }
         .onChange(of: photoPickerItems) { _, items in
@@ -761,7 +776,7 @@ struct ChatView: View {
         }
 
         sendError = nil
-        recoveryStatus = nil
+        endRecovery()
         let sentDraft = ChatDraft(text: input, images: pendingImages)
         let baselineMessageId = latestPersistedMessageId
         let optimisticId = UUID()
@@ -937,26 +952,48 @@ struct ChatView: View {
         }
     }
 
+    /// Seconds after a dropped stream at which the thread is re-read. A normal
+    /// reply takes 10–30 s, so the probes run for a minute before the reply is
+    /// called overdue; until then it looks like any other reply in progress.
+    static let recoveryProbeOffsets = [0, 1, 2, 4, 7, 10, 14, 19, 25, 32, 40, 50, 60]
+
+    private func setRecoveryTypingRow(_ visible: Bool) {
+        let hasTyping = rows.contains { if case .typing = $0 { return true }; return false }
+        if visible, !hasTyping {
+            rows.append(.typing)
+        } else if !visible, hasTyping {
+            rows.removeAll { if case .typing = $0 { return true }; return false }
+        }
+    }
+
     /// Reconcile a foreground transport drop without making the user leave and
-    /// reopen the thread. Four bounded probes cover the common race where the
-    /// server persists shortly after the transport disappears.
+    /// reopen the thread. Bounded probes cover the server persisting the reply
+    /// after the transport disappears.
     @MainActor
     private func reconcileDroppedTurn(baselineMessageId: Int?) async {
         guard let threadId else { return }
+        recoveryGeneration += 1
+        let generation = recoveryGeneration
+        let ownsRecovery = { generation == recoveryGeneration }
         recoveryStatus = .checking
+        setRecoveryTypingRow(true)
+        defer {
+            if ownsRecovery(), recoveryStatus != .checking { setRecoveryTypingRow(false) }
+        }
 
         var previousOffset = 0
-        for probeOffset in [0, 1, 2, 5] {
+        for probeOffset in Self.recoveryProbeOffsets {
             let delaySeconds = probeOffset - previousOffset
             previousOffset = probeOffset
             if delaySeconds > 0 {
                 do {
                     try await Task.sleep(nanoseconds: UInt64(delaySeconds) * 1_000_000_000)
                 } catch {
-                    recoveryStatus = nil
+                    if ownsRecovery() { recoveryStatus = nil }
                     return
                 }
             }
+            guard ownsRecovery() else { return }
             guard scenePhase == .active else {
                 // CoachApp owns silent reconciliation after backgrounding.
                 recoveryStatus = nil
@@ -965,6 +1002,7 @@ struct ChatView: View {
 
             do {
                 let detail = try await ChatService(api: api).threadDetail(id: threadId)
+                guard ownsRecovery() else { return }
                 if ChatRecovery.hasNewAssistantReply(
                     detail.messages,
                     afterMessageId: baselineMessageId
@@ -984,7 +1022,18 @@ struct ChatView: View {
             }
         }
 
+        guard ownsRecovery() else { return }
         recoveryStatus = .waiting
+    }
+
+    /// Stops any running recovery and clears its status and typing row.
+    @MainActor
+    private func endRecovery() {
+        recoveryGeneration += 1
+        if recoveryStatus != nil {
+            recoveryStatus = nil
+            setRecoveryTypingRow(false)
+        }
     }
 
     @MainActor
@@ -992,7 +1041,7 @@ struct ChatView: View {
         if let threadId {
             chatInFlight.inFlight.removeValue(forKey: threadId)
         }
-        recoveryStatus = nil
+        endRecovery()
         sendError = "Stopped checking. The reply may still appear in thread history."
     }
 

@@ -10,43 +10,47 @@ enum CoachSelection: Hashable {
     case thread(id: Int, title: String?)
 }
 
-/// Where the Coach list pane and the conversation pane sit on a regular
-/// width. The list fills the area left of the fold and the conversation the
-/// area right of it, so no answer column ever crosses the crease. The split
-/// is held open (the sidebar cannot be hidden) whenever the display reports a
-/// fold; hiding it would stretch the conversation across the hinge.
+/// How wide the Coach list pane may be on a regular width. It opens so the
+/// list ends where the fold ends, which keeps the conversation clear of the
+/// crease, and the person can drag the divider within these bounds or hide
+/// the list entirely.
 struct CoachPaneLayout: Equatable {
-    /// Width of the list column, ending where the fold band ends.
-    var sidebarWidth: CGFloat
-    /// Space kept clear at the trailing edge of the list so rows stop at the
-    /// fold band instead of running into it.
-    var listTrailingInset: CGFloat
-    /// True when the layout is anchored to a real fold.
-    var pinsSidebar: Bool
+    var minWidth: CGFloat
+    var idealWidth: CGFloat
+    var maxWidth: CGFloat
 
     static let minimumPane: CGFloat = 300
+    static let minimumSidebar: CGFloat = 280
 
     static func compute(fold: FoldGeometry, regular: Bool) -> CoachPaneLayout? {
-        guard regular, fold.width > 0 else { return nil }
+        guard regular, fold.width > 0, fold.width - minimumSidebar >= minimumPane else { return nil }
+        let maxWidth = fold.width - minimumPane
+        var ideal = min(max(fold.width * 0.4, 320), 420)
         if let hinge = fold.hinge,
            hinge.lowerBound >= minimumPane,
            fold.width - hinge.upperBound >= minimumPane {
-            return CoachPaneLayout(
-                sidebarWidth: hinge.upperBound,
-                listTrailingInset: hinge.upperBound - hinge.lowerBound,
-                pinsSidebar: true
-            )
+            ideal = hinge.upperBound
         }
-        let width = min(max(fold.width * 0.4, 320), 420)
-        guard fold.width - width >= minimumPane else { return nil }
-        return CoachPaneLayout(sidebarWidth: width, listTrailingInset: 0, pinsSidebar: false)
+        return CoachPaneLayout(
+            minWidth: minimumSidebar,
+            idealWidth: min(max(ideal, minimumSidebar), maxWidth),
+            maxWidth: maxWidth
+        )
+    }
+
+    /// Space kept clear at the trailing edge of a list pane of `listWidth`
+    /// whose edge falls inside the fold band, so rows stop where the fold
+    /// begins. A pane dragged past the fold spans it, and needs no inset.
+    static func listTrailingInset(listWidth: CGFloat, hinge: ClosedRange<CGFloat>?) -> CGFloat {
+        guard let hinge, listWidth > hinge.lowerBound, listWidth <= hinge.upperBound + 1 else { return 0 }
+        return listWidth - hinge.lowerBound
     }
 }
 
 struct CoachView: View {
     @Environment(\.appNavigation) private var navigation
     @Environment(\.horizontalSizeClass) private var sizeClass
-    @State private var columnVisibility: NavigationSplitViewVisibility = .automatic
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var selection: CoachSelection?
     /// Which column a collapsed (compact) split view shows. Selecting a
     /// conversation moves it to the detail; the system Back moves it back.
@@ -156,16 +160,12 @@ private struct CoachSplit<Chat: View>: View {
         CoachPaneLayout.compute(fold: fold, regular: sizeClass == .regular)
     }
 
-    private var visibility: Binding<NavigationSplitViewVisibility> {
-        guard layout?.pinsSidebar == true else { return $columnVisibility }
-        return Binding(get: { .all }, set: { _ in })
-    }
-
     var body: some View {
-        NavigationSplitView(columnVisibility: visibility, preferredCompactColumn: $compactColumn) {
+        NavigationSplitView(columnVisibility: $columnVisibility, preferredCompactColumn: $compactColumn) {
             ThreadListView(
                 selection: openConversation,
-                highlightedThreadId: sizeClass == .regular ? highlightedThreadId : nil
+                highlightedThreadId: sizeClass == .regular ? highlightedThreadId : nil,
+                isPane: sizeClass == .regular
             )
             .background(Theme.Palette.bg1)
             .modifier(SidebarWidth(layout: layout))
@@ -173,16 +173,16 @@ private struct CoachSplit<Chat: View>: View {
             NavigationStack {
                 chat(selection ?? .new(id: blankChat, draft: nil))
                     .toolbar {
-                        if sizeClass == .compact {
-                            ToolbarItem(placement: .primaryAction) {
-                                Button(action: newChat) {
-                                    Label("New chat", systemImage: "square.and.pencil")
-                                }
-                                .tint(Theme.Palette.accent)
+                        // On the conversation, not the list header, so iPhone
+                        // Duo puts it on the side rail on both displays.
+                        ToolbarItem(placement: .primaryAction) {
+                            Button(action: newChat) {
+                                Label("New chat", systemImage: "square.and.pencil")
                             }
+                            .tint(Theme.Palette.accent)
+                            .accessibilityIdentifier("coach-new-chat")
                         }
                     }
-                    .modifier(HidesSidebarToggle(hidden: layout?.pinsSidebar == true))
             }
         }
         .navigationSplitViewStyle(.balanced)
@@ -194,21 +194,10 @@ private struct SidebarWidth: ViewModifier {
 
     func body(content: Content) -> some View {
         if let layout {
-            content.navigationSplitViewColumnWidth(layout.sidebarWidth)
+            content.navigationSplitViewColumnWidth(
+                min: layout.minWidth, ideal: layout.idealWidth, max: layout.maxWidth)
         } else {
             content.navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 420)
-        }
-    }
-}
-
-private struct HidesSidebarToggle: ViewModifier {
-    let hidden: Bool
-
-    func body(content: Content) -> some View {
-        if #available(iOS 18.0, *) {
-            content.toolbar(removing: hidden ? .sidebarToggle : nil)
-        } else {
-            content
         }
     }
 }

@@ -6,6 +6,20 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-11-15: Let the Coach list pane be hidden and resized on iPhone Duo
+
+**Decision:** On the Duo inner display the Coach thread list opens with its edge at the end of the fold, but it is no longer held open at a fixed width. People can drag the divider (280 pt minimum, conversation keeps 300 pt) or hide the list, which moves the sidebar button to the top left of the conversation. New chat moves from the list header to the conversation toolbar, so the system places it on the side rail on both displays.
+
+**Rationale:** George found the pinned list too wide and wanted it to work like T3 Code's sidebar. A hidden list lets the conversation span the fold; that is the person's choice rather than the default.
+
+**Status:** active
+
+**Supersedes:** the fold-pinned sidebar from PR #619
+
+**References:** apps/ios/Sources/CoachView.swift, apps/ios/Sources/ThreadListView.swift
+
+---
+
 ## 2026-11-14: Remove the first inference round trip for clear recent reads
 
 **Decision:** Optimize end-to-end Coach response time by supplying a real, bounded local read before the first Anthropic inference for fully recognized, self-contained first-turn health questions. Keep the selected model, reasoning and output limits unchanged. Leave follow-ups, images, ambiguous dates/instructions, explicit refreshes and empty/error reads on the ordinary tool loop.

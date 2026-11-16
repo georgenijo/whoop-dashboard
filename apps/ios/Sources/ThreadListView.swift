@@ -5,12 +5,14 @@ struct ThreadListView: View {
     /// The thread shown beside the list on a regular width; nil when the
     /// list is the whole screen.
     var highlightedThreadId: Int?
+    /// True when the list is a pane beside the conversation. A split view's
+    /// sidebar always reports a compact size class, so the parent decides.
+    var isPane = false
     /// Fixed threads for previews and rendering tests; skips the network.
     var previewThreads: [ChatThread]? = nil
 
     @Environment(\.api) private var api
     @Environment(\.chatInFlight) private var inFlight
-    @Environment(\.horizontalSizeClass) private var sizeClass
     @Environment(\.foldGeometry) private var fold
     @State private var deletingThread: ChatThread?
     @State private var deleteError: String?
@@ -26,24 +28,34 @@ struct ThreadListView: View {
         case error(String)
     }
 
-    /// Keeps rows on the leading side of the fold when the list is a pane.
+    /// Width of the list pane, which the person can resize.
+    @State private var paneWidth: CGFloat = 0
+
+    /// Keeps rows on the leading side of the fold when the list pane ends
+    /// inside the fold band.
     private var trailingInset: CGFloat {
-        CoachPaneLayout.compute(fold: fold, regular: sizeClass == .regular)?.listTrailingInset ?? 0
+        guard isPane else { return 0 }
+        return CoachPaneLayout.listTrailingInset(listWidth: paneWidth, hinge: fold.hinge)
     }
 
     var body: some View {
         content
             .navigationTitle("Coach")
             .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        selection = .new(id: UUID(), draft: nil)
-                    } label: {
-                        Label("New chat", systemImage: "square.and.pencil")
+                // On a regular width New chat lives on the conversation's
+                // toolbar, which iPhone Duo places on the side rail.
+                if !isPane {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button {
+                            selection = .new(id: UUID(), draft: nil)
+                        } label: {
+                            Label("New chat", systemImage: "square.and.pencil")
+                        }
+                        .tint(Theme.Palette.accent)
                     }
-                    .tint(Theme.Palette.accent)
                 }
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { paneWidth = $0 }
             .onReceive(NotificationCenter.default.publisher(for: .chatThreadListChanged)) { _ in
                 titleRefreshTask?.cancel()
                 titleRefreshTask = Task {
