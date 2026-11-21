@@ -9,6 +9,18 @@ enum APIError: Error {
     case badResponse
 }
 
+extension APIError {
+    /// True when the request was abandoned rather than failed: the task was
+    /// cancelled (view went away, pull-to-refresh superseded) or URLSession
+    /// reported `.cancelled`. Callers should drop these silently.
+    static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if (error as? URLError)?.code == .cancelled { return true }
+        if case APIError.network(let underlying) = error { return isCancellation(underlying) }
+        return false
+    }
+}
+
 extension Notification.Name {
     static let apiUnauthorized = Notification.Name("com.georgenijo.coach.apiUnauthorized")
 }

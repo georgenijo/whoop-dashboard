@@ -66,19 +66,31 @@ struct DashboardView: View {
 
     @ViewBuilder
     private func headerCaption(_ payload: DashboardPayload) -> some View {
-        if let line = TodayFormat.freshness(dataDate: payload.dataDate, updatedAt: payload.recoveryHero.updatedAt,
-                                            isFallback: payload.isFallback) {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(payload.isFallback ? Theme.Palette.warning : Theme.Palette.recovery)
-                    .frame(width: 8, height: 8)
-                Text(line)
-                    .font(Theme.FontStyle.sans(15))
-                    .foregroundStyle(payload.isFallback ? Theme.Palette.warning : Theme.Palette.fg2)
-                    .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 0) {
+            if let line = TodayFormat.freshness(dataDate: payload.dataDate, updatedAt: payload.recoveryHero.updatedAt,
+                                                isFallback: payload.isFallback) {
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(payload.isFallback ? Theme.Palette.warning : Theme.Palette.recovery)
+                        .frame(width: 8, height: 8)
+                    Text(line)
+                        .font(Theme.FontStyle.sans(15))
+                        .foregroundStyle(payload.isFallback ? Theme.Palette.warning : Theme.Palette.fg2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(payload.isFallback ? "Showing latest data. \(line)" : line)
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(payload.isFallback ? "Showing latest data. \(line)" : line)
+            if refreshError != nil {
+                Button { Task { await load(showSpinner: false) } } label: {
+                    Label("Couldn't refresh · Retry", systemImage: "exclamationmark.circle")
+                        .font(Theme.FontStyle.sans(13))
+                        .foregroundStyle(Theme.Palette.warning)
+                        .frame(minHeight: 44, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint(refreshError ?? "")
+            }
         }
     }
 
@@ -126,18 +138,6 @@ struct DashboardView: View {
         VStack(alignment: .leading, spacing: Theme.Spacing.sm) {
             headerCaption(payload)
                 .inLeadingFoldColumn()
-            if let refreshError {
-                VStack(alignment: .leading, spacing: 6) {
-                    Label("Couldn't refresh", systemImage: "wifi.exclamationmark")
-                        .font(Theme.FontStyle.sans(13, weight: .semibold))
-                    Text("Showing previously loaded data. " + refreshError)
-                        .font(Theme.FontStyle.sans(13))
-                    Button("Try again") { Task { await load(showSpinner: false) } }
-                        .frame(minHeight: 44)
-                }
-                .foregroundStyle(Theme.Palette.fg1)
-                .glassCard()
-            }
             let brief = TodayBriefContent(
                 insight: payload.aiInsight, isFallback: payload.isFallback, isRefreshing: payload.insightRefreshing)
             // A current brief leads. Without one the readings lead and the brief
@@ -318,6 +318,9 @@ struct DashboardView: View {
             refreshError = nil
             lastFetched = Date()
             Task { await loadMetricDates(generation: generation) }
+            return
+        } catch where APIError.isCancellation(error) || Task.isCancelled {
+            // Abandoned, not failed: keep whatever is on screen and say nothing.
             return
         } catch APIError.unauthorized {
             failure = "Your session expired. Sign in again."
