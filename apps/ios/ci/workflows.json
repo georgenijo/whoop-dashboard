@@ -15,9 +15,9 @@
     "runtimeIdentifier": "com.apple.CoreSimulator.SimRuntime.iOS-27-2-iPhone19-4"
   },
   "macOs": {
-    "id": "353ddc8d-0ec5-436d-b324-fd88644df393",
-    "name": "macOS Golden Gate 27.2",
-    "version": "26B123"
+    "id": "b2747d10-9b4e-44ef-ab11-cde6ac42ab31",
+    "name": "macOS Golden Gate 27.2.1",
+    "version": "26B131"
   },
   "beta": {
     "id": "331CD557-A605-4CA8-85CC-9D80A00F3ACB",
