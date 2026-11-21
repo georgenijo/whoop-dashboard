@@ -272,7 +272,7 @@ struct TrendsView: View {
             guard generations[key] == generation else { return }
             state.wrappedValue.succeed(value, range: range)
         } catch {
-            guard generations[key] == generation, !Task.isCancelled else { return }
+            guard generations[key] == generation, !Task.isCancelled, !APIError.isCancellation(error) else { return }
             state.wrappedValue.fail(TrendsLoadError.describe(error), range: range)
         }
     }

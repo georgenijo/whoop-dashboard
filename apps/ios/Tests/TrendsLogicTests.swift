@@ -33,6 +33,16 @@ final class TrendsLogicTests: XCTestCase {
         XCTAssertEqual(state.loadedRange, .d7)
     }
 
+    // MARK: Cancellation is not a failure
+
+    func testCancellationErrorsAreRecognised() {
+        XCTAssertTrue(APIError.isCancellation(CancellationError()))
+        XCTAssertTrue(APIError.isCancellation(URLError(.cancelled)))
+        XCTAssertTrue(APIError.isCancellation(APIError.network(URLError(.cancelled))))
+        XCTAssertFalse(APIError.isCancellation(APIError.network(URLError(.notConnectedToInternet))))
+        XCTAssertFalse(APIError.isCancellation(APIError.serverError(500)))
+    }
+
     // MARK: Delta direction
 
     func testApiDirectionIsTheImprovementSignal() {
