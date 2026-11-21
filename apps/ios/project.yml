@@ -67,6 +67,8 @@ targets:
     dependencies:
       - sdk: AuthenticationServices.framework
       - sdk: HealthKit.framework
+      - sdk: Speech.framework
+      - sdk: AVFAudio.framework
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.georgenijo.coach
@@ -82,6 +84,8 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations~iphone: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         INFOPLIST_KEY_NSHealthShareUsageDescription: "Coach reads your workouts, heart rate, and step counts from Health to enrich your training stats."
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: "Coach uses the microphone only while you dictate a message, so you can speak instead of type."
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Coach turns your speech into text for the message you are dictating. Recognition runs on your device when supported."
         INFOPLIST_KEY_NSHealthUpdateUsageDescription: "Coach does not write to Health; this access is declared only because the HealthKit entitlement requires it."
   CoachTests:
     type: bundle.unit-test

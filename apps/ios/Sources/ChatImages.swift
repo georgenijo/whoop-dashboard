@@ -53,6 +53,14 @@ enum ChatComposerRules {
         text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && imageCount == 0
     }
 
+    /// Dictation appends to the draft rather than replacing it; blank transcripts change nothing.
+    static func appendingTranscript(_ transcript: String, to draft: String) -> String {
+        let spoken = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !spoken.isEmpty else { return draft }
+        guard let last = draft.last else { return spoken }
+        return last.isWhitespace ? draft + spoken : draft + " " + spoken
+    }
+
     static func restoring(_ sent: ChatDraft, over current: ChatDraft) -> ChatDraft {
         ChatDraft(
             text: current.text.isEmpty ? sent.text : current.text,
