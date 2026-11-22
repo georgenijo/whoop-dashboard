@@ -97,6 +97,51 @@ describe("Settings load Retry and the instructions draft", () => {
     expect(screen.getByText("Saved")).toBeInTheDocument();
   });
 
+  it("keeps just-saved instructions when an older Retry response resolves after the save", async () => {
+    vi.stubGlobal("fetch", fetchMock);
+    let resolveRetry: (value: { ok: boolean; json: () => Promise<unknown> }) => void = () => {};
+    let settingsGets = 0;
+    const posts: unknown[] = [];
+    fetchMock.mockImplementation(async (url: string, options?: RequestInit) => {
+      if (url !== "/api/settings") return { ok: false };
+      if (options?.method === "POST") {
+        const body = JSON.parse(String(options.body)) as { system_prompt: string };
+        posts.push(body);
+        return { ok: true, json: async () => ({ system_prompt: body.system_prompt }) };
+      }
+      settingsGets += 1;
+      if (settingsGets === 1) return { ok: false };
+      return new Promise((resolve) => { resolveRetry = resolve; });
+    });
+    render(<SettingsPage />);
+
+    // 1. The initial load fails; 2. Retry is clicked and left in flight.
+    fireEvent.click(await within(await screen.findByTestId("model-load-error")).findByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(settingsGets).toBe(2));
+
+    // 3. Edit and Save while the Retry request is still pending; the save succeeds.
+    const textarea = screen.getByLabelText("Coach instructions") as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "just-saved instructions" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(screen.getByText("Saved")).toBeInTheDocument());
+    expect(posts).toEqual([{ system_prompt: "just-saved instructions" }]);
+
+    // 4. The Retry response, built from pre-save server state, arrives late.
+    resolveRetry({
+      ok: true,
+      json: async () => ({ system_prompt: "older server instructions", model_pref: "anthropic:claude-opus-4-6" }),
+    });
+
+    // The model picker still recovers from that response...
+    await waitFor(() => expect(screen.getByLabelText("Coach model")).toBeEnabled());
+    expect((screen.getByLabelText("Coach model") as HTMLSelectElement).value).toBe("anthropic:claude-opus-4-6");
+    expect(screen.queryByTestId("model-load-error")).not.toBeInTheDocument();
+    // ...but the saved text stays displayed and the baseline still matches it.
+    expect(textarea.value).toBe("just-saved instructions");
+    expect(screen.getByText("Saved")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save changes" })).toBeDisabled();
+  });
+
   it("adopts the server instructions on Retry when the draft was left untouched", async () => {
     setupWithSettings([failed, loaded("server instructions", "anthropic:claude-opus-4-6")]);
     fireEvent.click(await within(await screen.findByTestId("model-load-error")).findByRole("button", { name: "Retry" }));

@@ -167,6 +167,11 @@ export default function SettingsPage() {
   // Mirrors savedSystemPrompt so loadSettings (a stable callback) can tell
   // whether the draft was edited since the last baseline without a stale closure.
   const savedSystemPromptRef = useRef("");
+  // Bumped when an instructions save starts and again when it settles. A
+  // settings load records it when issued and, if it changed by the time the
+  // response lands, drops that response's instructions: the response may
+  // predate the save and would put the older text (and baseline) back (#607).
+  const promptSaveSeqRef = useRef(0);
   const [saving, setSaving] = useState(false);
   const [backgroundFailure, setBackgroundFailure] = useState<string | null>(null);
   const [promptError, setPromptError] = useState<string | null>(null);
@@ -291,6 +296,7 @@ export default function SettingsPage() {
   // unavailable, instead of loading forever or saving an unknown selection.
   const loadSettings = useCallback(async (): Promise<void> => {
     setModelPrefReloading(true);
+    const promptSaveSeqAtIssue = promptSaveSeqRef.current;
     try {
       const response = await fetch("/api/settings");
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -302,16 +308,21 @@ export default function SettingsPage() {
       if (data === null || typeof data !== "object" || typeof data.model_pref !== "string") {
         throw new Error("malformed settings payload");
       }
-      // Never clobber an edited draft (e.g. typed while the first load had
-      // failed, then Retry): adopt the server text only when the draft still
-      // equals the previous baseline. The baseline itself always refreshes, so
-      // a kept draft correctly stays "Unsaved changes" against the new one.
-      const previousBaseline = savedSystemPromptRef.current;
-      setSystemPrompt((draft) =>
-        draft === previousBaseline ? data.system_prompt : draft,
-      );
-      savedSystemPromptRef.current = data.system_prompt;
-      setSavedSystemPrompt(data.system_prompt);
+      // A save that started or finished after this load was issued owns the
+      // instructions and baseline; this response may predate it. The model
+      // selection below is still adopted so the picker recovers.
+      if (promptSaveSeqRef.current === promptSaveSeqAtIssue) {
+        // Never clobber an edited draft (e.g. typed while the first load had
+        // failed, then Retry): adopt the server text only when the draft still
+        // equals the previous baseline. The baseline itself always refreshes,
+        // so a kept draft correctly stays "Unsaved changes" against the new one.
+        const previousBaseline = savedSystemPromptRef.current;
+        setSystemPrompt((draft) =>
+          draft === previousBaseline ? data.system_prompt : draft,
+        );
+        savedSystemPromptRef.current = data.system_prompt;
+        setSavedSystemPrompt(data.system_prompt);
+      }
       setModelPref(data.model_pref);
       setModelPrefLoaded(true);
       setModelPrefLoadFailed(false);
@@ -637,6 +648,7 @@ export default function SettingsPage() {
   }
 
   async function saveSystemPrompt() {
+    promptSaveSeqRef.current += 1;
     setSaving(true);
     setPromptError(null);
     try {
@@ -662,6 +674,7 @@ export default function SettingsPage() {
         error instanceof Error ? error.message : "Couldn't save instructions.",
       );
     } finally {
+      promptSaveSeqRef.current += 1;
       setSaving(false);
     }
   }
