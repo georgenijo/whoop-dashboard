@@ -23,20 +23,3 @@ export function smoothPath(points: [number, number][]): string {
   }
   return d;
 }
-
-/** Build a normalized polyline (viewBox 0 0 w h) from values, with min/max scaling. */
-export function sparklinePoints(
-  values: number[],
-  width: number,
-  height: number
-): [number, number][] {
-  if (values.length === 0) return [];
-  const max = Math.max(...values);
-  const min = Math.min(...values);
-  const range = max - min || 1;
-  const n = values.length === 1 ? 1 : values.length - 1;
-  return values.map((v, i) => [
-    (i / n) * width,
-    height - ((v - min) / range) * height,
-  ]);
-}

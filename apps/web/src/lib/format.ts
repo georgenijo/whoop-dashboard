@@ -14,18 +14,6 @@ export function recoveryZoneLabel(zone: Zone): string {
   return "Red · prioritize recovery";
 }
 
-export function recoveryZoneColor(zone: Zone): string {
-  if (zone === "green") return "var(--zone-green)";
-  if (zone === "yellow") return "var(--zone-yellow)";
-  return "var(--zone-red)";
-}
-
-export function recoveryZoneGradientStops(zone: Zone): [string, string] {
-  if (zone === "green") return ["#00d4aa", "#00aa88"];
-  if (zone === "yellow") return ["#ffaa00", "#cc8800"];
-  return ["#ff4444", "#cc3333"];
-}
-
 /** Render the trailing date-context suffix on a KPI delta. When both dates
  * are known and exactly 1 day apart it's "vs yesterday"; when >1 day apart
  * it's "vs N days ago"; when the previous date is unknown (or dates can't
@@ -81,11 +69,6 @@ export function formatDelta(
 export function kJToKcal(kj: number | null | undefined): number | null {
   if (kj == null || !Number.isFinite(kj)) return null;
   return kj * 0.239;
-}
-
-export function formatHours(ms: number | null | undefined, precision = 1): string {
-  if (ms == null) return "—";
-  return (ms / (1000 * 60 * 60)).toFixed(precision);
 }
 
 export function msToHoursNumber(ms: number | null | undefined): number | null {

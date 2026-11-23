@@ -44,13 +44,6 @@ export function sanitizeLimit(limit: unknown): number {
   return Math.min(floored, MAX_WORKOUTS_LIMIT);
 }
 
-export function getWorkouts(userId: number, limit?: number): WorkoutRow[] {
-  const safeLimit = sanitizeLimit(limit);
-  return forUser(userId).all<WorkoutRow>(
-    `SELECT ${WORKOUT_COLUMNS} FROM workouts WHERE user_id = ? ORDER BY date DESC LIMIT ${safeLimit}`,
-  );
-}
-
 export type TodayWorkoutRow = WorkoutRow & {
   start_time: string | null;
 };
