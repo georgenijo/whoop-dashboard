@@ -11,6 +11,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import CoachModelPicker from "./CoachModelPicker";
 import SettingsPage from "@/app/(dashboard)/settings/page";
 
+const router = vi.hoisted(() => ({ refresh: vi.fn() }));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => router,
+}));
+
 const fetchMock = vi.fn();
 
 const cursorCatalogMock = vi.fn();
@@ -163,6 +169,8 @@ describe("CoachModelPicker", () => {
     await expectSavedModel("Coach model: Claude Opus Live; effort high", "High");
     expect(onSavingChange).toHaveBeenNthCalledWith(1, true);
     await waitFor(() => expect(onSavingChange).toHaveBeenLastCalledWith(false));
+    // The cached /coach payload seeds the picker; a saved choice clears it.
+    expect(router.refresh).toHaveBeenCalledOnce();
   });
 
   it("selects Cursor independently of an Anthropic network error", async () => {
@@ -348,6 +356,7 @@ describe("CoachModelPicker", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Select Claude Opus Live" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Catalog changed; try again");
     expect(screen.getByRole("button", { name: "Coach model: Claude Sonnet 4.6; effort high" })).toBeInTheDocument();
+    expect(router.refresh).not.toHaveBeenCalled();
   });
 
   it("persists Cursor effort independently", async () => {

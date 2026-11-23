@@ -9,6 +9,7 @@ import {
   LoaderCircle,
   Search,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CoachEffort } from "@/lib/coach/provider";
 import {
@@ -84,6 +85,7 @@ export default function CoachModelPicker({
   disabled,
   onSavingChange,
 }: Props) {
+  const router = useRouter();
   const menuId = useId();
   const controlRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -413,6 +415,9 @@ export default function CoachModelPicker({
         );
       }
       setModelPref(data?.model_pref || nextModelPref);
+      // The /coach payload seeds this picker, and `staleTimes.dynamic` caches
+      // it for 30s; clear it so navigating away and back shows the saved value.
+      router.refresh();
     } catch (saveError) {
       setModelPref(previousModelPref);
       setError(
@@ -451,6 +456,9 @@ export default function CoachModelPicker({
         );
       }
       setCoachEffort(data?.coach_effort || nextEffort);
+      // The /coach payload seeds this picker, and `staleTimes.dynamic` caches
+      // it for 30s; clear it so navigating away and back shows the saved value.
+      router.refresh();
     } catch (saveError) {
       setCoachEffort(previousEffort);
       setError(
@@ -511,6 +519,9 @@ export default function CoachModelPicker({
           [model.id]: nextParams,
         },
       );
+      // The /coach payload seeds this picker, and `staleTimes.dynamic` caches
+      // it for 30s; clear it so navigating away and back shows the saved value.
+      router.refresh();
     } catch (saveError) {
       setCursorModelParams(previousParams);
       setError(
