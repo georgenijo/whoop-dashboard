@@ -25,6 +25,12 @@ const allowedDevOrigins = process.env.COACH_DEV_ORIGINS?.split(",")
 const nextConfig: NextConfig = {
   devIndicators: false,
   allowedDevOrigins,
+  // `next build` type-checks every file in the tsconfig program, including the
+  // ~130 *.test.ts(x) files and their vitest/testing-library types, then
+  // discards any errors in test files. The build tsconfig excludes them so
+  // that work is skipped. Tests are still type-checked by `npx tsc --noEmit`,
+  // which uses the full tsconfig.json.
+  typescript: { tsconfigPath: "tsconfig.build.json" },
   experimental: {
     proxyClientMaxBodySize: "30mb",
     // Every dashboard page is force-dynamic, and Next 16 defaults
