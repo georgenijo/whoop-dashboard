@@ -7,6 +7,12 @@ import { configDefaults, defineConfig } from "vitest/config";
 // `*.react-server.test.tsx?` and run in their own project with that resolve
 // condition, for both Vite-resolved sources and Node-resolved externals.
 const REACT_SERVER_TESTS = "src/**/*.react-server.test.{ts,tsx}";
+// Only component and hook tests need a DOM. Everything else (db, sync, coach,
+// auth, routes) runs in plain Node: building a jsdom window per file was most
+// of the suite's wall time, and server code is more faithfully exercised
+// without a global `window`. A new non-component test that needs the DOM can
+// opt in with a `// @vitest-environment jsdom` docblock.
+const DOM_TESTS = ["**/*.test.tsx", "src/components/**/*.test.ts"];
 
 export default defineConfig({
   plugins: [react()],
@@ -23,7 +29,16 @@ export default defineConfig({
           name: "default",
           environment: "jsdom",
           setupFiles: ["./src/test/setup.ts"],
+          include: DOM_TESTS,
           exclude: [...configDefaults.exclude, REACT_SERVER_TESTS],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "node",
+          environment: "node",
+          exclude: [...configDefaults.exclude, REACT_SERVER_TESTS, ...DOM_TESTS],
         },
       },
       {
