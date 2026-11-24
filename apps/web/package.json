@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "next dev",
-    "build": "npm run build:mcp && next build",
+    "build": "npm run build:mcp && next build --webpack",
     "build:mcp": "esbuild src/coach-mcp/server.ts --bundle --platform=node --format=esm --packages=external --tsconfig=tsconfig.json --outfile=dist/coach-mcp/server.mjs",
     "frame:morning:publish": "node --conditions=react-server --import tsx scripts/publish-frame-morning.mts",
     "start": "next start",

@@ -1,6 +1,7 @@
 // @vitest-environment node
 import crypto from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { secretMatches } from "@/lib/auth/secret-compare";
 
 vi.mock("server-only", () => ({}));
 
@@ -117,7 +118,7 @@ describe("secretMatches — constant-time-shaped compare", () => {
   it("invokes crypto.timingSafeEqual (not a short-circuiting ===) to detect a mismatch", () => {
     const spy = vi.spyOn(crypto, "timingSafeEqual");
     try {
-      const result = route.secretMatches("aaaaaaaa", "aaaaaaab");
+      const result = secretMatches("aaaaaaaa", "aaaaaaab");
       expect(result).toBe(false);
       // This only proves the constant-time primitive was invoked at all —
       // it does not (and a unit test cannot) prove actual wall-clock timing
@@ -132,8 +133,8 @@ describe("secretMatches — constant-time-shaped compare", () => {
   it("guards the length check so mismatched lengths never reach timingSafeEqual (which throws on them)", () => {
     const spy = vi.spyOn(crypto, "timingSafeEqual");
     try {
-      expect(() => route.secretMatches("short", "a-much-longer-secret")).not.toThrow();
-      expect(route.secretMatches("short", "a-much-longer-secret")).toBe(false);
+      expect(() => secretMatches("short", "a-much-longer-secret")).not.toThrow();
+      expect(secretMatches("short", "a-much-longer-secret")).toBe(false);
       expect(spy).not.toHaveBeenCalled();
     } finally {
       spy.mockRestore();
@@ -141,7 +142,7 @@ describe("secretMatches — constant-time-shaped compare", () => {
   });
 
   it("returns true only for an exact match", () => {
-    expect(route.secretMatches(SECRET, SECRET)).toBe(true);
+    expect(secretMatches(SECRET, SECRET)).toBe(true);
   });
 });
 
