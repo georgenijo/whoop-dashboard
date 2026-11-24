@@ -27,6 +27,14 @@ const nextConfig: NextConfig = {
   allowedDevOrigins,
   experimental: {
     proxyClientMaxBodySize: "30mb",
+    // Every dashboard page is force-dynamic, and Next 16 defaults
+    // `staleTimes.dynamic` to 0, so each soft navigation refetched the page's
+    // RSC payload and re-rendered it on the server even when the user had just
+    // been there. 30s lets back/forward and tab switching reuse the payload.
+    // Staleness bound: a soft navigation can show data up to 30s old. Full
+    // loads bypass the cache, and the sync button, Coach turns, and the Coach
+    // settings writes call `router.refresh()`, which clears it.
+    staleTimes: { dynamic: 30 },
   },
   env: {
     COACH_BUILD_SHA: resolveBuildSha(),

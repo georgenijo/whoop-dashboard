@@ -10,6 +10,7 @@ import {
   parseCoachPresentationBlocks,
   type CoachPresentationBlock,
 } from "@/lib/coach/presentation";
+import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -77,6 +78,9 @@ type UseChatSendParams = {
 };
 
 type SendParams = Omit<UseChatSendParams, "initialMessages"> & {
+  // Clears the client router cache once a turn has settled (see
+  // `sendChatMessage`). Injected so the module-level sender stays hook-free.
+  refreshRouter: () => void;
   text: string;
   messages: ComposerMessage[];
   setMessages: Dispatch<SetStateAction<ComposerMessage[]>>;
@@ -694,6 +698,13 @@ async function sendChatMessage(params: SendParams) {
       params.setPreparingImages(false);
       params.inputRef.current?.focus();
     }
+    // The turn has settled (completed, failed, or aborted), and the server may
+    // have persisted messages either way. `staleTimes.dynamic` caches this
+    // page's RSC payload, whose `initialMessages` now predates the turn:
+    // navigating away and back would remount with the exchange missing.
+    // `router.refresh()` clears the client router cache. It is also safe for
+    // live state: the hook ignores same-thread `initialMessages` changes.
+    params.refreshRouter();
   }
 }
 
@@ -704,6 +715,8 @@ export function useChatSend({
   refreshThreads,
   setBadApiKey,
 }: UseChatSendParams) {
+  const router = useRouter();
+  const refreshRouter = useCallback(() => router.refresh(), [router]);
   const [messages, setMessages] = useState<ComposerMessage[]>(
     toComposerMessages(initialMessages),
   );
@@ -715,6 +728,7 @@ export function useChatSend({
   const pendingImagesRef = useRef<PendingChatImage[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const syncedThreadRef = useRef<number | null>(null);
   const activeMessage = [...messages]
     .reverse()
     .find((message) => message.streaming && message.role === "assistant");
@@ -765,9 +779,15 @@ export function useChatSend({
     [setPendingImages],
   );
 
-  /* eslint-disable react-hooks/set-state-in-effect -- A server-driven thread
-     change intentionally resets all local composer state in one effect. */
+  // A server-driven thread change intentionally resets all local composer
+  // state in one effect.
   useEffect(() => {
+    // Reset only when the thread actually changes. `router.refresh()` after a
+    // turn hands this hook a fresh `initialMessages` for the SAME thread; the
+    // local state is already authoritative then, and resetting it would wipe
+    // the draft, abort a follow-up turn, and flash the transcript.
+    if (syncedThreadRef.current === threadId) return;
+    syncedThreadRef.current = threadId;
     abortRef.current?.abort();
     abortRef.current = null;
     releasePreviewUrls(pendingImagesRef.current);
@@ -779,7 +799,6 @@ export function useChatSend({
     setAttachmentError(null);
     if (inputRef.current) inputRef.current.style.height = "auto";
   }, [initialMessages, setPendingImages, threadId]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(
     () => () => {
@@ -805,11 +824,13 @@ export function useChatSend({
         inputRef,
         abortRef,
         refreshThreads,
+        refreshRouter,
         setBadApiKey,
       }),
     [
       messages,
       pendingImages,
+      refreshRouter,
       refreshThreads,
       setBadApiKey,
       setPendingImages,

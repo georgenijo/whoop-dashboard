@@ -86,6 +86,11 @@ export function useThreadList({
     const id = await createThread(isPending);
     if (!id) return;
     onNavigate();
+    // A new thread changes what the cached `/coach` payloads render (which
+    // thread a bare `/coach` redirects to, and each page's sidebar seed).
+    // `staleTimes.dynamic` would keep serving them, so clear the client router
+    // cache before navigating to the fresh thread.
+    router.refresh();
     navigateThread(router, startTransition, id);
   }, [isPending, onNavigate, router, startTransition]);
 
@@ -100,6 +105,9 @@ export function useThreadList({
   const handleDeleteThread = useCallback(async (id: number) => {
     const deleted = await deleteThread(id);
     if (!deleted) return;
+    // Drop cached `/coach?thread=N` payloads so going back can't resurrect the
+    // deleted thread from the 30s client router cache.
+    router.refresh();
 
     const nextThreads = await refreshThreads();
     onNavigate();

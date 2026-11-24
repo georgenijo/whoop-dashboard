@@ -5,6 +5,7 @@ import { useCoachThread, type ChatMessage, type ThreadSummary } from "./useCoach
 const router = vi.hoisted(() => ({
   push: vi.fn(),
   replace: vi.fn(),
+  refresh: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({

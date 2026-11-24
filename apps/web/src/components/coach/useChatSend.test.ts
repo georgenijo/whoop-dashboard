@@ -3,6 +3,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CoachWorkLog } from "@/lib/coach/work-log-types";
 import { useChatSend, type ChatMessage } from "./useChatSend";
 
+const router = vi.hoisted(() => ({ refresh: vi.fn() }));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => router,
+}));
+
 const emptyMessages: ChatMessage[] = [];
 
 function deferred<T>() {
@@ -58,9 +64,85 @@ function renderChat(initialMessages: ChatMessage[] = emptyMessages, threadId = 1
   );
 }
 
+describe("useChatSend router cache", () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    router.refresh.mockReset();
+  });
+
+  it("refreshes the router once after a completed turn, not before", async () => {
+    const stream = controllableStreamResponse();
+    vi.stubGlobal("fetch", vi.fn(async () => stream.response));
+    const { result } = renderChat();
+
+    let sendPromise = Promise.resolve();
+    act(() => {
+      sendPromise = result.current.send("hey");
+    });
+    await waitFor(() => expect(result.current.loading).toBe(true));
+    expect(router.refresh).not.toHaveBeenCalled();
+
+    stream.send(sse("done", { reply: "Hi", work_log: null }));
+    stream.close();
+    await act(async () => {
+      await sendPromise;
+    });
+
+    expect(router.refresh).toHaveBeenCalledOnce();
+    expect(result.current.messages[1]).toMatchObject({ content: "Hi" });
+  });
+
+  it("refreshes the router after a failed turn", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("boom", { status: 500 })));
+    const { result } = renderChat();
+
+    await act(async () => {
+      await result.current.send("hey");
+    });
+
+    expect(router.refresh).toHaveBeenCalledOnce();
+    expect(result.current.messages[1].content).toContain("boom");
+  });
+
+  it("does not refresh when nothing was sent", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    const { result } = renderChat();
+
+    await act(async () => {
+      await result.current.send("   ");
+    });
+
+    expect(router.refresh).not.toHaveBeenCalled();
+  });
+
+  it("keeps live state when the refresh hands back new same-thread initialMessages", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => streamResponse([sse("done", { reply: "Hi", work_log: null })])));
+    const { result, rerender } = renderChat();
+
+    await act(async () => {
+      await result.current.send("hey");
+    });
+    act(() => result.current.setInput("follow-up draft"));
+
+    // What router.refresh() delivers: same thread, fresh array identity.
+    rerender({
+      id: 1,
+      messages: [
+        { id: 1, role: "user", content: "hey", created_at: "2026-07-30T00:00:00Z", attachments: [] },
+        { id: 2, role: "assistant", content: "Hi", created_at: "2026-07-30T00:00:01Z", attachments: [] },
+      ],
+    });
+
+    expect(result.current.input).toBe("follow-up draft");
+    expect(result.current.messages).toHaveLength(2);
+    expect(result.current.messages[1]).toMatchObject({ content: "Hi" });
+  });
+});
+
 describe("useChatSend work logs", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
+    router.refresh.mockReset();
   });
 
   it("creates a running work log immediately and applies the authoritative done log", async () => {
