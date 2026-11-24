@@ -35,6 +35,13 @@ const nextConfig: NextConfig = {
     // loads bypass the cache, and the sync button, Coach turns, and the Coach
     // settings writes call `router.refresh()`, which clears it.
     staleTimes: { dynamic: 30 },
+    // Build time only (webpack builds). Node-file-tracing of the server bundle
+    // (~10s) otherwise runs serially after page-data collection; this starts it
+    // in a worker as soon as the server compile finishes, overlapping the
+    // client compile and the TypeScript check. Build output, including the
+    // .nft.json trace files, is byte-identical. Costs ~0.4 GB extra peak build
+    // memory.
+    parallelServerBuildTraces: true,
   },
   env: {
     COACH_BUILD_SHA: resolveBuildSha(),
