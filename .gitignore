@@ -24,3 +24,6 @@ infra/terraform/*.tfvars
 
 # throwaway design mockups
 mockups/
+
+# generated code-health reports (regenerate with `omen`)
+omen-report-*/
