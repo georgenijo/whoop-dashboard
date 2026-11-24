@@ -1118,6 +1118,12 @@ cd "$WEB_DIR" || exit 1
 echo "--- staging previous build for rollback ---"
 rm -rf .next.prev
 if [ -d .next ]; then mv .next .next.prev; fi
+# Carry the compiler cache (webpack's persistent cache) into the new build.
+# Without this every deploy compiles from scratch. The rollback copy does not
+# need it: the server only reads .next/cache for image optimization and the
+# data cache, and this app uses neither. A failed build discards it below with
+# the rest of the new .next, so a half-written cache never outlives its build.
+if [ -d .next.prev/cache ]; then mkdir -p .next && mv .next.prev/cache .next/cache; fi
 echo "--- building (npm run build) ---"
 npm run build
 rc=\$?
