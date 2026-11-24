@@ -229,12 +229,23 @@ poll_detached_step() {
   local label=$1 exit_file=$2 log_file=$3 ceiling=$4 interval=$5 lock_check=$6
   local -n _poll_out=$7
   local stall_note=${8:-} lock_hint=${9:-}
-  local waited=0 rc=""
+  local waited=0 rc="" started=$SECONDS
   while [ "$waited" -lt "$ceiling" ]; do
-    sleep "$interval"
-    waited=$((waited + interval))
-    rc=$(fleet exec --timeout 60 "$FLEET_NODE" "cat '$exit_file' 2>/dev/null || true" 2>/dev/null \
-      | tr -d '[:space:]') || rc=""
+    # Wait ON THE BOX for up to $interval seconds, checking the sentinel every
+    # second, rather than sleeping here and checking once per interval: a step
+    # that finishes is seen within ~1s instead of up to $interval later. Each
+    # poll is still one fresh, bounded connection ($interval is far below the
+    # 60s timeout). A poll that fails fast (dropped connection) sleeps out the
+    # rest of its interval here, so a broken link cannot become a busy loop.
+    local poll_started=$SECONDS left
+    rc=$(fleet exec --timeout 60 "$FLEET_NODE" \
+      "for _ in \$(seq $interval); do [ -s '$exit_file' ] && break; sleep 1; done; cat '$exit_file' 2>/dev/null || true" \
+      2>/dev/null | tr -d '[:space:]') || rc=""
+    if [ -z "$rc" ]; then
+      left=$((interval - (SECONDS - poll_started)))
+      [ "$left" -gt 0 ] && sleep "$left"
+    fi
+    waited=$((SECONDS - started))
     if [ -n "$rc" ]; then
       echo "  $label finished after ${waited}s (exit $rc)"
       _poll_out=$rc
