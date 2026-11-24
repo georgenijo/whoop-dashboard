@@ -164,11 +164,3 @@ export function getNaps(
     ...range.params,
   );
 }
-
-export function getRecentNaps(userId: number, days: number): NapRow[] {
-  const limit = safeDays(days);
-  const rows = forUser(userId).all<NapRow>(
-    `SELECT ${NAP_COLUMNS} FROM sleep WHERE COALESCE(nap, 0) = 1 AND user_id = ? ORDER BY date DESC LIMIT ${limit}`,
-  );
-  return rows.reverse();
-}

@@ -39,7 +39,6 @@ export {
   getSleepRangeRaw,
   getFullSleepTrend,
   getNaps,
-  getRecentNaps,
 } from "./sleep";
 
 export type {
@@ -57,7 +56,6 @@ export type {
   MonthlyRollupRow,
 } from "./workouts";
 export {
-  getWorkouts,
   getWorkoutById,
   getWorkoutDetail,
   capWorkoutRows,
@@ -129,20 +127,12 @@ export {
   getLatestChatThread,
   getChatThreadById,
   createChatThread,
-  touchChatThread,
   setChatThreadTitle,
   deleteChatThread,
   resolveChatThread,
-  getOrCreateChatThread,
   getChatThreadSummary,
   getChatThreadMessages,
   getChatThreadConversation,
-  getChatMessages,
-  getChatConversation,
-  getLegacyChatThreadId,
-  getLegacyChatMessages,
-  getLegacyChatConversation,
-  addChatMessage,
   addChatMessages,
   clearChatMessages,
   getChatAttachmentForUser,

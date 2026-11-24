@@ -22,8 +22,8 @@ import {
 } from "@/lib/coach/presentation";
 
 // Cap the conversation history sent to the model to keep input-token cost bounded.
-// Only applies to model-input fetches (getChatThreadConversation / getChatConversation).
-// UI fetches (getChatThreadMessages / getChatMessages) remain unbounded.
+// Only applies to model-input fetches (getChatThreadConversation).
+// UI fetches (getChatThreadMessages) remain unbounded.
 const MAX_HISTORY_ROWS = 30;
 
 export type ChatThread = {
@@ -267,16 +267,6 @@ export function createChatThread(userId: number, title: string | null = null): C
   );
 }
 
-export function touchChatThread(threadId: number): void {
-  const db = openWrite();
-  if (!db) return;
-  try {
-    db.prepare("UPDATE chat_threads SET updated_at = datetime('now') WHERE id = ?").run(threadId);
-  } finally {
-    db.close();
-  }
-}
-
 export function setChatThreadTitle(threadId: number, title: string | null): void {
   const db = openWrite();
   if (!db) return;
@@ -330,10 +320,6 @@ export function resolveChatThread(
   if (latest) return latest;
   if (!createIfMissing) return null;
   return createChatThread(userId, null);
-}
-
-export function getOrCreateChatThread(userId: number): ChatThread | null {
-  return resolveChatThread(userId, null, true);
 }
 
 export function getChatThreadSummary(userId: number, threadId: number): ChatThreadSummary | null {
@@ -522,35 +508,6 @@ export function getChatThreadConversation(
       return conversation.slice(cut);
     }) ?? []
   );
-}
-
-export function getChatMessages(threadId = 1): ChatMessage[] {
-  return getChatThreadMessages(1, threadId);
-}
-
-export function getChatConversation(threadId = 1): CoachConversationMessage[] {
-  return getChatThreadConversation(1, threadId);
-}
-
-export function getLegacyChatThreadId(): number {
-  return 1;
-}
-
-export function getLegacyChatMessages(): ChatMessage[] {
-  return getChatMessages(1);
-}
-
-export function getLegacyChatConversation(): CoachConversationMessage[] {
-  return getChatConversation(1);
-}
-
-export function addChatMessage(
-  threadId: number,
-  role: "user" | "assistant",
-  content: string,
-  blocks?: unknown
-): void {
-  addChatMessages(threadId, [{ role, content, blocks }]);
 }
 
 export function addChatMessages(

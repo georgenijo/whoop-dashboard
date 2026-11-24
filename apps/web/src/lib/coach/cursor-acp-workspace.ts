@@ -13,7 +13,6 @@ import {
   prepareCursorShimBin,
   removeCursorProjectRegistration,
   resolveMcpServerArgs,
-  shimBinDirFor,
 } from "./cursor-loop";
 import { CursorMcpAuditChannel } from "./cursor-mcp-audit";
 
@@ -117,8 +116,4 @@ export async function createCursorAcpWorkspace(
     await rm(root, { recursive: true, force: true }).catch(() => {});
     throw error;
   }
-}
-
-export function cursorAcpShimBin(workspace: string): string {
-  return shimBinDirFor(workspace);
 }
