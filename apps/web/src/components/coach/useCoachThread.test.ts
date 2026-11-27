@@ -40,7 +40,9 @@ describe("useCoachThread", () => {
     expect(result.current.input).toBe("");
     expect(result.current.activeThread?.id).toBe(1);
     expect(result.current.inputRef).toHaveProperty("current");
-    expect(result.current.bottomRef).toHaveProperty("current");
+    expect(result.current.messagesRef).toHaveProperty("current");
+    expect(result.current.stop).toEqual(expect.any(Function));
+    expect(result.current.retry).toEqual(expect.any(Function));
     expect(result.current.send).toEqual(expect.any(Function));
     expect(result.current.handleKeyDown).toEqual(expect.any(Function));
     unmount();

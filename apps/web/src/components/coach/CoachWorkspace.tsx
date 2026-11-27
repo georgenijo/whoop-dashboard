@@ -46,6 +46,7 @@ export default function CoachWorkspace({
     input,
     setInput,
     loading,
+    finishing,
     preparingImages,
     pendingImages,
     attachmentError,
@@ -55,8 +56,13 @@ export default function CoachWorkspace({
     mobileOpen,
     setMobileOpen,
     inputRef,
-    bottomRef,
+    messagesRef,
+    onMessagesScroll,
+    showJumpToLatest,
+    jumpToLatest,
     send,
+    stop,
+    retry,
     handleCreateThread,
     handleSelectThread,
     handleDeleteThread,
@@ -100,7 +106,11 @@ export default function CoachWorkspace({
             </div>
           </div>
           {badApiKey ? <BadApiKeyBanner onDismiss={dismissBadApiKey} /> : null}
-          <div className="coach-messages">
+          <div
+            className="coach-messages"
+            ref={messagesRef}
+            onScroll={onMessagesScroll}
+          >
             {messages.length === 0 ? (
               <div className="coach-empty">
                 <div className="coach-empty-orb" aria-hidden="true">
@@ -117,16 +127,32 @@ export default function CoachWorkspace({
                 />
               </div>
             ) : (
-              <MessageList messages={messages} />
+              <MessageList
+                messages={messages}
+                // Like Send, Retry waits for a model save so it runs on the
+                // model the user just picked.
+                onRetry={loading || modelSaving ? undefined : () => void retry()}
+              />
             )}
-            <div ref={bottomRef} />
           </div>
+          {showJumpToLatest ? (
+            <div className="coach-jump-latest-anchor">
+              <button
+                type="button"
+                className="coach-jump-latest"
+                onClick={jumpToLatest}
+              >
+                Jump to latest
+              </button>
+            </div>
+          ) : null}
 
           <ChatInput
             input={input}
             setInput={setInput}
             loading={loading}
             modelChanging={modelSaving}
+            finishing={finishing}
             modelPicker={
               <CoachModelPicker
                 initialModelPref={initialModelPref}
@@ -144,6 +170,7 @@ export default function CoachWorkspace({
             onAddImages={addImages}
             onRemoveImage={removeImage}
             onSubmit={() => void send(input)}
+            onStop={stop}
             onKeyDown={handleKeyDown}
           />
         </section>

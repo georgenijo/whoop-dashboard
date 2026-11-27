@@ -354,7 +354,9 @@ describe("CoachModelPicker", () => {
     renderPicker();
     openPicker();
     fireEvent.click(await screen.findByRole("button", { name: "Select Claude Opus Live" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Catalog changed; try again");
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Catalog changed; try again. Still using Claude Sonnet 4.6.",
+    );
     expect(screen.getByRole("button", { name: "Coach model: Claude Sonnet 4.6; effort high" })).toBeInTheDocument();
     expect(router.refresh).not.toHaveBeenCalled();
   });

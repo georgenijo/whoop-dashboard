@@ -42,3 +42,12 @@ describe("classifyChatError — Cursor key origin", () => {
     });
   });
 });
+
+describe("classifyChatError — reason", () => {
+  it("tags each actionable failure class", () => {
+    expect(classifyChatError(new AnthropicModelUnavailableError()).reason).toBe("model_unavailable");
+    expect(classifyChatError(new CursorAgentError("timeout", "slow")).reason).toBe("timeout");
+    expect(classifyChatError(new CursorAgentError("auth", "no", "env")).reason).toBe("invalid_key");
+    expect(classifyChatError(new Error("unknown")).reason).toBeUndefined();
+  });
+});

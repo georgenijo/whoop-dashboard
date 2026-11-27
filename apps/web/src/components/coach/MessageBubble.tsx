@@ -7,6 +7,7 @@ import CoachInlineChart from "./CoachInlineChart";
 import CoachWorkDisclosure from "./CoachWorkDisclosure";
 import CoachPresentationBlocks from "./CoachPresentationBlocks";
 import CoachMessageActions from "./CoachMessageActions";
+import { COACH_ERROR_COPY } from "./chat-errors";
 import type {
   ComposerAttachment,
   ComposerMessage,
@@ -19,6 +20,8 @@ type Props = {
     index: number,
     trigger: HTMLButtonElement,
   ) => void;
+  /** Present only on the latest failed reply. */
+  onRetry?: () => void;
 };
 
 // Markdown is rendered only after hydration. `dompurify` has no usable
@@ -33,7 +36,7 @@ const subscribeToBrowser = (notify: () => void) => {
 const browserSnapshot = () => true;
 const serverSnapshot = () => false;
 
-export default function MessageBubble({ msg, onAttachmentClick }: Props) {
+export default function MessageBubble({ msg, onAttachmentClick, onRetry }: Props) {
   const isUser = msg.role === "user";
   const isBrowser = useSyncExternalStore(
     subscribeToBrowser,
@@ -61,8 +64,9 @@ export default function MessageBubble({ msg, onAttachmentClick }: Props) {
     (segment) => segment.type === "chart",
   );
 
-  // Don't render empty aborted assistant bubbles (race between abort + tool flush).
-  if (isAborted && msg.content === "") return null;
+  // Don't render empty aborted assistant bubbles (race between abort + tool
+  // flush) -- unless a tool call already moved visible text into work notes.
+  if (isAborted && msg.content === "" && !msg.workLog?.notes.length) return null;
 
   return (
     <div className={`coach-message-row ${isUser ? "user" : "assistant"}${entering ? " is-entering" : ""}`}>
@@ -174,6 +178,26 @@ export default function MessageBubble({ msg, onAttachmentClick }: Props) {
             ) : null}
             {isAborted ? (
               <span className="coach-message-stopped">(stopped)</span>
+            ) : null}
+            {msg.error ? (
+              <div className="coach-message-error" role="alert">
+                <p className="coach-message-error-title">
+                  {COACH_ERROR_COPY[msg.error.errorClass].title}
+                </p>
+                <p className="coach-message-error-detail">
+                  {msg.error.detail ?? COACH_ERROR_COPY[msg.error.errorClass].hint}
+                </p>
+                {onRetry ? (
+                  <button
+                    type="button"
+                    className="coach-message-retry"
+                    onClick={onRetry}
+                    data-track="coach:retry"
+                  >
+                    Retry
+                  </button>
+                ) : null}
+              </div>
             ) : null}
             {!msg.streaming && (msg.content.trim() || msg.presentationBlocks?.length) ? (
               <CoachMessageActions text={[

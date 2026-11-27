@@ -394,6 +394,9 @@ export default function CoachModelPicker({
     if (!options.some((option) => option.value === nextModelPref && option.available)) return;
 
     const previousModelPref = modelPref;
+    const previousLabel = selectedOption.label;
+    // Optimistic: the trigger shows the new model immediately and the
+    // composer stays usable; a failed save rolls back with a notice below.
     setModelPref(nextModelPref);
     setSaving(true);
     setError(null);
@@ -421,9 +424,10 @@ export default function CoachModelPicker({
     } catch (saveError) {
       setModelPref(previousModelPref);
       setError(
-        saveError instanceof Error
+        `${(saveError instanceof Error
           ? saveError.message
-          : "Couldn't switch models.",
+          : "Couldn't switch models."
+        ).replace(/[^.!?]$/, "$&.")} Still using ${previousLabel}.`,
       );
     } finally {
       setSaving(false);

@@ -241,3 +241,88 @@ xychart-beta
     expect(html).toContain("coach-markdown-fallback");
   });
 });
+
+describe("MessageBubble failed and stopped replies", () => {
+  it.each([
+    ["missing_key", "No API key is configured for this model."],
+    ["invalid_key", "The API key for this model was rejected."],
+    ["model_unavailable", "That model isn't available right now."],
+    ["overloaded", "The model provider is busy."],
+    ["timeout", "Coach took too long to answer."],
+    ["cancelled", "The reply was cancelled before it finished."],
+  ] as const)("renders actionable copy for %s", (errorClass, title) => {
+    render(
+      <MessageBubble
+        msg={{
+          role: "assistant",
+          content: "",
+          error: { errorClass, detail: null },
+        }}
+      />,
+    );
+
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(title);
+    expect(alert).not.toHaveTextContent("Coach call failed");
+  });
+
+  it("prefers the server's detail and offers Retry only when wired", () => {
+    const onRetry = vi.fn();
+    const { rerender } = render(
+      <MessageBubble
+        msg={{
+          role: "assistant",
+          content: "",
+          error: { errorClass: "invalid_key", detail: "Your Cursor API key was rejected. Update it in Settings." },
+        }}
+      />,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("Update it in Settings.");
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+
+    rerender(
+      <MessageBubble
+        msg={{
+          role: "assistant",
+          content: "",
+          error: { errorClass: "overloaded", detail: null },
+        }}
+        onRetry={onRetry}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+  });
+
+  it("keeps stopped text visible and marks it stopped", () => {
+    render(
+      <MessageBubble
+        msg={{ role: "assistant", content: "Partial answer", status: "aborted" }}
+      />,
+    );
+    expect(screen.getByText("Partial answer")).toBeInTheDocument();
+    expect(screen.getByText("(stopped)")).toBeInTheDocument();
+  });
+});
+
+describe("MessageBubble stopped during a tool call", () => {
+  it("keeps the bubble when the visible text moved into work notes", () => {
+    render(
+      <MessageBubble
+        msg={{
+          role: "assistant",
+          content: "",
+          status: "aborted",
+          workLog: {
+            version: 1,
+            status: "aborted",
+            duration_ms: 1200,
+            notes: ["Let me check your sleep."],
+            tools: [],
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText("(stopped)")).toBeInTheDocument();
+  });
+});

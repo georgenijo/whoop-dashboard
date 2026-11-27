@@ -1,4 +1,4 @@
-import { APIError, APIConnectionError } from "@anthropic-ai/sdk";
+import { APIError, APIConnectionError, APIConnectionTimeoutError } from "@anthropic-ai/sdk";
 import { BadApiKeyError } from "./api-key";
 import { CursorAgentError, MissingCursorKeyError } from "./cursor-key";
 import { AnthropicModelCatalogError, AnthropicModelUnavailableError } from "./anthropic-models";
@@ -12,11 +12,26 @@ export type ChatErrorKind =
   | "network_error"
   | "server_error";
 
+/**
+ * Finer-grained failure class, additive to `kind` (which existing clients
+ * already switch on). The web Coach uses it to pick an actionable message and
+ * decide whether a Retry is worth offering; absent means "generic failure".
+ */
+export type ChatErrorReason =
+  | "missing_key"
+  | "invalid_key"
+  | "model_unavailable"
+  | "overloaded"
+  | "timeout"
+  | "quota"
+  | "network";
+
 export interface ClassifiedChatError {
   status: number;
   kind: ChatErrorKind;
   message: string;
   origin?: string;
+  reason?: ChatErrorReason;
 }
 
 function isCreditBalanceError(err: APIError): boolean {
@@ -28,15 +43,16 @@ function isCreditBalanceError(err: APIError): boolean {
 
 export function classifyChatError(err: unknown): ClassifiedChatError {
   if (err instanceof AnthropicModelUnavailableError) {
-    return { status: 422, kind: "upstream_error", message: err.message };
+    return { status: 422, kind: "upstream_error", reason: "model_unavailable", message: err.message };
   }
   if (err instanceof AnthropicModelCatalogError) {
-    return { status: 503, kind: "upstream_error", message: "Anthropic model discovery is unavailable. Try again shortly." };
+    return { status: 503, kind: "upstream_error", reason: "model_unavailable", message: "Anthropic model discovery is unavailable. Try again shortly." };
   }
   if (err instanceof MissingCursorKeyError) {
     return {
       status: 503,
       kind: "server_error",
+      reason: "missing_key",
       message:
         "The Cursor coach isn't configured. Switch to Claude in Settings, or contact the operator.",
     };
@@ -47,6 +63,7 @@ export function classifyChatError(err: unknown): ClassifiedChatError {
       return {
         status: err.origin === "user" ? 401 : 502,
         kind: err.origin === "user" ? "bad_api_key" : "upstream_error",
+        reason: "invalid_key",
         message:
           err.origin === "user"
             ? "Your Cursor API key was rejected. Update it in Settings."
@@ -58,6 +75,7 @@ export function classifyChatError(err: unknown): ClassifiedChatError {
       return {
         status: 504,
         kind: "upstream_error",
+        reason: "timeout",
         message: "The Cursor coach took too long. Try again.",
       };
     }
@@ -72,6 +90,7 @@ export function classifyChatError(err: unknown): ClassifiedChatError {
     return {
       status: 401,
       kind: "bad_api_key",
+      reason: "invalid_key",
       message:
         err.origin === "user"
           ? "Your Anthropic API key was rejected. Update it in Settings."
@@ -85,6 +104,7 @@ export function classifyChatError(err: unknown): ClassifiedChatError {
       return {
         status: 402,
         kind: "quota_exceeded",
+        reason: "quota",
         message:
           "Anthropic credits exhausted. Top up your Anthropic account, or add a personal key in Settings.",
       };
@@ -93,6 +113,7 @@ export function classifyChatError(err: unknown): ClassifiedChatError {
       return {
         status: 429,
         kind: "rate_limited",
+        reason: "overloaded",
         message: "Rate limited by Anthropic. Try again in a moment.",
       };
     }
@@ -100,6 +121,7 @@ export function classifyChatError(err: unknown): ClassifiedChatError {
       return {
         status: 503,
         kind: "overloaded",
+        reason: "overloaded",
         message: "Anthropic is overloaded right now. Try again shortly.",
       };
     }
@@ -112,10 +134,20 @@ export function classifyChatError(err: unknown): ClassifiedChatError {
     }
   }
 
+  if (err instanceof APIConnectionTimeoutError) {
+    return {
+      status: 504,
+      kind: "network_error",
+      reason: "timeout",
+      message: "Anthropic took too long to respond. Try again.",
+    };
+  }
+
   if (err instanceof APIConnectionError) {
     return {
       status: 503,
       kind: "network_error",
+      reason: "network",
       message: "Couldn't reach Anthropic. Check your connection and try again.",
     };
   }

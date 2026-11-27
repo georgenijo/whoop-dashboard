@@ -12,7 +12,14 @@ type LightboxState = {
   returnFocus: HTMLButtonElement | null;
 };
 
-export default function MessageList({ messages }: { messages: ComposerMessage[] }) {
+export default function MessageList({
+  messages,
+  onRetry,
+}: {
+  messages: ComposerMessage[];
+  /** Offered on the last message when it is a failed reply. */
+  onRetry?: () => void;
+}) {
   const [lightbox, setLightbox] = useState<LightboxState | null>(null);
   const closeLightbox = useCallback(() => setLightbox(null), []);
   const changeLightboxIndex = useCallback(
@@ -27,6 +34,13 @@ export default function MessageList({ messages }: { messages: ComposerMessage[] 
         <MessageBubble
           key={index}
           msg={message}
+          onRetry={
+            index === messages.length - 1 &&
+            message.error &&
+            message.error.retryable !== false
+              ? onRetry
+              : undefined
+          }
           onAttachmentClick={(attachments, attachmentIndex, trigger) =>
             setLightbox({
               attachments,

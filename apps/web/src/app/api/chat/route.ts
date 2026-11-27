@@ -282,7 +282,7 @@ export async function POST(req: Request) {
     // needs an Anthropic key opportunistically, for auto-titling.
     const selection = resolveCoachProvider(user.id);
     if (selection.provider === "cursor" && !cursorProviderEnabled(user.id)) {
-      return Response.json({ error: "No Cursor API key configured. Add a key in Settings or choose another provider." }, { status: 503 });
+      return Response.json({ error: "No Cursor API key configured. Add a key in Settings or choose another provider.", reason: "missing_key" }, { status: 503 });
     }
     let apiKey: string | null = null;
     let apiKeyOrigin: ApiKeyOrigin = "env";
@@ -297,6 +297,7 @@ export async function POST(req: Request) {
             {
               error:
                 "No Anthropic API key configured. Add a personal key in Settings or set ANTHROPIC_API_KEY on the server.",
+              reason: "missing_key",
             },
             { status: 503 },
           );
@@ -374,6 +375,7 @@ export async function POST(req: Request) {
           kind: classified.kind,
         };
         if (classified.origin) payload.origin = classified.origin;
+        if (classified.reason) payload.reason = classified.reason;
         return Response.json(payload, { status: classified.status });
       }
     }
@@ -504,6 +506,7 @@ export async function POST(req: Request) {
                 message: classified.message,
               };
               if (classified.origin) payload.origin = classified.origin;
+              if (classified.reason) payload.reason = classified.reason;
               send("error", payload);
             } catch {
               // Nothing useful to send once the SSE response is gone.

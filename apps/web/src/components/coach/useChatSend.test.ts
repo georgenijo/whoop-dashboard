@@ -101,7 +101,7 @@ describe("useChatSend router cache", () => {
     });
 
     expect(router.refresh).toHaveBeenCalledOnce();
-    expect(result.current.messages[1].content).toContain("boom");
+    expect(result.current.messages[1].error?.detail).toBe("boom");
   });
 
   it("does not refresh when nothing was sent", async () => {
@@ -248,8 +248,8 @@ describe("useChatSend work logs", () => {
     await act(async () => sendPromise);
 
     expect(result.current.input).toBe("Keep this follow-up");
-    expect(result.current.messages.at(-1)?.content).toContain(
-      "Provider unavailable",
+    expect(result.current.messages.at(-1)?.error?.detail).toBe(
+      "Provider unavailable.",
     );
   });
 
@@ -362,7 +362,8 @@ describe("useChatSend work logs", () => {
     });
 
     expect(result.current.messages[1]).toMatchObject({
-      content: "**Error:** Connection lost before Coach finished.",
+      content: "",
+      error: { errorClass: "network", detail: null, uncertain: true },
       streaming: false,
       workLog: {
         status: "error",
@@ -558,7 +559,7 @@ describe("useChatSend image attachments", () => {
 
     expect(result.current.input).toBe("What do you notice?");
     expect(result.current.pendingImages[0].file).toBe(file);
-    expect(result.current.messages.at(-1)?.content).toContain(
+    expect(result.current.messages.at(-1)?.error?.detail).toContain(
       "selected Coach provider rejected",
     );
     expect(revokeObjectUrl).not.toHaveBeenCalled();
@@ -594,5 +595,699 @@ describe("useChatSend image attachments", () => {
     await waitFor(() => expect(result.current.pendingImages).toHaveLength(1));
     unmount();
     expect(revokeObjectUrl).toHaveBeenCalledWith("blob:preview-3");
+  });
+});
+
+// Routes Coach POSTs to `posts` in order and history GETs to `history`.
+function chatFetch(posts: Response[], history: () => unknown[] = () => []) {
+  const queue = [...posts];
+  return vi.fn(async (url: string, init?: RequestInit) => {
+    void init;
+    if (String(url).startsWith("/api/chat/history")) return Response.json(history());
+    const next = queue.shift();
+    if (!next) throw new Error(`unexpected request to ${url}`);
+    return next;
+  });
+}
+
+function postBodies(fetchMock: ReturnType<typeof chatFetch>) {
+  return fetchMock.mock.calls
+    .filter(([url]) => url === "/api/chat")
+    .map(([, init]) => JSON.parse(String(init?.body)));
+}
+
+describe("useChatSend stop and retry", () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    router.refresh.mockReset();
+  });
+
+  it("stops a streaming reply and keeps the text it already received", async () => {
+    let signal: AbortSignal | undefined;
+    const stream = controllableStreamResponse();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        signal = init?.signal ?? undefined;
+        signal?.addEventListener("abort", () => {
+          // Real fetch bodies error with the abort reason once aborted.
+          try {
+            stream.close();
+          } catch {}
+        });
+        return stream.response;
+      }),
+    );
+    const { result } = renderChat();
+
+    let sendPromise = Promise.resolve();
+    act(() => {
+      sendPromise = result.current.send("long question");
+    });
+    await waitFor(() => expect(result.current.loading).toBe(true));
+    act(() => stream.send(sse("text_delta", { text: "Partial answer" })));
+    await waitFor(() =>
+      expect(result.current.messages.at(-1)?.content).toBe("Partial answer"),
+    );
+
+    act(() => result.current.stop());
+    await act(async () => {
+      await sendPromise;
+    });
+
+    expect(signal?.aborted).toBe(true);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.messages).toHaveLength(2);
+    expect(result.current.messages[0]).toMatchObject({
+      role: "user",
+      content: "long question",
+    });
+    expect(result.current.messages[1]).toMatchObject({
+      role: "assistant",
+      content: "Partial answer",
+      streaming: false,
+      status: "aborted",
+      workLog: expect.objectContaining({ status: "aborted" }),
+    });
+    expect(result.current.messages[1].error).toBeUndefined();
+  });
+
+  it.each([
+    [{ status: 503, body: { error: "No Anthropic API key configured.", reason: "missing_key" } }, "missing_key"],
+    [{ status: 502, body: { error: "The server's key was rejected.", kind: "upstream_error", reason: "invalid_key" } }, "invalid_key"],
+    [{ status: 422, body: { error: "Model retired.", kind: "upstream_error", reason: "model_unavailable" } }, "model_unavailable"],
+    [{ status: 503, body: { error: "Overloaded.", kind: "overloaded", reason: "overloaded" } }, "overloaded"],
+    [{ status: 504, body: { error: "Took too long.", kind: "upstream_error", reason: "timeout" } }, "timeout"],
+    [{ status: 500, body: { error: "Coach call failed. Please try again.", kind: "server_error" } }, "unknown"],
+  ])("classifies a %j response as %s", async ({ status, body }, errorClass) => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json(body, { status })));
+    const { result } = renderChat();
+
+    await act(async () => {
+      await result.current.send("hi");
+    });
+
+    expect(result.current.messages.at(-1)?.error?.errorClass).toBe(errorClass);
+    expect(result.current.messages.at(-1)?.content).not.toMatch(/Error:/);
+  });
+
+  it("classifies stream error events by their reason", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        streamResponse([
+          sse("text_delta", { text: "Half" }),
+          sse("error", { kind: "upstream_error", reason: "timeout", message: "The Cursor coach took too long. Try again." }),
+        ]),
+      ),
+    );
+    const { result } = renderChat();
+
+    await act(async () => {
+      await result.current.send("hi");
+    });
+
+    expect(result.current.messages.at(-1)).toMatchObject({
+      content: "Half",
+      streaming: false,
+      error: {
+        errorClass: "timeout",
+        detail: "The Cursor coach took too long. Try again.",
+      },
+    });
+  });
+
+  it("classifies a dropped stream as a lost connection", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => streamResponse([sse("text_delta", { text: "Half" })])),
+    );
+    const { result } = renderChat();
+
+    await act(async () => {
+      await result.current.send("hi");
+    });
+
+    expect(result.current.messages.at(-1)?.error).toEqual({
+      errorClass: "network",
+      detail: null,
+      uncertain: true,
+    });
+  });
+
+  it("classifies a cancelled request that the user did not stop", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new DOMException("The user aborted a request.", "AbortError");
+      }),
+    );
+    const { result } = renderChat();
+
+    await act(async () => {
+      await result.current.send("hi");
+    });
+
+    expect(result.current.messages.at(-1)?.error?.errorClass).toBe("cancelled");
+  });
+
+  it("retries the failed message without duplicating it in the thread", async () => {
+    const fetchMock = chatFetch([
+      Response.json(
+        { error: "Overloaded.", kind: "overloaded", reason: "overloaded" },
+        { status: 503 },
+      ),
+      streamResponse([
+        sse("text_delta", { text: "Recovered" }),
+        sse("done", { reply: "Recovered" }),
+      ]),
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderChat([
+      {
+        id: 1,
+        role: "user",
+        content: "earlier",
+        created_at: "2026-11-27T10:00:00.000Z",
+        attachments: [],
+      },
+      {
+        id: 2,
+        role: "assistant",
+        content: "earlier reply",
+        created_at: "2026-11-27T10:00:01.000Z",
+        attachments: [],
+      },
+    ]);
+
+    await act(async () => {
+      await result.current.send("how did I sleep?");
+    });
+    expect(result.current.messages).toHaveLength(4);
+    expect(result.current.messages.at(-1)?.error?.errorClass).toBe("overloaded");
+    // The failure restores the draft so it can be edited instead.
+    expect(result.current.input).toBe("how did I sleep?");
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    const bodies = postBodies(fetchMock);
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1].messages).toEqual([
+      { role: "user", content: "how did I sleep?" },
+    ]);
+    expect(
+      result.current.messages.map(({ role, content }) => ({ role, content })),
+    ).toEqual([
+      { role: "user", content: "earlier" },
+      { role: "assistant", content: "earlier reply" },
+      { role: "user", content: "how did I sleep?" },
+      { role: "assistant", content: "Recovered" },
+    ]);
+    expect(result.current.messages.at(-1)?.error).toBeUndefined();
+    expect(result.current.input).toBe("");
+  });
+
+  it("keeps an edited draft when retrying", async () => {
+    vi.stubGlobal(
+      "fetch",
+      chatFetch([
+        Response.json({ error: "Busy", kind: "overloaded" }, { status: 503 }),
+        streamResponse([sse("done", { reply: "ok" })]),
+      ]),
+    );
+    const { result } = renderChat();
+
+    await act(async () => {
+      await result.current.send("first");
+    });
+    act(() => result.current.setInput("something else"));
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    expect(result.current.input).toBe("something else");
+    expect(result.current.messages.filter((m) => m.role === "user")).toHaveLength(1);
+  });
+
+  it("does nothing when the last reply did not fail", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderChat([
+      {
+        id: 1,
+        role: "user",
+        content: "q",
+        created_at: "2026-11-27T10:00:00.000Z",
+        attachments: [],
+      },
+      {
+        id: 2,
+        role: "assistant",
+        content: "a",
+        created_at: "2026-11-27T10:00:01.000Z",
+        attachments: [],
+      },
+    ]);
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.current.messages).toHaveLength(2);
+  });
+});
+
+describe("useChatSend failed turns", () => {
+  beforeEach(() => vi.unstubAllGlobals());
+
+  it("replaces a failed turn when the restored draft is sent again", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(Response.json({ error: "Busy", kind: "overloaded" }, { status: 503 }))
+        .mockResolvedValueOnce(streamResponse([sse("done", { reply: "ok" })])),
+    );
+    const { result } = renderChat();
+
+    await act(async () => {
+      await result.current.send("first");
+    });
+    await act(async () => {
+      await result.current.send(result.current.input);
+    });
+
+    expect(
+      result.current.messages.map(({ role, content }) => ({ role, content })),
+    ).toEqual([
+      { role: "user", content: "first" },
+      { role: "assistant", content: "ok" },
+    ]);
+  });
+});
+
+function stubObjectUrls() {
+  let n = 0;
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value: vi.fn(() => `blob:test-${++n}`),
+  });
+  Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+}
+
+describe("useChatSend review follow-ups", () => {
+  beforeEach(() => vi.unstubAllGlobals());
+
+  it("does not resend a turn the server already committed when done was lost", async () => {
+    const fetchMock = chatFetch(
+      [streamResponse([sse("text_delta", { text: "Your sleep" })])],
+      () => [
+        { id: 10, role: "user", content: "how did I sleep?", created_at: "2026-11-27T10:00:00.000Z", attachments: [] },
+        { id: 11, role: "assistant", content: "Your sleep was solid.", created_at: "2026-11-27T10:00:05.000Z", attachments: [] },
+      ],
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderChat();
+
+    await act(async () => {
+      await result.current.send("how did I sleep?");
+    });
+    expect(result.current.messages.at(-1)?.error?.errorClass).toBe("network");
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    expect(postBodies(fetchMock)).toHaveLength(1);
+    expect(result.current.messages.map(({ role, content }) => ({ role, content }))).toEqual([
+      { role: "user", content: "how did I sleep?" },
+      { role: "assistant", content: "Your sleep was solid." },
+    ]);
+    expect(result.current.input).toBe("");
+  });
+
+  it("shows a turn stored as interrupted without storing the prompt twice", async () => {
+    const fetchMock = chatFetch(
+      [streamResponse([sse("text_delta", { text: "Half" })])],
+      () => [
+        { id: 10, role: "user", content: "q", created_at: "2026-11-27T10:00:00.000Z", attachments: [] },
+        { id: 11, role: "assistant", content: "Half", status: "aborted", created_at: "2026-11-27T10:00:05.000Z", attachments: [] },
+      ],
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderChat();
+
+    await act(async () => {
+      await result.current.send("q");
+    });
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    expect(postBodies(fetchMock)).toHaveLength(1);
+    expect(result.current.messages.map(({ role, content, status }) => ({ role, content, status }))).toEqual([
+      { role: "user", content: "q", status: undefined },
+      { role: "assistant", content: "Half", status: "aborted" },
+    ]);
+    expect(result.current.messages.at(-1)?.error?.retryable).toBe(false);
+    // And Retry is now a no-op.
+    await act(async () => {
+      await result.current.retry();
+    });
+    expect(postBodies(fetchMock)).toHaveLength(1);
+  });
+
+  it("does not resend when history can't be checked, and keeps Retry available", async () => {
+    let historyOk = false;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).startsWith("/api/chat/history")) {
+        return historyOk ? Response.json([]) : new Response("down", { status: 503 });
+      }
+      return postBodiesQueue.shift()!;
+    });
+    const postBodiesQueue = [
+      streamResponse([sse("text_delta", { text: "Half" })]),
+      streamResponse([sse("done", { reply: "ok" })]),
+    ];
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderChat();
+
+    await act(async () => {
+      await result.current.send("q");
+    });
+    await act(async () => {
+      await result.current.retry();
+    });
+    const posts = () => fetchMock.mock.calls.filter(([url]) => url === "/api/chat").length;
+    expect(posts()).toBe(1);
+    expect(result.current.messages.at(-1)?.error?.detail).toMatch(/wasn't resent/);
+
+    historyOk = true;
+    await act(async () => {
+      await result.current.retry();
+    });
+    expect(posts()).toBe(2);
+    expect(result.current.messages.at(-1)?.content).toBe("ok");
+  });
+
+  it("abandons a Retry whose history check is overtaken by a new Send", async () => {
+    const history = deferred<Response>();
+    const posts: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (String(url).startsWith("/api/chat/history")) return history.promise;
+        posts.push(JSON.parse(String(init?.body)).messages[0].content);
+        return posts.length === 1
+          ? streamResponse([sse("text_delta", { text: "cut off" })])
+          : streamResponse([sse("done", { reply: "newer reply" })]);
+      }),
+    );
+    const { result } = renderChat();
+    await act(async () => {
+      await result.current.send("old");
+    });
+
+    let retryPromise = Promise.resolve();
+    act(() => {
+      retryPromise = result.current.retry();
+    });
+    await act(async () => {
+      await result.current.send("new question");
+    });
+    history.resolve(Response.json([]));
+    await act(async () => retryPromise);
+
+    expect(posts).toEqual(["old", "new question"]);
+    expect(result.current.messages.at(-1)?.content).toBe("newer reply");
+  });
+
+  it("never resends from a Retry whose history check finishes after unmount", async () => {
+    const history = deferred<Response>();
+    const fetchMock = chatFetch([
+      Response.json({ error: "Busy", kind: "overloaded" }, { status: 503 }),
+    ]);
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).startsWith("/api/chat/history")) return history.promise;
+      return streamResponse([sse("text_delta", { text: "cut off" })]);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { result, unmount } = renderChat();
+    await act(async () => {
+      await result.current.send("q");
+    });
+    let retryPromise = Promise.resolve();
+    act(() => {
+      retryPromise = result.current.retry();
+    });
+
+    unmount();
+    history.resolve(Response.json([]));
+    await retryPromise;
+
+    expect(fetchMock.mock.calls.filter(([url]) => url === "/api/chat")).toHaveLength(1);
+  });
+
+  it.each([
+    ["HTTP", () => Response.json({ error: "Your Anthropic API key was rejected. Update it in Settings.", kind: "bad_api_key", reason: "invalid_key", origin: "user" }, { status: 401 })],
+    ["SSE", () => streamResponse([sse("error", { kind: "bad_api_key", reason: "invalid_key", origin: "user", message: "Your Anthropic API key was rejected. Update it in Settings." })])],
+  ])("routes a %s bad_api_key through the failed-turn path with Retry", async (_label, failure) => {
+    const setBadApiKey = vi.fn();
+    const fetchMock = chatFetch([failure(), streamResponse([sse("done", { reply: "ok" })])]);
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderHook(() =>
+      useChatSend({
+        initialMessages: [],
+        threadId: 1,
+        setThreadId: vi.fn(),
+        refreshThreads: vi.fn(async () => []),
+        setBadApiKey,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.send("hi");
+    });
+    expect(setBadApiKey).toHaveBeenLastCalledWith(true);
+    expect(result.current.messages).toHaveLength(2);
+    expect(result.current.messages[1].error?.errorClass).toBe("invalid_key");
+    expect(result.current.input).toBe("hi");
+
+    await act(async () => {
+      await result.current.retry();
+    });
+    expect(result.current.messages.filter((m) => m.role === "user")).toHaveLength(1);
+    expect(result.current.messages.at(-1)?.content).toBe("ok");
+  });
+
+  it("aborts the in-flight reply on unmount", async () => {
+    let signal: AbortSignal | undefined;
+    const stream = controllableStreamResponse();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        signal = init?.signal ?? undefined;
+        return stream.response;
+      }),
+    );
+    const { result, unmount } = renderChat();
+    act(() => {
+      void result.current.send("hi");
+    });
+    await waitFor(() => expect(signal).toBeDefined());
+
+    unmount();
+
+    expect(signal?.aborted).toBe(true);
+  });
+
+  it("ends the stoppable phase on done, and shows Send busy while images save", async () => {
+    stubObjectUrls();
+    const stream = controllableStreamResponse();
+    const history = deferred<Response>();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) =>
+        String(url).startsWith("/api/chat/history") ? history.promise : stream.response,
+      ),
+    );
+    const { result } = renderChat();
+    act(() => result.current.addImages([new File(["x"], "a.jpg", { type: "image/jpeg" })]));
+
+    let sendPromise = Promise.resolve();
+    act(() => {
+      sendPromise = result.current.send("look");
+    });
+    await waitFor(() => expect(result.current.loading).toBe(true));
+    act(() => {
+      stream.send(sse("done", { reply: "Looks fine" }));
+      stream.close();
+    });
+    // Stop is gone; Send is visibly busy rather than silently dropping input.
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.finishing).toBe(true);
+
+    history.resolve(Response.json([]));
+    await act(async () => sendPromise);
+    expect(result.current.finishing).toBe(false);
+  });
+
+  it("only checks history before retrying a transport failure", async () => {
+    const fetchMock = chatFetch([
+      Response.json({ error: "Busy", kind: "overloaded" }, { status: 503 }),
+      streamResponse([sse("done", { reply: "ok" })]),
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderChat();
+    await act(async () => {
+      await result.current.send("q");
+    });
+    await act(async () => {
+      await result.current.retry();
+    });
+    expect(
+      fetchMock.mock.calls.some(([url]) => String(url).startsWith("/api/chat/history")),
+    ).toBe(false);
+    expect(result.current.messages.at(-1)?.content).toBe("ok");
+  });
+
+  it("matches a stored multipart prompt despite CRLF line endings", async () => {
+    const fetchMock = chatFetch(
+      [streamResponse([sse("text_delta", { text: "x" })])],
+      () => [
+        { id: 10, role: "user", content: "line one\r\nline two", created_at: "2026-11-27T10:00:00.000Z", attachments: [] },
+        { id: 11, role: "assistant", content: "Answer", created_at: "2026-11-27T10:00:05.000Z", attachments: [] },
+      ],
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderChat();
+    await act(async () => {
+      await result.current.send("line one\nline two");
+    });
+    await act(async () => {
+      await result.current.retry();
+    });
+    expect(postBodies(fetchMock)).toHaveLength(1);
+    expect(result.current.messages.at(-1)?.content).toBe("Answer");
+  });
+
+  it("keeps a recovered interrupted exchange when the user asks again", async () => {
+    const fetchMock = chatFetch(
+      [
+        streamResponse([sse("text_delta", { text: "Half" })]),
+        streamResponse([sse("done", { reply: "Continued" })]),
+      ],
+      () => [
+        { id: 10, role: "user", content: "q", created_at: "2026-11-27T10:00:00.000Z", attachments: [] },
+        { id: 11, role: "assistant", content: "Half", status: "aborted", created_at: "2026-11-27T10:00:05.000Z", attachments: [] },
+      ],
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderChat();
+    await act(async () => {
+      await result.current.send("q");
+    });
+    await act(async () => {
+      await result.current.retry();
+    });
+    await act(async () => {
+      await result.current.send("continue");
+    });
+    expect(result.current.messages.map(({ role, content }) => ({ role, content }))).toEqual([
+      { role: "user", content: "q" },
+      { role: "assistant", content: "Half" },
+      { role: "user", content: "continue" },
+      { role: "assistant", content: "Continued" },
+    ]);
+  });
+
+  it("does not refresh the router (and bounce to sign-in) after an expired session", async () => {
+    router.refresh.mockReset();
+    vi.stubGlobal("fetch", chatFetch([new Response("Unauthorized", { status: 401 })]));
+    const { result } = renderChat();
+    await act(async () => {
+      await result.current.send("keep me");
+    });
+    expect(result.current.messages.at(-1)?.error?.errorClass).toBe("session_expired");
+    expect(result.current.input).toBe("keep me");
+    expect(router.refresh).not.toHaveBeenCalled();
+  });
+
+  it("never restores a failed Retry's images past the 3-image limit", async () => {
+    stubObjectUrls();
+    vi.stubGlobal(
+      "fetch",
+      chatFetch([
+        Response.json({ error: "Busy", kind: "overloaded" }, { status: 503 }),
+        Response.json({ error: "Busy", kind: "overloaded" }, { status: 503 }),
+      ]),
+    );
+    const { result } = renderChat();
+    const original = new File(["o"], "o.jpg", { type: "image/jpeg" });
+    act(() => result.current.addImages([original]));
+    await act(async () => {
+      await result.current.send("what is this?");
+    });
+    act(() => result.current.removeImage(result.current.pendingImages[0].id));
+    const replacements = ["1", "2", "3"].map((n) => new File([n], `${n}.jpg`, { type: "image/jpeg" }));
+    act(() => result.current.addImages(replacements));
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    expect(result.current.pendingImages.map((image) => image.file)).toEqual(replacements);
+  });
+
+  it("retrying an image turn keeps images attached since, and sends only the failed ones", async () => {
+    stubObjectUrls();
+    const fetchMock = chatFetch([
+      Response.json({ error: "Busy", kind: "overloaded" }, { status: 503 }),
+      streamResponse([sse("done", { reply: "ok" })]),
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderChat();
+    const a = new File(["a"], "a.jpg", { type: "image/jpeg" });
+    const b = new File(["b"], "b.jpg", { type: "image/jpeg" });
+
+    act(() => result.current.addImages([a]));
+    await act(async () => {
+      await result.current.send("what is this?");
+    });
+    expect(result.current.pendingImages.map((image) => image.file)).toEqual([a]);
+    act(() => result.current.addImages([b]));
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    const retryPost = fetchMock.mock.calls.filter(([url]) => url === "/api/chat")[1];
+    const form = retryPost[1]?.body as FormData;
+    expect(form.getAll("images")).toEqual([a]);
+    expect(result.current.pendingImages.map((image) => image.file)).toEqual([b]);
+  });
+});
+
+describe("useChatSend retry with an untrustworthy history read", () => {
+  beforeEach(() => vi.unstubAllGlobals());
+
+  it("treats a history read with fewer prompts than shown as unknown, not absent", async () => {
+    const fetchMock = chatFetch([streamResponse([sse("text_delta", { text: "x" })])], () => []);
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderChat([
+      { id: 1, role: "user", content: "earlier", created_at: "2026-11-27T10:00:00.000Z", attachments: [] },
+      { id: 2, role: "assistant", content: "reply", created_at: "2026-11-27T10:00:01.000Z", attachments: [] },
+    ]);
+    await act(async () => {
+      await result.current.send("q");
+    });
+    await act(async () => {
+      await result.current.retry();
+    });
+    expect(postBodies(fetchMock)).toHaveLength(1);
+    expect(result.current.messages.at(-1)?.error?.detail).toMatch(/wasn't resent/);
   });
 });
