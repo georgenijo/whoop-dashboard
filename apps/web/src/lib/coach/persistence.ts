@@ -8,6 +8,7 @@ import {
   type ChatMessageInsert,
 } from "@/lib/db";
 import type { ApiKeyOrigin } from "./api-key";
+import { classifyChatError } from "./error-mapping";
 import { resolveCatalogModel } from "./model-resolution";
 import {
   type DetailState,
@@ -103,8 +104,11 @@ export async function runAndPersistCoachTurn(
       : undefined,
   });
 
+  // Sanitised failure class for the #444 detector; set only on the error path.
+  let errorClass: string | null = null;
   const buildDetails = () =>
     JSON.stringify({
+      ...(errorClass ? { error_class: errorClass } : {}),
       full_prompt: turn.displayText,
       prompt_chars: turn.displayText.length,
       attachments: turn.images.map(({ id, width, height }) => ({
@@ -180,6 +184,12 @@ export async function runAndPersistCoachTurn(
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    if (options.signal?.aborted) {
+      errorClass = "aborted";
+    } else {
+      const classified = classifyChatError(err);
+      errorClass = classified.reason ?? classified.kind;
+    }
     addChatLog({
       user_id: userId,
       started_at: startedAt,
