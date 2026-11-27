@@ -1,11 +1,19 @@
 "use client";
-import { useCallback, useEffect, useState, useTransition, type Dispatch, type SetStateAction } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 export type ThreadSummary = { id: number; title: string | null; updated_at: string; message_count: number; last_preview: string | null };
 
-type Router = ReturnType<typeof useRouter>;
 type SetThreads = Dispatch<SetStateAction<ThreadSummary[]>>;
-type StartTransition = (callback: () => void) => void;
+
+export function parseThreadParam(value: string | null | undefined): number | null {
+  if (value == null) return null;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+export function threadPath(id: number): string {
+  return `/coach?thread=${id}`;
+}
 async function fetchThreads(): Promise<ThreadSummary[]> {
   const res = await fetch("/api/threads", { cache: "no-store" });
   return res.ok ? ((await res.json()) as ThreadSummary[]) : [];
@@ -17,8 +25,7 @@ async function refreshThreadState(setThreads: SetThreads): Promise<ThreadSummary
   return data;
 }
 
-async function createThread(isPending: boolean): Promise<number | null> {
-  if (isPending) return null;
+async function createThread(): Promise<number | null> {
   const res = await fetch("/api/threads", { method: "POST" });
   if (!res.ok) return null;
   return ((await res.json()) as { id: number }).id;
@@ -28,12 +35,14 @@ async function deleteThread(id: number): Promise<boolean> {
   return (await fetch(`/api/threads/${id}`, { method: "DELETE" })).ok;
 }
 
-function navigateThread(router: Router, startTransition: StartTransition, id: number, replace = false) {
-  startTransition(() => {
-    const path = `/coach?thread=${id}`;
-    if (replace) router.replace(path);
-    else router.push(path);
-  });
+// Thread switches are client-side: the URL changes through the native
+// History API, which Next.js folds into its router (so `useSearchParams`, and
+// Back/Forward, follow along) without fetching a new RSC payload. The messages
+// themselves are loaded by `useChatSend` when `threadId` changes.
+function writeThreadUrl(id: number, replace: boolean) {
+  const path = threadPath(id);
+  if (replace) window.history.replaceState(null, "", path);
+  else window.history.pushState(null, "", path);
 }
 
 async function pollThreads(setThreads: SetThreads, isActive: () => boolean) {
@@ -73,33 +82,73 @@ export function useThreadList({
   onNavigate,
 }: { initialThreadId: number; initialThreads: ThreadSummary[]; onNavigate: () => void }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const searchParams = useSearchParams();
+  const urlThreadId = parseThreadParam(searchParams?.get("thread"));
   const [threads, setThreads] = useState(initialThreads);
   const [threadId, setThreadId] = useState(initialThreadId);
+  const creatingRef = useRef(false);
   const activeThread = threads.find((t) => t.id === threadId) ?? null;
 
+  // Follow the URL when it changes (Back/Forward, a link to `/coach?thread=N`
+  // while Coach is open, or our own pushState landing). A bare `/coach` is the newest
+  // thread, which is what the server rendered as `initialThreadId`.
+  // Adjusting state during render (not in an effect) keeps it to one pass.
+  // The thread a bare `/coach` showed when Coach mounted. Captured once:
+  // later refreshes render the URL's own thread as `initialThreadId`.
+  const [bareThreadId] = useState(initialThreadId);
+  const [seenUrlThreadId, setSeenUrlThreadId] = useState(urlThreadId);
+  if (seenUrlThreadId !== urlThreadId) {
+    setSeenUrlThreadId(urlThreadId);
+    setThreadId(urlThreadId ?? bareThreadId);
+  }
+
+  // `/coach?thread=<missing or foreign id>` renders the newest thread instead
+  // (no redirect); make the address bar say which one.
+  // Mount only: a later `router.refresh()` re-renders the URL's own thread.
+  const mountRef = useRef({ requested: urlThreadId, rendered: initialThreadId });
+  useEffect(() => {
+    const { requested, rendered } = mountRef.current;
+    if (requested !== null && requested !== rendered) writeThreadUrl(rendered, true);
+  }, []);
+
   useEffect(() => watchThreads(setThreads), []);
+
+  const selectThread = useCallback((id: number, replace = false) => {
+    // Only `threadId` moves here. `seenUrlThreadId` tracks the URL itself:
+    // Next applies the History API update in a later render, and comparing
+    // against the URL's previous value (not our selection) is what keeps that
+    // in-between render from snapping back to the old thread.
+    setThreadId(id);
+    writeThreadUrl(id, replace);
+  }, []);
 
   const refreshThreads = useCallback(() => refreshThreadState(setThreads), []);
 
   const handleCreateThread = useCallback(async () => {
-    const id = await createThread(isPending);
-    if (!id) return;
-    onNavigate();
-    // A new thread changes what the cached `/coach` payloads render (which
-    // thread a bare `/coach` redirects to, and each page's sidebar seed).
-    // `staleTimes.dynamic` would keep serving them, so clear the client router
-    // cache before navigating to the fresh thread.
-    router.refresh();
-    navigateThread(router, startTransition, id);
-  }, [isPending, onNavigate, router, startTransition]);
+    if (creatingRef.current) return;
+    creatingRef.current = true;
+    try {
+      const id = await createThread();
+      if (!id) return;
+      onNavigate();
+      selectThread(id);
+      void refreshThreadState(setThreads);
+      // A new thread changes what cached `/coach` payloads render (which
+      // thread a bare `/coach` shows, and each page's sidebar seed), and
+      // `staleTimes.dynamic` would keep serving them. Clear the client router
+      // cache; the live workspace ignores the refreshed props.
+      router.refresh();
+    } finally {
+      creatingRef.current = false;
+    }
+  }, [onNavigate, router, selectThread]);
 
   const handleSelectThread = useCallback(
     (id: number) => {
       onNavigate();
-      navigateThread(router, startTransition, id);
+      if (id !== threadId) selectThread(id);
     },
-    [onNavigate, router, startTransition]
+    [onNavigate, selectThread, threadId]
   );
 
   const handleDeleteThread = useCallback(async (id: number) => {
@@ -113,10 +162,10 @@ export function useThreadList({
     onNavigate();
     if (id !== threadId) return;
 
-    const nextThreadId = nextThreads[0]?.id ?? (await createThread(isPending));
+    const nextThreadId = nextThreads[0]?.id ?? (await createThread());
     if (!nextThreadId) return;
-    navigateThread(router, startTransition, nextThreadId, true);
-  }, [isPending, onNavigate, refreshThreads, router, startTransition, threadId]);
+    selectThread(nextThreadId, true);
+  }, [onNavigate, refreshThreads, router, selectThread, threadId]);
 
   return {
     threads,

@@ -14,6 +14,7 @@ import {
   useCoachThread,
 } from "@/components/coach/useCoachThread";
 import type { CoachEffort } from "@/lib/coach/provider";
+import type { CoachSuggestionContext } from "@/lib/coach/suggestions";
 import type { CursorModelParamsByModel } from "@/lib/coach/cursor-model-params";
 
 type CoachWorkspaceProps = {
@@ -23,6 +24,7 @@ type CoachWorkspaceProps = {
   initialModelPref: string;
   initialCoachEffort: CoachEffort;
   initialCursorModelParams: CursorModelParamsByModel;
+  suggestionContext?: CoachSuggestionContext;
 };
 
 function formatCount(n: number): string {
@@ -36,6 +38,7 @@ export default function CoachWorkspace({
   initialModelPref,
   initialCoachEffort,
   initialCursorModelParams,
+  suggestionContext,
 }: CoachWorkspaceProps) {
   const [modelSaving, setModelSaving] = useState(false);
   const {
@@ -63,6 +66,7 @@ export default function CoachWorkspace({
     send,
     stop,
     retry,
+    threadLoad,
     handleCreateThread,
     handleSelectThread,
     handleDeleteThread,
@@ -111,7 +115,15 @@ export default function CoachWorkspace({
             ref={messagesRef}
             onScroll={onMessagesScroll}
           >
-            {messages.length === 0 ? (
+            {messages.length === 0 && threadLoad !== "idle" ? (
+              <div className="coach-empty" role="status">
+                <div className="coach-empty-copy">
+                  {threadLoad === "loading"
+                    ? "Loading conversation…"
+                    : "Couldn't load this conversation. Pick it again to retry."}
+                </div>
+              </div>
+            ) : messages.length === 0 ? (
               <div className="coach-empty">
                 <div className="coach-empty-orb" aria-hidden="true">
                   <span />
@@ -122,6 +134,7 @@ export default function CoachWorkspace({
                   Keep one thread per topic. The sidebar stays with you across devices.
                 </div>
                 <SuggestionChips
+                  context={suggestionContext}
                   disabled={modelSaving}
                   onSelect={(text) => void send(text)}
                 />
@@ -153,6 +166,7 @@ export default function CoachWorkspace({
             loading={loading}
             modelChanging={modelSaving}
             finishing={finishing}
+            threadLoading={threadLoad === "loading"}
             modelPicker={
               <CoachModelPicker
                 initialModelPref={initialModelPref}

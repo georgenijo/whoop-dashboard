@@ -5,6 +5,7 @@ import type { ComposerMessage } from "./useChatSend";
 
 const messages: ComposerMessage[] = [
   {
+    clientId: "m:1",
     role: "user",
     content: "",
     attachments: [

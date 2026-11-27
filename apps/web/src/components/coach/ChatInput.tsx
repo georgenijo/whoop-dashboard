@@ -20,6 +20,8 @@ type Props = {
   modelChanging: boolean;
   /** A reply finished but its images are still being saved; Send waits. */
   finishing?: boolean;
+  /** The selected thread's history is still loading; sending waits for it. */
+  threadLoading?: boolean;
   modelPicker: ReactNode;
   preparingImages: boolean;
   pendingImages: PendingChatImage[];
@@ -40,6 +42,7 @@ export default function ChatInput({
   loading,
   modelChanging,
   finishing = false,
+  threadLoading = false,
   modelPicker,
   preparingImages,
   pendingImages,
@@ -54,7 +57,7 @@ export default function ChatInput({
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragActive, setDragActive] = useState(false);
-  const busy = loading || modelChanging || finishing;
+  const busy = loading || modelChanging || finishing || threadLoading;
 
   useEffect(() => {
     if (input === "" && inputRef.current) {

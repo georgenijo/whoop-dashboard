@@ -21,11 +21,12 @@ describe("CoachPresentationBlocks", () => {
     });
   });
 
-  it("renders equivalent readable meaning for every initial block type", () => {
+  it("renders equivalent readable meaning for every initial block type", async () => {
     render(<CoachPresentationBlocks blocks={blocks} />);
     expect(screen.getByText("78%")).toBeInTheDocument();
     expect(screen.getByText("This week", { selector: "summary span" })).toBeInTheDocument();
-    expect(screen.getByText("HRV trend")).toBeInTheDocument();
+    // The chart block arrives in its own lazily loaded (Recharts) chunk.
+    expect(await screen.findByText("HRV trend")).toBeInTheDocument();
     expect(screen.getByText("Easy aerobic work")).toBeInTheDocument();
     expect(screen.getByText("Whoop")).toBeInTheDocument();
     expect(screen.getByText("30 min zone 2", { exact: false })).toBeInTheDocument();
@@ -35,7 +36,7 @@ describe("CoachPresentationBlocks", () => {
   it("switches a chart to its accessible table and copies tabular data", async () => {
     const { container } = render(<CoachPresentationBlocks blocks={[blocks[2]]} />);
     const view = within(container);
-    fireEvent.click(view.getByRole("button", { name: "Table" }));
+    fireEvent.click(await view.findByRole("button", { name: "Table" }));
     expect(view.getByRole("table", { name: "HRV trend" })).toBeInTheDocument();
     fireEvent.click(view.getByRole("button", { name: "Copy table" }));
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith(

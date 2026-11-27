@@ -22,6 +22,14 @@ export default function MessageList({
 }) {
   const [lightbox, setLightbox] = useState<LightboxState | null>(null);
   const closeLightbox = useCallback(() => setLightbox(null), []);
+  const openLightbox = useCallback(
+    (
+      attachments: ComposerAttachment[],
+      index: number,
+      trigger: HTMLButtonElement,
+    ) => setLightbox({ attachments, index, returnFocus: trigger }),
+    [],
+  );
   const changeLightboxIndex = useCallback(
     (index: number) =>
       setLightbox((current) => (current ? { ...current, index } : current)),
@@ -32,7 +40,10 @@ export default function MessageList({
     <>
       {messages.map((message, index) => (
         <MessageBubble
-          key={index}
+          // Stable per message (db id, or a local id while optimistic), so a
+          // streamed delta re-renders only the streaming bubble and inserting
+          // or dropping a turn never remounts its neighbours.
+          key={message.clientId}
           msg={message}
           onRetry={
             index === messages.length - 1 &&
@@ -41,13 +52,7 @@ export default function MessageList({
               ? onRetry
               : undefined
           }
-          onAttachmentClick={(attachments, attachmentIndex, trigger) =>
-            setLightbox({
-              attachments,
-              index: attachmentIndex,
-              returnFocus: trigger,
-            })
-          }
+          onAttachmentClick={openLightbox}
         />
       ))}
       {lightbox ? (

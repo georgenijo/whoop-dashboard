@@ -65,6 +65,11 @@ export type ChatMessage = {
 };
 
 export type ComposerMessage = {
+  /**
+   * Stable React key: `m:<db id>` for persisted rows, `local:<n>` for an
+   * optimistic message until the thread is reloaded from the server.
+   */
+  clientId: string;
   role: "user" | "assistant";
   content: string;
   streaming?: boolean;
@@ -76,6 +81,9 @@ export type ComposerMessage = {
   /** Set when the turn failed; drives the actionable error + Retry. */
   error?: CoachTurnError;
 };
+
+/** What a single bubble renders; the list owns the key. */
+export type BubbleMessage = Omit<ComposerMessage, "clientId">;
 
 type FailedTurn = { text: string; images: PendingChatImage[] };
 
@@ -143,6 +151,12 @@ type StreamHandlers = {
     presentationBlocks: CoachPresentationBlock[],
   ) => void;
 };
+
+let localIdCounter = 0;
+function nextLocalId(): string {
+  localIdCounter += 1;
+  return `local:${localIdCounter}`;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -349,6 +363,7 @@ function toComposerMessages(messages: ChatMessage[]): ComposerMessage[] {
   return messages.map((message) => {
     const presentationBlocks = parseCoachPresentationBlocks(message.presentation_blocks);
     return {
+      clientId: `m:${message.id}`,
       role: message.role,
       content: message.content,
       status: message.status,
@@ -437,7 +452,7 @@ function markInterrupted(messages: ComposerMessage[]): ComposerMessage[] {
   }
   return [
     ...messages,
-    { role: "assistant", content: "", error: INTERRUPTED_TURN_ERROR },
+    { clientId: nextLocalId(), role: "assistant", content: "", error: INTERRUPTED_TURN_ERROR },
   ];
 }
 
@@ -704,6 +719,7 @@ async function sendChatMessage(params: SendParams) {
   const draftText = params.text;
   const draftImages = params.pendingImages;
   const userMessage: ComposerMessage = {
+    clientId: nextLocalId(),
     role: "user",
     content: params.text,
     attachments: optimisticAttachments(draftImages),
@@ -731,6 +747,7 @@ async function sendChatMessage(params: SendParams) {
   params.setMessages((previous) => [
     ...previous,
     {
+      clientId: nextLocalId(),
       role: "assistant",
       content: "",
       streaming: true,
@@ -879,6 +896,11 @@ export function useChatSend({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const turnRef = useRef(0);
+  const threadCacheRef = useRef(new Map<number, ComposerMessage[]>());
+  // Sending waits for the selected thread's history, so a new turn is never
+  // appended to (or overwritten by) a transcript that is still loading.
+  const threadLoadingRef = useRef(false);
+  const [threadLoad, setThreadLoad] = useState<"idle" | "loading" | "error">("idle");
   const syncedThreadRef = useRef<number | null>(null);
   const retryingRef = useRef(false);
   const messagesRef = useRef(messages);
@@ -948,28 +970,56 @@ export function useChatSend({
     [setPendingImages],
   );
 
-  // A server-driven thread change intentionally resets all local composer
-  // state in one effect.
+  // Switching threads is client-side (see `useThreadList`): reset the
+  // composer and load the selected thread's messages here, in one effect.
   useEffect(() => {
     // Reset only when the thread actually changes. `router.refresh()` after a
     // turn hands this hook a fresh `initialMessages` for the SAME thread; the
     // local state is already authoritative then, and resetting it would wipe
     // the draft, abort a follow-up turn, and flash the transcript.
     if (syncedThreadRef.current === threadId) return;
+    const previousThreadId = syncedThreadRef.current;
     syncedThreadRef.current = threadId;
+    // Remember what the thread we're leaving looked like, so coming back
+    // (Back button, sidebar) paints instantly while it revalidates. Skipped
+    // mid-turn: that transcript is about to be aborted and is half-built.
+    if (previousThreadId !== null && !abortRef.current) {
+      threadCacheRef.current.set(previousThreadId, messagesRef.current);
+    }
     turnRef.current += 1;
+    const load = turnRef.current;
     abortRef.current?.abort();
     abortRef.current = null;
     failedTurnRef.current = null;
     releasePreviewUrls(pendingImagesRef.current);
     setPendingImages([]);
-    setMessages(toComposerMessages(initialMessages));
     setInput("");
     setLoading(false);
     setFinishing(false);
     setPreparingImages(false);
     setAttachmentError(null);
     if (inputRef.current) inputRef.current.style.height = "auto";
+    if (previousThreadId === null) {
+      // First mount: the server already rendered this thread.
+      setMessages(toComposerMessages(initialMessages));
+      return;
+    }
+    const cached = threadCacheRef.current.get(threadId);
+    setMessages(cached ?? []);
+    threadLoadingRef.current = true;
+    setThreadLoad(cached ? "idle" : "loading");
+    void refreshPersistedMessages(threadId).then((loaded) => {
+      // A later switch, or unmount, owns the transcript now.
+      if (turnRef.current !== load) return;
+      threadLoadingRef.current = false;
+      if (loaded) {
+        threadCacheRef.current.set(threadId, loaded);
+        setMessages(loaded);
+        setThreadLoad("idle");
+      } else {
+        setThreadLoad(cached ? "idle" : "error");
+      }
+    });
   }, [initialMessages, setPendingImages, threadId]);
 
   useEffect(
@@ -986,8 +1036,9 @@ export function useChatSend({
   );
 
   const send = useCallback(
-    (text: string) =>
-      sendChatMessage({
+    async (text: string) => {
+      if (threadLoadingRef.current) return;
+      return sendChatMessage({
         text,
         messages,
         threadId,
@@ -1007,7 +1058,8 @@ export function useChatSend({
         refreshRouter,
         setBadApiKey,
         onTurnFailed: rememberFailedTurn,
-      }),
+      });
+    },
     [
       getPendingImages,
       messages,
@@ -1036,6 +1088,7 @@ export function useChatSend({
     if (
       abortRef.current ||
       retryingRef.current ||
+      threadLoadingRef.current ||
       !failedTurn ||
       failed?.role !== "assistant" ||
       !failed.error ||
@@ -1144,6 +1197,8 @@ export function useChatSend({
     send,
     stop,
     retry,
+    /** `loading`: fetching a just-selected thread; `error`: that fetch failed. */
+    threadLoad,
     progress: activeMessage?.workLog ?? null,
     progressLabel: workPhaseLabel(
       activeMessage?.workLog,
