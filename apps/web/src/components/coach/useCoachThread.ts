@@ -2,11 +2,8 @@
 
 import {
   useCallback,
-  useEffect,
-  useRef,
   useState,
   type KeyboardEvent,
-  type RefObject,
 } from "react";
 import {
   type ChatMessage,
@@ -17,12 +14,9 @@ import {
   type ThreadSummary,
   useThreadList,
 } from "@/components/coach/useThreadList";
+import { useAutoScroll } from "@/components/coach/useAutoScroll";
 
 export type { ChatMessage, ComposerMessage, ThreadSummary };
-
-function scrollToBottom(bottomRef: RefObject<HTMLDivElement | null>) {
-  bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-}
 
 function submitOnEnter(
   e: KeyboardEvent<HTMLTextAreaElement>,
@@ -44,7 +38,6 @@ export function useCoachThread(
   // Ephemeral banner state for the BYOK 401 path. Reset to false on every
   // new send (inside sendChatMessage) and on dismiss; not persisted.
   const [badApiKey, setBadApiKey] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const closeMobile = useCallback(() => setMobileOpen(false), []);
 
   const {
@@ -69,7 +62,9 @@ export function useCoachThread(
     addImages,
     removeImage,
     inputRef,
-    send,
+    send: sendMessage,
+    stop,
+    retry,
     progressLabel,
   } = useChatSend({
     initialMessages,
@@ -79,7 +74,26 @@ export function useCoachThread(
     setBadApiKey,
   });
 
-  useEffect(() => scrollToBottom(bottomRef), [messages]);
+  const {
+    containerRef: messagesRef,
+    onScroll: onMessagesScroll,
+    showJump: showJumpToLatest,
+    jumpToLatest,
+  } = useAutoScroll(messages, threadId);
+
+  // Sending is an explicit "show me the latest", so it re-pins the transcript
+  // even if the reader had scrolled up.
+  const send = useCallback(
+    (text: string) => {
+      jumpToLatest();
+      return sendMessage(text);
+    },
+    [jumpToLatest, sendMessage],
+  );
+  const retryLast = useCallback(() => {
+    jumpToLatest();
+    return retry();
+  }, [jumpToLatest, retry]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => submitOnEnter(e, input, send),
@@ -105,8 +119,13 @@ export function useCoachThread(
     mobileOpen,
     setMobileOpen,
     inputRef,
-    bottomRef,
+    messagesRef,
+    onMessagesScroll,
+    showJumpToLatest,
+    jumpToLatest,
     send,
+    stop,
+    retry: retryLast,
     handleCreateThread,
     handleSelectThread,
     handleDeleteThread,

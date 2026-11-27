@@ -1182,3 +1182,47 @@ body:has(.coach-page) .bottom-nav { display: none; }
   .bn-tab.active { color: var(--fg); }
   .bn-tab.active::before { background: var(--fg); box-shadow: none; }
 }
+
+/* Coach turn controls (#592): failed-reply notice + Retry, Jump to latest. */
+.coach-message-error {
+  display: grid;
+  gap: var(--s1, 4px);
+  justify-items: start;
+  margin-top: var(--s2, 8px);
+  padding: var(--s2, 8px) var(--s3, 12px);
+  border: 1px solid color-mix(in oklch, var(--bad) 45%, var(--rule));
+  border-radius: var(--r-sm);
+  font-size: var(--t-sm, 13px);
+}
+.coach-message-error p { margin: 0; }
+.coach-message-error-title { color: var(--bad); font-weight: 600; }
+.coach-message-error-detail { color: var(--fg-2); }
+.coach-message-retry {
+  margin-top: var(--s1, 4px);
+  padding: 4px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-sm);
+  background: var(--bg-lift);
+  color: var(--fg-hi);
+  font-size: var(--t-xs, 12px);
+}
+.coach-message-retry:hover { background: var(--bg); }
+.coach-jump-latest-anchor {
+  position: relative;
+  height: 0;
+  z-index: 5;
+}
+.coach-jump-latest {
+  position: absolute;
+  bottom: var(--s2, 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  background: var(--bg-lift);
+  color: var(--fg-hi);
+  font-size: var(--t-xs, 12px);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
+}
+.coach-jump-latest:hover { background: var(--bg); }

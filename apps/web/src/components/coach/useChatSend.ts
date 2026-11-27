@@ -12,6 +12,12 @@ import {
 } from "@/lib/coach/presentation";
 import { useRouter } from "next/navigation";
 import {
+  CONNECTION_LOST_MESSAGE,
+  CoachRequestError,
+  classifyCoachFailure,
+  type CoachTurnError,
+} from "./chat-errors";
+import {
   useCallback,
   useEffect,
   useRef,
@@ -67,7 +73,11 @@ export type ComposerMessage = {
   workStartedAt?: number;
   presentationBlocks?: CoachPresentationBlock[];
   attachments?: ComposerAttachment[];
+  /** Set when the turn failed; drives the actionable error + Retry. */
+  error?: CoachTurnError;
 };
+
+type FailedTurn = { text: string; images: PendingChatImage[] };
 
 type UseChatSendParams = {
   initialMessages: ChatMessage[];
@@ -91,6 +101,12 @@ type SendParams = Omit<UseChatSendParams, "initialMessages"> & {
   setPendingImages: (images: PendingChatImage[]) => void;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   abortRef: RefObject<AbortController | null>;
+  /**
+   * Resending a failed turn: the composer is only cleared if it still holds
+   * that draft, and is not refilled if the resend fails too.
+   */
+  retry?: boolean;
+  onTurnFailed: (turn: FailedTurn | null) => void;
 };
 
 type ToolStartEvent = { id: string; name: string; input: unknown };
@@ -275,15 +291,34 @@ function finishAssistant(
 function failAssistant(
   setMessages: Dispatch<SetStateAction<ComposerMessage[]>>,
   index: number,
-  messageText: string,
+  error: CoachTurnError,
 ) {
   updateAssistantMessage(setMessages, index, (message) => ({
     ...message,
-    content: `**Error:** ${messageText}`,
     streaming: false,
+    error,
     workLog: {
       ...activeWorkLog(message),
       status: "error",
+      duration_ms:
+        message.workStartedAt == null ? null : Date.now() - message.workStartedAt,
+    },
+  }));
+}
+
+// The user pressed Stop: keep whatever text already arrived and mark it, the
+// same way the server persists the partial reply (`status = 'aborted'`).
+function stopAssistant(
+  setMessages: Dispatch<SetStateAction<ComposerMessage[]>>,
+  index: number,
+) {
+  updateAssistantMessage(setMessages, index, (message) => ({
+    ...message,
+    streaming: false,
+    status: "aborted",
+    workLog: {
+      ...activeWorkLog(message),
+      status: "aborted",
       duration_ms:
         message.workStartedAt == null ? null : Date.now() - message.workStartedAt,
     },
@@ -302,10 +337,6 @@ function applyThreadHeader(
     return nextThreadId;
   }
   return null;
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === "AbortError";
 }
 
 function toComposerMessages(messages: ChatMessage[]): ComposerMessage[] {
@@ -329,6 +360,15 @@ function withoutPendingTurn(messages: ComposerMessage[]): ComposerMessage[] {
   return withoutAssistant.at(-1)?.role === "user"
     ? withoutAssistant.slice(0, -1)
     : withoutAssistant;
+}
+
+// A failed turn commits nothing server-side, so its user message only exists
+// locally. Drop it (with its error reply) before the next send so a resend --
+// Retry, or the restored draft sent again -- doesn't show the question twice.
+function withoutFailedTurn(messages: ComposerMessage[]): ComposerMessage[] {
+  const last = messages.at(-1);
+  if (last?.role !== "assistant" || !last.error) return messages;
+  return messages.at(-2)?.role === "user" ? messages.slice(0, -2) : messages.slice(0, -1);
 }
 
 async function postMessage(
@@ -379,17 +419,23 @@ async function refreshPersistedMessages(
   }
 }
 
-async function responseErrorMessage(response: Response): Promise<string> {
+async function responseError(response: Response): Promise<CoachRequestError> {
   const body = await response.text();
   try {
     const parsed = JSON.parse(body) as unknown;
     if (isRecord(parsed) && typeof parsed.error === "string") {
-      return parsed.error;
+      return new CoachRequestError(parsed.error, {
+        kind: parsed.kind,
+        reason: parsed.reason,
+        status: response.status,
+      });
     }
   } catch {
     // Plain-text errors remain valid for legacy and infrastructure responses.
   }
-  return body || `Server error ${response.status}`;
+  return new CoachRequestError(body || `Server error ${response.status}`, {
+    status: response.status,
+  });
 }
 
 function releasePreviewUrls(images: PendingChatImage[]) {
@@ -517,10 +563,11 @@ async function readChatStream(
         });
         sawDone = true;
       } else {
-        throw new Error(
+        throw new CoachRequestError(
           typeof payload.message === "string"
             ? payload.message
             : "Coach stream failed",
+          { kind: payload.kind, reason: payload.reason },
         );
       }
     }
@@ -559,13 +606,14 @@ async function readChatStream(
   } finally {
     reader.releaseLock();
   }
-  if (!sawDone) throw new Error("Connection lost before Coach finished.");
+  if (!sawDone) throw new Error(CONNECTION_LOST_MESSAGE);
 }
 
 async function sendChatMessage(params: SendParams) {
   if (!params.text.trim() && params.pendingImages.length === 0) return;
   if (params.abortRef.current) return;
   params.setBadApiKey?.(false);
+  params.onTurnFailed(null);
 
   const draftText = params.text;
   const draftImages = params.pendingImages;
@@ -574,11 +622,18 @@ async function sendChatMessage(params: SendParams) {
     content: params.text,
     attachments: optimisticAttachments(draftImages),
   };
-  const nextMessages = [...withoutPendingTurn(params.messages), userMessage];
+  const nextMessages = [
+    ...withoutFailedTurn(withoutPendingTurn(params.messages)),
+    userMessage,
+  ];
   params.setMessages(nextMessages);
   params.setLoading(true);
   params.setPreparingImages(draftImages.length > 0);
-  params.setInput("");
+  if (params.retry) {
+    params.setInput((current) => (current === draftText ? "" : current));
+  } else {
+    params.setInput("");
+  }
   if (params.inputRef.current) params.inputRef.current.style.height = "auto";
 
   const controller = new AbortController();
@@ -624,9 +679,9 @@ async function sendChatMessage(params: SendParams) {
           // Fall through to the generic error path.
         }
       }
-      throw new Error(await responseErrorMessage(response));
+      throw await responseError(response);
     }
-    params.setPendingImages([]);
+    if (!params.retry) params.setPendingImages([]);
 
     await readChatStream(response, {
       appendText: (text) =>
@@ -675,22 +730,22 @@ async function sendChatMessage(params: SendParams) {
     releasePreviewUrls(draftImages);
     void params.refreshThreads();
   } catch (error) {
-    if (isAbortError(error)) {
+    // Only this hook aborts the controller: Stop while current, or a thread
+    // switch (which has already replaced `abortRef`). Abort reasons are
+    // re-thrown verbatim by fetch/read, so check the signal, not the error.
+    if (controller.signal.aborted) {
       releasePreviewUrls(draftImages);
-      if (isCurrent()) {
-        params.setMessages((previous) => previous.slice(0, assistantIndex));
-      }
+      if (isCurrent()) stopAssistant(params.setMessages, assistantIndex);
       void params.refreshThreads();
       return;
     }
     if (!isCurrent()) return;
-    restoreDraftIfEmpty(params.setInput, draftText);
-    params.setPendingImages(draftImages);
-    failAssistant(
-      params.setMessages,
-      assistantIndex,
-      error instanceof Error ? error.message : String(error),
-    );
+    if (!params.retry) {
+      restoreDraftIfEmpty(params.setInput, draftText);
+      params.setPendingImages(draftImages);
+    }
+    params.onTurnFailed({ text: draftText, images: draftImages });
+    failAssistant(params.setMessages, assistantIndex, classifyCoachFailure(error));
   } finally {
     if (isCurrent()) {
       params.abortRef.current = null;
@@ -729,6 +784,10 @@ export function useChatSend({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const syncedThreadRef = useRef<number | null>(null);
+  const failedTurnRef = useRef<FailedTurn | null>(null);
+  const rememberFailedTurn = useCallback((turn: FailedTurn | null) => {
+    failedTurnRef.current = turn;
+  }, []);
   const activeMessage = [...messages]
     .reverse()
     .find((message) => message.streaming && message.role === "assistant");
@@ -790,6 +849,7 @@ export function useChatSend({
     syncedThreadRef.current = threadId;
     abortRef.current?.abort();
     abortRef.current = null;
+    failedTurnRef.current = null;
     releasePreviewUrls(pendingImagesRef.current);
     setPendingImages([]);
     setMessages(toComposerMessages(initialMessages));
@@ -826,9 +886,11 @@ export function useChatSend({
         refreshThreads,
         refreshRouter,
         setBadApiKey,
+        onTurnFailed: rememberFailedTurn,
       }),
     [
       messages,
+      rememberFailedTurn,
       pendingImages,
       refreshRouter,
       refreshThreads,
@@ -838,6 +900,59 @@ export function useChatSend({
       threadId,
     ],
   );
+
+  // Stop the streaming reply. Text already received stays, marked stopped.
+  const stop = useCallback(() => {
+    abortRef.current?.abort();
+  }, []);
+
+  // Resend the last failed user message. `withoutFailedTurn` drops the failed
+  // pair so the resend's optimistic user message replaces it.
+  const retry = useCallback(() => {
+    const failedTurn = failedTurnRef.current;
+    const failed = messages.at(-1);
+    if (
+      abortRef.current ||
+      !failedTurn ||
+      failed?.role !== "assistant" ||
+      !failed.error ||
+      messages.at(-2)?.role !== "user"
+    ) {
+      return Promise.resolve();
+    }
+    // The failure restored these images to the composer; they're being sent
+    // again, so take them back out (without revoking their preview URLs,
+    // which the resent user message still displays).
+    if (pendingImagesRef.current === failedTurn.images) setPendingImages([]);
+    return sendChatMessage({
+      text: failedTurn.text,
+      messages,
+      threadId,
+      setThreadId,
+      setMessages,
+      setInput,
+      setLoading,
+      setPreparingImages,
+      pendingImages: failedTurn.images,
+      setPendingImages,
+      inputRef,
+      abortRef,
+      refreshThreads,
+      refreshRouter,
+      setBadApiKey,
+      onTurnFailed: rememberFailedTurn,
+      retry: true,
+    });
+  }, [
+    messages,
+    refreshRouter,
+    refreshThreads,
+    rememberFailedTurn,
+    setBadApiKey,
+    setPendingImages,
+    setThreadId,
+    threadId,
+  ]);
 
   return {
     messages,
@@ -851,6 +966,8 @@ export function useChatSend({
     removeImage,
     inputRef,
     send,
+    stop,
+    retry,
     progress: activeMessage?.workLog ?? null,
     progressLabel: workPhaseLabel(
       activeMessage?.workLog,

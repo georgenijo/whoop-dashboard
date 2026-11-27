@@ -31,6 +31,7 @@ function renderInput(
     onAddImages: vi.fn(),
     onRemoveImage: vi.fn(),
     onSubmit: vi.fn(),
+    onStop: vi.fn(),
     onKeyDown: vi.fn(),
     ...overrides,
   };
@@ -111,7 +112,7 @@ describe("ChatInput image attachments", () => {
     );
   });
 
-  it("keeps the draft editable but blocks submission during an active turn", () => {
+  it("keeps the draft editable and turns Send into Stop during an active turn", () => {
     const { props } = renderInput({
       input: "Draft the follow-up",
       loading: true,
@@ -119,25 +120,57 @@ describe("ChatInput image attachments", () => {
     const textbox = screen.getByRole("textbox");
 
     expect(textbox).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Send message" })).toBeNull();
 
     fireEvent.change(textbox, { target: { value: "Next question" } });
     expect(props.setInput).toHaveBeenCalledWith("Next question");
 
     fireEvent.keyDown(textbox, { key: "Enter" });
     expect(props.onKeyDown).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Stop reply" }));
+    expect(props.onStop).toHaveBeenCalledTimes(1);
+    expect(props.onSubmit).not.toHaveBeenCalled();
   });
 
-  it("blocks composer actions while the model preference is changing", () => {
-    renderInput({
+  it("stops a streaming reply with Escape", () => {
+    const { props } = renderInput({ input: "", loading: true });
+
+    fireEvent.keyDown(screen.getByRole("textbox"), { key: "Escape" });
+
+    expect(props.onStop).toHaveBeenCalledTimes(1);
+    expect(props.onKeyDown).not.toHaveBeenCalled();
+  });
+
+  it("leaves Escape alone and keeps Enter/Shift+Enter behaviour when idle", () => {
+    const { props } = renderInput({ input: "How did I sleep?" });
+    const textbox = screen.getByRole("textbox");
+
+    fireEvent.keyDown(textbox, { key: "Escape" });
+    expect(props.onStop).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(textbox, { key: "Enter", shiftKey: true });
+    fireEvent.keyDown(textbox, { key: "Enter" });
+    expect(props.onKeyDown).toHaveBeenCalledTimes(3);
+    expect(props.onKeyDown).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ key: "Enter", shiftKey: true }),
+    );
+  });
+
+  it("never disables the textarea while a model preference saves", () => {
+    const { props } = renderInput({
       input: "How did I sleep?",
       modelChanging: true,
     });
+    const textbox = screen.getByRole("textbox");
 
-    expect(screen.getByRole("textbox")).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Attach images" })).toBeDisabled();
+    expect(textbox).toBeEnabled();
+    fireEvent.change(textbox, { target: { value: "How did I sleep last night?" } });
+    expect(props.setInput).toHaveBeenCalledWith("How did I sleep last night?");
+    expect(screen.queryByText("Switching model…")).toBeNull();
+    // Sending waits for the save to land so the turn uses the new model.
     expect(screen.getByRole("button", { name: "Send message" })).toBeDisabled();
-    expect(screen.getByText("Switching model…")).toBeInTheDocument();
   });
 
   it("shows live Coach progress without duplicating the work activity mark", () => {

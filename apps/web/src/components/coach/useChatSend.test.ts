@@ -101,7 +101,7 @@ describe("useChatSend router cache", () => {
     });
 
     expect(router.refresh).toHaveBeenCalledOnce();
-    expect(result.current.messages[1].content).toContain("boom");
+    expect(result.current.messages[1].error?.detail).toBe("boom");
   });
 
   it("does not refresh when nothing was sent", async () => {
@@ -248,8 +248,8 @@ describe("useChatSend work logs", () => {
     await act(async () => sendPromise);
 
     expect(result.current.input).toBe("Keep this follow-up");
-    expect(result.current.messages.at(-1)?.content).toContain(
-      "Provider unavailable",
+    expect(result.current.messages.at(-1)?.error?.detail).toBe(
+      "Provider unavailable.",
     );
   });
 
@@ -362,7 +362,8 @@ describe("useChatSend work logs", () => {
     });
 
     expect(result.current.messages[1]).toMatchObject({
-      content: "**Error:** Connection lost before Coach finished.",
+      content: "",
+      error: { errorClass: "network", detail: null },
       streaming: false,
       workLog: {
         status: "error",
@@ -558,7 +559,7 @@ describe("useChatSend image attachments", () => {
 
     expect(result.current.input).toBe("What do you notice?");
     expect(result.current.pendingImages[0].file).toBe(file);
-    expect(result.current.messages.at(-1)?.content).toContain(
+    expect(result.current.messages.at(-1)?.error?.detail).toContain(
       "selected Coach provider rejected",
     );
     expect(revokeObjectUrl).not.toHaveBeenCalled();
@@ -594,5 +595,281 @@ describe("useChatSend image attachments", () => {
     await waitFor(() => expect(result.current.pendingImages).toHaveLength(1));
     unmount();
     expect(revokeObjectUrl).toHaveBeenCalledWith("blob:preview-3");
+  });
+});
+
+describe("useChatSend stop and retry", () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    router.refresh.mockReset();
+  });
+
+  it("stops a streaming reply and keeps the text it already received", async () => {
+    let signal: AbortSignal | undefined;
+    const stream = controllableStreamResponse();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) => {
+        signal = init?.signal ?? undefined;
+        signal?.addEventListener("abort", () => {
+          // Real fetch bodies error with the abort reason once aborted.
+          try {
+            stream.close();
+          } catch {}
+        });
+        return stream.response;
+      }),
+    );
+    const { result } = renderChat();
+
+    let sendPromise = Promise.resolve();
+    act(() => {
+      sendPromise = result.current.send("long question");
+    });
+    await waitFor(() => expect(result.current.loading).toBe(true));
+    act(() => stream.send(sse("text_delta", { text: "Partial answer" })));
+    await waitFor(() =>
+      expect(result.current.messages.at(-1)?.content).toBe("Partial answer"),
+    );
+
+    act(() => result.current.stop());
+    await act(async () => {
+      await sendPromise;
+    });
+
+    expect(signal?.aborted).toBe(true);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.messages).toHaveLength(2);
+    expect(result.current.messages[0]).toMatchObject({
+      role: "user",
+      content: "long question",
+    });
+    expect(result.current.messages[1]).toMatchObject({
+      role: "assistant",
+      content: "Partial answer",
+      streaming: false,
+      status: "aborted",
+      workLog: expect.objectContaining({ status: "aborted" }),
+    });
+    expect(result.current.messages[1].error).toBeUndefined();
+  });
+
+  it.each([
+    [{ status: 503, body: { error: "No Anthropic API key configured.", reason: "missing_key" } }, "missing_key"],
+    [{ status: 502, body: { error: "The server's key was rejected.", kind: "upstream_error", reason: "invalid_key" } }, "invalid_key"],
+    [{ status: 422, body: { error: "Model retired.", kind: "upstream_error", reason: "model_unavailable" } }, "model_unavailable"],
+    [{ status: 503, body: { error: "Overloaded.", kind: "overloaded", reason: "overloaded" } }, "overloaded"],
+    [{ status: 504, body: { error: "Took too long.", kind: "upstream_error", reason: "timeout" } }, "timeout"],
+    [{ status: 500, body: { error: "Coach call failed. Please try again.", kind: "server_error" } }, "unknown"],
+  ])("classifies a %j response as %s", async ({ status, body }, errorClass) => {
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json(body, { status })));
+    const { result } = renderChat();
+
+    await act(async () => {
+      await result.current.send("hi");
+    });
+
+    expect(result.current.messages.at(-1)?.error?.errorClass).toBe(errorClass);
+    expect(result.current.messages.at(-1)?.content).not.toMatch(/Error:/);
+  });
+
+  it("classifies stream error events by their reason", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        streamResponse([
+          sse("text_delta", { text: "Half" }),
+          sse("error", { kind: "upstream_error", reason: "timeout", message: "The Cursor coach took too long. Try again." }),
+        ]),
+      ),
+    );
+    const { result } = renderChat();
+
+    await act(async () => {
+      await result.current.send("hi");
+    });
+
+    expect(result.current.messages.at(-1)).toMatchObject({
+      content: "Half",
+      streaming: false,
+      error: {
+        errorClass: "timeout",
+        detail: "The Cursor coach took too long. Try again.",
+      },
+    });
+  });
+
+  it("classifies a dropped stream as a lost connection", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => streamResponse([sse("text_delta", { text: "Half" })])),
+    );
+    const { result } = renderChat();
+
+    await act(async () => {
+      await result.current.send("hi");
+    });
+
+    expect(result.current.messages.at(-1)?.error).toEqual({
+      errorClass: "network",
+      detail: null,
+    });
+  });
+
+  it("classifies a cancelled request that the user did not stop", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new DOMException("The user aborted a request.", "AbortError");
+      }),
+    );
+    const { result } = renderChat();
+
+    await act(async () => {
+      await result.current.send("hi");
+    });
+
+    expect(result.current.messages.at(-1)?.error?.errorClass).toBe("cancelled");
+  });
+
+  it("retries the failed message without duplicating it in the thread", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json(
+          { error: "Overloaded.", kind: "overloaded", reason: "overloaded" },
+          { status: 503 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        streamResponse([
+          sse("text_delta", { text: "Recovered" }),
+          sse("done", { reply: "Recovered" }),
+        ]),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderChat([
+      {
+        id: 1,
+        role: "user",
+        content: "earlier",
+        created_at: "2026-11-27T10:00:00.000Z",
+        attachments: [],
+      },
+      {
+        id: 2,
+        role: "assistant",
+        content: "earlier reply",
+        created_at: "2026-11-27T10:00:01.000Z",
+        attachments: [],
+      },
+    ]);
+
+    await act(async () => {
+      await result.current.send("how did I sleep?");
+    });
+    expect(result.current.messages).toHaveLength(4);
+    expect(result.current.messages.at(-1)?.error?.errorClass).toBe("overloaded");
+    // The failure restores the draft so it can be edited instead.
+    expect(result.current.input).toBe("how did I sleep?");
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const retryBody = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
+    expect(retryBody.messages).toEqual([
+      { role: "user", content: "how did I sleep?" },
+    ]);
+    expect(
+      result.current.messages.map(({ role, content }) => ({ role, content })),
+    ).toEqual([
+      { role: "user", content: "earlier" },
+      { role: "assistant", content: "earlier reply" },
+      { role: "user", content: "how did I sleep?" },
+      { role: "assistant", content: "Recovered" },
+    ]);
+    expect(result.current.messages.at(-1)?.error).toBeUndefined();
+    expect(result.current.input).toBe("");
+  });
+
+  it("keeps an edited draft when retrying", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(Response.json({ error: "Busy", kind: "overloaded" }, { status: 503 }))
+        .mockResolvedValueOnce(streamResponse([sse("done", { reply: "ok" })])),
+    );
+    const { result } = renderChat();
+
+    await act(async () => {
+      await result.current.send("first");
+    });
+    act(() => result.current.setInput("something else"));
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    expect(result.current.input).toBe("something else");
+    expect(result.current.messages.filter((m) => m.role === "user")).toHaveLength(1);
+  });
+
+  it("does nothing when the last reply did not fail", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderChat([
+      {
+        id: 1,
+        role: "user",
+        content: "q",
+        created_at: "2026-11-27T10:00:00.000Z",
+        attachments: [],
+      },
+      {
+        id: 2,
+        role: "assistant",
+        content: "a",
+        created_at: "2026-11-27T10:00:01.000Z",
+        attachments: [],
+      },
+    ]);
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.current.messages).toHaveLength(2);
+  });
+});
+
+describe("useChatSend failed turns", () => {
+  beforeEach(() => vi.unstubAllGlobals());
+
+  it("replaces a failed turn when the restored draft is sent again", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(Response.json({ error: "Busy", kind: "overloaded" }, { status: 503 }))
+        .mockResolvedValueOnce(streamResponse([sse("done", { reply: "ok" })])),
+    );
+    const { result } = renderChat();
+
+    await act(async () => {
+      await result.current.send("first");
+    });
+    await act(async () => {
+      await result.current.send(result.current.input);
+    });
+
+    expect(
+      result.current.messages.map(({ role, content }) => ({ role, content })),
+    ).toEqual([
+      { role: "user", content: "first" },
+      { role: "assistant", content: "ok" },
+    ]);
   });
 });

@@ -1,6 +1,6 @@
 "use client";
 
-import { Paperclip, X } from "lucide-react";
+import { Paperclip, Square, X } from "lucide-react";
 import {
   useEffect,
   useRef,
@@ -27,6 +27,8 @@ type Props = {
   onAddImages: (files: File[]) => void;
   onRemoveImage: (id: string) => void;
   onSubmit: () => void;
+  /** Abort the streaming reply. */
+  onStop: () => void;
   onKeyDown: (e: KeyboardEvent<HTMLTextAreaElement>) => void;
 };
 
@@ -44,6 +46,7 @@ export default function ChatInput({
   onAddImages,
   onRemoveImage,
   onSubmit,
+  onStop,
   onKeyDown,
 }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -83,13 +86,14 @@ export default function ChatInput({
   };
 
   const atLimit = pendingImages.length >= 3;
-  const statusLabel = modelChanging
-    ? "Switching model…"
-    : preparingImages
-      ? "Preparing images…"
-      : loading
-        ? progressLabel ?? "Thinking…"
-        : null;
+  // A model save is optimistic and non-blocking: the textarea stays editable
+  // and only sending waits the moment it takes to land, so the next turn
+  // runs on the model the user just picked.
+  const statusLabel = preparingImages
+    ? "Preparing images…"
+    : loading
+      ? progressLabel ?? "Thinking…"
+      : null;
 
   return (
     <div
@@ -167,6 +171,11 @@ export default function ChatInput({
             e.target.style.height = `${e.target.scrollHeight}px`;
           }}
           onKeyDown={(event) => {
+            if (loading && event.key === "Escape") {
+              event.preventDefault();
+              onStop();
+              return;
+            }
             if (busy && event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
               return;
@@ -176,7 +185,6 @@ export default function ChatInput({
           onPaste={handlePaste}
           placeholder="Ask about your recovery, sleep, strain..."
           rows={1}
-          disabled={modelChanging}
           className="coach-input"
         />
         <div className="coach-input-toolbar">
@@ -198,30 +206,43 @@ export default function ChatInput({
           </div>
           <div className="coach-input-submit-controls">
             {modelPicker}
-            <button
-              type="button"
-              className="coach-send"
-              onClick={onSubmit}
-              disabled={
-                (!input.trim() && pendingImages.length === 0) || busy
-              }
-              aria-label="Send message"
-              data-track="coach:send"
-            >
-              <svg
-                width="17"
-                height="17"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
+            {loading ? (
+              <button
+                type="button"
+                className="coach-send is-stop"
+                onClick={onStop}
+                aria-label="Stop reply"
+                title="Stop (Esc)"
+                data-track="coach:stop"
               >
-                <path d="M12 19V5M5 12l7-7 7 7" />
-              </svg>
-            </button>
+                <Square size={13} fill="currentColor" strokeWidth={0} aria-hidden />
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="coach-send"
+                onClick={onSubmit}
+                disabled={
+                  (!input.trim() && pendingImages.length === 0) || busy
+                }
+                aria-label="Send message"
+                data-track="coach:send"
+              >
+                <svg
+                  width="17"
+                  height="17"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 19V5M5 12l7-7 7 7" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
       </div>
