@@ -66,6 +66,7 @@ export function useCoachThread(
     send: sendMessage,
     stop,
     retry,
+    threadLoad,
     progressLabel,
   } = useChatSend({
     initialMessages,
@@ -128,6 +129,7 @@ export function useCoachThread(
     send,
     stop,
     retry: retryLast,
+    threadLoad,
     handleCreateThread,
     handleSelectThread,
     handleDeleteThread,

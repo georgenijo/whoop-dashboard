@@ -11,6 +11,12 @@ type TooltipEntry = {
   dataKey?: string | number;
 };
 
+/** A presentation-block number with its unit, or "Not available". */
+export function formatBlockNumber(value: number | null, unit = ""): string {
+  if (value === null) return "Not available";
+  return `${value.toLocaleString("en-US")}${unit === "%" ? "%" : unit ? ` ${unit}` : ""}`;
+}
+
 export function formatChartValue(value: number, unit: string): string {
   const text = value.toLocaleString("en-US", { maximumFractionDigits: 2 });
   if (!unit) return text;

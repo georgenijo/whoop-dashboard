@@ -372,15 +372,8 @@ describe("useChatSend work logs", () => {
     });
   });
 
-  it("drops a stale in-flight turn when switching threads and restores persisted logs", async () => {
+  it("drops a stale in-flight turn when switching threads and loads the new thread client-side", async () => {
     const pending = deferred<Response>();
-    vi.stubGlobal("fetch", vi.fn(() => pending.promise));
-    const { result, rerender } = renderChat();
-    act(() => {
-      void result.current.send("old request");
-    });
-    await waitFor(() => expect(result.current.loading).toBe(true));
-
     const persisted: CoachWorkLog = {
       version: 1,
       status: "complete",
@@ -388,24 +381,39 @@ describe("useChatSend work logs", () => {
       notes: ["Checked your sleep."],
       tools: [],
     };
-    rerender({
-      id: 2,
-      messages: [
-        {
-          id: 9,
-          role: "assistant",
-          content: "New thread",
-          created_at: "2026-07-30T00:00:00Z",
-          work_log: persisted,
-          attachments: [],
-        },
-      ],
+    const fetchMock = vi.fn((url: string) =>
+      String(url) === "/api/chat/history?thread_id=2"
+        ? Promise.resolve(
+            Response.json([
+              {
+                id: 9,
+                role: "assistant",
+                content: "New thread",
+                created_at: "2026-07-30T00:00:00Z",
+                work_log: persisted,
+                attachments: [],
+              },
+            ]),
+          )
+        : pending.promise,
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { result, rerender } = renderChat();
+    act(() => {
+      void result.current.send("old request");
     });
+    await waitFor(() => expect(result.current.loading).toBe(true));
+
+    // Only the thread id changes: no server-rendered `initialMessages` arrive.
+    rerender({ id: 2, messages: emptyMessages });
+    expect(result.current.threadLoad).toBe("loading");
 
     await waitFor(() => {
       expect(result.current.loading).toBe(false);
+      expect(result.current.threadLoad).toBe("idle");
       expect(result.current.messages).toEqual([
         {
+          clientId: "m:9",
           role: "assistant",
           content: "New thread",
           status: undefined,
@@ -414,6 +422,49 @@ describe("useChatSend work logs", () => {
         },
       ]);
     });
+  });
+
+  it("paints a previously visited thread from cache, then revalidates it", async () => {
+    const history = deferred<Response>();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) =>
+        String(url).startsWith("/api/chat/history?thread_id=2")
+          ? Promise.resolve(Response.json([]))
+          : history.promise,
+      ),
+    );
+    const first: ChatMessage[] = [
+      { id: 1, role: "user", content: "thread one", created_at: "2026-07-30T00:00:00Z", attachments: [] },
+    ];
+    const { result, rerender } = renderChat(first, 1);
+    rerender({ id: 2, messages: emptyMessages });
+    await waitFor(() => expect(result.current.threadLoad).toBe("idle"));
+
+    // Back to thread 1: shown immediately from cache while history reloads.
+    rerender({ id: 1, messages: emptyMessages });
+    expect(result.current.messages.map((m) => m.content)).toEqual(["thread one"]);
+    expect(result.current.threadLoad).toBe("idle");
+    history.resolve(Response.json(first));
+    await waitFor(() => expect(result.current.messages[0]?.clientId).toBe("m:1"));
+  });
+
+  it("waits for the selected thread to load before sending", async () => {
+    const history = deferred<Response>();
+    const fetchMock = vi.fn((url: string) =>
+      String(url).startsWith("/api/chat/history") ? history.promise : Promise.reject(new Error("no")),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { result, rerender } = renderChat();
+    rerender({ id: 2, messages: emptyMessages });
+
+    await act(async () => {
+      await result.current.send("too early");
+    });
+
+    expect(fetchMock.mock.calls.filter(([url]) => url === "/api/chat")).toHaveLength(0);
+    history.resolve(Response.json([]));
+    await waitFor(() => expect(result.current.threadLoad).toBe("idle"));
   });
 });
 

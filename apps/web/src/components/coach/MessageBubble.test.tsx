@@ -41,7 +41,7 @@ describe("MessageBubble browser render", () => {
     expect(html).not.toContain("coach-markdown-fallback");
   });
 
-  it("renders a safe Mermaid xychart with a table alternative", () => {
+  it("renders a safe Mermaid xychart with a table alternative", async () => {
     const content = `**HRV trend**\n\n\`\`\`mermaid
 xychart-beta
   title "Morning HRV"
@@ -53,7 +53,8 @@ xychart-beta
       <MessageBubble msg={{ role: "assistant", content, status: "complete" }} />,
     );
 
-    expect(screen.getByRole("region", { name: "Morning HRV" })).toBeVisible();
+    // The chart (and Recharts) load lazily; the markdown around it doesn't wait.
+    expect(await screen.findByRole("region", { name: "Morning HRV" })).toBeVisible();
     expect(screen.getByRole("img", { name: "Morning HRV chart" })).toBeVisible();
     expect(container).not.toHaveTextContent("xychart-beta");
 

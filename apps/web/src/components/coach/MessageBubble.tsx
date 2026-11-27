@@ -2,19 +2,22 @@
 
 import { renderMarkdownToSafeHtml } from "@/lib/render-markdown";
 import { parseCoachVisualizations } from "@/lib/coach/visualization";
-import { useMemo, useState, useSyncExternalStore } from "react";
-import CoachInlineChart from "./CoachInlineChart";
+import dynamic from "next/dynamic";
+import { memo, useMemo, useState, useSyncExternalStore } from "react";
+import { useFrameThrottledValue } from "./useFrameThrottledValue";
 import CoachWorkDisclosure from "./CoachWorkDisclosure";
 import CoachPresentationBlocks from "./CoachPresentationBlocks";
 import CoachMessageActions from "./CoachMessageActions";
 import { COACH_ERROR_COPY } from "./chat-errors";
-import type {
-  ComposerAttachment,
-  ComposerMessage,
-} from "./useChatSend";
+import type { BubbleMessage, ComposerAttachment } from "./useChatSend";
+
+// Recharts is fetched only once a reply actually contains an inline chart.
+const CoachInlineChart = dynamic(() => import("./CoachInlineChart"), {
+  loading: () => <div className="coach-inline-chart is-loading" aria-busy="true" />,
+});
 
 type Props = {
-  msg: ComposerMessage;
+  msg: BubbleMessage;
   onAttachmentClick?: (
     attachments: ComposerAttachment[],
     index: number,
@@ -36,7 +39,7 @@ const subscribeToBrowser = (notify: () => void) => {
 const browserSnapshot = () => true;
 const serverSnapshot = () => false;
 
-export default function MessageBubble({ msg, onAttachmentClick, onRetry }: Props) {
+function MessageBubble({ msg, onAttachmentClick, onRetry }: Props) {
   const isUser = msg.role === "user";
   const isBrowser = useSyncExternalStore(
     subscribeToBrowser,
@@ -49,19 +52,36 @@ export default function MessageBubble({ msg, onAttachmentClick, onRetry }: Props
   // streaming re-renders never replay the entrance.
   const [entering] = useState(isBrowser);
   const isAborted = !isUser && !msg.streaming && msg.status === "aborted";
-  const html = useMemo(() => {
-    if (isUser || !isBrowser) return null;
-    return renderMarkdownToSafeHtml(msg.content);
-  }, [isBrowser, isUser, msg.content]);
+  // Parsing + sanitizing the whole message is the expensive part of a
+  // streamed delta, so a streaming bubble re-renders it at most once per
+  // animation frame; a finished message renders its final text at once.
+  const content = useFrameThrottledValue(msg.content, Boolean(msg.streaming));
   const contentSegments = useMemo(
     () =>
       isUser || !isBrowser
-        ? [{ type: "markdown" as const, content: msg.content }]
-        : parseCoachVisualizations(msg.content),
-    [isBrowser, isUser, msg.content],
+        ? [{ type: "markdown" as const, content }]
+        : parseCoachVisualizations(content),
+    [content, isBrowser, isUser],
   );
   const hasInlineChart = contentSegments.some(
     (segment) => segment.type === "chart",
+  );
+  // Every assistant fragment goes through `renderMarkdownToSafeHtml`
+  // (marked + DOMPurify); nothing model-authored reaches the DOM unsanitized.
+  const html = useMemo(() => {
+    if (isUser || !isBrowser || hasInlineChart) return null;
+    return renderMarkdownToSafeHtml(content);
+  }, [content, hasInlineChart, isBrowser, isUser]);
+  const segmentHtml = useMemo(
+    () =>
+      hasInlineChart
+        ? contentSegments.map((segment) =>
+            segment.type === "chart"
+              ? null
+              : (renderMarkdownToSafeHtml(segment.content) ?? ""),
+          )
+        : [],
+    [contentSegments, hasInlineChart],
   );
 
   // Don't render empty aborted assistant bubbles (race between abort + tool
@@ -143,8 +163,7 @@ export default function MessageBubble({ msg, onAttachmentClick, onRetry }: Props
                         // normal assistant message. Chart extraction never
                         // turns model-authored markup into executable content.
                         dangerouslySetInnerHTML={{
-                          __html:
-                            renderMarkdownToSafeHtml(segment.content) ?? "",
+                          __html: segmentHtml[index] ?? "",
                         }}
                         key={`markdown:${index}`}
                       />
@@ -164,7 +183,7 @@ export default function MessageBubble({ msg, onAttachmentClick, onRetry }: Props
                   }`}
                   aria-busy={msg.streaming || undefined}
                 >
-                  {msg.content}
+                  {content}
                 </div>
               )
             ) : null}
@@ -211,3 +230,7 @@ export default function MessageBubble({ msg, onAttachmentClick, onRetry }: Props
     </div>
   );
 }
+
+// Memoized: in a long thread only the streaming bubble (whose `msg` object
+// changes per delta) re-renders; settled messages keep their identity.
+export default memo(MessageBubble);

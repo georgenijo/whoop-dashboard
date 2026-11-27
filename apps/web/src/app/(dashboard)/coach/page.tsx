@@ -1,5 +1,4 @@
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
 import CoachWorkspace from "@/components/coach/CoachWorkspace";
 import "@/styles/coach.css";
 import {
@@ -11,6 +10,7 @@ import {
   getUserSettings,
 } from "@/lib/db";
 import { requireAuthOrSignin } from "@/lib/auth";
+import { getCoachSuggestionContext } from "@/lib/coach/suggestion-context";
 import {
   modelPrefForSelection,
   resolveCoachProvider,
@@ -53,10 +53,10 @@ export default async function CoachPage({
     throw new Error("Unable to create or load a chat thread");
   }
 
-  if (requestedThreadId !== activeThread.id) {
-    redirect(`/coach?thread=${activeThread.id}`);
-  }
-
+  // No redirect to `/coach?thread=N`: a bare `/coach` renders the newest
+  // thread directly, and a missing/foreign id falls back to it (the client
+  // corrects the address bar). Switching threads after this is client-side,
+  // so there is no `key={thread.id}` remount either.
   const threads = getChatThreads(user.id);
   const messages = getChatThreadMessages(user.id, activeThread.id);
   const initialModelPref = modelPrefForSelection(
@@ -65,16 +65,17 @@ export default async function CoachPage({
   const initialCoachEffort = resolveCoachEffort(user.id);
   const initialCursorModelParams =
     getUserSettings(user.id)?.cursor_model_params ?? {};
+  const suggestionContext = getCoachSuggestionContext(user.id);
 
   return (
     <CoachWorkspace
-      key={activeThread.id}
       initialThreadId={activeThread.id}
       initialThreads={threads}
       initialMessages={messages}
       initialModelPref={initialModelPref}
       initialCoachEffort={initialCoachEffort}
       initialCursorModelParams={initialCursorModelParams}
+      suggestionContext={suggestionContext}
     />
   );
 }
