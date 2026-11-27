@@ -1,10 +1,13 @@
 "use client";
 
-const SUGGESTIONS = [
-  "How is my recovery trending this week?",
-  "What does my sleep quality look like?",
-  "Am I overtraining based on my strain?",
-  "What should I focus on to improve HRV?",
+import type { CSSProperties } from "react";
+import { Activity, Flame, HeartPulse, Moon, type LucideIcon } from "lucide-react";
+
+const SUGGESTIONS: Array<{ text: string; hint: string; icon: LucideIcon; accent: string }> = [
+  { text: "How is my recovery trending this week?", hint: "Recovery", icon: HeartPulse, accent: "var(--d-recovery)" },
+  { text: "What does my sleep quality look like?", hint: "Sleep", icon: Moon, accent: "var(--d-sleep)" },
+  { text: "Am I overtraining based on my strain?", hint: "Strain", icon: Flame, accent: "var(--d-strain)" },
+  { text: "What should I focus on to improve HRV?", hint: "HRV", icon: Activity, accent: "var(--d-hrv)" },
 ];
 
 export default function SuggestionChips({
@@ -16,15 +19,20 @@ export default function SuggestionChips({
 }) {
   return (
     <div className="coach-suggestions">
-      {SUGGESTIONS.map((suggestion) => (
+      {SUGGESTIONS.map(({ text, hint, icon: Icon, accent }, index) => (
         <button
-          key={suggestion}
+          key={text}
           type="button"
           className="coach-suggestion"
-          onClick={() => onSelect(suggestion)}
+          style={{ "--metric-accent": accent, "--stagger": index } as CSSProperties}
+          onClick={() => onSelect(text)}
           disabled={disabled}
         >
-          {suggestion}
+          <span className="coach-suggestion-icon" aria-hidden="true">
+            <Icon size={15} strokeWidth={1.9} />
+          </span>
+          <span className="coach-suggestion-hint" aria-hidden="true">{hint}</span>
+          <span className="coach-suggestion-text">{text}</span>
         </button>
       ))}
     </div>

@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import CoachWorkspace from "@/components/coach/CoachWorkspace";
+import "@/styles/coach.css";
 import {
   createChatThread,
   getChatThreadById,
