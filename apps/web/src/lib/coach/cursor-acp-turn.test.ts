@@ -224,6 +224,9 @@ describe("runCursorAcpTurn", () => {
       cache_creation_input_tokens_total: 1,
       cache_read_input_tokens_total: 2,
       calls: 1,
+      // Issue #608 — one per-turn figure: best available, flagged approximate.
+      context_tokens: 13,
+      context_approximate: true,
     });
     expect(detailState).toMatchObject({
       iterations: 2,

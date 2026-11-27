@@ -273,6 +273,27 @@ describe("POST /api/chat — SSE wiring", () => {
     );
   });
 
+  it("carries the turn's context-window figure on done (issue #608)", async () => {
+    testState.thread = { id: 42, title: "Existing" };
+    runAndPersistImpl = async () => ({
+      reply: "final reply",
+      workLog: completedWorkLog,
+      context: { tokens: 42_000, approximate: false },
+    }) as Awaited<ReturnType<typeof runAndPersistImpl>>;
+
+    const res = await POST(
+      makeRequest({ messages: [{ role: "user", content: "hi" }], thread_id: 42 }),
+    );
+    const text = await readEntireStream(res.body as ReadableStream<Uint8Array>);
+    expect(text).toContain(
+      `event: done\ndata: ${JSON.stringify({
+        reply: "final reply",
+        work_log: completedWorkLog,
+        context: { tokens: 42_000, approximate: false },
+      })}\n\n`,
+    );
+  });
+
   it("makes done terminal and refines an immediate deterministic title after the response", async () => {
     testState.thread = { id: 42, title: null };
     runAndPersistImpl = async () => ({
