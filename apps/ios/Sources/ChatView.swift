@@ -47,6 +47,8 @@ struct ChatView: View {
     @State private var attachmentCache = ChatAttachmentCache()
     @State private var scrollState = ChatScrollState()
     @State private var jumpRequest = 0
+    @State private var dictation = VoiceDictation()
+    @State private var dictationFinishCount = 0
     @FocusState private var isComposerFocused: Bool
 
     /// `initialDraft` only pre-fills the composer; nothing is sent until the user taps send.
@@ -202,6 +204,29 @@ struct ChatView: View {
             endRecovery()
             Task { await loadHistory() }
         }
+        .onChange(of: dictation.state) { _, state in
+            switch state {
+            case .failed(let message):
+                input = ChatComposerRules.appendingTranscript(dictation.transcript, to: input)
+                sendError = message
+                dictation.acknowledgeEnd()
+            case .finished:
+                input = ChatComposerRules.appendingTranscript(dictation.transcript, to: input)
+                dictationFinishCount += 1
+                dictation.acknowledgeEnd()
+                isComposerFocused = true
+            case .idle, .starting, .recording:
+                break
+            }
+        }
+        .onChange(of: dictation.reachedLimit) { _, reached in
+            guard reached else { return }
+            dictation.takeLimitReached()
+            finishDictation()
+        }
+        .onDisappear { dictation.cancel() }
+        .sensoryFeedback(.impact(weight: .light), trigger: dictation.isActive) { _, active in active }
+        .sensoryFeedback(.success, trigger: dictationFinishCount)
         .onChange(of: photoPickerItems) { _, items in
             guard !items.isEmpty else { return }
             onComposerInteraction?()
@@ -570,67 +595,86 @@ struct ChatView: View {
                 }
             }
 
-            VStack(alignment: .leading, spacing: 0) {
-                TextField("Message Coach", text: $input,
-                          prompt: Text(rows.isEmpty ? "Ask about recovery, sleep, strain…" : "Ask a follow-up…")
-                              .foregroundColor(Theme.Palette.fg2),
-                          axis: .vertical)
-                    .font(Theme.FontStyle.sans(15))
-                    .foregroundStyle(Theme.Palette.fg0)
-                    .tint(Theme.Palette.accent)
-                    .lineLimit(1...6)
-                    .disabled(isSending)
-                    .textFieldStyle(.plain)
-                    .focused($isComposerFocused)
-                    .id(Int(composerFieldWidth.rounded()))
-                    .padding(.horizontal, 4)
-                    .accessibilityIdentifier("chat-message-input")
+            if dictation.isActive {
+                dictationPill
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    TextField("Message Coach", text: $input,
+                              prompt: Text(rows.isEmpty ? "Ask about recovery, sleep, strain…" : "Ask a follow-up…")
+                                  .foregroundColor(Theme.Palette.fg2),
+                              axis: .vertical)
+                        .font(Theme.FontStyle.sans(15))
+                        .foregroundStyle(Theme.Palette.fg0)
+                        .tint(Theme.Palette.accent)
+                        .lineLimit(1...6)
+                        .disabled(isSending)
+                        .textFieldStyle(.plain)
+                        .focused($isComposerFocused)
+                        .id(Int(composerFieldWidth.rounded()))
+                        .padding(.horizontal, 4)
+                        .accessibilityIdentifier("chat-message-input")
 
-                HStack(spacing: 2) {
-                    PhotosPicker(
-                        selection: $photoPickerItems,
-                        maxSelectionCount: max(1, 3 - pendingImages.count),
-                        matching: .images
-                    ) {
-                        Image(systemName: "plus")
+                    HStack(spacing: 2) {
+                        PhotosPicker(
+                            selection: $photoPickerItems,
+                            maxSelectionCount: max(1, 3 - pendingImages.count),
+                            matching: .images
+                        ) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(Theme.Palette.fg1)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .disabled(isSending || isPreparingImages || pendingImages.count >= 3)
+                        .opacity(isSending || pendingImages.count >= 3 ? 0.4 : 1)
+                        .accessibilityLabel("Attach photos")
+                        .accessibilityValue("\(pendingImages.count) of 3 selected")
+
+                        Spacer(minLength: 4)
+
+                        CoachModelPicker(disabled: isSending)
+
+                    Button {
+                        startDictation()
+                    } label: {
+                        Image(systemName: "mic")
                             .font(.system(size: 15, weight: .medium))
                             .foregroundStyle(Theme.Palette.fg1)
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
                     }
-                    .disabled(isSending || isPreparingImages || pendingImages.count >= 3)
-                    .opacity(isSending || pendingImages.count >= 3 ? 0.4 : 1)
-                    .accessibilityLabel("Attach photos")
-                    .accessibilityValue("\(pendingImages.count) of 3 selected")
-
-                    Spacer(minLength: 4)
-
-                    CoachModelPicker(disabled: isSending)
-
-                    Button {
-                        Task { await send() }
-                    } label: {
-                        ZStack {
-                            Circle()
-                                .fill(canSend ? Theme.Palette.accent : Theme.Palette.bg3)
-                            if isSending {
-                                ProgressView()
-                                    .controlSize(.small)
-                                    .tint(Theme.Palette.fg2)
-                            } else {
-                                Image(systemName: "arrow.up")
-                                    .font(.system(size: 15, weight: .bold))
-                                    .foregroundStyle(canSend ? Theme.Palette.bg0 : Theme.Palette.fg3)
-                            }
-                        }
-                        .frame(width: 34, height: 34)
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                    }
                     .buttonStyle(ChatPressStyle())
-                    .disabled(!canSend)
-                    .accessibilityLabel(isSending ? "Sending" : "Send message")
-                    .sensoryFeedback(.impact(weight: .light), trigger: isSending) { _, sending in sending }
+                    .disabled(isSending || recoveryStatus != nil)
+                    .opacity(isSending || recoveryStatus != nil ? 0.4 : 1)
+                    .accessibilityLabel("Dictate message")
+                    .accessibilityIdentifier("chat-dictate")
+
+                        Button {
+                            Task { await send() }
+                        } label: {
+                            ZStack {
+                                Circle()
+                                    .fill(canSend ? Theme.Palette.accent : Theme.Palette.bg3)
+                                if isSending {
+                                    ProgressView()
+                                        .controlSize(.small)
+                                        .tint(Theme.Palette.fg2)
+                                } else {
+                                    Image(systemName: "arrow.up")
+                                        .font(.system(size: 15, weight: .bold))
+                                        .foregroundStyle(canSend ? Theme.Palette.bg0 : Theme.Palette.fg3)
+                                }
+                            }
+                            .frame(width: 34, height: 34)
+                            .frame(width: 44, height: 44)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(ChatPressStyle())
+                        .disabled(!canSend)
+                        .accessibilityLabel(isSending ? "Sending" : "Send message")
+                        .sensoryFeedback(.impact(weight: .light), trigger: isSending) { _, sending in sending }
+                    }
                 }
             }
         }
@@ -656,6 +700,76 @@ struct ChatView: View {
         .padding(.bottom, 8)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("chat-composer")
+    }
+
+    private var dictationPill: some View {
+        HStack(spacing: 6) {
+            Button {
+                dictation.cancel()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Theme.Palette.fg1)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(ChatPressStyle())
+            .disabled(dictation.isFinishing)
+            .accessibilityLabel("Cancel dictation")
+
+            DictationWaveform(levels: dictation.levels.values, animates: !reduceMotion)
+                .frame(maxWidth: .infinity)
+                .frame(height: 30)
+                .accessibilityHidden(true)
+
+            Text(DictationMath.formatElapsed(dictation.elapsed))
+                .font(Theme.FontStyle.mono(13, weight: .medium))
+                .fixedSize(horizontal: true, vertical: false)
+                .foregroundStyle(Theme.Palette.fg2)
+                .accessibilityLabel("Recording time")
+                .accessibilityValue(DictationMath.spokenElapsed(dictation.elapsed))
+
+            Button {
+                finishDictation()
+            } label: {
+                ZStack {
+                    Circle().fill(Theme.Palette.accent)
+                    if dictation.isFinishing {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(Theme.Palette.bg0)
+                    } else {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(Theme.Palette.bg0)
+                    }
+                }
+                .frame(width: 34, height: 34)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(ChatPressStyle())
+            .disabled(dictation.isFinishing || dictation.state != .recording)
+            .accessibilityLabel("Finish dictation")
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("chat-dictation-pill")
+    }
+
+    private func startDictation() {
+        onComposerInteraction?()
+        isComposerFocused = false
+        sendError = nil
+        dictation.start()
+    }
+
+    private func finishDictation() {
+        Task { @MainActor in
+            guard let transcript = await dictation.finish() else { return }
+            input = ChatComposerRules.appendingTranscript(transcript, to: input)
+            dictationFinishCount += 1
+            isComposerFocused = true
+        }
     }
 
     private var canSend: Bool {
@@ -1689,5 +1803,31 @@ private struct JumpToLatestButton: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Latest reply")
         .accessibilityHint("Scrolls to the newest message")
+    }
+}
+
+
+private struct DictationWaveform: View {
+    let levels: [Float]
+    let animates: Bool
+
+    private let barWidth: CGFloat = 2.5
+    private let spacing: CGFloat = 3
+
+    var body: some View {
+        GeometryReader { proxy in
+            let fit = DictationMath.barCount(forWidth: proxy.size.width, barWidth: barWidth, spacing: spacing)
+            let shown = Array(levels.suffix(fit))
+            HStack(spacing: spacing) {
+                ForEach(Array(shown.enumerated()), id: \.offset) { index, level in
+                    Capsule()
+                        .fill(index >= shown.count - 6 ? Theme.Palette.fg2 : Theme.Palette.fg3)
+                        .frame(width: barWidth, height: max(3, CGFloat(level) * 28))
+                }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .trailing)
+            .clipped()
+            .animation(animates ? .linear(duration: 0.08) : nil, value: levels)
+        }
     }
 }
