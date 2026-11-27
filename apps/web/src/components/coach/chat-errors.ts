@@ -20,6 +20,14 @@ export type CoachTurnError = {
   detail: string | null;
   /** `false` when resending would duplicate a stored turn. Default: retryable. */
   retryable?: boolean;
+  /**
+   * The failure happened in transport (lost connection, network error), so
+   * the server may still have stored the turn. Server-reported failures
+   * commit nothing, so they're never uncertain.
+   */
+  uncertain?: boolean;
+  /** This notice sits on a turn the server stored; never prune it locally. */
+  stored?: boolean;
 };
 
 type FailureInfo = {
@@ -133,10 +141,12 @@ function classFromInfo(info: FailureInfo): CoachErrorClass {
 
 export function classifyCoachFailure(error: unknown): CoachTurnError {
   if (error instanceof DOMException && error.name === "AbortError") {
-    return { errorClass: "cancelled", detail: null };
+    return { errorClass: "cancelled", detail: null, uncertain: true };
   }
   // `fetch` rejects with a bare TypeError when the network itself fails.
-  if (error instanceof TypeError) return { errorClass: "network", detail: null };
+  if (error instanceof TypeError) {
+    return { errorClass: "network", detail: null, uncertain: true };
+  }
   const message = error instanceof Error ? error.message : String(error);
   const info =
     error instanceof CoachRequestError ? error.info : { message };
@@ -149,5 +159,7 @@ export function classifyCoachFailure(error: unknown): CoachTurnError {
     message !== CONNECTION_LOST_MESSAGE
       ? message
       : null;
-  return { errorClass, detail };
+  return error instanceof CoachRequestError
+    ? { errorClass, detail }
+    : { errorClass, detail, uncertain: true };
 }

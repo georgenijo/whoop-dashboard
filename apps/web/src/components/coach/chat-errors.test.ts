@@ -39,17 +39,19 @@ describe("classifyCoachFailure", () => {
   it("treats a stray AbortError as cancelled", () => {
     expect(
       classifyCoachFailure(new DOMException("aborted", "AbortError")),
-    ).toEqual({ errorClass: "cancelled", detail: null });
+    ).toEqual({ errorClass: "cancelled", detail: null, uncertain: true });
   });
 
   it("treats fetch network failures and dropped streams as network", () => {
     expect(classifyCoachFailure(new TypeError("Failed to fetch"))).toEqual({
       errorClass: "network",
       detail: null,
+      uncertain: true,
     });
     expect(classifyCoachFailure(new Error(CONNECTION_LOST_MESSAGE))).toEqual({
       errorClass: "network",
       detail: null,
+      uncertain: true,
     });
   });
 

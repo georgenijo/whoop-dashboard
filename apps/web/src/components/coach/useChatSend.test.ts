@@ -363,7 +363,7 @@ describe("useChatSend work logs", () => {
 
     expect(result.current.messages[1]).toMatchObject({
       content: "",
-      error: { errorClass: "network", detail: null },
+      error: { errorClass: "network", detail: null, uncertain: true },
       streaming: false,
       workLog: {
         status: "error",
@@ -731,6 +731,7 @@ describe("useChatSend stop and retry", () => {
     expect(result.current.messages.at(-1)?.error).toEqual({
       errorClass: "network",
       detail: null,
+      uncertain: true,
     });
   });
 
@@ -1001,7 +1002,7 @@ describe("useChatSend review follow-ups", () => {
         if (String(url).startsWith("/api/chat/history")) return history.promise;
         posts.push(JSON.parse(String(init?.body)).messages[0].content);
         return posts.length === 1
-          ? Response.json({ error: "Busy", kind: "overloaded" }, { status: 503 })
+          ? streamResponse([sse("text_delta", { text: "cut off" })])
           : streamResponse([sse("done", { reply: "newer reply" })]);
       }),
     );
@@ -1031,7 +1032,7 @@ describe("useChatSend review follow-ups", () => {
     ]);
     fetchMock.mockImplementation(async (url: string) => {
       if (String(url).startsWith("/api/chat/history")) return history.promise;
-      return Response.json({ error: "Busy", kind: "overloaded" }, { status: 503 });
+      return streamResponse([sse("text_delta", { text: "cut off" })]);
     });
     vi.stubGlobal("fetch", fetchMock);
     const { result, unmount } = renderChat();
@@ -1103,7 +1104,8 @@ describe("useChatSend review follow-ups", () => {
     expect(signal?.aborted).toBe(true);
   });
 
-  it("ends the stoppable phase as soon as done arrives", async () => {
+  it("ends the stoppable phase on done, and shows Send busy while images save", async () => {
+    stubObjectUrls();
     const stream = controllableStreamResponse();
     const history = deferred<Response>();
     vi.stubGlobal(
@@ -1112,7 +1114,6 @@ describe("useChatSend review follow-ups", () => {
         String(url).startsWith("/api/chat/history") ? history.promise : stream.response,
       ),
     );
-    stubObjectUrls();
     const { result } = renderChat();
     act(() => result.current.addImages([new File(["x"], "a.jpg", { type: "image/jpeg" })]));
 
@@ -1125,25 +1126,94 @@ describe("useChatSend review follow-ups", () => {
       stream.send(sse("done", { reply: "Looks fine" }));
       stream.close();
     });
+    // Stop is gone; Send is visibly busy rather than silently dropping input.
     await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.finishing).toBe(true);
 
-    // The next message can go right away, while attachment history loads.
-    const next = controllableStreamResponse();
-    vi.mocked(fetch).mockImplementation(async (url) =>
-      String(url).startsWith("/api/chat/history") ? history.promise : next.response,
-    );
-    act(() => {
-      void result.current.send("and now?");
-    });
-    await waitFor(() =>
-      expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/chat")).toHaveLength(2),
-    );
-
-    // The older turn's late history must not clobber the newer turn.
     history.resolve(Response.json([]));
     await act(async () => sendPromise);
-    expect(result.current.messages.at(-2)).toMatchObject({ role: "user", content: "and now?" });
-    act(() => next.close());
+    expect(result.current.finishing).toBe(false);
+  });
+
+  it("only checks history before retrying a transport failure", async () => {
+    const fetchMock = chatFetch([
+      Response.json({ error: "Busy", kind: "overloaded" }, { status: 503 }),
+      streamResponse([sse("done", { reply: "ok" })]),
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderChat();
+    await act(async () => {
+      await result.current.send("q");
+    });
+    await act(async () => {
+      await result.current.retry();
+    });
+    expect(
+      fetchMock.mock.calls.some(([url]) => String(url).startsWith("/api/chat/history")),
+    ).toBe(false);
+    expect(result.current.messages.at(-1)?.content).toBe("ok");
+  });
+
+  it("matches a stored multipart prompt despite CRLF line endings", async () => {
+    const fetchMock = chatFetch(
+      [streamResponse([sse("text_delta", { text: "x" })])],
+      () => [
+        { id: 10, role: "user", content: "line one\r\nline two", created_at: "2026-11-27T10:00:00.000Z", attachments: [] },
+        { id: 11, role: "assistant", content: "Answer", created_at: "2026-11-27T10:00:05.000Z", attachments: [] },
+      ],
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderChat();
+    await act(async () => {
+      await result.current.send("line one\nline two");
+    });
+    await act(async () => {
+      await result.current.retry();
+    });
+    expect(postBodies(fetchMock)).toHaveLength(1);
+    expect(result.current.messages.at(-1)?.content).toBe("Answer");
+  });
+
+  it("keeps a recovered interrupted exchange when the user asks again", async () => {
+    const fetchMock = chatFetch(
+      [
+        streamResponse([sse("text_delta", { text: "Half" })]),
+        streamResponse([sse("done", { reply: "Continued" })]),
+      ],
+      () => [
+        { id: 10, role: "user", content: "q", created_at: "2026-11-27T10:00:00.000Z", attachments: [] },
+        { id: 11, role: "assistant", content: "Half", status: "aborted", created_at: "2026-11-27T10:00:05.000Z", attachments: [] },
+      ],
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderChat();
+    await act(async () => {
+      await result.current.send("q");
+    });
+    await act(async () => {
+      await result.current.retry();
+    });
+    await act(async () => {
+      await result.current.send("continue");
+    });
+    expect(result.current.messages.map(({ role, content }) => ({ role, content }))).toEqual([
+      { role: "user", content: "q" },
+      { role: "assistant", content: "Half" },
+      { role: "user", content: "continue" },
+      { role: "assistant", content: "Continued" },
+    ]);
+  });
+
+  it("does not refresh the router (and bounce to sign-in) after an expired session", async () => {
+    router.refresh.mockReset();
+    vi.stubGlobal("fetch", chatFetch([new Response("Unauthorized", { status: 401 })]));
+    const { result } = renderChat();
+    await act(async () => {
+      await result.current.send("keep me");
+    });
+    expect(result.current.messages.at(-1)?.error?.errorClass).toBe("session_expired");
+    expect(result.current.input).toBe("keep me");
+    expect(router.refresh).not.toHaveBeenCalled();
   });
 
   it("never restores a failed Retry's images past the 3-image limit", async () => {

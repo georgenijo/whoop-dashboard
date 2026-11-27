@@ -96,6 +96,7 @@ type SendParams = Omit<UseChatSendParams, "initialMessages"> & {
   setMessages: Dispatch<SetStateAction<ComposerMessage[]>>;
   setInput: Dispatch<SetStateAction<string>>;
   setLoading: Dispatch<SetStateAction<boolean>>;
+  setFinishing: Dispatch<SetStateAction<boolean>>;
   setPreparingImages: Dispatch<SetStateAction<boolean>>;
   pendingImages: PendingChatImage[];
   getPendingImages: () => PendingChatImage[];
@@ -372,7 +373,7 @@ function withoutPendingTurn(messages: ComposerMessage[]): ComposerMessage[] {
 // Retry, or the restored draft sent again -- doesn't show the question twice.
 function withoutFailedTurn(messages: ComposerMessage[]): ComposerMessage[] {
   const last = messages.at(-1);
-  if (last?.role !== "assistant" || !last.error) return messages;
+  if (last?.role !== "assistant" || !last.error || last.error.stored) return messages;
   return messages.at(-2)?.role === "user" ? messages.slice(0, -2) : messages.slice(0, -1);
 }
 
@@ -405,7 +406,11 @@ async function storedFailedTurn(
   if (!persisted) return { kind: "unknown" };
   if (userCount(persisted) <= userCount(base)) return { kind: "absent" };
   const lastUserIndex = persisted.findLastIndex((message) => message.role === "user");
-  if (persisted[lastUserIndex]?.content !== text) return { kind: "absent" };
+  // Multipart uploads can store CRLF line endings for a typed LF draft.
+  const normalize = (value: string) => value.replace(/\r\n?/g, "\n").trim();
+  if (normalize(persisted[lastUserIndex]?.content ?? "") !== normalize(text)) {
+    return { kind: "absent" };
+  }
   const reply = persisted[lastUserIndex + 1];
   return reply?.role === "assistant" && reply.status !== "aborted"
     ? { kind: "answered", messages: persisted }
@@ -417,6 +422,7 @@ const INTERRUPTED_TURN_ERROR: CoachTurnError = {
   detail:
     "The connection dropped mid-reply. Your message and whatever arrived were saved, so ask again to continue.",
   retryable: false,
+  stored: true,
 };
 
 // Show a stored interrupted turn as stored, with a notice (and no Retry,
@@ -730,6 +736,7 @@ async function sendChatMessage(params: SendParams) {
     },
   ]);
   const isCurrent = () => params.turnRef.current === turn;
+  let sessionExpired = false;
   const releaseStop = () => {
     if (params.abortRef.current === controller) params.abortRef.current = null;
   };
@@ -769,17 +776,21 @@ async function sendChatMessage(params: SendParams) {
           workLog,
           presentationBlocks,
         );
-        // The reply is complete: nothing left for Stop to cancel, and the
-        // next message can go. (An image turn still swaps in persisted
-        // attachment URLs below, unless a newer turn starts first.)
-        releaseStop();
+        // The reply is complete: nothing left for Stop to cancel. An image
+        // turn still swaps in persisted attachment URLs below; Send shows as
+        // busy ("Saving images…") rather than silently ignoring a click.
         params.setLoading(false);
+        if (draftImages.length > 0) params.setFinishing(true);
       },
     });
     if (!isCurrent()) return;
     if (draftImages.length > 0) {
       const persistedMessages = await refreshPersistedMessages(responseThreadId);
-      if (!isCurrent()) return;
+      if (!isCurrent()) {
+        // Thread switch / unmount: the transcript showing the previews is gone.
+        releasePreviewUrls(draftImages);
+        return;
+      }
       if (persistedMessages) {
         params.setMessages(persistedMessages);
       } else {
@@ -817,14 +828,17 @@ async function sendChatMessage(params: SendParams) {
     if (error instanceof CoachRequestError && error.info.kind === "bad_api_key") {
       params.setBadApiKey?.(true);
     }
+    const failure = classifyCoachFailure(error);
+    sessionExpired = failure.errorClass === "session_expired";
     restoreDraftIfEmpty(params.setInput, draftText);
     restoreDraftImages(params, params.restoreImages ?? draftImages);
     params.onTurnFailed({ text: draftText, images: draftImages });
-    failAssistant(params.setMessages, assistantIndex, classifyCoachFailure(error));
+    failAssistant(params.setMessages, assistantIndex, failure);
   } finally {
     releaseStop();
     if (isCurrent()) {
       params.setLoading(false);
+      params.setFinishing(false);
       params.setPreparingImages(false);
       params.inputRef.current?.focus();
     }
@@ -834,7 +848,9 @@ async function sendChatMessage(params: SendParams) {
     // navigating away and back would remount with the exchange missing.
     // `router.refresh()` clears the client router cache. It is also safe for
     // live state: the hook ignores same-thread `initialMessages` changes.
-    params.refreshRouter();
+    // Not after an expired session, though: the refresh would bounce to the
+    // sign-in page before the user can copy their restored draft.
+    if (!sessionExpired) params.refreshRouter();
   }
 }
 
@@ -852,6 +868,7 @@ export function useChatSend({
   );
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [finishing, setFinishing] = useState(false);
   const [preparingImages, setPreparingImages] = useState(false);
   const [pendingImages, setPendingImagesState] = useState<PendingChatImage[]>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
@@ -946,6 +963,7 @@ export function useChatSend({
     setMessages(toComposerMessages(initialMessages));
     setInput("");
     setLoading(false);
+    setFinishing(false);
     setPreparingImages(false);
     setAttachmentError(null);
     if (inputRef.current) inputRef.current.style.height = "auto";
@@ -974,6 +992,7 @@ export function useChatSend({
         setMessages,
         setInput,
         setLoading,
+        setFinishing,
         setPreparingImages,
         pendingImages,
         getPendingImages,
@@ -1022,22 +1041,26 @@ export function useChatSend({
     ) {
       return;
     }
-    retryingRef.current = true;
-    // Owning a turn number means any Send, thread switch, or unmount during
-    // the history check below invalidates this Retry.
-    turnRef.current += 1;
-    const op = turnRef.current;
-    let stored: StoredTurn;
-    try {
-      stored = await storedFailedTurn(
-        threadId,
-        withoutFailedTurn(messages),
-        failedTurn.text,
-      );
-    } finally {
-      retryingRef.current = false;
+    // A failure the server reported committed nothing: resend straight away.
+    // A transport failure may have reached the database, so check first.
+    let stored: StoredTurn = { kind: "absent" };
+    if (failed.error.uncertain) {
+      retryingRef.current = true;
+      // Owning a turn number means any Send, thread switch, or unmount during
+      // the history check below invalidates this Retry.
+      turnRef.current += 1;
+      const op = turnRef.current;
+      try {
+        stored = await storedFailedTurn(
+          threadId,
+          withoutFailedTurn(messages),
+          failedTurn.text,
+        );
+      } finally {
+        retryingRef.current = false;
+      }
+      if (turnRef.current !== op) return;
     }
-    if (turnRef.current !== op) return;
     if (stored.kind === "unknown") {
       setMessages((previous) =>
         previous.map((message) =>
@@ -1075,6 +1098,7 @@ export function useChatSend({
       setMessages,
       setInput,
       setLoading,
+      setFinishing,
       setPreparingImages,
       pendingImages: failedTurn.images,
       restoreImages: failedTurn.images.filter((image) => composerIds.has(image.id)),
@@ -1106,6 +1130,8 @@ export function useChatSend({
     input,
     setInput,
     loading,
+    /** An image reply finished; its persisted attachments are loading. */
+    finishing,
     preparingImages,
     pendingImages,
     attachmentError,

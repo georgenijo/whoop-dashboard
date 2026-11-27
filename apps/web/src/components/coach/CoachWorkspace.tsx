@@ -46,6 +46,7 @@ export default function CoachWorkspace({
     input,
     setInput,
     loading,
+    finishing,
     preparingImages,
     pendingImages,
     attachmentError,
@@ -148,6 +149,7 @@ export default function CoachWorkspace({
             setInput={setInput}
             loading={loading}
             modelChanging={modelSaving}
+            finishing={finishing}
             modelPicker={
               <CoachModelPicker
                 initialModelPref={initialModelPref}
