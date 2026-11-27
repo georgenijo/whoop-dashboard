@@ -2,7 +2,7 @@
 
 import { renderMarkdownToSafeHtml } from "@/lib/render-markdown";
 import { parseCoachVisualizations } from "@/lib/coach/visualization";
-import { useMemo, useSyncExternalStore } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 import CoachInlineChart from "./CoachInlineChart";
 import CoachWorkDisclosure from "./CoachWorkDisclosure";
 import CoachPresentationBlocks from "./CoachPresentationBlocks";
@@ -43,6 +43,11 @@ export default function MessageBubble({ msg, onAttachmentClick, onRetry }: Props
     browserSnapshot,
     serverSnapshot,
   );
+  // A bubble first rendered after hydration arrived during this visit (a sent
+  // message or a reply) and springs in; the server-rendered
+  // transcript is already on screen and stays still. Captured once, so later
+  // streaming re-renders never replay the entrance.
+  const [entering] = useState(isBrowser);
   const isAborted = !isUser && !msg.streaming && msg.status === "aborted";
   const html = useMemo(() => {
     if (isUser || !isBrowser) return null;
@@ -64,7 +69,7 @@ export default function MessageBubble({ msg, onAttachmentClick, onRetry }: Props
   if (isAborted && msg.content === "" && !msg.workLog?.notes.length) return null;
 
   return (
-    <div className={`coach-message-row ${isUser ? "user" : "assistant"}`}>
+    <div className={`coach-message-row ${isUser ? "user" : "assistant"}${entering ? " is-entering" : ""}`}>
       <div
         className={`coach-message ${isUser ? "user" : "assistant"} ${
           msg.workLog ? "has-work-log" : ""

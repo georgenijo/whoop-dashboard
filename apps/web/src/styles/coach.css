@@ -1,0 +1,941 @@
+/* =========================================================================
+   COACH — LIVE INSTRUMENT
+
+   Layered over quiet-instrument.css for the Coach route only. Every rule is
+   scoped under `.coach-page` so it wins on specificity, not import order.
+
+   Principles
+   - Numbers are the protagonists: large mono numerals in their metric's own
+     color, counted in on a spring (AnimatedNumber), each sitting on a meter
+     that shows where today falls against its baseline.
+   - Motion has one physics: the springs in tokens.css, sampled from
+     src/lib/motion.ts. Entrances rise and settle; nothing loops except
+     things that are genuinely live (streaming, a running tool, "now" dots).
+   - Reduced motion removes every animation and transition at the bottom of
+     this file; all states are designed to be correct with motion off.
+   ========================================================================= */
+
+.coach-page {
+  --coach-accent: var(--d-hrv);
+  --coach-surface: color-mix(in oklch, var(--bg-lift) 62%, var(--bg));
+  --coach-surface-hi: color-mix(in oklch, var(--bg-lift) 100%, var(--fg) 3%);
+  --coach-prose: color-mix(in oklch, var(--fg) 86%, var(--fg-2));
+  --coach-shadow: 0 1px 0 color-mix(in oklch, var(--fg) 5%, transparent) inset,
+    0 10px 30px -18px oklch(0% 0 0 / 0.7);
+}
+
+/* ---------- Shared numerals ---------- */
+.coach-page .motion-number {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Copying a number should yield it once, not once per visible/sr-only copy. */
+.coach-page .motion-number .sr-only { user-select: none; }
+
+/* ---------- Thread rail ---------- */
+.coach-page .coach-sidebar {
+  background: var(--bg-sunk);
+}
+.coach-page .coach-new-thread {
+  border-radius: var(--r-lg);
+  transition: background var(--dur) var(--ease), transform var(--spring-snappy-dur) var(--spring-snappy);
+}
+.coach-page .coach-new-thread:hover { background: var(--bg-lift); }
+.coach-page .coach-new-thread:active { transform: scale(0.97); }
+.coach-page .coach-thread-row {
+  position: relative;
+  border-radius: var(--r-lg);
+  transition: background var(--dur) var(--ease);
+}
+.coach-page .coach-thread-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 9px;
+  bottom: 9px;
+  width: 2px;
+  border-radius: var(--r-full);
+  background: var(--coach-accent);
+  transform: scaleY(0);
+  transition: transform var(--spring-snappy-dur) var(--spring-snappy);
+}
+.coach-page .coach-thread-row:has(.coach-thread-item.active)::before { transform: scaleY(1); }
+.coach-page .coach-thread-item:focus-visible {
+  outline: 2px solid color-mix(in oklch, var(--coach-accent) 70%, transparent);
+  outline-offset: -2px;
+  border-radius: var(--r-lg);
+}
+
+/* ---------- Top bar: a hairline that runs while Coach works ---------- */
+.coach-page .coach-topbar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 6px;
+  height: 1px;
+  opacity: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--d-hrv) 35%,
+    var(--d-recovery) 50%,
+    var(--d-sleep) 65%,
+    transparent 100%
+  );
+  background-size: 50% 100%;
+  background-repeat: no-repeat;
+  transition: opacity 320ms var(--ease);
+}
+.coach-page .coach-topbar.is-live::after {
+  opacity: 0.85;
+  animation: coach-live-sweep 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+/* ---------- Message choreography ---------- */
+.coach-page .coach-message-row.is-entering.user {
+  animation: coach-bubble-in var(--spring-snappy-dur) var(--spring-snappy) both;
+  transform-origin: 100% 100%;
+}
+.coach-page .coach-message-row.is-entering.assistant {
+  animation: coach-rise var(--spring-smooth-dur) var(--spring-smooth) both;
+}
+
+.coach-page .coach-message.user {
+  padding: 10px 15px;
+  border-radius: var(--r-xl) var(--r-xl) 6px var(--r-xl);
+  background: var(--coach-surface-hi);
+  color: var(--fg-hi);
+  box-shadow: var(--coach-shadow);
+  line-height: 1.55;
+}
+.coach-page .coach-message-thumbnail {
+  border-radius: var(--r-lg);
+  border-color: var(--rule);
+  transition: transform var(--spring-snappy-dur) var(--spring-snappy);
+}
+.coach-page .coach-message-thumbnail:hover { transform: scale(1.03); }
+
+/* ---------- Prose: calm, warm, readable ---------- */
+.coach-page .coach-message.assistant,
+.coach-page .coach-message.assistant.has-work-log > .prose-coach {
+  color: var(--coach-prose);
+}
+.coach-page .prose-coach {
+  font-size: 15.5px;
+  line-height: 1.72;
+  letter-spacing: -0.003em;
+  text-wrap: pretty;
+}
+.coach-page .prose-coach p { margin: 10px 0; }
+.coach-page .prose-coach h1,
+.coach-page .prose-coach h2 {
+  margin: 22px 0 8px;
+  color: var(--fg-hi);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+.coach-page .prose-coach h3 {
+  margin: 18px 0 6px;
+  color: var(--fg-hi);
+  font-size: 15px;
+  font-weight: 600;
+}
+.coach-page .prose-coach strong { color: var(--fg-hi); font-weight: 600; }
+.coach-page .prose-coach ul,
+.coach-page .prose-coach ol { margin: 8px 0; padding-left: 22px; }
+.coach-page .prose-coach li { margin: 5px 0; padding-left: 2px; }
+.coach-page .prose-coach li::marker { color: color-mix(in oklch, var(--coach-accent) 75%, var(--fg-3)); }
+.coach-page .prose-coach ol > li::marker {
+  font-family: var(--font-num);
+  font-size: 0.86em;
+}
+.coach-page .prose-coach a {
+  color: var(--fg-hi);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklch, var(--coach-accent) 60%, transparent);
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--dur) var(--ease);
+}
+.coach-page .prose-coach a:hover { text-decoration-color: var(--coach-accent); }
+.coach-page .prose-coach code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--bg-lift);
+  color: var(--fg);
+  font-family: var(--font-num);
+  font-size: 0.86em;
+}
+.coach-page .prose-coach pre {
+  overflow-x: auto;
+  padding: 12px 14px;
+  border: var(--stroke) solid var(--rule-soft);
+  border-radius: var(--r-lg);
+  background: var(--bg-sunk);
+}
+.coach-page .prose-coach pre code { padding: 0; background: transparent; }
+.coach-page .prose-coach blockquote {
+  margin: 12px 0;
+  padding: 2px 0 2px 14px;
+  border-left: 2px solid color-mix(in oklch, var(--coach-accent) 55%, var(--rule));
+  color: var(--fg-2);
+}
+.coach-page .prose-coach hr {
+  margin: 18px 0;
+  border-top-color: var(--rule-soft);
+}
+.coach-page .prose-coach > table,
+.coach-page .coach-markdown-segment > table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 12px 0;
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
+}
+.coach-page .prose-coach > table th,
+.coach-page .coach-markdown-segment > table th {
+  color: var(--fg-3);
+  font-weight: 500;
+  font-size: 12px;
+}
+.coach-page .prose-coach > table th,
+.coach-page .prose-coach > table td,
+.coach-page .coach-markdown-segment > table th,
+.coach-page .coach-markdown-segment > table td {
+  padding: 7px 16px 7px 0;
+  border-bottom: var(--stroke) solid var(--rule-soft);
+}
+
+/* Streaming caret: a soft bar that breathes, not a hard blink. */
+.coach-page .prose-coach.is-streaming::after,
+.coach-page .prose-coach.is-streaming > :last-child::after {
+  width: 3px;
+  height: 1.05em;
+  margin-left: 4px;
+  border-radius: var(--r-full);
+  background: var(--coach-accent);
+  box-shadow: 0 0 10px 1px color-mix(in oklch, var(--coach-accent) 60%, transparent);
+  animation: coach-caret-breathe 1.1s ease-in-out infinite;
+}
+
+/* ---------- Work log: steps that arrive and check themselves off ---------- */
+.coach-page .coach-tool-call,
+.coach-page .coach-work-trace-row {
+  animation: coach-slide-in 420ms var(--spring-smooth) both;
+}
+.coach-page .coach-tool-call.complete .coach-tool-state path,
+.coach-page .coach-work-step.complete path {
+  stroke-dasharray: 14;
+  stroke-dashoffset: 0;
+  animation: coach-check-draw 420ms var(--ease) both;
+}
+.coach-page .coach-tool-call.complete .coach-tool-state {
+  animation: coach-pop var(--spring-bouncy-dur) var(--spring-bouncy) both;
+}
+.coach-page .coach-tool-call.running .coach-tool-state {
+  border-top-color: var(--coach-accent);
+}
+.coach-page .coach-work-disclosure > summary { border-radius: var(--r-md); }
+.coach-page .coach-work-disclosure > summary:focus-visible,
+.coach-page .coach-tool-call > summary:focus-visible,
+.coach-page .coach-previous-tools > summary:focus-visible {
+  outline: 2px solid color-mix(in oklch, var(--coach-accent) 70%, transparent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+.coach-page .coach-activity-mark { color: var(--coach-accent); }
+.coach-page .coach-work-disclosure:not(.running) .coach-activity-mark { color: var(--fg-3); }
+
+/* ---------- Rich blocks ---------- */
+.coach-page .coach-rich-blocks { gap: var(--s4); margin-top: var(--s4); }
+.coach-page .coach-rich-enter {
+  min-width: 0;
+  animation: coach-rise var(--spring-smooth-dur) var(--spring-smooth) both;
+  animation-delay: calc(var(--stagger, 0) * 70ms);
+}
+.coach-page .coach-rich-block {
+  border-radius: var(--r-lg);
+  border-color: var(--rule-soft);
+  background: var(--coach-surface);
+  padding: var(--s4);
+}
+.coach-page .coach-rich-block.coach-rich-metric_strip,
+.coach-page .coach-rich-block.coach-rich-comparison {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* Metric cards */
+.coach-page .coach-rich-metrics { column-gap: 10px; row-gap: 0; }
+.coach-page .coach-rich-metric {
+  --metric-accent: var(--fg-2);
+  position: relative;
+  grid-row: span 5;
+  row-gap: 0;
+  padding: 14px 15px 13px;
+  overflow: hidden;
+  border: var(--stroke) solid color-mix(in oklch, var(--metric-accent) 16%, var(--rule-soft));
+  border-radius: 14px;
+  background:
+    radial-gradient(120% 90% at 0% 0%, color-mix(in oklch, var(--metric-accent) 13%, transparent), transparent 62%),
+    var(--coach-surface);
+  box-shadow: var(--coach-shadow);
+  animation: coach-rise var(--spring-smooth-dur) var(--spring-smooth) both;
+  animation-delay: calc(var(--stagger, 0) * 70ms);
+  transition:
+    transform var(--spring-snappy-dur) var(--spring-snappy),
+    border-color 200ms var(--ease);
+}
+@media (hover: hover) {
+  .coach-page .coach-rich-metric:hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in oklch, var(--metric-accent) 34%, var(--rule));
+  }
+}
+.coach-page .coach-rich-metric-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--fg-2);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+.coach-page .coach-rich-metric-label::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--metric-accent);
+  box-shadow: 0 0 8px color-mix(in oklch, var(--metric-accent) 70%, transparent);
+}
+.coach-page .coach-rich-metric-value {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 5px;
+  margin: 8px 0 10px;
+  color: var(--fg-hi);
+  font: 600 clamp(1.4rem, 3.6vw + 0.45rem, 2.15rem)/1.05 var(--font-num);
+  letter-spacing: -0.035em;
+}
+.coach-page .coach-rich-metric-value small {
+  margin: 0;
+  color: var(--fg-3);
+  font: 500 12px/1 var(--font-text);
+  letter-spacing: 0;
+}
+
+.coach-page .coach-rich-metric-meter {
+  position: relative;
+  display: block;
+  height: 4px;
+  margin-bottom: 10px;
+  border-radius: var(--r-full);
+  background: color-mix(in oklch, var(--fg) 7%, transparent);
+}
+.coach-page .coach-rich-metric-meter.is-empty { background: transparent; }
+.coach-page .coach-rich-metric-meter-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, color-mix(in oklch, var(--metric-accent) 55%, transparent), var(--metric-accent));
+  transform-origin: var(--meter-origin, left);
+  animation: coach-meter-grow 900ms var(--spring-smooth) both;
+  animation-delay: calc(var(--stagger, 0) * 70ms + 140ms);
+}
+.coach-page .coach-rich-metric-meter.is-baseline .coach-rich-metric-meter-fill {
+  background: var(--metric-accent);
+  opacity: 0.55;
+}
+.coach-page .coach-rich-metric-meter-tick {
+  position: absolute;
+  left: 50%;
+  top: -3px;
+  bottom: -3px;
+  width: 1.5px;
+  margin-left: -0.75px;
+  border-radius: var(--r-full);
+  background: var(--fg-3);
+}
+.coach-page .coach-rich-metric-meter-marker {
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border: 2px solid var(--bg);
+  border-radius: var(--r-full);
+  background: var(--metric-accent);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--metric-accent) 45%, transparent);
+  animation: coach-marker-slide 900ms var(--spring-snappy) both;
+  animation-delay: calc(var(--stagger, 0) * 70ms + 140ms);
+}
+
+.coach-page .coach-rich-metric-direction {
+  justify-self: start;
+  min-height: 0;
+  color: var(--fg-3);
+  font: 500 11.5px/1.3 var(--font-num);
+}
+.coach-page .coach-rich-metric-direction:empty { min-height: 1.3em; }
+.coach-page .coach-rich-metric-direction:not(:empty) {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: var(--r-full);
+  background: color-mix(in oklch, var(--fg) 6%, transparent);
+}
+.coach-page .coach-rich-metric.tone-positive .coach-rich-metric-direction:not(:empty) {
+  color: var(--ok);
+  background: color-mix(in oklch, var(--ok) 14%, transparent);
+}
+.coach-page .coach-rich-metric.tone-warning .coach-rich-metric-direction:not(:empty) {
+  color: var(--warn);
+  background: color-mix(in oklch, var(--warn) 14%, transparent);
+}
+.coach-page .coach-rich-metric.tone-negative .coach-rich-metric-direction:not(:empty) {
+  color: var(--bad);
+  background: color-mix(in oklch, var(--bad) 14%, transparent);
+}
+.coach-page .coach-rich-metric-baseline {
+  margin-top: 6px;
+  color: var(--fg-3);
+  font: 400 11px/1.35 var(--font-num);
+}
+
+/* Disclosures */
+.coach-page .coach-rich-details { border-top-color: var(--rule-soft); }
+.coach-page .coach-rich-details > summary {
+  border-radius: var(--r-md);
+  transition: color var(--dur) var(--ease);
+}
+.coach-page .coach-rich-details > summary:hover { color: var(--fg); }
+.coach-page .coach-rich-details > summary:focus-visible {
+  outline: 2px solid color-mix(in oklch, var(--coach-accent) 70%, transparent);
+  outline-offset: 2px;
+}
+.coach-page .coach-rich-details > summary > svg {
+  transition: transform var(--spring-snappy-dur) var(--spring-snappy);
+}
+.coach-page .coach-rich-details[open] > :not(summary) {
+  animation: coach-fade-down 280ms var(--ease) both;
+}
+.coach-page .coach-rich-table tbody th {
+  position: relative;
+  padding-left: 14px;
+}
+.coach-page .coach-rich-table tbody th::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: var(--r-full);
+  background: var(--metric-accent, var(--fg-3));
+}
+.coach-page .coach-rich-table td { font-family: var(--font-num); }
+.coach-page .coach-rich-change {
+  display: inline-flex;
+  padding: 2px 7px;
+  border-radius: var(--r-full);
+  white-space: nowrap;
+  background: color-mix(in oklch, var(--fg) 6%, transparent);
+  color: var(--fg-2);
+}
+.coach-page .coach-rich-change.is-up { color: var(--fg-hi); background: color-mix(in oklch, var(--metric-accent, var(--fg)) 18%, transparent); }
+.coach-page .coach-rich-change.is-down { color: var(--fg-2); background: color-mix(in oklch, var(--fg) 8%, transparent); }
+
+/* Freshness, plans, actions */
+.coach-page .coach-rich-freshness strong { display: inline-flex; align-items: center; gap: 6px; color: var(--fg); font-weight: 550; }
+.coach-page .coach-rich-freshness strong::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-full);
+  background: var(--fg-3);
+}
+.coach-page .coach-rich-freshness.status-fresh strong::before {
+  background: var(--ok);
+  box-shadow: 0 0 0 0 color-mix(in oklch, var(--ok) 50%, transparent);
+  animation: coach-ping 2.4s var(--ease) infinite;
+}
+.coach-page .coach-rich-freshness.status-stale strong::before,
+.coach-page .coach-rich-freshness.status-partial strong::before { background: var(--warn); }
+.coach-page .coach-rich-freshness.status-missing strong::before,
+.coach-page .coach-rich-freshness.status-error strong::before { background: var(--bad); }
+.coach-page .coach-rich-plan > div {
+  padding: 12px;
+  border-radius: var(--r-md);
+  background: color-mix(in oklch, var(--fg) 3%, transparent);
+}
+.coach-page .coach-rich-chart-actions > button,
+.coach-page .coach-rich-block > button,
+.coach-page .coach-rich-block a,
+.coach-page .coach-message-action {
+  border-radius: var(--r-md);
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease), transform var(--spring-snappy-dur) var(--spring-snappy);
+}
+.coach-page .coach-rich-chart-actions > button:hover,
+.coach-page .coach-rich-block > button:hover,
+.coach-page .coach-rich-block a:hover { background: var(--bg-lift); }
+.coach-page .coach-rich-chart-actions > button:active,
+.coach-page .coach-rich-block > button:active,
+.coach-page .coach-message-action:active { transform: scale(0.96); }
+.coach-page .coach-rich-sync.is-running { color: var(--fg); }
+.coach-page .coach-rich-sync.is-done { color: var(--ok); }
+.coach-page .coach-rich-sync.is-error { color: var(--bad); }
+.coach-page .coach-message-actions {
+  animation: coach-fade 360ms var(--ease) 120ms both;
+}
+.coach-page .coach-rich-chart-actions > button:focus-visible,
+.coach-page .coach-rich-block > button:focus-visible,
+.coach-page .coach-rich-block a:focus-visible,
+.coach-page .coach-message-action:focus-visible {
+  outline: 2px solid color-mix(in oklch, var(--coach-accent) 70%, transparent);
+  outline-offset: 1px;
+}
+
+/* ---------- Charts ---------- */
+.coach-page .coach-inline-chart {
+  --metric-accent: var(--coach-accent);
+  position: relative;
+  margin: var(--s4) 0;
+  padding: 16px 16px 12px;
+  overflow: hidden;
+  border: var(--stroke) solid color-mix(in oklch, var(--metric-accent) 14%, var(--rule-soft));
+  border-radius: 16px;
+  background:
+    radial-gradient(90% 70% at 100% 0%, color-mix(in oklch, var(--metric-accent) 9%, transparent), transparent 65%),
+    var(--bg-sunk);
+  box-shadow: var(--coach-shadow);
+}
+.coach-page .coach-rich-enter > .coach-inline-chart { margin: 0; }
+.coach-page .coach-inline-chart-head { margin-bottom: 4px; }
+.coach-page .coach-inline-chart-title { min-width: 0; }
+.coach-page .coach-inline-chart h3,
+.coach-page .prose-coach .coach-inline-chart h3 {
+  margin: 0;
+  color: var(--fg);
+  font: 600 13.5px/1.35 var(--font-text);
+}
+.coach-page .coach-inline-chart-head > div > span {
+  display: block;
+  margin-top: 2px;
+  color: var(--fg-3);
+  font-family: var(--font-num);
+  font-size: 11px;
+}
+.coach-page .coach-chart-headline {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 6px 0 10px;
+}
+.coach-page .coach-chart-headline-label {
+  flex-basis: 100%;
+  color: var(--fg-3);
+  font-size: 11px;
+}
+.coach-page .coach-chart-headline-value {
+  color: var(--fg-hi);
+  font: 600 26px/1.1 var(--font-num);
+  letter-spacing: -0.03em;
+}
+.coach-page .coach-chart-headline-change {
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  background: color-mix(in oklch, var(--fg) 6%, transparent);
+  color: var(--fg-2);
+  font: 500 11.5px/1.4 var(--font-num);
+}
+.coach-page .coach-chart-headline-change.is-up,
+.coach-page .coach-chart-headline-change.is-down {
+  color: var(--metric-accent);
+  background: color-mix(in oklch, var(--metric-accent) 14%, transparent);
+}
+
+/* Segmented control with a sliding thumb. */
+.coach-page .coach-inline-chart-switch {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  flex: 0 0 auto;
+  padding: 3px;
+  border: var(--stroke) solid var(--rule-soft);
+  border-radius: var(--r-full);
+  background: var(--bg);
+}
+.coach-page .coach-inline-chart-switch::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  border-radius: var(--r-full);
+  background: var(--bg-lift);
+  box-shadow: 0 1px 2px oklch(0% 0 0 / 0.35);
+  transition: transform var(--spring-snappy-dur) var(--spring-snappy);
+}
+.coach-page .coach-inline-chart-switch[data-view="table"]::before { transform: translateX(100%); }
+.coach-page .coach-inline-chart-switch button,
+.coach-page .coach-inline-chart-switch button:hover,
+.coach-page .coach-inline-chart-switch button.active {
+  position: relative;
+  z-index: 1;
+  min-height: 26px;
+  padding: 0 12px;
+  border-radius: var(--r-full);
+  background: transparent;
+  transition: color var(--dur) var(--ease);
+}
+.coach-page .coach-inline-chart-switch button.active { color: var(--fg-hi); }
+.coach-page .coach-inline-chart-switch button:focus-visible {
+  outline: 2px solid color-mix(in oklch, var(--metric-accent) 70%, transparent);
+  outline-offset: 0;
+}
+.coach-page .coach-inline-chart-plot { height: 236px; }
+.coach-page .coach-view-enter { animation: coach-fade 260ms var(--ease) both; }
+
+.coach-page .coach-inline-chart-tooltip {
+  min-width: 96px;
+  gap: 4px;
+  padding: 8px 11px;
+  border: var(--stroke) solid var(--rule);
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--bg-lift) 88%, transparent);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 12px 28px -12px oklch(0% 0 0 / 0.7);
+}
+.coach-page .coach-inline-chart-tooltip strong {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--fg-hi);
+  font-size: 13px;
+  font-weight: 600;
+}
+.coach-page .coach-inline-chart-tooltip strong::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-full);
+  background: var(--series-color, var(--metric-accent));
+}
+.coach-page .coach-inline-chart-tooltip em {
+  color: var(--fg-3);
+  font-style: normal;
+  font-weight: 400;
+  font-size: 11px;
+}
+.coach-page .coach-inline-chart .recharts-legend-item-text { color: var(--fg-2) !important; font-size: 11px; }
+.coach-page .coach-chart-live-halo {
+  fill: currentColor;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: coach-halo 2.4s var(--ease) 900ms infinite;
+}
+.coach-page .coach-chart-live-dot {
+  animation: coach-fade 300ms var(--ease) 820ms both;
+}
+
+/* ---------- Empty state ---------- */
+.coach-page .coach-empty { gap: 10px; }
+.coach-page .coach-empty > * {
+  animation: coach-rise var(--spring-smooth-dur) var(--spring-smooth) both;
+}
+.coach-page .coach-empty > :nth-child(2) { animation-delay: 60ms; }
+.coach-page .coach-empty > :nth-child(3) { animation-delay: 110ms; }
+.coach-page .coach-empty > :nth-child(4) { animation-delay: 160ms; }
+.coach-page .coach-empty > :nth-child(5) { animation: none; }
+
+.coach-page .coach-empty-orb {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 14px;
+}
+.coach-page .coach-empty-orb::before,
+.coach-page .coach-empty-orb > span {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    var(--d-recovery),
+    var(--d-sleep),
+    var(--d-hrv),
+    var(--d-rhr),
+    var(--d-strain),
+    var(--d-recovery)
+  );
+  animation: coach-orb-spin 14s linear infinite;
+}
+.coach-page .coach-empty-orb::before {
+  inset: -10px;
+  filter: blur(22px);
+  opacity: 0.45;
+  animation: coach-orb-spin 14s linear infinite, coach-orb-breathe 5s ease-in-out infinite;
+}
+.coach-page .coach-empty-orb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(60% 60% at 32% 28%, oklch(100% 0 0 / 0.38), transparent 60%),
+    radial-gradient(circle at 50% 50%, transparent 52%, oklch(0% 0 0 / 0.25) 100%);
+}
+.coach-page .coach-empty-mark {
+  color: var(--fg-3);
+  font-family: var(--font-num);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.coach-page .coach-empty-title {
+  color: var(--fg-hi);
+  font-size: clamp(22px, 2.6vw + 10px, 30px);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+.coach-page .coach-empty-copy {
+  max-width: 44ch;
+  color: var(--fg-3);
+  font-size: 14px;
+}
+
+.coach-page .coach-suggestions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+  max-width: 620px;
+  margin-top: 22px;
+}
+.coach-page .coach-suggestion {
+  --metric-accent: var(--coach-accent);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 11px;
+  row-gap: 3px;
+  align-items: center;
+  padding: 13px 14px;
+  border: var(--stroke) solid var(--rule-soft);
+  border-radius: 14px;
+  background: var(--coach-surface);
+  color: var(--fg);
+  text-align: left;
+  cursor: pointer;
+  animation: coach-rise var(--spring-smooth-dur) var(--spring-smooth) both;
+  animation-delay: calc(220ms + var(--stagger, 0) * 60ms);
+  transition:
+    transform var(--spring-snappy-dur) var(--spring-snappy),
+    border-color 200ms var(--ease),
+    background 200ms var(--ease);
+}
+.coach-page .coach-suggestion:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: color-mix(in oklch, var(--metric-accent) 40%, var(--rule));
+  background:
+    radial-gradient(120% 120% at 0% 0%, color-mix(in oklch, var(--metric-accent) 10%, transparent), transparent 70%),
+    var(--coach-surface);
+}
+.coach-page .coach-suggestion:active:not(:disabled) { transform: scale(0.98); }
+.coach-page .coach-suggestion:focus-visible {
+  outline: 2px solid color-mix(in oklch, var(--metric-accent) 75%, transparent);
+  outline-offset: 2px;
+}
+.coach-page .coach-suggestion-icon {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--metric-accent) 15%, transparent);
+  color: var(--metric-accent);
+  transition: transform var(--spring-bouncy-dur) var(--spring-bouncy);
+}
+.coach-page .coach-suggestion:hover:not(:disabled) .coach-suggestion-icon { transform: scale(1.08) rotate(-4deg); }
+.coach-page .coach-suggestion-hint {
+  color: var(--fg-3);
+  font-family: var(--font-num);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.coach-page .coach-suggestion-text {
+  color: var(--fg);
+  font-size: 13.5px;
+  line-height: 1.35;
+}
+
+/* ---------- Composer ---------- */
+.coach-page .coach-composer { border-top-color: transparent; }
+.coach-page .coach-input-shell {
+  padding: 10px 10px 8px 12px;
+  border-color: var(--rule);
+  border-radius: var(--r-xl);
+  background: var(--coach-surface);
+  box-shadow: var(--coach-shadow);
+  transition:
+    border-color 220ms var(--ease),
+    box-shadow 320ms var(--ease);
+}
+.coach-page .coach-input-shell:focus-within {
+  border-color: color-mix(in oklch, var(--fg) 24%, var(--rule));
+  box-shadow:
+    0 0 0 4px color-mix(in oklch, var(--coach-accent) 10%, transparent),
+    0 16px 40px -20px oklch(0% 0 0 / 0.8);
+}
+.coach-page .coach-input::placeholder { color: var(--fg-3); }
+.coach-page .coach-attach { border-radius: var(--r-full); }
+.coach-page .coach-send {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-full);
+  transition:
+    transform var(--spring-snappy-dur) var(--spring-snappy),
+    background 200ms var(--ease),
+    color 200ms var(--ease);
+}
+.coach-page .coach-send:hover:not(:disabled) { transform: scale(1.06); background: var(--fg-hi); }
+.coach-page .coach-send:hover:not(:disabled) svg { transform: translateY(-1px); }
+.coach-page .coach-send svg { transition: transform var(--spring-snappy-dur) var(--spring-snappy); }
+.coach-page .coach-send:not(:disabled):active { transform: scale(0.92); }
+.coach-page .coach-send:focus-visible,
+.coach-page .coach-attach:focus-visible {
+  outline: 2px solid color-mix(in oklch, var(--coach-accent) 75%, transparent);
+  outline-offset: 2px;
+}
+.coach-page .coach-attachment-preview {
+  border-radius: var(--r-lg);
+  animation: coach-bubble-in var(--spring-snappy-dur) var(--spring-snappy) both;
+}
+.coach-page .coach-attachment-preview img { border-radius: calc(var(--r-lg) - 1px); }
+.coach-page .coach-model-menu {
+  border-radius: 14px;
+  box-shadow: 0 24px 60px -24px oklch(0% 0 0 / 0.8);
+  transform-origin: 100% 100%;
+  animation: coach-menu-in var(--spring-snappy-dur) var(--spring-snappy) both;
+}
+
+/* ---------- Lightbox ---------- */
+.coach-page .coach-image-lightbox { animation: coach-fade 200ms var(--ease) both; }
+.coach-page .coach-lightbox-image { animation: coach-bubble-in var(--spring-smooth-dur) var(--spring-smooth) both; }
+
+/* ---------- Narrow ---------- */
+@media (max-width: 640px) {
+  .coach-page .coach-suggestions { grid-template-columns: 1fr; margin-top: 16px; }
+  .coach-page .coach-rich-metric { padding: 12px 10px 11px; border-radius: 12px; }
+  .coach-page .coach-rich-metric-label { font-size: 11px; gap: 5px; }
+  .coach-page .coach-rich-metrics { column-gap: 6px; }
+  .coach-page .coach-inline-chart { padding: 13px 12px 10px; border-radius: 14px; }
+  .coach-page .coach-inline-chart-plot { height: 210px; }
+  .coach-page .coach-chart-headline-label {
+  flex-basis: 100%;
+  color: var(--fg-3);
+  font-size: 11px;
+}
+.coach-page .coach-chart-headline-value { font-size: 22px; }
+  .coach-page .prose-coach { font-size: 15px; }
+}
+
+/* ---------- Keyframes ---------- */
+@keyframes coach-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes coach-bubble-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes coach-menu-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes coach-slide-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes coach-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes coach-fade-down {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes coach-check-draw {
+  from { stroke-dashoffset: 14; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes coach-pop {
+  from { transform: scale(0.6); }
+  to { transform: scale(1); }
+}
+@keyframes coach-meter-grow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes coach-marker-slide {
+  from { left: 50%; opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes coach-caret-breathe {
+  0%, 100% { opacity: 1; transform: scaleY(1); }
+  50% { opacity: 0.35; transform: scaleY(0.82); }
+}
+@keyframes coach-live-sweep {
+  from { background-position: -60% 0; }
+  to { background-position: 160% 0; }
+}
+@keyframes coach-halo {
+  0% { opacity: 0.45; transform: scale(0.45); }
+  80%, 100% { opacity: 0; transform: scale(1.35); }
+}
+@keyframes coach-ping {
+  0% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--ok) 50%, transparent); }
+  70%, 100% { box-shadow: 0 0 0 6px transparent; }
+}
+@keyframes coach-orb-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes coach-orb-breathe {
+  0%, 100% { opacity: 0.35; scale: 0.92; }
+  50% { opacity: 0.6; scale: 1.08; }
+}
+
+/* ---------- Reduced motion: every state is designed to be correct static ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .coach-page *,
+  .coach-page *::before,
+  .coach-page *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+  .coach-page .coach-topbar.is-live::after { opacity: 0.6; }
+  .coach-page .coach-chart-live-halo { display: none; }
+}
