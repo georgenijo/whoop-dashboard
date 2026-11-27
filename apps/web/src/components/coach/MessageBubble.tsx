@@ -59,8 +59,9 @@ export default function MessageBubble({ msg, onAttachmentClick, onRetry }: Props
     (segment) => segment.type === "chart",
   );
 
-  // Don't render empty aborted assistant bubbles (race between abort + tool flush).
-  if (isAborted && msg.content === "") return null;
+  // Don't render empty aborted assistant bubbles (race between abort + tool
+  // flush) -- unless a tool call already moved visible text into work notes.
+  if (isAborted && msg.content === "" && !msg.workLog?.notes.length) return null;
 
   return (
     <div className={`coach-message-row ${isUser ? "user" : "assistant"}`}>

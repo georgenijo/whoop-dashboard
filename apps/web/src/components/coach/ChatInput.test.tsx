@@ -142,6 +142,16 @@ describe("ChatInput image attachments", () => {
     expect(props.onKeyDown).not.toHaveBeenCalled();
   });
 
+  it("stops with Escape while focus is on the Stop button", () => {
+    const { props } = renderInput({ loading: true });
+    const stop = screen.getByRole("button", { name: "Stop reply" });
+    stop.focus();
+
+    fireEvent.keyDown(stop, { key: "Escape" });
+
+    expect(props.onStop).toHaveBeenCalledTimes(1);
+  });
+
   it("leaves Escape alone and keeps Enter/Shift+Enter behaviour when idle", () => {
     const { props } = renderInput({ input: "How did I sleep?" });
     const textbox = screen.getByRole("textbox");

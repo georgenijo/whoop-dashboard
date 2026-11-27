@@ -304,3 +304,25 @@ describe("MessageBubble failed and stopped replies", () => {
     expect(screen.getByText("(stopped)")).toBeInTheDocument();
   });
 });
+
+describe("MessageBubble stopped during a tool call", () => {
+  it("keeps the bubble when the visible text moved into work notes", () => {
+    render(
+      <MessageBubble
+        msg={{
+          role: "assistant",
+          content: "",
+          status: "aborted",
+          workLog: {
+            version: 1,
+            status: "aborted",
+            duration_ms: 1200,
+            notes: ["Let me check your sleep."],
+            tools: [],
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText("(stopped)")).toBeInTheDocument();
+  });
+});

@@ -92,6 +92,15 @@ describe("useAutoScroll", () => {
     expect(scroller.scrollTop).toBe(1100);
   });
 
+  it("offers Jump to latest as soon as the reader scrolls up, without new content", () => {
+    const { scroller } = setup();
+    act(() => {
+      scroller.scrollTop = 100;
+      fireEvent.scroll(scroller);
+    });
+    expect(screen.getByRole("button", { name: "Jump to latest" })).toBeInTheDocument();
+  });
+
   it("hides Jump to latest once the reader scrolls back down", () => {
     const { rerender, scroller, metrics } = setup();
     scroller.scrollTop = 0;

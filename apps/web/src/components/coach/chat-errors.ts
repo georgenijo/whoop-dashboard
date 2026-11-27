@@ -11,6 +11,7 @@ export type CoachErrorClass =
   | "cancelled"
   | "quota"
   | "network"
+  | "session_expired"
   | "unknown";
 
 export type CoachTurnError = {
@@ -76,6 +77,10 @@ export const COACH_ERROR_COPY: Record<
     title: "Lost the connection to Coach.",
     hint: "Check your connection, then retry.",
   },
+  session_expired: {
+    title: "You've been signed out.",
+    hint: "Reload the page to sign in again, then retry.",
+  },
   unknown: {
     title: "Coach hit an unexpected error.",
     hint: "Retry, or start a new thread if it keeps happening.",
@@ -108,9 +113,10 @@ function classFromInfo(info: FailureInfo): CoachErrorClass {
       return "network";
   }
   switch (info.status) {
+    // Provider-key failures always carry `kind`/`reason` (handled above); an
+    // untagged 401 comes from the auth gate, i.e. the session itself.
     case 401:
-    case 403:
-      return "invalid_key";
+      return "session_expired";
     case 422:
       return "model_unavailable";
     case 429:

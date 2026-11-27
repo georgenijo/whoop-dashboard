@@ -36,7 +36,7 @@ export function useAutoScroll<T>(content: T, resetKey: unknown) {
     if (!element) return;
     const pinned = isNearBottom(element);
     pinnedRef.current = pinned;
-    if (pinned) setShowJump(false);
+    setShowJump(!pinned);
   }, []);
 
   /** Re-pin to the bottom, e.g. when the user sends or taps "Jump to latest". */

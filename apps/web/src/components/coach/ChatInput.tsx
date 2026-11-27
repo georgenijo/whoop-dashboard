@@ -113,6 +113,13 @@ export default function ChatInput({
         }
       }}
       onDrop={handleDrop}
+      onKeyDown={(event) => {
+        // Composer-wide, so it still works when focus sits on Stop itself.
+        if (loading && event.key === "Escape") {
+          event.preventDefault();
+          onStop();
+        }
+      }}
     >
       {pendingImages.length > 0 ? (
         <>
@@ -171,11 +178,7 @@ export default function ChatInput({
             e.target.style.height = `${e.target.scrollHeight}px`;
           }}
           onKeyDown={(event) => {
-            if (loading && event.key === "Escape") {
-              event.preventDefault();
-              onStop();
-              return;
-            }
+            if (loading && event.key === "Escape") return;
             if (busy && event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
               return;

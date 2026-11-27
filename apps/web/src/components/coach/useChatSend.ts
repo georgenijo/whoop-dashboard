@@ -98,13 +98,11 @@ type SendParams = Omit<UseChatSendParams, "initialMessages"> & {
   setLoading: Dispatch<SetStateAction<boolean>>;
   setPreparingImages: Dispatch<SetStateAction<boolean>>;
   pendingImages: PendingChatImage[];
+  getPendingImages: () => PendingChatImage[];
   setPendingImages: (images: PendingChatImage[]) => void;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   abortRef: RefObject<AbortController | null>;
-  /**
-   * Resending a failed turn: the composer is only cleared if it still holds
-   * that draft, and is not refilled if the resend fails too.
-   */
+  /** Resending a failed turn: only clear the composer if it still holds that draft. */
   retry?: boolean;
   onTurnFailed: (turn: FailedTurn | null) => void;
 };
@@ -135,7 +133,6 @@ type StreamHandlers = {
     workLog: CoachWorkLog | null,
     presentationBlocks: CoachPresentationBlock[],
   ) => void;
-  badApiKey?: (event: { origin: string }) => void;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -371,6 +368,34 @@ function withoutFailedTurn(messages: ComposerMessage[]): ComposerMessage[] {
   return messages.at(-2)?.role === "user" ? messages.slice(0, -2) : messages.slice(0, -1);
 }
 
+function userCount(messages: ComposerMessage[]): number {
+  return messages.filter((message) => message.role === "user").length;
+}
+
+/**
+ * Before a Retry resends, check whether the "failed" turn actually reached
+ * the database: the connection can drop after the server commits but before
+ * `done` arrives, or mid-stream (the server then persists the partial turn as
+ * aborted). Returns the persisted transcript when it holds this turn's user
+ * message, plus whether it also holds a finished reply (then there's nothing
+ * to resend). `null` when the turn isn't there, or history can't be read.
+ */
+async function persistedFailedTurn(
+  threadId: number,
+  base: ComposerMessage[],
+  text: string,
+): Promise<{ messages: ComposerMessage[]; answered: boolean } | null> {
+  const persisted = await refreshPersistedMessages(threadId);
+  if (!persisted || userCount(persisted) <= userCount(base)) return null;
+  const lastUserIndex = persisted.findLastIndex((message) => message.role === "user");
+  if (persisted[lastUserIndex]?.content !== text) return null;
+  const reply = persisted[lastUserIndex + 1];
+  return {
+    messages: persisted,
+    answered: reply?.role === "assistant" && reply.status !== "aborted",
+  };
+}
+
 async function postMessage(
   userMessage: ComposerMessage,
   images: PendingChatImage[],
@@ -440,6 +465,29 @@ async function responseError(response: Response): Promise<CoachRequestError> {
 
 function releasePreviewUrls(images: PendingChatImage[]) {
   for (const image of images) URL.revokeObjectURL(image.previewUrl);
+}
+
+type ComposerImages = Pick<SendParams, "getPendingImages" | "setPendingImages">;
+
+function removeSentImages(params: ComposerImages, sent: PendingChatImage[]) {
+  if (sent.length === 0) return;
+  const sentIds = new Set(sent.map((image) => image.id));
+  const current = params.getPendingImages();
+  if (current.some((image) => sentIds.has(image.id))) {
+    params.setPendingImages(current.filter((image) => !sentIds.has(image.id)));
+  }
+}
+
+// A failed send puts its images back in the composer (ahead of anything the
+// user attached since), without duplicating any that are still there.
+function restoreDraftImages(params: ComposerImages, draft: PendingChatImage[]) {
+  if (draft.length === 0) return;
+  const current = params.getPendingImages();
+  const currentIds = new Set(current.map((image) => image.id));
+  params.setPendingImages([
+    ...draft.filter((image) => !currentIds.has(image.id)),
+    ...current,
+  ]);
 }
 
 function restoreDraftIfEmpty(
@@ -556,20 +604,12 @@ async function readChatStream(
         parseCoachPresentationBlocks(payload.presentation_blocks),
       );
     } else if (event === "error") {
-      if (payload.kind === "bad_api_key") {
-        handlers.badApiKey?.({
-          origin:
-            typeof payload.origin === "string" ? payload.origin : "unknown",
-        });
-        sawDone = true;
-      } else {
-        throw new CoachRequestError(
-          typeof payload.message === "string"
-            ? payload.message
-            : "Coach stream failed",
-          { kind: payload.kind, reason: payload.reason },
-        );
-      }
+      throw new CoachRequestError(
+        typeof payload.message === "string"
+          ? payload.message
+          : "Coach stream failed",
+        { kind: payload.kind, reason: payload.reason },
+      );
     }
   };
 
@@ -651,7 +691,6 @@ async function sendChatMessage(params: SendParams) {
     },
   ]);
   const isCurrent = () => params.abortRef.current === controller;
-  let badApiKey = false;
 
   try {
     await yieldForPreparingState(draftImages);
@@ -665,23 +704,11 @@ async function sendChatMessage(params: SendParams) {
     params.setPreparingImages(false);
     const responseThreadId =
       applyThreadHeader(response, params.setThreadId) ?? params.threadId;
-    if (!response.ok) {
-      if (response.status === 401) {
-        try {
-          const body = (await response.clone().json()) as { kind?: string };
-          if (body.kind === "bad_api_key") {
-            params.setBadApiKey?.(true);
-            params.setMessages((previous) => previous.slice(0, assistantIndex));
-            restoreDraftIfEmpty(params.setInput, draftText);
-            return;
-          }
-        } catch {
-          // Fall through to the generic error path.
-        }
-      }
-      throw await responseError(response);
-    }
-    if (!params.retry) params.setPendingImages([]);
+    if (!response.ok) throw await responseError(response);
+    // The images are on their way to the server now; take them out of the
+    // composer (by id, so anything added since stays). Their preview URLs
+    // stay alive: the optimistic user message still shows them.
+    removeSentImages(params, draftImages);
 
     await readChatStream(response, {
       appendText: (text) =>
@@ -692,28 +719,23 @@ async function sendChatMessage(params: SendParams) {
         endAssistantTool(params.setMessages, assistantIndex, event),
       progressTool: (event) =>
         progressAssistantTool(params.setMessages, assistantIndex, event),
-      done: (reply, workLog, presentationBlocks) =>
+      done: (reply, workLog, presentationBlocks) => {
         finishAssistant(
           params.setMessages,
           assistantIndex,
           reply,
           workLog,
           presentationBlocks,
-        ),
-      badApiKey: () => {
-        badApiKey = true;
-        params.setBadApiKey?.(true);
+        );
+        // The reply is complete; nothing left for Stop to cancel. (An image
+        // turn still swaps in persisted attachment URLs below.)
+        params.setLoading(false);
       },
     });
     if (!isCurrent()) return;
-    if (badApiKey) {
-      params.setMessages((previous) => previous.slice(0, assistantIndex));
-      restoreDraftIfEmpty(params.setInput, draftText);
-      params.setPendingImages(draftImages);
-      return;
-    }
     if (draftImages.length > 0) {
       const persistedMessages = await refreshPersistedMessages(responseThreadId);
+      if (!isCurrent()) return;
       if (persistedMessages) {
         params.setMessages(persistedMessages);
       } else {
@@ -734,16 +756,24 @@ async function sendChatMessage(params: SendParams) {
     // switch (which has already replaced `abortRef`). Abort reasons are
     // re-thrown verbatim by fetch/read, so check the signal, not the error.
     if (controller.signal.aborted) {
-      releasePreviewUrls(draftImages);
-      if (isCurrent()) stopAssistant(params.setMessages, assistantIndex);
+      if (isCurrent()) {
+        // Stopped: the turn was sent, so its images leave the composer. Their
+        // previews stay alive for the stopped user message.
+        removeSentImages(params, draftImages);
+        stopAssistant(params.setMessages, assistantIndex);
+      } else {
+        // Thread switch / unmount: the transcript showing them is gone.
+        releasePreviewUrls(draftImages);
+      }
       void params.refreshThreads();
       return;
     }
     if (!isCurrent()) return;
-    if (!params.retry) {
-      restoreDraftIfEmpty(params.setInput, draftText);
-      params.setPendingImages(draftImages);
+    if (error instanceof CoachRequestError && error.info.kind === "bad_api_key") {
+      params.setBadApiKey?.(true);
     }
+    restoreDraftIfEmpty(params.setInput, draftText);
+    restoreDraftImages(params, draftImages);
     params.onTurnFailed({ text: draftText, images: draftImages });
     failAssistant(params.setMessages, assistantIndex, classifyCoachFailure(error));
   } finally {
@@ -784,6 +814,8 @@ export function useChatSend({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const syncedThreadRef = useRef<number | null>(null);
+  const retryingRef = useRef(false);
+  const messagesRef = useRef(messages);
   const failedTurnRef = useRef<FailedTurn | null>(null);
   const rememberFailedTurn = useCallback((turn: FailedTurn | null) => {
     failedTurnRef.current = turn;
@@ -796,6 +828,11 @@ export function useChatSend({
     pendingImagesRef.current = images;
     setPendingImagesState(images);
   }, []);
+  const getPendingImages = useCallback(() => pendingImagesRef.current, []);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const addImages = useCallback(
     (files: File[]) => {
@@ -829,7 +866,14 @@ export function useChatSend({
   const removeImage = useCallback(
     (id: string) => {
       const image = pendingImagesRef.current.find((item) => item.id === id);
-      if (image) URL.revokeObjectURL(image.previewUrl);
+      // A failed turn's images are back in the composer but its user message
+      // still shows them; only revoke a preview nothing else displays.
+      const shownInTranscript =
+        image != null &&
+        messagesRef.current.some((message) =>
+          message.attachments?.some((attachment) => attachment.url === image.previewUrl),
+        );
+      if (image && !shownInTranscript) URL.revokeObjectURL(image.previewUrl);
       setPendingImages(
         pendingImagesRef.current.filter((item) => item.id !== id),
       );
@@ -862,6 +906,10 @@ export function useChatSend({
 
   useEffect(
     () => () => {
+      // Unmount (e.g. leaving /coach): don't leave a stream running into a
+      // component that no longer exists.
+      abortRef.current?.abort();
+      abortRef.current = null;
       releasePreviewUrls(pendingImagesRef.current);
       pendingImagesRef.current = [];
     },
@@ -880,6 +928,7 @@ export function useChatSend({
         setLoading,
         setPreparingImages,
         pendingImages,
+        getPendingImages,
         setPendingImages,
         inputRef,
         abortRef,
@@ -889,6 +938,7 @@ export function useChatSend({
         onTurnFailed: rememberFailedTurn,
       }),
     [
+      getPendingImages,
       messages,
       rememberFailedTurn,
       pendingImages,
@@ -908,25 +958,45 @@ export function useChatSend({
 
   // Resend the last failed user message. `withoutFailedTurn` drops the failed
   // pair so the resend's optimistic user message replaces it.
-  const retry = useCallback(() => {
+  const retry = useCallback(async () => {
     const failedTurn = failedTurnRef.current;
     const failed = messages.at(-1);
     if (
       abortRef.current ||
+      retryingRef.current ||
       !failedTurn ||
       failed?.role !== "assistant" ||
       !failed.error ||
       messages.at(-2)?.role !== "user"
     ) {
-      return Promise.resolve();
+      return;
     }
-    // The failure restored these images to the composer; they're being sent
-    // again, so take them back out (without revoking their preview URLs,
-    // which the resent user message still displays).
-    if (pendingImagesRef.current === failedTurn.images) setPendingImages([]);
-    return sendChatMessage({
+    retryingRef.current = true;
+    let base = messages;
+    try {
+      const persisted = await persistedFailedTurn(
+        threadId,
+        withoutFailedTurn(messages),
+        failedTurn.text,
+      );
+      if (syncedThreadRef.current !== threadId || abortRef.current) return;
+      if (persisted?.answered) {
+        // The server finished this turn; only the reply's delivery failed.
+        failedTurnRef.current = null;
+        removeSentImages({ getPendingImages, setPendingImages }, failedTurn.images);
+        setInput((current) => (current === failedTurn.text ? "" : current));
+        setMessages(persisted.messages);
+        return;
+      }
+      // Persisted as an interrupted turn: show the transcript as stored, and
+      // resend after it (the stored record keeps that interrupted attempt).
+      if (persisted) base = persisted.messages;
+    } finally {
+      retryingRef.current = false;
+    }
+    await sendChatMessage({
       text: failedTurn.text,
-      messages,
+      messages: base,
       threadId,
       setThreadId,
       setMessages,
@@ -934,6 +1004,7 @@ export function useChatSend({
       setLoading,
       setPreparingImages,
       pendingImages: failedTurn.images,
+      getPendingImages,
       setPendingImages,
       inputRef,
       abortRef,
@@ -944,6 +1015,7 @@ export function useChatSend({
       retry: true,
     });
   }, [
+    getPendingImages,
     messages,
     refreshRouter,
     refreshThreads,

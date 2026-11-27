@@ -125,7 +125,9 @@ export default function CoachWorkspace({
             ) : (
               <MessageList
                 messages={messages}
-                onRetry={loading ? undefined : () => void retry()}
+                // Like Send, Retry waits for a model save so it runs on the
+                // model the user just picked.
+                onRetry={loading || modelSaving ? undefined : () => void retry()}
               />
             )}
           </div>

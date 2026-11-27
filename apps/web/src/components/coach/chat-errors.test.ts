@@ -11,6 +11,8 @@ describe("classifyCoachFailure", () => {
     [{ reason: "missing_key", status: 503 }, "missing_key"],
     [{ reason: "invalid_key", status: 502 }, "invalid_key"],
     [{ kind: "bad_api_key", status: 401 }, "invalid_key"],
+    // An untagged 401 is the auth gate (expired session), not a provider key.
+    [{ status: 401 }, "session_expired"],
     [{ reason: "model_unavailable", status: 422 }, "model_unavailable"],
     [{ status: 422 }, "model_unavailable"],
     [{ kind: "overloaded", status: 503 }, "overloaded"],
