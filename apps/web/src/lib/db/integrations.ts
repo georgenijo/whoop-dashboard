@@ -377,14 +377,28 @@ export function setIntegrationNeedsReauth(
   user_id: number,
   provider: string,
   value: boolean
-): void {
+): boolean {
   const db = openWrite();
-  if (!db) return;
+  if (!db) return false;
   try {
-    if (!hasTable(db, "integrations")) return;
-    db.prepare(
-      "UPDATE integrations SET needs_reauth = ?, updated_at = ? WHERE user_id = ? AND provider = ?"
-    ).run(value ? 1 : 0, new Date().toISOString(), user_id, provider);
+    if (!hasTable(db, "integrations")) return false;
+    // `needs_reauth != ?` makes this a transition, not a blind write: the
+    // return value is true only when the flag actually changed, so callers
+    // can log (and later push on) the 0→1 edge exactly once instead of on
+    // every failed refresh against an already-flagged row (#263).
+    const info = db
+      .prepare(
+        "UPDATE integrations SET needs_reauth = ?, updated_at = ? " +
+          "WHERE user_id = ? AND provider = ? AND needs_reauth != ?"
+      )
+      .run(
+        value ? 1 : 0,
+        new Date().toISOString(),
+        user_id,
+        provider,
+        value ? 1 : 0
+      );
+    return info.changes > 0;
   } finally {
     db.close();
   }

@@ -298,8 +298,25 @@ describe("integrations + vault", () => {
     });
     // Fresh write defaults to false.
     expect(integrations.getIntegration(1, "whoop")?.needs_reauth).toBe(false);
-    integrations.setIntegrationNeedsReauth(1, "whoop", true);
+    expect(integrations.setIntegrationNeedsReauth(1, "whoop", true)).toBe(true);
     expect(integrations.getIntegration(1, "whoop")?.needs_reauth).toBe(true);
+  });
+
+  it("setIntegrationNeedsReauth reports a transition only once (#263)", async () => {
+    const { integrations } = await loadModules();
+    integrations.upsertIntegration({
+      user_id: 1,
+      provider: "whoop",
+      access_token: "a",
+      refresh_token: "r",
+      expires_at: "2026-05-09T00:00:00+00:00",
+    });
+    expect(integrations.setIntegrationNeedsReauth(1, "whoop", true)).toBe(true);
+    // Already flagged: no transition, flag unchanged.
+    expect(integrations.setIntegrationNeedsReauth(1, "whoop", true)).toBe(false);
+    expect(integrations.getIntegration(1, "whoop")?.needs_reauth).toBe(true);
+    // Missing row: no transition.
+    expect(integrations.setIntegrationNeedsReauth(2, "whoop", true)).toBe(false);
   });
 
   it("upsertIntegration resets needs_reauth to false on every write", async () => {
