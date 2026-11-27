@@ -82,6 +82,7 @@ kept out of this repository.
 | `COACH_CURSOR_TRANSPORT` | Cursor ACP rollout is enabled | `legacy` (default) or `acp`; controls both model discovery and turns |
 | `COACH_CURSOR_ACP_IDLE_TTL_MS` | ACP session idle lifetime needs tuning | Default 600000 (10 minutes) |
 | `COACH_CURSOR_ACP_MAX_SESSIONS` | ACP process capacity needs tuning | Default 4 live sessions |
+| `COACH_TURN_ROUTING` | Measuring the #489 turn router | Unset/anything else = off. `shadow` records the router's lane, tool envelope, confidence, features and `router_ms` in `chat_logs.details.routing` (plus `timing.router_ms`) next to the tools the turn actually used (`observed_tools`); execution is unchanged. No enforcing mode exists yet |
 | `CURSOR_BACKEND_URL` | Cursor endpoint override is needed | Coach model discovery and turns |
 | `PUBLIC_ORIGIN` | Production redirects are generated | Web auth |
 | `ADMIN_APPLE_SUB` | Admin webhook replay is enabled | Admin authorization |
