@@ -1270,3 +1270,24 @@ describe("useChatSend review follow-ups", () => {
     expect(result.current.pendingImages.map((image) => image.file)).toEqual([b]);
   });
 });
+
+describe("useChatSend retry with an untrustworthy history read", () => {
+  beforeEach(() => vi.unstubAllGlobals());
+
+  it("treats a history read with fewer prompts than shown as unknown, not absent", async () => {
+    const fetchMock = chatFetch([streamResponse([sse("text_delta", { text: "x" })])], () => []);
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderChat([
+      { id: 1, role: "user", content: "earlier", created_at: "2026-11-27T10:00:00.000Z", attachments: [] },
+      { id: 2, role: "assistant", content: "reply", created_at: "2026-11-27T10:00:01.000Z", attachments: [] },
+    ]);
+    await act(async () => {
+      await result.current.send("q");
+    });
+    await act(async () => {
+      await result.current.retry();
+    });
+    expect(postBodies(fetchMock)).toHaveLength(1);
+    expect(result.current.messages.at(-1)?.error?.detail).toMatch(/wasn't resent/);
+  });
+});

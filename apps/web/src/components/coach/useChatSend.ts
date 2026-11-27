@@ -404,7 +404,10 @@ async function storedFailedTurn(
 ): Promise<StoredTurn> {
   const persisted = await refreshPersistedMessages(threadId);
   if (!persisted) return { kind: "unknown" };
-  if (userCount(persisted) <= userCount(base)) return { kind: "absent" };
+  // Fewer stored prompts than we already show means the read can't be trusted
+  // (the history route degrades a failed DB read to an empty list).
+  if (userCount(persisted) < userCount(base)) return { kind: "unknown" };
+  if (userCount(persisted) === userCount(base)) return { kind: "absent" };
   const lastUserIndex = persisted.findLastIndex((message) => message.role === "user");
   // Multipart uploads can store CRLF line endings for a typed LF draft.
   const normalize = (value: string) => value.replace(/\r\n?/g, "\n").trim();
