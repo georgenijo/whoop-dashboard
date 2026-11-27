@@ -41,7 +41,7 @@ export default function MessageBubble({ msg, onAttachmentClick }: Props) {
     serverSnapshot,
   );
   // A bubble first rendered after hydration arrived during this visit (a sent
-  // message, a reply, a thread switch) and springs in; the server-rendered
+  // message or a reply) and springs in; the server-rendered
   // transcript is already on screen and stays still. Captured once, so later
   // streaming re-renders never replay the entrance.
   const [entering] = useState(isBrowser);

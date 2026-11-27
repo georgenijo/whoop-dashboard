@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarizeSeries, svgSafeId } from "./chartSummary";
+import { lastNumericIndex, summarizeSeries, svgSafeId } from "./chartSummary";
 
 describe("summarizeSeries", () => {
   it("leads with the latest value and the change across the window", () => {
@@ -24,5 +24,13 @@ describe("svgSafeId", () => {
   it("strips characters that break url(#id) references", () => {
     expect(svgSafeId(":r1:")).toBe("r1");
     expect(svgSafeId("«r2»")).toBe("r2");
+  });
+});
+
+describe("lastNumericIndex", () => {
+  it("finds the last real value, skipping trailing gaps", () => {
+    expect(lastNumericIndex([1, 2, null, undefined])).toBe(1);
+    expect(lastNumericIndex([1, 2, 3])).toBe(2);
+    expect(lastNumericIndex([null])).toBe(-1);
   });
 });

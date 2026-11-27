@@ -42,7 +42,10 @@ type Props = {
 
 /**
  * Counts a display value up to its target the first time it scrolls into
- * view, then springs between values when it changes.
+ * view, then springs between values when it changes. Numbers already on
+ * screen at hydration (a server-rendered transcript) stay still: the first
+ * client pass runs under the server's "reduced" snapshot and records the
+ * settled value, so only numbers mounted afterwards count up.
  *
  * The rendered text is the final value on the server, in tests, under reduced
  * motion, and for compound values ("7h 12m") that have no single number to
@@ -78,6 +81,7 @@ export default function AnimatedNumber({ value, className, delay = 0, spring = S
     const to = parsed.value;
     if (from === to) {
       setText(value);
+      setAnimating(false);
       return;
     }
     // Paint the starting value before the browser shows the final one.

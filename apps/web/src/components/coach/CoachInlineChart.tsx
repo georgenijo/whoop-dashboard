@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, useId, useMemo, useState } from "react";
+import { type CSSProperties, memo, useId, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -24,12 +24,12 @@ import {
   formatChartValue,
   liveDot,
 } from "./CoachChartParts";
-import { summarizeSeries, svgSafeId } from "./chartSummary";
+import { lastNumericIndex, summarizeSeries, svgSafeId } from "./chartSummary";
 
 const AXIS_TICK = { fill: "var(--fg-3)", fontSize: 10, fontFamily: "var(--font-num)" };
 const MARGIN = { top: 12, right: 12, bottom: 0, left: -12 };
 
-export default function CoachInlineChart({ chart }: { chart: CoachChartSpec }) {
+function CoachInlineChart({ chart }: { chart: CoachChartSpec }) {
   const [view, setView] = useState<"chart" | "table">("chart");
   const reduced = usePrefersReducedMotion();
   const gradientId = `coach-area-${svgSafeId(useId())}`;
@@ -38,10 +38,22 @@ export default function CoachInlineChart({ chart }: { chart: CoachChartSpec }) {
     () => chart.labels.map((label, index) => ({ label, value: chart.values[index] })),
     [chart.labels, chart.values],
   );
-  const summary = useMemo(() => summarizeSeries(chart.values, chart.unit), [chart.unit, chart.values]);
+  // A trend headline only makes sense for a series over time; a bar chart is
+  // a comparison across categories, so "latest" and "change" would mislead.
+  const summary = useMemo(
+    () => (chart.type === "line" ? summarizeSeries(chart.values, chart.unit) : null),
+    [chart.type, chart.unit, chart.values],
+  );
   const domain: [number | "auto", number | "auto"] = [chart.yMin ?? "auto", chart.yMax ?? "auto"];
   const units = { value: chart.unit };
-  const lastIndex = data.length - 1;
+  const lastIndex = lastNumericIndex(chart.values);
+  const dot = useMemo(() => liveDot(lastIndex, color), [lastIndex, color]);
+  const cells = useMemo(
+    () => data.map((row, index) => (
+      <Cell key={`${row.label}:${index}`} fill={color} fillOpacity={index === lastIndex ? 1 : 0.42} />
+    )),
+    [color, data, lastIndex],
+  );
   const motion = {
     isAnimationActive: !reduced,
     animationDuration: 900,
@@ -85,7 +97,7 @@ export default function CoachInlineChart({ chart }: { chart: CoachChartSpec }) {
                   strokeWidth={2.25}
                   strokeLinecap="round"
                   fill={`url(#${gradientId})`}
-                  dot={liveDot(lastIndex, color)}
+                  dot={dot}
                   activeDot={{ r: 5, fill: color, stroke: "var(--bg-sunk)", strokeWidth: 2 }}
                   {...motion}
                 />
@@ -97,13 +109,7 @@ export default function CoachInlineChart({ chart }: { chart: CoachChartSpec }) {
                 <YAxis domain={domain} tickLine={false} axisLine={false} width={48} tick={AXIS_TICK} />
                 <Tooltip content={<CoachChartTooltip units={units} />} cursor={{ fill: "var(--bg-lift)", radius: 6 } as object} />
                 <Bar dataKey="value" radius={[6, 6, 2, 2]} maxBarSize={44} {...motion}>
-                  {data.map((row, index) => (
-                    <Cell
-                      key={`${row.label}:${index}`}
-                      fill={color}
-                      fillOpacity={index === lastIndex ? 1 : 0.42}
-                    />
-                  ))}
+                  {cells}
                 </Bar>
               </BarChart>
             )}
@@ -130,3 +136,23 @@ export default function CoachInlineChart({ chart }: { chart: CoachChartSpec }) {
     </section>
   );
 }
+
+function sameChart(a: CoachChartSpec, b: CoachChartSpec): boolean {
+  return (
+    a === b ||
+    (a.type === b.type &&
+      a.title === b.title &&
+      a.unit === b.unit &&
+      a.yMin === b.yMin &&
+      a.yMax === b.yMax &&
+      a.labels.length === b.labels.length &&
+      a.values.length === b.values.length &&
+      a.labels.every((label, index) => label === b.labels[index]) &&
+      a.values.every((value, index) => value === b.values[index]))
+  );
+}
+
+// The chart spec is re-parsed from the message on every streamed token, so
+// identity changes while content doesn't. Comparing content keeps Recharts
+// from restarting its draw-in animation (and its rAF loop) per token.
+export default memo(CoachInlineChart, (prev, next) => sameChart(prev.chart, next.chart));

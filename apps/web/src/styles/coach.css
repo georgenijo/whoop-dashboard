@@ -30,6 +30,9 @@
   font-feature-settings: "tnum" 1;
 }
 
+/* Copying a number should yield it once, not once per visible/sr-only copy. */
+.coach-page .motion-number .sr-only { user-select: none; }
+
 /* ---------- Thread rail ---------- */
 .coach-page .coach-sidebar {
   background: var(--bg-sunk);
@@ -541,6 +544,11 @@
   gap: 4px 10px;
   margin: 6px 0 10px;
 }
+.coach-page .coach-chart-headline-label {
+  flex-basis: 100%;
+  color: var(--fg-3);
+  font-size: 11px;
+}
 .coach-page .coach-chart-headline-value {
   color: var(--fg-hi);
   font: 600 26px/1.1 var(--font-num);
@@ -843,7 +851,12 @@
   .coach-page .coach-rich-metrics { column-gap: 6px; }
   .coach-page .coach-inline-chart { padding: 13px 12px 10px; border-radius: 14px; }
   .coach-page .coach-inline-chart-plot { height: 210px; }
-  .coach-page .coach-chart-headline-value { font-size: 22px; }
+  .coach-page .coach-chart-headline-label {
+  flex-basis: 100%;
+  color: var(--fg-3);
+  font-size: 11px;
+}
+.coach-page .coach-chart-headline-value { font-size: 22px; }
   .coach-page .prose-coach { font-size: 15px; }
 }
 

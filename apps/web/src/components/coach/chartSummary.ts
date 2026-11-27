@@ -36,6 +36,15 @@ export function summarizeSeries(values: ReadonlyArray<number | null | undefined>
   };
 }
 
+/** Index of the last real value — where the series' "now" dot belongs. -1 if none. */
+export function lastNumericIndex(values: ReadonlyArray<number | null | undefined>): number {
+  for (let index = values.length - 1; index >= 0; index -= 1) {
+    const value = values[index];
+    if (typeof value === "number" && Number.isFinite(value)) return index;
+  }
+  return -1;
+}
+
 /** A DOM-safe id fragment from React's `useId()` output (which contains colons). */
 export function svgSafeId(id: string): string {
   return id.replace(/[^a-zA-Z0-9_-]/g, "");

@@ -78,10 +78,11 @@ export function AreaGradient({ id, color }: { id: string; color: string }) {
 }
 
 /** The chart's lead number: the latest value, animated, with its movement. */
-export function ChartHeadline({ summary, color }: { summary: SeriesSummary | null; color: string }) {
+export function ChartHeadline({ summary, color, label }: { summary: SeriesSummary | null; color: string; label?: string }) {
   if (!summary) return null;
   return (
     <div className="coach-chart-headline" style={{ "--metric-accent": color } as CSSProperties}>
+      {label ? <span className="coach-chart-headline-label">{label}</span> : null}
       <AnimatedNumber className="coach-chart-headline-value" value={summary.latest} />
       {summary.change ? (
         <span className={`coach-chart-headline-change is-${summary.direction}`}>{summary.change}</span>

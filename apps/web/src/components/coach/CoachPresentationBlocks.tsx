@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, useId, useMemo, useState } from "react";
+import { type CSSProperties, memo, useId, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import {
@@ -24,7 +24,7 @@ import type {
 import AnimatedNumber, { usePrefersReducedMotion } from "@/components/motion/AnimatedNumber";
 import { type MetricAccent, accentVar, baselinePosition, metricAccent } from "@/lib/motion";
 import { AreaGradient, ChartHeadline, CoachChartTooltip, ViewSwitch, liveDot } from "./CoachChartParts";
-import { summarizeSeries, svgSafeId } from "./chartSummary";
+import { lastNumericIndex, summarizeSeries, svgSafeId } from "./chartSummary";
 
 function number(value: number | null, unit = ""): string {
   if (value === null) return "Not available";
@@ -85,7 +85,6 @@ function MetricCards({ metrics, comparison, columns }: { metrics: MetricStripBlo
           : metric.value === null || metric.direction === "neutral"
             ? null
             : metric.direction === "up" ? "↑ Higher" : "↓ Lower";
-        const heading = direction?.startsWith("↑") ? "up" : direction?.startsWith("↓") ? "down" : "flat";
         return (
         <div
           className={`coach-rich-metric tone-${metric.tone}`}
@@ -98,7 +97,7 @@ function MetricCards({ metrics, comparison, columns }: { metrics: MetricStripBlo
             {metric.value !== null && metric.unit && !metric.display_value.toLowerCase().includes(metric.unit.toLowerCase()) ? <small>{metric.unit}</small> : null}
           </strong>
           <MetricMeter value={metric.value} unit={metric.unit} baseline={baseline?.baseline ?? null} />
-          <span className={`coach-rich-metric-direction${direction ? ` is-${heading}` : ""}`}>
+          <span className="coach-rich-metric-direction">
             {direction}
           </span>
           <span className="coach-rich-metric-baseline">{baseline && baseline.baseline !== null ? `Baseline ${number(baseline.baseline, baseline.unit)}` : null}</span>
@@ -176,9 +175,14 @@ function RichChart({ block }: { block: ChartBlock }) {
     [block],
   );
   const lead = block.series[0];
-  const summary = useMemo(() => (lead ? summarizeSeries(lead.values, lead.unit) : null), [lead]);
+  // Headline the lead series only when it is a trend line; bars compare
+  // categories, where "latest" and "change" would be a false trend claim.
+  const summary = useMemo(() => (lead?.kind === "line" ? summarizeSeries(lead.values, lead.unit) : null), [lead]);
   const units = Object.fromEntries(block.series.map((series) => [series.id, series.unit]));
-  const lastIndex = block.labels.length - 1;
+  const dots = useMemo(
+    () => block.series.map((series, index) => liveDot(lastNumericIndex(series.values), colors[index])),
+    [block.series, colors],
+  );
   const motion = { isAnimationActive: !reduced, animationDuration: 900, animationEasing: "ease-out" as const };
   async function copyTable() {
     const header = ["Period", ...block.series.map((series) => `${series.label}${series.unit ? ` (${series.unit})` : ""}`), "Note"];
@@ -191,7 +195,7 @@ function RichChart({ block }: { block: ChartBlock }) {
         <div className="coach-inline-chart-title"><h3>{block.title}</h3><span>{block.labels.length} points · {block.series.length} series</span></div>
         <ViewSwitch view={view} onChange={setView} />
       </div>
-      <ChartHeadline summary={summary} color={colors[0]} />
+      <ChartHeadline summary={summary} color={colors[0]} label={block.series.length > 1 ? lead?.label : undefined} />
       {view === "chart" ? (
         <div className="coach-inline-chart-plot coach-view-enter" role="img" aria-label={`${block.title}. ${block.fallback}`}>
           <ResponsiveContainer width="100%" height="100%">
@@ -225,7 +229,7 @@ function RichChart({ block }: { block: ChartBlock }) {
                   strokeWidth={2.25}
                   fill={`url(#${idBase}-${index})`}
                   connectNulls={false}
-                  dot={liveDot(lastIndex, colors[index])}
+                  dot={dots[index]}
                   activeDot={{ r: 5, fill: colors[index], stroke: "var(--bg-sunk)", strokeWidth: 2 }}
                   {...motion}
                   key={series.id}
@@ -294,7 +298,7 @@ function RichBlock({ block, comparison }: { block: CoachPresentationBlock; compa
   );
 }
 
-export default function CoachPresentationBlocks({ blocks }: { blocks: CoachPresentationBlock[] }) {
+function CoachPresentationBlocks({ blocks }: { blocks: CoachPresentationBlock[] }) {
   if (blocks.length === 0) return null;
   const comparisons = blocks.filter((block) => block.type === "comparison");
   const comparison = comparisons.length === 1 ? comparisons[0] : undefined;
@@ -308,3 +312,7 @@ export default function CoachPresentationBlocks({ blocks }: { blocks: CoachPrese
     </div>
   );
 }
+
+// Every bubble re-renders per streamed token; finished messages keep the same
+// `blocks` array, so a shallow memo stops their charts re-animating each time.
+export default memo(CoachPresentationBlocks);
