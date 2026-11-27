@@ -86,6 +86,7 @@ kept out of this repository.
 | `PUBLIC_ORIGIN` | Production redirects are generated | Web auth |
 | `ADMIN_APPLE_SUB` | Admin webhook replay is enabled | Admin authorization |
 | `WHOOP_REFRESH_SECRET` | Refresh-only keepalive timer is enabled (#273) | `POST /api/whoop/refresh` bearer auth — fails closed (404) when unset |
+| `COACH_KEY_PROBE` | Optional; `on` enables the shared-key probe (#525) | Each keepalive tick also checks the shared `CURSOR_API_KEY` against Cursor's `GET /v1/models` (no model turn) and records `ok`/`invalid`/`unreachable` in `credential_health`, shown on `/logs`. Two consecutive rejections open one incident (hook: `registerSharedCredentialIncidentHandler` in `lib/coach/shared-key-probe.ts`). Off by default; requires the keepalive timer |
 | `LOG_LEVEL` | Default logging is not wanted | Structured logger |
 | `APPLE_BUNDLE_ID` | Native Sign in with Apple is enabled | iOS identity verification |
 | `APPLE_SERVICES_ID` | Web Sign in with Apple is enabled | Web Apple OAuth |
