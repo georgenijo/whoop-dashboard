@@ -82,7 +82,7 @@ export default function CoachWorkspace({
         />
 
         <section className="coach-chat">
-          <div className="coach-topbar">
+          <div className={`coach-topbar${loading ? " is-live" : ""}`}>
             <div className="coach-title-block">
               <div className="coach-kicker">Conversation</div>
               <h1>{threadTitle}</h1>
@@ -103,6 +103,9 @@ export default function CoachWorkspace({
           <div className="coach-messages">
             {messages.length === 0 ? (
               <div className="coach-empty">
+                <div className="coach-empty-orb" aria-hidden="true">
+                  <span />
+                </div>
                 <div className="coach-empty-mark">Coach</div>
                 <div className="coach-empty-title">Ask anything about your health data</div>
                 <div className="coach-empty-copy">

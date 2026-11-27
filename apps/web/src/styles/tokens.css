@@ -64,6 +64,20 @@
   --dur: 160ms;
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 
+  /* Springs, sampled from src/lib/motion.ts `springProgress` with the same
+     (duration, bounce) as SPRINGS. Each pairs with the settle time it was
+     sampled over; use them together or the curve is stretched. */
+  --spring-smooth: linear(0, 0.0294, 0.0992, 0.1891, 0.2858, 0.3814, 0.4712, 0.5527, 0.6248, 0.6876, 0.7415, 0.7872, 0.8257, 0.8577, 0.8843, 0.9062, 0.9242, 0.9389, 0.9508, 0.9605, 0.9684, 0.9747, 0.9798, 0.9839, 0.9872, 0.9898, 0.9919, 0.9936, 0.9949, 0.996, 0.9968, 0.9975, 1);
+  --spring-smooth-dur: 674ms;
+  --spring-snappy: linear(0, 0.0276, 0.0956, 0.1864, 0.2874, 0.3899, 0.488, 0.5782, 0.6587, 0.7287, 0.7883, 0.8379, 0.8786, 0.9114, 0.9373, 0.9574, 0.9726, 0.984, 0.9922, 0.998, 1.0018, 1.0042, 1.0056, 1.0062, 1.0063, 1.006, 1.0055, 1.0049, 1.0043, 1.0036, 1.003, 1.0025, 1);
+  --spring-snappy-dur: 578ms;
+  --spring-bouncy: linear(0, 0.0246, 0.0874, 0.1747, 0.2754, 0.3809, 0.4849, 0.5831, 0.6725, 0.7515, 0.8194, 0.8762, 0.9225, 0.9591, 0.9872, 1.0078, 1.0221, 1.0313, 1.0364, 1.0383, 1.0379, 1.0359, 1.0328, 1.029, 1.025, 1.0209, 1.0171, 1.0135, 1.0104, 1.0077, 1.0054, 1.0035, 1);
+  --spring-bouncy-dur: 717ms;
+
+  /* Larger radii for conversational surfaces (bubbles, composer, cards). */
+  --r-lg: 12px;
+  --r-xl: 18px;
+
   /* Density multiplier. */
   --dm: 1;
 
