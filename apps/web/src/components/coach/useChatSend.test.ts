@@ -928,12 +928,9 @@ describe("useChatSend review follow-ups", () => {
     expect(result.current.input).toBe("");
   });
 
-  it("resends after a turn the server stored as interrupted, matching the stored record", async () => {
+  it("shows a turn stored as interrupted without storing the prompt twice", async () => {
     const fetchMock = chatFetch(
-      [
-        streamResponse([sse("text_delta", { text: "Half" })]),
-        streamResponse([sse("done", { reply: "Full answer" })]),
-      ],
+      [streamResponse([sse("text_delta", { text: "Half" })])],
       () => [
         { id: 10, role: "user", content: "q", created_at: "2026-11-27T10:00:00.000Z", attachments: [] },
         { id: 11, role: "assistant", content: "Half", status: "aborted", created_at: "2026-11-27T10:00:05.000Z", attachments: [] },
@@ -949,13 +946,108 @@ describe("useChatSend review follow-ups", () => {
       await result.current.retry();
     });
 
-    expect(postBodies(fetchMock)).toHaveLength(2);
+    expect(postBodies(fetchMock)).toHaveLength(1);
     expect(result.current.messages.map(({ role, content, status }) => ({ role, content, status }))).toEqual([
       { role: "user", content: "q", status: undefined },
       { role: "assistant", content: "Half", status: "aborted" },
-      { role: "user", content: "q", status: undefined },
-      { role: "assistant", content: "Full answer", status: undefined },
     ]);
+    expect(result.current.messages.at(-1)?.error?.retryable).toBe(false);
+    // And Retry is now a no-op.
+    await act(async () => {
+      await result.current.retry();
+    });
+    expect(postBodies(fetchMock)).toHaveLength(1);
+  });
+
+  it("does not resend when history can't be checked, and keeps Retry available", async () => {
+    let historyOk = false;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).startsWith("/api/chat/history")) {
+        return historyOk ? Response.json([]) : new Response("down", { status: 503 });
+      }
+      return postBodiesQueue.shift()!;
+    });
+    const postBodiesQueue = [
+      streamResponse([sse("text_delta", { text: "Half" })]),
+      streamResponse([sse("done", { reply: "ok" })]),
+    ];
+    vi.stubGlobal("fetch", fetchMock);
+    const { result } = renderChat();
+
+    await act(async () => {
+      await result.current.send("q");
+    });
+    await act(async () => {
+      await result.current.retry();
+    });
+    const posts = () => fetchMock.mock.calls.filter(([url]) => url === "/api/chat").length;
+    expect(posts()).toBe(1);
+    expect(result.current.messages.at(-1)?.error?.detail).toMatch(/wasn't resent/);
+
+    historyOk = true;
+    await act(async () => {
+      await result.current.retry();
+    });
+    expect(posts()).toBe(2);
+    expect(result.current.messages.at(-1)?.content).toBe("ok");
+  });
+
+  it("abandons a Retry whose history check is overtaken by a new Send", async () => {
+    const history = deferred<Response>();
+    const posts: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (String(url).startsWith("/api/chat/history")) return history.promise;
+        posts.push(JSON.parse(String(init?.body)).messages[0].content);
+        return posts.length === 1
+          ? Response.json({ error: "Busy", kind: "overloaded" }, { status: 503 })
+          : streamResponse([sse("done", { reply: "newer reply" })]);
+      }),
+    );
+    const { result } = renderChat();
+    await act(async () => {
+      await result.current.send("old");
+    });
+
+    let retryPromise = Promise.resolve();
+    act(() => {
+      retryPromise = result.current.retry();
+    });
+    await act(async () => {
+      await result.current.send("new question");
+    });
+    history.resolve(Response.json([]));
+    await act(async () => retryPromise);
+
+    expect(posts).toEqual(["old", "new question"]);
+    expect(result.current.messages.at(-1)?.content).toBe("newer reply");
+  });
+
+  it("never resends from a Retry whose history check finishes after unmount", async () => {
+    const history = deferred<Response>();
+    const fetchMock = chatFetch([
+      Response.json({ error: "Busy", kind: "overloaded" }, { status: 503 }),
+    ]);
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).startsWith("/api/chat/history")) return history.promise;
+      return Response.json({ error: "Busy", kind: "overloaded" }, { status: 503 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { result, unmount } = renderChat();
+    await act(async () => {
+      await result.current.send("q");
+    });
+    let retryPromise = Promise.resolve();
+    act(() => {
+      retryPromise = result.current.retry();
+    });
+
+    unmount();
+    history.resolve(Response.json([]));
+    await retryPromise;
+
+    expect(fetchMock.mock.calls.filter(([url]) => url === "/api/chat")).toHaveLength(1);
   });
 
   it.each([
@@ -1035,8 +1127,49 @@ describe("useChatSend review follow-ups", () => {
     });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
+    // The next message can go right away, while attachment history loads.
+    const next = controllableStreamResponse();
+    vi.mocked(fetch).mockImplementation(async (url) =>
+      String(url).startsWith("/api/chat/history") ? history.promise : next.response,
+    );
+    act(() => {
+      void result.current.send("and now?");
+    });
+    await waitFor(() =>
+      expect(vi.mocked(fetch).mock.calls.filter(([url]) => url === "/api/chat")).toHaveLength(2),
+    );
+
+    // The older turn's late history must not clobber the newer turn.
     history.resolve(Response.json([]));
     await act(async () => sendPromise);
+    expect(result.current.messages.at(-2)).toMatchObject({ role: "user", content: "and now?" });
+    act(() => next.close());
+  });
+
+  it("never restores a failed Retry's images past the 3-image limit", async () => {
+    stubObjectUrls();
+    vi.stubGlobal(
+      "fetch",
+      chatFetch([
+        Response.json({ error: "Busy", kind: "overloaded" }, { status: 503 }),
+        Response.json({ error: "Busy", kind: "overloaded" }, { status: 503 }),
+      ]),
+    );
+    const { result } = renderChat();
+    const original = new File(["o"], "o.jpg", { type: "image/jpeg" });
+    act(() => result.current.addImages([original]));
+    await act(async () => {
+      await result.current.send("what is this?");
+    });
+    act(() => result.current.removeImage(result.current.pendingImages[0].id));
+    const replacements = ["1", "2", "3"].map((n) => new File([n], `${n}.jpg`, { type: "image/jpeg" }));
+    act(() => result.current.addImages(replacements));
+
+    await act(async () => {
+      await result.current.retry();
+    });
+
+    expect(result.current.pendingImages.map((image) => image.file)).toEqual(replacements);
   });
 
   it("retrying an image turn keeps images attached since, and sends only the failed ones", async () => {

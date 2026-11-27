@@ -35,7 +35,11 @@ export default function MessageList({
           key={index}
           msg={message}
           onRetry={
-            index === messages.length - 1 && message.error ? onRetry : undefined
+            index === messages.length - 1 &&
+            message.error &&
+            message.error.retryable !== false
+              ? onRetry
+              : undefined
           }
           onAttachmentClick={(attachments, attachmentIndex, trigger) =>
             setLightbox({

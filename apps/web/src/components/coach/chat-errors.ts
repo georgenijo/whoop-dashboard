@@ -18,6 +18,8 @@ export type CoachTurnError = {
   errorClass: CoachErrorClass;
   /** Server-provided detail, when it says more than the generic fallback. */
   detail: string | null;
+  /** `false` when resending would duplicate a stored turn. Default: retryable. */
+  retryable?: boolean;
 };
 
 type FailureInfo = {
@@ -79,7 +81,7 @@ export const COACH_ERROR_COPY: Record<
   },
   session_expired: {
     title: "You've been signed out.",
-    hint: "Reload the page to sign in again, then retry.",
+    hint: "Copy your message first: reloading the page to sign in again clears it.",
   },
   unknown: {
     title: "Coach hit an unexpected error.",
@@ -139,8 +141,12 @@ export function classifyCoachFailure(error: unknown): CoachTurnError {
   const info =
     error instanceof CoachRequestError ? error.info : { message };
   const errorClass = classFromInfo({ ...info, message: info.message ?? message });
+  // The auth gate's body ("Unauthorized") says less than the sign-in hint.
   const detail =
-    message && message !== GENERIC_SERVER_MESSAGE && message !== CONNECTION_LOST_MESSAGE
+    errorClass !== "session_expired" &&
+    message &&
+    message !== GENERIC_SERVER_MESSAGE &&
+    message !== CONNECTION_LOST_MESSAGE
       ? message
       : null;
   return { errorClass, detail };

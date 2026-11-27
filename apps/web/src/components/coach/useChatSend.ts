@@ -102,6 +102,14 @@ type SendParams = Omit<UseChatSendParams, "initialMessages"> & {
   setPendingImages: (images: PendingChatImage[]) => void;
   inputRef: RefObject<HTMLTextAreaElement | null>;
   abortRef: RefObject<AbortController | null>;
+  /**
+   * Bumped by every new turn, Retry, thread switch, and unmount. Async work
+   * checks it to know whether it still owns the transcript; `abortRef` only
+   * says whether there is still something for Stop to cancel.
+   */
+  turnRef: RefObject<number>;
+  /** On failure, which images to put back (default: all of this turn's). */
+  restoreImages?: PendingChatImage[];
   /** Resending a failed turn: only clear the composer if it still holds that draft. */
   retry?: boolean;
   onTurnFailed: (turn: FailedTurn | null) => void;
@@ -372,28 +380,56 @@ function userCount(messages: ComposerMessage[]): number {
   return messages.filter((message) => message.role === "user").length;
 }
 
+type StoredTurn =
+  /** History has no trace of the turn: safe to resend. */
+  | { kind: "absent" }
+  /** The server finished it; only delivery of the reply failed. */
+  | { kind: "answered"; messages: ComposerMessage[] }
+  /** Stored as interrupted (mid-stream disconnect). Resending would store the prompt twice. */
+  | { kind: "interrupted"; messages: ComposerMessage[] }
+  /** History couldn't be read, so resending might duplicate it. */
+  | { kind: "unknown" };
+
 /**
  * Before a Retry resends, check whether the "failed" turn actually reached
  * the database: the connection can drop after the server commits but before
  * `done` arrives, or mid-stream (the server then persists the partial turn as
- * aborted). Returns the persisted transcript when it holds this turn's user
- * message, plus whether it also holds a finished reply (then there's nothing
- * to resend). `null` when the turn isn't there, or history can't be read.
+ * aborted).
  */
-async function persistedFailedTurn(
+async function storedFailedTurn(
   threadId: number,
   base: ComposerMessage[],
   text: string,
-): Promise<{ messages: ComposerMessage[]; answered: boolean } | null> {
+): Promise<StoredTurn> {
   const persisted = await refreshPersistedMessages(threadId);
-  if (!persisted || userCount(persisted) <= userCount(base)) return null;
+  if (!persisted) return { kind: "unknown" };
+  if (userCount(persisted) <= userCount(base)) return { kind: "absent" };
   const lastUserIndex = persisted.findLastIndex((message) => message.role === "user");
-  if (persisted[lastUserIndex]?.content !== text) return null;
+  if (persisted[lastUserIndex]?.content !== text) return { kind: "absent" };
   const reply = persisted[lastUserIndex + 1];
-  return {
-    messages: persisted,
-    answered: reply?.role === "assistant" && reply.status !== "aborted",
-  };
+  return reply?.role === "assistant" && reply.status !== "aborted"
+    ? { kind: "answered", messages: persisted }
+    : { kind: "interrupted", messages: persisted };
+}
+
+const INTERRUPTED_TURN_ERROR: CoachTurnError = {
+  errorClass: "network",
+  detail:
+    "The connection dropped mid-reply. Your message and whatever arrived were saved, so ask again to continue.",
+  retryable: false,
+};
+
+// Show a stored interrupted turn as stored, with a notice (and no Retry,
+// since resending would store the prompt a second time).
+function markInterrupted(messages: ComposerMessage[]): ComposerMessage[] {
+  const last = messages.at(-1);
+  if (last?.role === "assistant") {
+    return [...messages.slice(0, -1), { ...last, error: INTERRUPTED_TURN_ERROR }];
+  }
+  return [
+    ...messages,
+    { role: "assistant", content: "", error: INTERRUPTED_TURN_ERROR },
+  ];
 }
 
 async function postMessage(
@@ -479,15 +515,16 @@ function removeSentImages(params: ComposerImages, sent: PendingChatImage[]) {
 }
 
 // A failed send puts its images back in the composer (ahead of anything the
-// user attached since), without duplicating any that are still there.
+// user attached since), without duplicating any that are still there, and
+// never past the 3-image limit.
 function restoreDraftImages(params: ComposerImages, draft: PendingChatImage[]) {
   if (draft.length === 0) return;
   const current = params.getPendingImages();
   const currentIds = new Set(current.map((image) => image.id));
-  params.setPendingImages([
-    ...draft.filter((image) => !currentIds.has(image.id)),
-    ...current,
-  ]);
+  const restored = draft
+    .filter((image) => !currentIds.has(image.id))
+    .slice(0, Math.max(0, 3 - current.length));
+  if (restored.length > 0) params.setPendingImages([...restored, ...current]);
 }
 
 function restoreDraftIfEmpty(
@@ -678,6 +715,8 @@ async function sendChatMessage(params: SendParams) {
 
   const controller = new AbortController();
   params.abortRef.current = controller;
+  params.turnRef.current += 1;
+  const turn = params.turnRef.current;
   const assistantIndex = nextMessages.length;
   const workStartedAt = Date.now();
   params.setMessages((previous) => [
@@ -690,7 +729,10 @@ async function sendChatMessage(params: SendParams) {
       workStartedAt,
     },
   ]);
-  const isCurrent = () => params.abortRef.current === controller;
+  const isCurrent = () => params.turnRef.current === turn;
+  const releaseStop = () => {
+    if (params.abortRef.current === controller) params.abortRef.current = null;
+  };
 
   try {
     await yieldForPreparingState(draftImages);
@@ -727,8 +769,10 @@ async function sendChatMessage(params: SendParams) {
           workLog,
           presentationBlocks,
         );
-        // The reply is complete; nothing left for Stop to cancel. (An image
-        // turn still swaps in persisted attachment URLs below.)
+        // The reply is complete: nothing left for Stop to cancel, and the
+        // next message can go. (An image turn still swaps in persisted
+        // attachment URLs below, unless a newer turn starts first.)
+        releaseStop();
         params.setLoading(false);
       },
     });
@@ -753,9 +797,10 @@ async function sendChatMessage(params: SendParams) {
     void params.refreshThreads();
   } catch (error) {
     // Only this hook aborts the controller: Stop while current, or a thread
-    // switch (which has already replaced `abortRef`). Abort reasons are
-    // re-thrown verbatim by fetch/read, so check the signal, not the error.
+    // switch / unmount (which has already bumped `turnRef`). Abort reasons
+    // are re-thrown verbatim by fetch/read, so check the signal, not the error.
     if (controller.signal.aborted) {
+      releaseStop();
       if (isCurrent()) {
         // Stopped: the turn was sent, so its images leave the composer. Their
         // previews stay alive for the stopped user message.
@@ -773,12 +818,12 @@ async function sendChatMessage(params: SendParams) {
       params.setBadApiKey?.(true);
     }
     restoreDraftIfEmpty(params.setInput, draftText);
-    restoreDraftImages(params, draftImages);
+    restoreDraftImages(params, params.restoreImages ?? draftImages);
     params.onTurnFailed({ text: draftText, images: draftImages });
     failAssistant(params.setMessages, assistantIndex, classifyCoachFailure(error));
   } finally {
+    releaseStop();
     if (isCurrent()) {
-      params.abortRef.current = null;
       params.setLoading(false);
       params.setPreparingImages(false);
       params.inputRef.current?.focus();
@@ -813,6 +858,7 @@ export function useChatSend({
   const pendingImagesRef = useRef<PendingChatImage[]>([]);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const turnRef = useRef(0);
   const syncedThreadRef = useRef<number | null>(null);
   const retryingRef = useRef(false);
   const messagesRef = useRef(messages);
@@ -891,6 +937,7 @@ export function useChatSend({
     // the draft, abort a follow-up turn, and flash the transcript.
     if (syncedThreadRef.current === threadId) return;
     syncedThreadRef.current = threadId;
+    turnRef.current += 1;
     abortRef.current?.abort();
     abortRef.current = null;
     failedTurnRef.current = null;
@@ -906,8 +953,9 @@ export function useChatSend({
 
   useEffect(
     () => () => {
-      // Unmount (e.g. leaving /coach): don't leave a stream running into a
-      // component that no longer exists.
+      // Unmount (e.g. leaving /coach): don't leave a stream running, or a
+      // Retry's history check resending, into a component that's gone.
+      turnRef.current += 1;
       abortRef.current?.abort();
       abortRef.current = null;
       releasePreviewUrls(pendingImagesRef.current);
@@ -932,6 +980,7 @@ export function useChatSend({
         setPendingImages,
         inputRef,
         abortRef,
+        turnRef,
         refreshThreads,
         refreshRouter,
         setBadApiKey,
@@ -957,7 +1006,8 @@ export function useChatSend({
   }, []);
 
   // Resend the last failed user message. `withoutFailedTurn` drops the failed
-  // pair so the resend's optimistic user message replaces it.
+  // pair so the resend's optimistic user message replaces it. First, history
+  // is checked so a turn the server did store is never stored twice.
   const retry = useCallback(async () => {
     const failedTurn = failedTurnRef.current;
     const failed = messages.at(-1);
@@ -967,36 +1017,59 @@ export function useChatSend({
       !failedTurn ||
       failed?.role !== "assistant" ||
       !failed.error ||
+      failed.error.retryable === false ||
       messages.at(-2)?.role !== "user"
     ) {
       return;
     }
     retryingRef.current = true;
-    let base = messages;
+    // Owning a turn number means any Send, thread switch, or unmount during
+    // the history check below invalidates this Retry.
+    turnRef.current += 1;
+    const op = turnRef.current;
+    let stored: StoredTurn;
     try {
-      const persisted = await persistedFailedTurn(
+      stored = await storedFailedTurn(
         threadId,
         withoutFailedTurn(messages),
         failedTurn.text,
       );
-      if (syncedThreadRef.current !== threadId || abortRef.current) return;
-      if (persisted?.answered) {
-        // The server finished this turn; only the reply's delivery failed.
-        failedTurnRef.current = null;
-        removeSentImages({ getPendingImages, setPendingImages }, failedTurn.images);
-        setInput((current) => (current === failedTurn.text ? "" : current));
-        setMessages(persisted.messages);
-        return;
-      }
-      // Persisted as an interrupted turn: show the transcript as stored, and
-      // resend after it (the stored record keeps that interrupted attempt).
-      if (persisted) base = persisted.messages;
     } finally {
       retryingRef.current = false;
     }
+    if (turnRef.current !== op) return;
+    if (stored.kind === "unknown") {
+      setMessages((previous) =>
+        previous.map((message) =>
+          message === failed
+            ? {
+                ...message,
+                error: {
+                  ...failed.error!,
+                  detail:
+                    "Couldn't check whether this message was saved, so it wasn't resent. Retry again in a moment.",
+                },
+              }
+            : message,
+        ),
+      );
+      return;
+    }
+    if (stored.kind !== "absent") {
+      failedTurnRef.current = null;
+      removeSentImages({ getPendingImages, setPendingImages }, failedTurn.images);
+      setInput((current) => (current === failedTurn.text ? "" : current));
+      setMessages(
+        stored.kind === "answered" ? stored.messages : markInterrupted(stored.messages),
+      );
+      return;
+    }
+    // Only put back images that are still in the composer if this fails too:
+    // the user may have removed some and attached others since.
+    const composerIds = new Set(pendingImagesRef.current.map((image) => image.id));
     await sendChatMessage({
       text: failedTurn.text,
-      messages: base,
+      messages,
       threadId,
       setThreadId,
       setMessages,
@@ -1004,10 +1077,12 @@ export function useChatSend({
       setLoading,
       setPreparingImages,
       pendingImages: failedTurn.images,
+      restoreImages: failedTurn.images.filter((image) => composerIds.has(image.id)),
       getPendingImages,
       setPendingImages,
       inputRef,
       abortRef,
+      turnRef,
       refreshThreads,
       refreshRouter,
       setBadApiKey,

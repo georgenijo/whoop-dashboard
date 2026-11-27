@@ -30,6 +30,12 @@ describe("classifyCoachFailure", () => {
     ).toBe(errorClass);
   });
 
+  it("shows the sign-in hint, not the auth gate's body, for an expired session", () => {
+    expect(
+      classifyCoachFailure(new CoachRequestError("Unauthorized", { status: 401 })),
+    ).toEqual({ errorClass: "session_expired", detail: null });
+  });
+
   it("treats a stray AbortError as cancelled", () => {
     expect(
       classifyCoachFailure(new DOMException("aborted", "AbortError")),
