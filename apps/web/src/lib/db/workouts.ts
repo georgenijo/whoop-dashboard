@@ -652,3 +652,32 @@ export function getMonthlyRollup(
       r.ym === currentYm || (i === 0 && !r.first_day.endsWith("-01")),
   }));
 }
+
+/** Row cap for `getSimilarWorkoutCandidates` — keeps the detail page's one extra read bounded. */
+export const SIMILAR_CANDIDATES_LIMIT = 250;
+
+/**
+ * Same-sport sessions for the detail page's "Compare with similar workouts"
+ * card (`SIMILAR_WORKOUTS=1`): one bounded, user-scoped read over
+ * `[startDate, endDate]`, newest first, excluding the session itself. Sport is
+ * matched trimmed + case-insensitively, and a `null` sport matches `null`/blank.
+ * Duration filtering and "earlier than" ordering happen in the pure
+ * `lib/analytics/similarWorkouts` module.
+ */
+export function getSimilarWorkoutCandidates(
+  userId: number,
+  sport: string | null,
+  excludeId: string,
+  startDate: string,
+  endDate: string,
+): WorkoutRow[] {
+  const range = dateRangeClause(startDate, endDate);
+  return forUser(userId).all<WorkoutRow>(
+    `SELECT ${WORKOUT_COLUMNS} FROM workouts
+      WHERE COALESCE(LOWER(TRIM(sport)), '') = ? AND id != ? AND ${range.clause} AND user_id = ?
+      ORDER BY date DESC LIMIT ${SIMILAR_CANDIDATES_LIMIT}`,
+    (sport ?? "").trim().toLowerCase(),
+    excludeId,
+    ...range.params,
+  );
+}

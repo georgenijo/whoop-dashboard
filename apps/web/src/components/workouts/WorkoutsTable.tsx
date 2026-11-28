@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import type { WorkoutRow } from "@/lib/db";
+import type { VsUsualChip } from "@/lib/analytics/similarWorkouts";
 
 type Props = {
   rows: WorkoutRow[];
+  /** SIMILAR_WORKOUTS=1 only; absent = table renders exactly as before. */
+  vsUsual?: Record<string, VsUsualChip>;
   title?: string;
   /** Overrides the "N sessions" header count, e.g. when `rows` is capped. */
   countLabel?: string;
@@ -51,6 +54,7 @@ const HEADERS = ["Date", "Sport", "Duration", "Strain", "Avg HR", "Max HR", "kca
 
 export default function WorkoutsTable({
   rows,
+  vsUsual,
   title = "Recent workouts",
   countLabel,
   emptyTitle = "No workouts in range",
@@ -102,7 +106,7 @@ export default function WorkoutsTable({
             <span aria-hidden />
           </div>
           {rows.map((w) => (
-            <WorkoutRowItem key={w.id} workout={w} />
+            <WorkoutRowItem key={w.id} workout={w} chip={vsUsual?.[w.id]} />
           ))}
         </div>
       )}
@@ -110,7 +114,7 @@ export default function WorkoutsTable({
   );
 }
 
-function WorkoutRowItem({ workout: w }: { workout: WorkoutRow }) {
+function WorkoutRowItem({ workout: w, chip }: { workout: WorkoutRow; chip?: VsUsualChip }) {
   const totalZoneMs = ZONES.reduce((sum, z) => sum + (w[z.key] ?? 0), 0);
   const zonesPresent = totalZoneMs > 0;
 
@@ -138,6 +142,7 @@ function WorkoutRowItem({ workout: w }: { workout: WorkoutRow }) {
         }}
       >
         {w.sport ?? "—"}
+        {chip ? <VsUsualBadge chip={chip} /> : null}
       </span>
       <span style={{ color: "var(--fg-1)" }}>{formatDuration(w.duration_sec)}</span>
       <span style={{ color: "#ffaa00", fontWeight: 600 }}>{w.strain?.toFixed(1) ?? "—"}</span>
@@ -192,5 +197,32 @@ function WorkoutRowItem({ workout: w }: { workout: WorkoutRow }) {
         </svg>
       </span>
     </Link>
+  );
+}
+
+const CHIP_COLOR: Record<VsUsualChip["verdict"], string> = {
+  "higher-intensity": "#f97316",
+  "lower-intensity": "#06b6d4",
+  typical: "var(--fg-3)",
+  mixed: "#facc15",
+};
+
+function VsUsualBadge({ chip }: { chip: VsUsualChip }) {
+  return (
+    <span
+      data-testid="vs-usual-chip"
+      data-verdict={chip.verdict}
+      title={`vs your last ${chip.n} similar session${chip.n === 1 ? "" : "s"}`}
+      style={{
+        marginLeft: 8,
+        fontFamily: "var(--font-mono)",
+        fontSize: 10,
+        fontWeight: 400,
+        color: CHIP_COLOR[chip.verdict],
+        whiteSpace: "nowrap",
+      }}
+    >
+      {chip.label}
+    </span>
   );
 }

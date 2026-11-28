@@ -71,6 +71,7 @@ export {
   getPersonalRecords,
   getMonthlyRollup,
   getWorkoutHistoryFloor,
+  getSimilarWorkoutCandidates,
 } from "./workouts";
 
 export type { PRStats, PRValue, PRStreak } from "./prs";
