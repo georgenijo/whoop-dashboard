@@ -8,6 +8,7 @@ import {
 import {
   type ChatMessage,
   type ComposerMessage,
+  type ThreadContext,
   useChatSend,
 } from "@/components/coach/useChatSend";
 import {
@@ -16,7 +17,7 @@ import {
 } from "@/components/coach/useThreadList";
 import { useAutoScroll } from "@/components/coach/useAutoScroll";
 
-export type { ChatMessage, ComposerMessage, ThreadSummary };
+export type { ChatMessage, ComposerMessage, ThreadContext, ThreadSummary };
 
 function submitOnEnter(
   e: KeyboardEvent<HTMLTextAreaElement>,
@@ -32,7 +33,8 @@ function submitOnEnter(
 export function useCoachThread(
   initialThreadId: number,
   initialThreads: ThreadSummary[],
-  initialMessages: ChatMessage[]
+  initialMessages: ChatMessage[],
+  initialContext: ThreadContext | null = null,
 ) {
   const [mobileOpen, setMobileOpen] = useState(false);
   // Ephemeral banner state for the BYOK 401 path. Reset to false on every
@@ -68,8 +70,10 @@ export function useCoachThread(
     retry,
     threadLoad,
     progressLabel,
+    context,
   } = useChatSend({
     initialMessages,
+    initialContext,
     threadId,
     setThreadId,
     refreshThreads,
@@ -130,6 +134,7 @@ export function useCoachThread(
     stop,
     retry: retryLast,
     threadLoad,
+    context,
     handleCreateThread,
     handleSelectThread,
     handleDeleteThread,

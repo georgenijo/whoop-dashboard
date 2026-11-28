@@ -7,6 +7,8 @@ export type AnthropicModelOption = {
   thinking: "adaptive" | "enabled" | "none";
   efforts: CoachEffort[];
   max_tokens: number | null;
+  /** Context-window input limit from the Models API (issue #608). */
+  max_input_tokens?: number | null;
   output_effort?: boolean;
   strict_tools?: boolean;
 };

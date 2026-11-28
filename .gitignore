@@ -27,3 +27,6 @@ mockups/
 
 # generated code-health reports (regenerate with `omen`)
 omen-report-*/
+
+# scripts/deploy staged npm install state on the deploy host (issue #524)
+/.deploy-state/

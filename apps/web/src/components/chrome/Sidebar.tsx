@@ -23,7 +23,10 @@ const secondary: NavItem[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
-export default function Sidebar() {
+// Shown only when the server passes `showWeekly` (WEEKLY_REVIEW=1).
+const weeklyItem: NavItem = { href: "/weekly", label: "Weekly review", icon: "calendar-days" };
+
+export default function Sidebar({ showWeekly = false }: { showWeekly?: boolean }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const range = searchParams.get("range");
@@ -53,7 +56,7 @@ export default function Sidebar() {
           );
         })}
         <div className="sb-group-label">Intelligence</div>
-        {secondary.map((n) => {
+        {(showWeekly ? [weeklyItem, ...secondary] : secondary).map((n) => {
           const Icon = NAV_ICONS[n.icon];
           return (
             <Link
