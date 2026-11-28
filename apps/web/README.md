@@ -207,3 +207,32 @@ extra DB reads.
 | Flag | Enables |
 |---|---|
 | `YEAR_REVIEW=1` | **Year in Review** at `/year` (`?y=YYYY`, defaults to the current year in the user's timezone; out-of-range or malformed years fall back to it) plus a "Year in review →" link on `/stats`. A printable annual summary: days scored, yearly and per-month averages (recovery, HRV, RHR, sleep), best/toughest month, longest green-recovery streak, highest-strain day, workout totals with HR-zone minutes and top sports, sleep-consistency trend, personal bests, and 3–5 deterministic highlight sentences. Pure computation in `src/lib/analytics/yearReview.ts` over the existing user-scoped range readers, bounded to one calendar year. Flag off → `/year` is a 404 and the Stats link is absent. |
+### `HEALTH_ALERTS=1` — Health Alerts center (`/alerts`)
+
+Off by default. Server-side env flag, read per request
+(`src/lib/health-alerts-flag.ts`); only the exact value `1` enables it.
+
+- **Off:** `/alerts` returns 404 before any auth or DB read, the Sidebar and
+  the mobile More drawer show no Alerts entry, and the dashboard layout does no
+  extra reads.
+- **On:** adds "Alerts" to the Sidebar's Intelligence group (with a count badge
+  for `watch`/`act` alerts; `info` never badges) and to the mobile More drawer.
+  The page lists the signals the app already computes, most urgent first, each
+  with severity (`info` / `watch` / `act`), a one-line explanation with the
+  numbers, since-when, and what usually helps. With nothing current it shows
+  "Nothing to flag" and the per-check status.
+
+Rules live in `src/lib/analytics/healthAlerts.ts` (pure, no AI, no network) and
+reuse the existing analytics so an alert never disagrees with its card:
+illness signal (`illness.ts`), overtraining score (`ots.ts`), HRV below the
+30-day 1.5σ band (`trends.ts`, same as `HRVTrend`), resting HR above the 14-day
+baseline, skin-temp run (`skinTemp.ts`, shared with `SkinTempDeviationCard`),
+respiratory rate outside ±2 br/min, Whoop's sleep-debt figure, and data
+freshness. When the illness alert fires it absorbs the per-metric RHR / HRV /
+skin-temp / resp alerts it is built from. Reads are the last 60 days through the
+user-scoped `getRecoveryRange` / `getSleepRange` / `getStrainRange` plus
+`getLastSuccessfulSyncAt`, deduped per request with `cache()`. Guidance only,
+not medical advice.
+
+To enable it in production, add `Environment=HEALTH_ALERTS=1` to the
+`whoop-web` service drop-in and restart the service.

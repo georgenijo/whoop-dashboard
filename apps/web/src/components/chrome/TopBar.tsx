@@ -35,6 +35,7 @@ const TITLES: Record<string, string> = {
   "/perf": "Performance",
   "/history": "History",
   "/settings": "Settings",
+  "/alerts": "Alerts",
 };
 
 // Nested routes (`/stats/Running`, `/workouts/<id>`) inherit their section's

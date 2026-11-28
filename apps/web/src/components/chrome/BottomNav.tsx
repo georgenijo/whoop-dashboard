@@ -27,6 +27,9 @@ const more: Item[] = [
 // Shown only when the server passes `showWeekly` (WEEKLY_REVIEW=1).
 const weeklyItem: Item = { href: "/weekly", label: "Weekly review", icon: "calendar-days" };
 
+// Shown in the More drawer only when the server passes `showAlerts` (HEALTH_ALERTS=1).
+const ALERTS_ITEM: Item = { href: "/alerts", label: "Alerts", icon: "bell" };
+
 // Default-off /compare entry (PERIOD_COMPARE=1); the server layout decides.
 const compareItem: Item = { href: "/compare", label: "Compare", icon: "git-compare" };
 
@@ -37,8 +40,15 @@ export default function BottomNav({
   showWeekly = false,
   compareEnabled = false,
   showRecords = false,
-}: { showWeekly?: boolean; compareEnabled?: boolean; showRecords?: boolean } = {}) {
+  showAlerts = false,
+}: {
+  showWeekly?: boolean;
+  compareEnabled?: boolean;
+  showRecords?: boolean;
+  showAlerts?: boolean;
+} = {}) {
   const drawerItems = [
+    ...(showAlerts ? [ALERTS_ITEM] : []),
     ...(showRecords ? [RECORDS_ITEM] : []),
     ...(showWeekly ? [weeklyItem] : []),
     ...(compareEnabled ? [compareItem] : []),

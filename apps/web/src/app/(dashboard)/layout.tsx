@@ -14,6 +14,9 @@ import { requireAuthOrSignin } from "@/lib/auth";
 import { isWeeklyReviewEnabled } from "@/lib/weekly-flag";
 import { isPeriodCompareEnabled } from "@/lib/period-compare-flag";
 import { isRecordsPageEnabled } from "@/lib/records-flag";
+import { isHealthAlertsEnabled } from "@/lib/health-alerts-flag";
+import { loadHealthAlerts } from "@/lib/health-alerts";
+import { alertBadgeCount } from "@/lib/analytics/healthAlerts";
 import "../globals.css";
 import "../../styles/quiet-instrument.css";
 
@@ -117,6 +120,17 @@ export default async function RootLayout({
     );
   }
 
+  // Health Alerts nav entry + badge (HEALTH_ALERTS=1). Flag off: no reads,
+  // no entry. A failed read hides the badge rather than breaking the shell.
+  let alertsNav: { count: number } | undefined;
+  if (isHealthAlertsEnabled()) {
+    try {
+      alertsNav = { count: alertBadgeCount(loadHealthAlerts(user.id)) };
+    } catch {
+      alertsNav = { count: 0 };
+    }
+  }
+
   return (
     <html
       lang="en"
@@ -131,7 +145,12 @@ export default async function RootLayout({
         <WebVitalsReporter />
         <div className="app">
           <Suspense fallback={null}>
-            <Sidebar showWeekly={showWeekly} compareEnabled={compareEnabled} showRecords={showRecords} />
+            <Sidebar
+              showWeekly={showWeekly}
+              compareEnabled={compareEnabled}
+              showRecords={showRecords}
+              alerts={alertsNav}
+            />
           </Suspense>
           <main className="main">
             <Suspense fallback={null}>
@@ -143,7 +162,12 @@ export default async function RootLayout({
           </main>
         </div>
         <Suspense fallback={null}>
-          <BottomNav showWeekly={showWeekly} compareEnabled={compareEnabled} showRecords={showRecords} />
+          <BottomNav
+            showWeekly={showWeekly}
+            compareEnabled={compareEnabled}
+            showRecords={showRecords}
+            showAlerts={alertsNav !== undefined}
+          />
         </Suspense>
       </body>
     </html>

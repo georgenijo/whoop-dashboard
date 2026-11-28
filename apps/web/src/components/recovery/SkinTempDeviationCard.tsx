@@ -11,6 +11,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import {
+  SKIN_TEMP_ELEVATED_THRESHOLD,
+  latestElevatedSkinTempRun,
+} from "@/lib/analytics/skinTemp";
 
 type Row = { date: string; skin_temp: number | null; recovery_score: number | null };
 
@@ -22,7 +26,7 @@ type Props = {
 const ELEVATED_COLOR = "#ffaa00";
 const BELOW_COLOR = "#00aaff";
 const NORMAL_COLOR = "#00d4aa";
-const ELEVATED_THRESHOLD = 0.5;
+const ELEVATED_THRESHOLD = SKIN_TEMP_ELEVATED_THRESHOLD;
 const RECOVERY_DROP_THRESHOLD = 10;
 
 function colorFor(dev: number): string {
@@ -59,23 +63,11 @@ type Annotation =
 
 function detectAnnotation(rows: Row[], mean: number): Annotation {
   // Walk from most recent backwards; find latest run of >=2 consecutive elevated days.
-  let runEnd = -1;
-  let runStart = -1;
-  for (let i = rows.length - 1; i >= 0; i--) {
-    const v = rows[i].skin_temp;
-    if (v != null && v - mean > ELEVATED_THRESHOLD) {
-      runEnd = i;
-      runStart = i;
-      while (runStart - 1 >= 0) {
-        const prev = rows[runStart - 1].skin_temp;
-        if (prev != null && prev - mean > ELEVATED_THRESHOLD) runStart--;
-        else break;
-      }
-      break;
-    }
-  }
+  const run = latestElevatedSkinTempRun(rows, mean);
+  if (!run) return { kind: "none" };
+  const { runStart, runEnd } = run;
   const days = runEnd - runStart + 1;
-  if (runEnd < 0 || days < 2) return { kind: "none" };
+  if (days < 2) return { kind: "none" };
 
   const recoveryValid = rows
     .map((r) => r.recovery_score)
