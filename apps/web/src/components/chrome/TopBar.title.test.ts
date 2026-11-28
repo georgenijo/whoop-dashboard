@@ -28,4 +28,23 @@ describe("titleForPath", () => {
     expect(titleForPath("/day")).toBe("Day detail");
     expect(titleForPath("/day/2026-11-27")).toBe("Day detail");
   });
+
+  it("titles every page added in the Nov 27 frontier batch, never Overview", () => {
+    const pages: Record<string, string> = {
+      "/weekly": "Weekly review",
+      "/compare": "Compare periods",
+      "/records": "Records",
+      "/alerts": "Alerts",
+      "/report": "Health report",
+      "/load": "Training Load",
+      "/year": "Year in Review",
+      "/day": "Day detail",
+      "/day/2026-11-27": "Day detail",
+      "/stats/Running": "Stats",
+      "/workouts/abc-123": "Workouts",
+    };
+    for (const [path, title] of Object.entries(pages)) {
+      expect(titleForPath(path)).toBe(title);
+    }
+  });
 });
