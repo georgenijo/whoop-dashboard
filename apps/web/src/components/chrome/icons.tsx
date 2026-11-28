@@ -1,6 +1,7 @@
 import {
   Activity,
   BarChart3,
+  CalendarDays,
   Bell,
   ClipboardList,
   Dumbbell,
@@ -31,4 +32,5 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   bell: Bell,
   menu: Menu,
   gauge: Gauge,
+  "calendar-days": CalendarDays,
 };

@@ -12,6 +12,7 @@ export type CoachErrorClass =
   | "quota"
   | "network"
   | "session_expired"
+  | "out_of_memory"
   | "unknown";
 
 export type CoachTurnError = {
@@ -91,6 +92,10 @@ export const COACH_ERROR_COPY: Record<
     title: "You've been signed out.",
     hint: "Copy your message first: reloading the page to sign in again clears it.",
   },
+  out_of_memory: {
+    title: "The server is low on memory.",
+    hint: "Switch to a Claude model below, or wait a few minutes. Retrying right away won't help.",
+  },
   unknown: {
     title: "Coach hit an unexpected error.",
     hint: "Retry, or start a new thread if it keeps happening.",
@@ -105,6 +110,7 @@ const REASONS = new Set<CoachErrorClass>([
   "timeout",
   "quota",
   "network",
+  "out_of_memory",
 ]);
 
 function classFromInfo(info: FailureInfo): CoachErrorClass {

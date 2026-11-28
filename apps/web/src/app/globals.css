@@ -577,7 +577,57 @@ body {
 
 .coach-model-control {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   min-width: 0;
+}
+
+/* Issue #608 — context-window meter beside the model picker. */
+.coach-context-meter {
+  --meter-color: var(--fg-3);
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  height: 38px;
+  padding: 0 4px;
+  color: var(--fg-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: default;
+}
+.coach-context-meter.is-warn { --meter-color: var(--warn); color: var(--warn); }
+.coach-context-meter.is-danger { --meter-color: var(--bad); color: var(--bad); }
+.coach-context-meter-limit { color: var(--fg-3); }
+.coach-context-meter.is-warn .coach-context-meter-limit,
+.coach-context-meter.is-danger .coach-context-meter-limit { color: inherit; opacity: 0.7; }
+.coach-context-meter-track {
+  position: relative;
+  width: 100%;
+  min-width: 44px;
+  height: 2px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--fg-3) 22%, transparent);
+}
+.coach-context-meter-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--meter-color);
+  transform-origin: left center;
+  transition:
+    transform var(--spring-smooth-dur, 600ms) var(--spring-smooth, ease),
+    background 150ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .coach-context-meter-fill { transition: none; }
 }
 
 .coach-model-trigger {
@@ -2360,6 +2410,33 @@ body {
   font-family: var(--font-mono); font-size: 11.5px; color: var(--fg-2);
   text-align: right; font-variant-numeric: tabular-nums;
 }
+/* #430: sport rows drill down to /stats/[sport] */
+a.sport-row {
+  color: inherit; text-decoration: none; border-radius: 8px;
+  margin: -4px -8px; padding: 4px 8px;
+  transition: background-color 160ms ease;
+}
+a.sport-row:hover { background: rgba(255,255,255,0.035); }
+a.sport-row:hover .name { color: var(--fg-0); }
+a.sport-row:focus-visible { outline: 2px solid #00d4aa; outline-offset: 1px; }
+
+.sport-crumb {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--fg-3);
+  letter-spacing: 0.12em; text-transform: uppercase; text-decoration: none;
+}
+.sport-crumb:hover { color: var(--fg-1); }
+.sport-crumb svg { width: 12px; height: 12px; }
+.sport-head {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 16px;
+  flex-wrap: wrap; margin-bottom: 4px;
+}
+.sport-head h1 {
+  display: flex; align-items: center; gap: 10px; margin: 6px 0 0;
+  font-family: var(--font-display); font-size: 30px; font-weight: 500;
+  letter-spacing: -0.02em; color: var(--fg-0);
+}
+.sport-head h1 i { width: 11px; height: 11px; border-radius: 3px; flex: 0 0 auto; }
 
 .record-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .record-card {
@@ -2402,3 +2479,7 @@ body {
   .record-grid { grid-template-columns: 1fr; }
 }
 /* ===== end stats ===== */
+
+@media (max-width: 420px) {
+  .coach-context-meter-limit { display: none; }
+}

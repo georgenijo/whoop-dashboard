@@ -420,3 +420,47 @@ describe("server read before the first Anthropic inference", () => {
     expect(streamMock).not.toHaveBeenCalled();
   });
 });
+
+describe("context-window figure (issue #608)", () => {
+  it("records the LAST call's prompt size for a multi-iteration tool turn, not the sum", async () => {
+    getUserSettingsMock.mockReturnValue({});
+    const toolUse = (id: string) => ({
+      stop_reason: "tool_use" as const,
+      content: [{ type: "tool_use", id, name: "query_sleep", input: {}, caller: { type: "direct" } }],
+    });
+    streamMock
+      .mockReturnValueOnce(fakeStream({
+        ...toolUse("tool_1"),
+        usage: { input_tokens: 1_000, output_tokens: 50, cache_creation_input_tokens: 20_000, cache_read_input_tokens: 0 },
+      } as Partial<Message>))
+      .mockReturnValueOnce(fakeStream({
+        ...toolUse("tool_2"),
+        usage: { input_tokens: 800, output_tokens: 40, cache_creation_input_tokens: 1_500, cache_read_input_tokens: 21_000 },
+      } as Partial<Message>))
+      .mockReturnValueOnce(fakeStream({
+        usage: { input_tokens: 300, output_tokens: 200, cache_creation_input_tokens: 900, cache_read_input_tokens: 23_300 },
+      } as Partial<Message>));
+    vi.mocked(executeToolResult).mockResolvedValue({ type: "tool_result", tool_use_id: "tool_1", content: "sleep data" });
+    const usage: Usage = {
+      input_tokens_total: 0,
+      output_tokens_total: 0,
+      cache_creation_input_tokens_total: 0,
+      cache_read_input_tokens_total: 0,
+      calls: 0,
+    };
+    await runAnthropicSdk(1, 42,
+      { displayText: "Check my sleep", modelText: "Check my sleep", images: [] },
+      [], [], usage, { iterations: 0 }, "personal-key", "user", {}, undefined, "claude-sonnet-5-5");
+
+    expect(streamMock).toHaveBeenCalledTimes(3);
+    expect(usage.calls).toBe(3);
+    // Last call: 300 + 900 + 23,300. The per-turn sums would read 68,800.
+    expect(usage.context_tokens).toBe(24_500);
+    expect(usage.context_approximate).toBe(false);
+    expect(
+      usage.input_tokens_total +
+        usage.cache_creation_input_tokens_total +
+        usage.cache_read_input_tokens_total,
+    ).toBe(68_800);
+  });
+});

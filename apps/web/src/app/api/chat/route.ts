@@ -336,7 +336,7 @@ export async function POST(req: Request) {
 
     if (!wantsStream(req)) {
       try {
-        const { reply, workLog, presentationBlocks } = await runAndPersistCoachTurn(
+        const { reply, workLog, presentationBlocks, context } = await runAndPersistCoachTurn(
           user.id,
           thread,
           turn,
@@ -356,6 +356,7 @@ export async function POST(req: Request) {
           reply,
           work_log: workLog,
           presentation_blocks: presentationBlocks,
+          context,
         });
       } catch (err) {
         const classified = classifyChatError(err);
@@ -431,7 +432,7 @@ export async function POST(req: Request) {
         }, HEARTBEAT_CHECK_MS);
 
         try {
-          const { reply, workLog, presentationBlocks } = await runAndPersistCoachTurn(
+          const { reply, workLog, presentationBlocks, context } = await runAndPersistCoachTurn(
             user.id,
             thread,
             turn,
@@ -483,6 +484,9 @@ export async function POST(req: Request) {
             reply,
             work_log: workLog,
             presentation_blocks: presentationBlocks,
+            // Issue #608 — context-window meter; null when the provider
+            // reported no usage (the client keeps its previous figure).
+            context,
           });
           close();
           return;
