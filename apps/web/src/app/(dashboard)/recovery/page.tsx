@@ -12,6 +12,7 @@ import SkinTempDeviationCard from "@/components/recovery/SkinTempDeviationCard";
 import Spo2TrendCard from "@/components/recovery/Spo2TrendCard";
 import RecoveryCalendarCard from "@/components/recovery/RecoveryCalendarCard";
 import RecoveryDriversCard from "@/components/recovery/RecoveryDriversCard";
+import RecoveryOutlookCard from "@/components/recovery/RecoveryOutlookCard";
 import {
   getOverviewSnapshot,
   getRecoveryByDayOfWeek,
@@ -33,6 +34,11 @@ import {
   computeRecoveryDrivers,
   isRecoveryDriversEnabled,
 } from "@/lib/analytics/recoveryDrivers";
+import {
+  RECOVERY_OUTLOOK_LOOKBACK_DAYS,
+  computeRecoveryOutlook,
+  isRecoveryOutlookEnabled,
+} from "@/lib/analytics/recoveryOutlook";
 import { resolveRangeWindow, rowsInWindow, shiftDate } from "@/lib/range";
 import { localToday } from "@/lib/date";
 
@@ -135,6 +141,25 @@ export default async function RecoveryPage({
     recoveryDrivers = <RecoveryDriversCard result={result} />;
   }
 
+  // RECOVERY_OUTLOOK=1 only: a fixed 90-day lookback independent of the range
+  // picker. Three extra user-scoped reads; flag off does none of them.
+  let recoveryOutlook: ReactNode = null;
+  if (isRecoveryOutlookEnabled()) {
+    const today = localToday();
+    const outlookStart = shiftDate(today, -(RECOVERY_OUTLOOK_LOOKBACK_DAYS - 1));
+    recoveryOutlook = (
+      <RecoveryOutlookCard
+        outlook={computeRecoveryOutlook({
+          today,
+          recovery: getRecoveryRange(user.id, outlookStart, today),
+          sleep: getSleepRange(user.id, outlookStart, today),
+          // One extra day so the earliest recovery can pair with its prior-day strain.
+          cycles: getStrainRange(user.id, shiftDate(outlookStart, -1), today),
+        })}
+      />
+    );
+  }
+
   return (
     <>
       <KPIStrip
@@ -147,6 +172,8 @@ export default async function RecoveryPage({
         latestSteps={data.latestSteps}
         previousSteps={data.previousSteps}
       />
+
+      {recoveryOutlook}
 
       {recoveryDrivers}
 
