@@ -47,7 +47,7 @@ Read these files silently before doing anything else (paths are relative to your
 - CLAUDE.md — project overview, architecture, conventions
 - README.md — setup and run commands
 
-Also read any file in `streamlit/whoop/` or the relevant `@st.fragment` section of `streamlit/app.py` for your work.
+Also read `apps/web/AGENTS.md` and the files under `apps/web/src/` that your work touches. Next.js here is 16.2.4; read the relevant guide in `apps/web/node_modules/next/dist/docs/` before touching routing, caching or rendering.
 
 ## Your Assignment
 <issue body>
@@ -61,7 +61,7 @@ Also read any file in `streamlit/whoop/` or the relevant `@st.fragment` section 
 2. Enter plan mode. Read all relevant files before planning. Write a focused plan covering:
    - Which files you will change and why
    - What exactly you will add or modify — no more than the issue requires
-   - How your approach follows existing patterns (`build_*_df()`, `@st.fragment`, `@st.cache_data(ttl=600)`, `score_state == "SCORED"` filter)
+   - How your approach follows existing patterns (domain reads through `forUser(userId)` in `src/lib/db/scoped.ts`, lazy schema migrations in `openWrite()`, `score_state == "SCORED"` filter, Coach tools in `src/lib/coach/tools.ts` + `src/coach-mcp/tool-policy.ts`)
    - Verification steps
 
    Submit your plan for review. Do not write any code until the lead approves.
@@ -69,8 +69,8 @@ Also read any file in `streamlit/whoop/` or the relevant `@st.fragment` section 
 3. After approval, implement exactly what was planned. No scope creep.
 
 4. Run verification:
-   - python3 -m py_compile streamlit/app.py streamlit/whoop/*.py sync/daily_sync.py
-   - For dashboard changes, note that the user needs to run `streamlit run streamlit/app.py` to visually verify; flag this in the PR body if applicable
+   - From apps/web/: npm test, npm run lint, npm run build
+   - For UI/API changes, verify with the `whoop-dev` skill (dev server on a snapshot DB); if you could not, say so in the PR body
 
 5. Commit and open a PR:
    git push -u origin issue/<number>-<slug>
@@ -87,18 +87,18 @@ When a sub-agent submits a plan for approval, review it critically as a senior e
 
 **Approve if:**
 - It addresses exactly what the issue asks — nothing more, nothing less
-- It follows existing patterns (where new DataFrames live, where Plotly charts live, how sections are wrapped in `@st.fragment`, how sync/DB code reuses `get_conn()`, how insights reuse `_build_context()`)
+- It follows existing patterns (DB helpers live in `src/lib/db/` and are re-exported from `db/index.ts`, charts reuse the existing Recharts components in `src/components/`, sync code goes through `src/lib/sync.ts`, Coach tools are registered for both providers)
 - It doesn't introduce unnecessary abstractions, new dependencies, or premature generalization
 - Verification steps are included
 
 **Reject with specific feedback if:**
 - It adds complexity beyond what the issue requires
-- It puts code in the wrong place (e.g., a new `streamlit/whoop/<thing>.py` module when `streamlit/app.py` would be consistent, or vice versa)
+- It puts code in the wrong place (e.g., a new `src/lib/<thing>.ts` module when an existing `src/lib/db/` or `src/lib/coach/` file would be consistent, or vice versa)
 - It skips existing patterns in favor of something novel
 - It's missing verification steps
 - It touches files unrelated to the issue
 
-When rejecting, be specific: "This belongs in `streamlit/whoop/db.py` next to the other `sync_*` functions" or "You're reimplementing `_build_context()` — reuse it." Give the sub-agent exactly what it needs to fix the plan.
+When rejecting, be specific: "This belongs in `src/lib/db/sleep.ts` next to the other sleep reads" or "You're reimplementing `forUser()` — reuse it." Give the sub-agent exactly what it needs to fix the plan.
 
 ## 5. Monitor Implementation
 

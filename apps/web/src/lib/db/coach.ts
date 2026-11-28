@@ -322,47 +322,6 @@ export function resolveChatThread(
   return createChatThread(userId, null);
 }
 
-export function getChatThreadSummary(userId: number, threadId: number): ChatThreadSummary | null {
-  return (
-    safeReadQuery((db) => {
-      if (!hasTable(db, "chat_threads")) return null;
-      const visibleM = visibleChatMessageClause("m");
-      const previewM2 = visibleChatPreviewClause("m2");
-      const row = db
-        .prepare(
-          `
-          SELECT
-            t.id,
-            t.title,
-            t.updated_at,
-            COUNT(m.id) AS message_count,
-            (
-              SELECT CASE
-                WHEN m2.content = '' AND EXISTS (
-                  SELECT 1 FROM chat_message_attachments ma
-                  WHERE ma.message_id = m2.id
-                ) THEN 'Image attachment'
-                ELSE m2.content
-              END
-              FROM chat_messages m2
-              WHERE m2.thread_id = t.id AND ${previewM2}
-              ORDER BY m2.id DESC
-              LIMIT 1
-            ) AS last_preview
-          FROM chat_threads t
-          LEFT JOIN chat_messages m
-            ON m.thread_id = t.id AND ${visibleM}
-          WHERE t.id = ? AND t.user_id = ?
-          GROUP BY t.id
-          LIMIT 1
-        `
-        )
-        .get(threadId, userId) as ChatThreadSummary | undefined;
-      return row ?? null;
-    }) ?? null
-  );
-}
-
 export function getChatThreadMessages(userId: number, threadId: number): ChatMessage[] {
   return (
     safeReadQuery((db) => {
