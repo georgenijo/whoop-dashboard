@@ -5,6 +5,7 @@ vi.mock("server-only", () => ({}));
 
 import { CursorAgentError } from "./cursor-key";
 import { classifyChatError } from "./error-mapping";
+import { CursorInsufficientMemoryError } from "./cursor-memory";
 import { AnthropicModelCatalogError, AnthropicModelUnavailableError } from "./anthropic-models";
 
 it("makes unavailable Anthropic models actionable without a paid fallback", () => {
@@ -49,5 +50,24 @@ describe("classifyChatError — reason", () => {
     expect(classifyChatError(new CursorAgentError("timeout", "slow")).reason).toBe("timeout");
     expect(classifyChatError(new CursorAgentError("auth", "no", "env")).reason).toBe("invalid_key");
     expect(classifyChatError(new Error("unknown")).reason).toBeUndefined();
+  });
+});
+
+describe("classifyChatError — Cursor memory pre-flight (issue #475-A)", () => {
+  it("names low memory instead of a bare retry prompt", () => {
+    const c = classifyChatError(
+      new CursorInsufficientMemoryError({
+        available_bytes: 6 * 1024 * 1024,
+        host_available_bytes: null,
+        cgroup_headroom_bytes: 6 * 1024 * 1024,
+        cgroup_limited_by: "/system.slice/whoop-web.service",
+        required_bytes: 150 * 1024 * 1024,
+        ok: false,
+      }),
+    );
+    expect(c).toMatchObject({ status: 503, kind: "server_error", reason: "out_of_memory" });
+    expect(c.message).toMatch(/low on memory/);
+    expect(c.message).toMatch(/Switch to a Claude model/);
+    expect(c.message).not.toBe("The Cursor coach hit an error. Try again.");
   });
 });

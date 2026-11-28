@@ -1,6 +1,7 @@
 import { APIError, APIConnectionError, APIConnectionTimeoutError } from "@anthropic-ai/sdk";
 import { BadApiKeyError } from "./api-key";
 import { CursorAgentError, MissingCursorKeyError } from "./cursor-key";
+import { CursorInsufficientMemoryError } from "./cursor-memory";
 import { AnthropicModelCatalogError, AnthropicModelUnavailableError } from "./anthropic-models";
 
 export type ChatErrorKind =
@@ -24,7 +25,8 @@ export type ChatErrorReason =
   | "overloaded"
   | "timeout"
   | "quota"
-  | "network";
+  | "network"
+  | "out_of_memory";
 
 export interface ClassifiedChatError {
   status: number;
@@ -55,6 +57,18 @@ export function classifyChatError(err: unknown): ClassifiedChatError {
       reason: "missing_key",
       message:
         "The Cursor coach isn't configured. Switch to Claude in Settings, or contact the operator.",
+    };
+  }
+
+  if (err instanceof CursorInsufficientMemoryError) {
+    // Raised before spawn, so nothing ran and nothing was stored. Retrying
+    // immediately hits the same ceiling — say so instead of "Try again".
+    return {
+      status: 503,
+      kind: "server_error",
+      reason: "out_of_memory",
+      message:
+        "The server is low on memory, so the Cursor coach didn't start. Switch to a Claude model, or try again in a few minutes.",
     };
   }
 
