@@ -31,6 +31,27 @@ DB read-only, or those writes will fail. If the DB is missing or empty (e.g.
 before the first Whoop sync), the Overview renders with muted empty states and
 no runtime errors.
 
+## Feature flags
+
+- `RECOVERY_DRIVERS=1` — shows a **What moves your recovery** card near the
+  top of `/recovery`: the user's own habits ranked by how strongly they line
+  up with their recovery score over the last 120 days (independent of the
+  range picker). Drivers: previous night's sleep duration, bedtime regularity
+  (minutes from the user's median bedtime), previous day's strain, workout vs
+  rest day, deep-sleep share, and weekend vs weekday. Each gets a plain-terms
+  effect (top vs bottom third, or yes vs no), a Pearson/point-biserial r with
+  a weak/moderate/strong label, and its sample size. A driver is only shown
+  as a finding when it has ≥21 days, ≥5 days per compared group, |r| ≥ 0.2,
+  t ≥ 2 (≈ p < 0.05), a gap of ≥3 recovery points, and a sign that agrees
+  with r; everything else reads "not enough data" or "no clear pattern". Top
+  3 are ranked with a bar; fewer than 21 scored recovery days shows an empty
+  state. Labelled as association, not causation. Pure computation in
+  `src/lib/analytics/recoveryDrivers.ts` (thresholds are named constants
+  there); four extra user-scoped reads (`getRecoveryRange`, `getSleepRange`,
+  `getStrainRange`, `getWorkoutRowsRange`), no network or LLM calls. Unset
+  (default) or any other value: `/recovery` renders exactly as before and
+  does no extra reads.
+
 ## Design tokens
 
 - `src/app/theme.css` — verbatim copy of the Whoop+ design kit's
