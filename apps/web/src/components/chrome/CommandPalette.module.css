@@ -1,0 +1,127 @@
+/* Cmd/Ctrl-K quick-jump palette (COMMAND_PALETTE=1). Quiet Instrument tokens. */
+
+/* Header button: desktop only. The shortcut still works everywhere. */
+.trigger {
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+@media (max-width: 900px) {
+  .trigger { display: none; }
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12vh 16px 16px;
+  background: color-mix(in oklch, var(--bg) 70%, transparent);
+}
+
+.panel {
+  width: min(100%, 560px);
+  max-height: min(70vh, 520px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+  border: var(--stroke, 1px) solid var(--rule);
+  border-radius: var(--r-md);
+  box-shadow: 0 24px 64px rgb(0 0 0 / 0.45);
+}
+
+.inputRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border-bottom: var(--stroke, 1px) solid var(--rule-soft);
+}
+.inputIcon { color: var(--fg-3); flex: none; }
+
+.input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--fg);
+  font-size: var(--t-md);
+}
+.input::placeholder { color: var(--fg-3); }
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: var(--s1) 0;
+  overflow-y: auto;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s2) var(--s4);
+  cursor: pointer;
+  color: var(--fg-2);
+}
+.option[data-group-start]:not(:first-child) {
+  margin-top: var(--s1);
+  border-top: var(--stroke, 1px) solid var(--rule-soft);
+  padding-top: calc(var(--s2) + var(--s1));
+}
+.active { background: var(--bg-lift); color: var(--fg); }
+
+.label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meta {
+  display: flex;
+  gap: var(--s2);
+  flex: none;
+  font-size: var(--t-xs);
+  color: var(--fg-3);
+}
+.group {
+  font-family: var(--font-num);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.empty {
+  margin: 0;
+  padding: var(--s4);
+  color: var(--fg-3);
+  font-size: var(--t-sm);
+}
+
+.footer {
+  display: flex;
+  gap: var(--s4);
+  padding: var(--s2) var(--s4);
+  border-top: var(--stroke, 1px) solid var(--rule-soft);
+  color: var(--fg-3);
+  font-size: var(--t-xs);
+}
+@media (max-width: 640px) {
+  .footer { display: none; }
+}
+
+.kbd {
+  display: inline-block;
+  min-width: 1.6em;
+  margin-right: 2px;
+  padding: 0 4px;
+  border: var(--stroke, 1px) solid var(--rule);
+  border-radius: var(--r-sm);
+  font-family: var(--font-num);
+  font-size: var(--t-xs);
+  text-align: center;
+  color: var(--fg-3);
+}

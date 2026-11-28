@@ -39,3 +39,12 @@ no runtime errors.
   to the kit source so future kit refreshes diff cleanly.
 - `src/app/globals.css` — aurora / glass / layout / card / chart styles
   ported from the kit's `ui_kits/dashboard/styles.css`.
+
+## Feature flags
+
+Server-side env flags, read at request time. Default OFF; only the exact value
+`1` enables a flag.
+
+| Flag | Enables |
+|---|---|
+| `COMMAND_PALETTE=1` | Cmd/Ctrl-K quick-jump palette plus a search button in the desktop header. You can fuzzy-search the nav pages and quick actions ("Go to today", "Show last 30 days", …) or type a date (`2026-11-02`, `yesterday`, `last monday`, `nov 2`). A date opens a dashboard page at the smallest `?range=` window that contains it. Navigation only: no network calls, no data reads. With the flag off, the dashboard layout never references the component, so no JS ships and no key listener or button appears. Logic: `src/lib/ui/palette.ts`; UI: `src/components/chrome/CommandPalette.tsx`. |

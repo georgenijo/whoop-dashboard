@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Bell, RefreshCw } from "lucide-react";
 
@@ -43,7 +43,7 @@ function formatToday(): string {
   }).replace(",", " ·");
 }
 
-export default function TopBar() {
+export default function TopBar({ trailing }: { trailing?: ReactNode } = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -158,6 +158,7 @@ export default function TopBar() {
             {syncMessage}
           </div>
         )}
+        {trailing}
         <button
           type="button"
           className="icon-btn"

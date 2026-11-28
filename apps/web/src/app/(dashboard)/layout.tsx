@@ -6,6 +6,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Sidebar from "@/components/chrome/Sidebar";
 import TopBar from "@/components/chrome/TopBar";
 import BottomNav from "@/components/chrome/BottomNav";
+import CommandPalette from "@/components/chrome/CommandPalette";
+import { isCommandPaletteEnabled } from "@/lib/ui/command-palette-flag";
 import ClientLogBootstrap from "@/components/ClientLogBootstrap";
 import WebVitalsReporter from "@/components/WebVitalsReporter";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -128,7 +130,9 @@ export default async function RootLayout({
           </Suspense>
           <main className="main">
             <Suspense fallback={null}>
-              <TopBar />
+              {/* COMMAND_PALETTE=1 only: flag off never references the client
+                  component, so no chunk, key listener or header button. */}
+              <TopBar trailing={isCommandPaletteEnabled() ? <CommandPalette /> : null} />
             </Suspense>
             <div className="content">
               <ErrorBoundary>{children}</ErrorBoundary>
