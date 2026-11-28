@@ -430,3 +430,40 @@ Server-side env flag, off by default, read per request
 
 To enable it in production, add `Environment=SLEEP_REGULARITY=1` to the
 `whoop-web` service environment and restart the service.
+
+## Feature flag: `SLEEP_STAGES=1` — Sleep stages deep-dive (`/sleep/stages`)
+
+Server-side env flag, off by default, read per request
+(`src/lib/sleep-stages-flag.ts`); only the exact value `1` enables it.
+
+- **Off (default, any other value):** `/sleep/stages` returns 404 before any
+  auth or DB read, `/sleep` renders no link to it and makes no extra reads,
+  and no nav entry exists.
+- **On:** `/sleep` gains a "Sleep stages →" link card at the top. The page
+  (server-rendered, no client JS) covers the last 30 days by default, or
+  `?days=14` / `?days=90` (any other value falls back to 30). It shows:
+  - a per-night stacked bar chart of deep / REM / light / awake minutes
+    (inline SVG, same stage colors as the existing Sleep stages chart)
+  - average and median minutes and % of the night for each stage (% is of
+    all four stages, so they add up to 100%)
+  - your **typical deep and REM range**: the 25th–75th percentile (linear
+    interpolation, numpy's default) of your own nights over the last 365
+    days, *excluding* the latest night, which is then marked below / within
+    (inclusive) / above it. Needs 7 earlier nights.
+  - deep and REM **trends**: mean over the last 30 days vs the 30 before
+    (each side needs 7 nights; under 5 min of change reads "steady"), plus a
+    least-squares slope over the last 30 days in min/week
+  - a deterministic plain-language takeaway (no LLM)
+  - "Not enough data yet" below 7 nights with stage data in the window
+- **Missing data:** a night missing any of light/deep/REM/awake (or with no
+  asleep time) is excluded from every statistic and counted as "no stage
+  data". Naps are excluded in SQL. Durations are elapsed time and dates use
+  UTC day arithmetic, so DST shifts neither.
+- **Data:** a single user-scoped `getSleepRange` read of the last 365 days:
+  non-nap, one row per wake day via `SLEEP_DEDUP_WHERE`. No writes, network
+  or LLM calls. Logic is in `src/lib/analytics/sleepStages.ts` (pure,
+  unit-tested); per-night stage minutes come from `stageMinutesFromRow` in
+  `src/lib/analytics/deepSleep.ts` (`computeDeepSleepEfficiency` unchanged).
+
+To enable it in production, add `Environment=SLEEP_STAGES=1` to the
+`whoop-web` service environment and restart the service.

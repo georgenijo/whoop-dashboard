@@ -33,6 +33,11 @@ describe("titleForPath", () => {
     expect(titleForPath("/day/2026-11-27")).toBe("Day detail");
   });
 
+  it("titles /sleep/stages without changing /sleep", () => {
+    expect(titleForPath("/sleep/stages")).toBe("Sleep stages");
+    expect(titleForPath("/sleep")).toBe("Sleep");
+  });
+
   it("titles /sleep/regularity without changing /sleep", () => {
     expect(titleForPath("/sleep/regularity")).toBe("Sleep regularity");
     expect(titleForPath("/sleep")).toBe("Sleep");

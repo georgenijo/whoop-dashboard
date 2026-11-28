@@ -95,3 +95,36 @@ describe("/sleep SLEEP_REGULARITY link", () => {
     expect(db.getSleepRange).toHaveBeenCalledTimes(1);
   });
 });
+
+function stagesLinks(tree: ReactNode): ReactElement[] {
+  const out: ReactElement[] = [];
+  const walk = (n: ReactNode) => {
+    if (Array.isArray(n)) return n.forEach(walk);
+    if (!isValidElement(n)) return;
+    if ((n.props as { href?: string }).href === "/sleep/stages") out.push(n);
+    walk((n.props as { children?: ReactNode }).children);
+  };
+  walk(tree);
+  return out;
+}
+
+describe("/sleep SLEEP_STAGES link", () => {
+  beforeEach(() => {
+    Object.values(db).forEach((fn) => fn.mockClear());
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it.each([undefined, "", "0", "true"])("flag %s: no link and no extra reads", async (v) => {
+    vi.stubEnv("SLEEP_STAGES", v as string);
+    const tree = await SleepPage({ searchParams: Promise.resolve({}) });
+    expect(stagesLinks(tree)).toHaveLength(0);
+    expect(db.getSleepRange).toHaveBeenCalledTimes(1);
+  });
+
+  it("flag on: links to /sleep/stages without any extra reads", async () => {
+    vi.stubEnv("SLEEP_STAGES", "1");
+    const tree = await SleepPage({ searchParams: Promise.resolve({}) });
+    expect(stagesLinks(tree)).toHaveLength(1);
+    expect(db.getSleepRange).toHaveBeenCalledTimes(1);
+  });
+});
