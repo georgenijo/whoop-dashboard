@@ -291,3 +291,7 @@ To enable it in production, add `Environment=HEALTH_ALERTS=1` to the
   `src/lib/analytics/healthReport.ts`, which is pure.
 
 To enable it in production, add `Environment=HEALTH_REPORT=1` to the
+Server-side env flags, read at request time. Default OFF; only the exact value
+`1` enables a flag.
+
+| `COMMAND_PALETTE=1` | Cmd/Ctrl-K quick-jump palette plus a search button in the desktop header. You can fuzzy-search the nav pages and quick actions ("Go to today", "Show last 30 days", …) or type a date (`2026-11-02`, `yesterday`, `last monday`, `nov 2`). A date opens a dashboard page at the smallest `?range=` window that contains it. Navigation only: no network calls, no data reads. With the flag off, the dashboard layout never references the component, so no JS ships and no key listener or button appears. Logic: `src/lib/ui/palette.ts`; UI: `src/components/chrome/CommandPalette.tsx`. |
