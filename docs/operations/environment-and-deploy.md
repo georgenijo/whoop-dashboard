@@ -104,6 +104,7 @@ kept out of this repository.
 | `ENABLE_PUSH_DEBUG` | Temporary push diagnostics are explicitly wanted | Debug route |
 | `WHOOP_REAUTH_PUSH` | Opting in to the Whoop-disconnected push (`log` = record only, `on` = send); default off | Reauth push (#287) |
 | `COACH_FAILURE_ALERTS` | Sustained-failure alerting is wanted: `log` (track + log only) or `push` (also APNs to the `ADMIN_APPLE_SUB` user). Unset = off | Failure alerts (#444) |
+| `DATA_EXPORT` | Set to `1` to enable the user-owned CSV/JSON export (`/api/export` + Settings card); default off — see `docs/data-export.md` | Data export |
 
 `ENABLE_PUSH_DEBUG` must remain unset or `0` during normal production.
 

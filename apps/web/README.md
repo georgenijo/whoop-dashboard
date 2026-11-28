@@ -46,6 +46,10 @@ no runtime errors.
   `getRecoveryRange`. Unset (default) or any other value: `/strain` renders
   exactly as before and does no extra reads. Guidance only, not medical
   advice — the card says so.
+- `DATA_EXPORT=1` — enables `GET /api/export` and the "Export my data" card on
+  `/settings` (CSV/JSON download of the signed-in user's own data). Off by
+  default: the route 404s and the settings page is unchanged. See
+  `../../docs/data-export.md`.
 
 ## Design tokens
 
