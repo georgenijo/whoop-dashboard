@@ -183,7 +183,12 @@ describe("Coach reply latency and token usage (deterministic, issue #623)", () =
     expect(vi.mocked(executeToolResult).mock.calls.map(([, tool]) => tool.name)).toEqual(c.expect.tool_calls);
 
     // Uncached input, output, and cache read/write totals from the usage objects.
-    expect(usage).toEqual({ calls: c.expect.model_calls, ...c.expect.usage });
+    // context_tokens / context_approximate (#608) describe the final call's
+    // context window, not a running total, so they are left out of this check.
+    const totals: Partial<Usage> = { ...usage };
+    delete totals.context_tokens;
+    delete totals.context_approximate;
+    expect(totals).toEqual({ calls: c.expect.model_calls, ...c.expect.usage });
 
     // Speed never comes from a quieter model or effort: every call keeps the selection.
     for (const [params] of streamMock.mock.calls) {
