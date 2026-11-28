@@ -216,6 +216,40 @@ Server-side env flags; anything other than the exact value `1` is off.
   `src/lib/analytics/dataHealth.ts`. No tables, migrations, LLM or network
   calls.
 
+### `SHARE_CARD=1` — Shareable daily snapshot card (`/share/today`)
+
+- **Off (default, any value other than `1`):** `/share/today` and
+  `/api/share/today` return 404 before any auth or DB read, no Sidebar or
+  BottomNav entry renders, and no other page changes.
+- **On:** adds "Share today" as the last item in the Sidebar's main group and
+  the first item in the BottomNav "More" drawer. The page (server-rendered, no
+  client JS) shows a 4:5 card meant to be screenshotted: recovery (ring + Whoop
+  band), sleep (time asleep + Whoop performance band), strain so far (+ Whoop
+  strain category and workout count), HRV and resting HR (each compared with
+  the user's own median over the 30 days before the card's day; at least 7
+  readings, ±5% reads as "Usual"), and a one-line recap. If today has nothing
+  synced yet, the card shows yesterday, labelled "Yesterday".
+  - `?hide=1` hides every number (bands and colours only; workout count
+    becomes "a workout"/"workouts"); `?theme=light` picks the light theme
+    (dark is the default). Both are plain links on the page.
+  - "Download PNG" fetches `/api/share/today` with the same options: a
+    1080 x 1350 PNG rendered by `next/og` `ImageResponse` from the same JSX
+    tree as the page, sent `Content-Disposition: attachment` with
+    `Cache-Control: no-store, private`.
+  - Privacy: both routes need the normal signed-in session (the page
+    redirects to `/signin`, the image route returns 401) and only ever read
+    the session user's own rows. There are no share links, tokens or public
+    URLs. The card carries no name, email, ids, sport names or journal text;
+    every string is generated ASCII, so the PNG uses `next/og`'s bundled font
+    and never fetches a fallback font or emoji glyph.
+  Reads go through the existing user-scoped readers (`getRecoveryRange` for
+  32 days, `getSleepRange`, `getStrainRange`, `getWorkoutRowsRange` for today
+  and yesterday) in the user's tz (`getInsightTimezone`, UTC fallback). The
+  per-day shaping reuses the Day detail model (`buildDayDetail`), so the
+  numbers match `/day/[date]`; the card model is pure in
+  `src/lib/share/todayCard.ts`. No tables, migrations, dependencies, LLM or
+  network calls.
+
 ## Design tokens
 
 - `src/app/theme.css` — verbatim copy of the Whoop+ design kit's

@@ -27,6 +27,8 @@ const more: Item[] = [
 // Added to the "More" drawer only when TRAINING_LOAD=1 (the layout passes `showTrainingLoad`).
 const TRAINING_LOAD_ITEM: Item = { href: "/load", label: "Load", icon: "scale" };
 
+// Added first in the "More" drawer only when SHARE_CARD=1 (the layout passes `showShareCard`).
+const SHARE_CARD_ITEM: Item = { href: "/share/today", label: "Share today", icon: "share" };
 // Added to the "More" drawer only when BASELINES_PAGE=1 (the layout passes `showBaselines`).
 const BASELINES_ITEM: Item = { href: "/baselines", label: "Baselines", icon: "target" };
 
@@ -56,6 +58,7 @@ export default function BottomNav({
   showReport = false,
   showTrainingLoad = false,
   showDataHealth = false,
+  showShareCard = false,
   showBaselines = false,
 }: {
   showWeekly?: boolean;
@@ -65,12 +68,14 @@ export default function BottomNav({
   showReport?: boolean;
   showTrainingLoad?: boolean;
   showDataHealth?: boolean;
+  showShareCard?: boolean;
   showBaselines?: boolean;
 } = {}) {
   const moreItems = showDataHealth
     ? more.flatMap((m) => (m.href === "/logs" ? [DATA_HEALTH_ITEM, m] : [m]))
     : more;
   const drawerItems = [
+    ...(showShareCard ? [SHARE_CARD_ITEM] : []),
     ...(showTrainingLoad ? [TRAINING_LOAD_ITEM] : []),
     ...(showBaselines ? [BASELINES_ITEM] : []),
     ...(showAlerts ? [ALERTS_ITEM] : []),

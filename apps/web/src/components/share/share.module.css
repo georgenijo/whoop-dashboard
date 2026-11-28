@@ -1,0 +1,10 @@
+.page { display: flex; flex-direction: column; gap: var(--s4); max-width: 720px; }
+.intro { margin: 0; color: var(--fg-2); font-size: var(--t-sm); max-width: 70ch; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }
+.segment { display: inline-flex; gap: var(--s1); }
+.control { display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px; border-radius: 8px; border: var(--stroke) solid var(--rule); color: var(--fg-2); font-size: var(--t-sm); text-decoration: none; }
+.control:hover { color: var(--fg); }
+.control[aria-current="true"],
+.control[aria-pressed="true"] { color: var(--fg); background: rgba(255, 255, 255, 0.06); }
+.primary { color: var(--fg); font-weight: 500; }
+.stage { display: flex; justify-content: center; }
