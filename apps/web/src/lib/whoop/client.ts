@@ -74,7 +74,10 @@ export async function whoopGet<T>(path: string, opts: GetOpts): Promise<T> {
   });
 
   if (resp.status === 401) {
-    token = await getValidAccessToken(opts.userId, true, { onRefresh: opts.onTokenRefresh });
+    token = await getValidAccessToken(opts.userId, true, {
+      onRefresh: opts.onTokenRefresh,
+      rejectedAccessToken: token,
+    });
     if (!token) throw new WhoopAuthError("Refresh failed; re-auth required");
     resp = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },

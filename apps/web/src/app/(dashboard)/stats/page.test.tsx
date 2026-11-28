@@ -8,32 +8,41 @@ vi.mock("@/lib/auth", () => ({
   requireAuthOrSignin: vi.fn(async () => ({ user: { id: 1 }, source: "web" })),
 }));
 vi.mock("@/lib/date", () => ({ localToday: () => "2026-11-27" }));
-vi.mock("@/lib/db", () => {
-  const metric = { current: null, prior: null, delta: null, spark: [] };
-  const rec = { value: null, meta: null };
-  return {
-    getAllTimeStats: vi.fn(() => ({ workouts: 3, activeSeconds: 3600, distanceMeters: null, kilojoules: null })),
-    getYearComparison: vi.fn(() => ({
-      year: 2026,
-      priorYear: 2025,
-      periodLabel: "Jan 1 – Nov 27",
-      workouts: metric,
-      distanceMeters: metric,
-      activeHours: metric,
-      calories: metric,
-    })),
-    getSportBreakdown: vi.fn(() => []),
-    getPersonalRecords: vi.fn(() => ({
-      longestSessionSec: rec,
-      mostKilojoules: rec,
-      highestStrain: rec,
-      biggestWeekSec: rec,
-      topHr: rec,
-      mostSessionsMonth: rec,
-    })),
-    getMonthlyRollup: vi.fn(() => []),
-  };
-});
+
+const yoyMetric = { current: null, prior: null, delta: null, spark: [] };
+const record = { value: null, meta: null };
+
+vi.mock("@/lib/db", () => ({
+  getAllTimeStats: vi.fn(() => ({
+    workouts: 3,
+    activeSeconds: 3600,
+    distanceMeters: null,
+    kilojoules: null,
+  })),
+  getYearComparison: vi.fn(() => ({
+    year: 2026,
+    priorYear: 2025,
+    periodLabel: "Jan 1 – Nov 27",
+    workouts: yoyMetric,
+    distanceMeters: yoyMetric,
+    activeHours: yoyMetric,
+    calories: yoyMetric,
+  })),
+  getSportBreakdown: vi.fn(() => [
+    { sport: "Running", count: 2 },
+    { sport: "Box & Weights", count: 1 },
+    { sport: "Unknown", count: 1 },
+  ]),
+  getPersonalRecords: vi.fn(() => ({
+    longestSessionSec: record,
+    mostKilojoules: record,
+    highestStrain: record,
+    biggestWeekSec: record,
+    topHr: record,
+    mostSessionsMonth: record,
+  })),
+  getMonthlyRollup: vi.fn(() => []),
+}));
 
 import * as db from "@/lib/db";
 import StatsPage from "./page";
@@ -43,6 +52,23 @@ async function render() {
 }
 
 afterEach(() => vi.unstubAllEnvs());
+
+describe("Stats page sport rows (issue #430)", () => {
+  it("links each sport row to its encoded drill-down, carrying the range", async () => {
+    const html = renderToStaticMarkup(
+      await StatsPage({ searchParams: Promise.resolve({ range: "90d" }) }),
+    );
+    expect(html).toContain('href="/stats/Running?range=90d"');
+    expect(html).toContain('href="/stats/Box%20%26%20Weights?range=90d"');
+    expect(html).toContain('href="/stats/Unknown?range=90d"');
+    expect(html.match(/class="sport-row"/g)).toHaveLength(3);
+  });
+
+  it("defaults to the year range when none is selected", async () => {
+    const html = renderToStaticMarkup(await StatsPage({ searchParams: Promise.resolve({}) }));
+    expect(html).toContain('href="/stats/Running?range=year"');
+  });
+});
 
 describe("Stats page Year in review link", () => {
   it("is absent with YEAR_REVIEW unset", async () => {

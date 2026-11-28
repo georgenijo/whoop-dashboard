@@ -1,0 +1,278 @@
+{
+  "$comment": "Issue #623. Deterministic Coach reply workload. `cases` drive loop-latency.test.ts with mocked Anthropic responses and mocked tool reads (no live inference). Cases with `live: true` form the small predefined live batch; a later live run appends one object per measured run to `live_workload.runs` (keep failures and slow tails). Never put API keys, session tokens, or raw health rows in this file.",
+  "today": "2026-11-14",
+  "now": "2026-11-14T17:00:00Z",
+  "cases": [
+    {
+      "id": "recovery-week-recognized",
+      "category": "recognized first-turn single-domain recent read",
+      "live": true,
+      "text": "How was my recovery this week? Give the key numbers and one clear recommendation in at most 120 words. Do not sync data or save a plan.",
+      "prefetch": {
+        "tool": "query_recovery",
+        "input": { "start_date": "2026-11-08", "end_date": "2026-11-14" },
+        "result": { "content": "[{\"date\":\"2026-11-14\",\"recovery_score\":78}]" },
+        "used": true
+      },
+      "model_turns": [
+        { "usage": { "input_tokens": 3, "output_tokens": 496, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 9519 } }
+      ],
+      "expect": {
+        "model_calls": 1,
+        "iterations": 0,
+        "tool_calls": ["query_recovery"],
+        "usage": { "input_tokens_total": 3, "output_tokens_total": 496, "cache_creation_input_tokens_total": 0, "cache_read_input_tokens_total": 9519 }
+      }
+    },
+    {
+      "id": "sleep-last-night-recognized",
+      "category": "recognized first-turn single-domain recent read",
+      "live": true,
+      "text": "How did I sleep last night?",
+      "prefetch": {
+        "tool": "query_sleep",
+        "input": { "start_date": "2026-11-14", "end_date": "2026-11-14" },
+        "result": { "content": "[{\"date\":\"2026-11-14\",\"performance\":82}]" },
+        "used": true
+      },
+      "model_turns": [
+        { "usage": { "input_tokens": 4, "output_tokens": 410, "cache_creation_input_tokens": 1210, "cache_read_input_tokens": 8304 } }
+      ],
+      "expect": {
+        "model_calls": 1,
+        "iterations": 0,
+        "tool_calls": ["query_sleep"],
+        "usage": { "input_tokens_total": 4, "output_tokens_total": 410, "cache_creation_input_tokens_total": 1210, "cache_read_input_tokens_total": 8304 }
+      }
+    },
+    {
+      "id": "follow-up",
+      "category": "follow-up keeps the ordinary tool loop",
+      "live": true,
+      "history": true,
+      "text": "How did I sleep last night?",
+      "prefetch": null,
+      "model_turns": [
+        { "tool_uses": [{ "name": "query_sleep", "input": { "start_date": "2026-11-14", "end_date": "2026-11-14" } }], "usage": { "input_tokens": 5, "output_tokens": 60, "cache_creation_input_tokens": 300, "cache_read_input_tokens": 9000 } },
+        { "usage": { "input_tokens": 6, "output_tokens": 380, "cache_creation_input_tokens": 420, "cache_read_input_tokens": 9300 } }
+      ],
+      "tool_results": { "query_sleep": "[{\"date\":\"2026-11-14\",\"performance\":82}]" },
+      "expect": {
+        "model_calls": 2,
+        "iterations": 1,
+        "tool_calls": ["query_sleep"],
+        "usage": { "input_tokens_total": 11, "output_tokens_total": 440, "cache_creation_input_tokens_total": 720, "cache_read_input_tokens_total": 18300 }
+      }
+    },
+    {
+      "id": "image-attached",
+      "category": "images keep the ordinary tool loop",
+      "live": false,
+      "image": true,
+      "text": "How did I sleep last night?",
+      "prefetch": null,
+      "model_turns": [
+        { "tool_uses": [{ "name": "query_sleep", "input": { "start_date": "2026-11-14", "end_date": "2026-11-14" } }], "usage": { "input_tokens": 1600, "output_tokens": 70, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 8200 } },
+        { "usage": { "input_tokens": 8, "output_tokens": 350, "cache_creation_input_tokens": 1900, "cache_read_input_tokens": 8200 } }
+      ],
+      "tool_results": { "query_sleep": "[{\"date\":\"2026-11-14\",\"performance\":82}]" },
+      "expect": {
+        "model_calls": 2,
+        "iterations": 1,
+        "tool_calls": ["query_sleep"],
+        "usage": { "input_tokens_total": 1608, "output_tokens_total": 420, "cache_creation_input_tokens_total": 1900, "cache_read_input_tokens_total": 16400 }
+      }
+    },
+    {
+      "id": "ambiguous-explicit-date",
+      "category": "ambiguous question/date keeps the ordinary tool loop",
+      "live": false,
+      "text": "How was my recovery on 2026-11-01, not today?",
+      "prefetch": null,
+      "model_turns": [
+        { "tool_uses": [{ "name": "query_recovery", "input": { "start_date": "2026-11-01", "end_date": "2026-11-01" } }], "usage": { "input_tokens": 5, "output_tokens": 55, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 9100 } },
+        { "usage": { "input_tokens": 5, "output_tokens": 300, "cache_creation_input_tokens": 250, "cache_read_input_tokens": 9100 } }
+      ],
+      "tool_results": { "query_recovery": "[{\"date\":\"2026-11-01\",\"recovery_score\":61}]" },
+      "expect": {
+        "model_calls": 2,
+        "iterations": 1,
+        "tool_calls": ["query_recovery"],
+        "usage": { "input_tokens_total": 10, "output_tokens_total": 355, "cache_creation_input_tokens_total": 250, "cache_read_input_tokens_total": 18200 }
+      }
+    },
+    {
+      "id": "ambiguous-general",
+      "category": "ambiguous question keeps the ordinary tool loop",
+      "live": false,
+      "text": "How am I doing today?",
+      "prefetch": null,
+      "model_turns": [
+        { "usage": { "input_tokens": 4, "output_tokens": 120, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 9000 } }
+      ],
+      "expect": {
+        "model_calls": 1,
+        "iterations": 0,
+        "tool_calls": [],
+        "usage": { "input_tokens_total": 4, "output_tokens_total": 120, "cache_creation_input_tokens_total": 0, "cache_read_input_tokens_total": 9000 }
+      }
+    },
+    {
+      "id": "explicit-refresh",
+      "category": "explicit refresh syncs before reading",
+      "live": false,
+      "text": "Check my recovery today and sync now",
+      "prefetch": null,
+      "model_turns": [
+        { "tool_uses": [{ "name": "trigger_whoop_sync", "input": {} }], "usage": { "input_tokens": 5, "output_tokens": 40, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 9000 } },
+        { "tool_uses": [{ "name": "query_recovery", "input": { "start_date": "2026-11-14", "end_date": "2026-11-14" } }], "usage": { "input_tokens": 5, "output_tokens": 45, "cache_creation_input_tokens": 120, "cache_read_input_tokens": 9000 } },
+        { "usage": { "input_tokens": 5, "output_tokens": 260, "cache_creation_input_tokens": 180, "cache_read_input_tokens": 9120 } }
+      ],
+      "tool_results": { "trigger_whoop_sync": "{\"success\":true}", "query_recovery": "[{\"date\":\"2026-11-14\",\"recovery_score\":78}]" },
+      "expect": {
+        "model_calls": 3,
+        "iterations": 2,
+        "tool_calls": ["trigger_whoop_sync", "query_recovery"],
+        "usage": { "input_tokens_total": 15, "output_tokens_total": 345, "cache_creation_input_tokens_total": 300, "cache_read_input_tokens_total": 27120 }
+      }
+    },
+    {
+      "id": "arbitrary-trailing-instruction",
+      "category": "arbitrary trailing instruction stays model-led",
+      "live": false,
+      "text": "How did I sleep last night? Do not sync data; save a plan instead.",
+      "prefetch": null,
+      "model_turns": [
+        { "tool_uses": [{ "name": "query_sleep", "input": { "start_date": "2026-11-14", "end_date": "2026-11-14" } }], "usage": { "input_tokens": 5, "output_tokens": 50, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 9000 } },
+        { "usage": { "input_tokens": 5, "output_tokens": 330, "cache_creation_input_tokens": 200, "cache_read_input_tokens": 9000 } }
+      ],
+      "tool_results": { "query_sleep": "[{\"date\":\"2026-11-14\",\"performance\":82}]" },
+      "expect": {
+        "model_calls": 2,
+        "iterations": 1,
+        "tool_calls": ["query_sleep"],
+        "usage": { "input_tokens_total": 10, "output_tokens_total": 380, "cache_creation_input_tokens_total": 200, "cache_read_input_tokens_total": 18000 }
+      }
+    },
+    {
+      "id": "data-opt-out",
+      "category": "data-access opt-out reads nothing",
+      "live": false,
+      "text": "How was my recovery today? Don't query my data; explain generally.",
+      "prefetch": null,
+      "model_turns": [
+        { "usage": { "input_tokens": 4, "output_tokens": 200, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 9000 } }
+      ],
+      "expect": {
+        "model_calls": 1,
+        "iterations": 0,
+        "tool_calls": [],
+        "usage": { "input_tokens_total": 4, "output_tokens_total": 200, "cache_creation_input_tokens_total": 0, "cache_read_input_tokens_total": 9000 }
+      }
+    },
+    {
+      "id": "prefetch-error-falls-back",
+      "category": "error result retains the normal flow",
+      "live": false,
+      "text": "How was my recovery today?",
+      "prefetch": {
+        "tool": "query_recovery",
+        "input": { "start_date": "2026-11-14", "end_date": "2026-11-14" },
+        "result": { "content": "{\"error\":\"unavailable\"}", "is_error": true },
+        "used": false
+      },
+      "model_turns": [
+        { "tool_uses": [{ "name": "query_recovery", "input": { "start_date": "2026-11-14", "end_date": "2026-11-14" } }], "usage": { "input_tokens": 5, "output_tokens": 50, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 9000 } },
+        { "usage": { "input_tokens": 5, "output_tokens": 280, "cache_creation_input_tokens": 150, "cache_read_input_tokens": 9000 } }
+      ],
+      "tool_results": { "query_recovery": "[{\"date\":\"2026-11-14\",\"recovery_score\":78}]" },
+      "expect": {
+        "model_calls": 2,
+        "iterations": 1,
+        "tool_calls": ["query_recovery", "query_recovery"],
+        "usage": { "input_tokens_total": 10, "output_tokens_total": 330, "cache_creation_input_tokens_total": 150, "cache_read_input_tokens_total": 18000 }
+      }
+    },
+    {
+      "id": "slow-missing-data",
+      "category": "slow read with missing data retains sync + re-query",
+      "live": true,
+      "text": "How did I sleep last night?",
+      "prefetch": {
+        "tool": "query_sleep",
+        "input": { "start_date": "2026-11-14", "end_date": "2026-11-14" },
+        "result": { "content": "[]" },
+        "delay_ms": 2500,
+        "used": false
+      },
+      "model_turns": [
+        { "tool_uses": [{ "name": "trigger_whoop_sync", "input": {} }], "usage": { "input_tokens": 5, "output_tokens": 45, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 9000 } },
+        { "tool_uses": [{ "name": "query_sleep", "input": { "start_date": "2026-11-14", "end_date": "2026-11-14" } }], "usage": { "input_tokens": 5, "output_tokens": 40, "cache_creation_input_tokens": 110, "cache_read_input_tokens": 9000 } },
+        { "usage": { "input_tokens": 5, "output_tokens": 150, "cache_creation_input_tokens": 90, "cache_read_input_tokens": 9110 } }
+      ],
+      "tool_results": { "trigger_whoop_sync": "{\"success\":true}", "query_sleep": "[]" },
+      "expect": {
+        "model_calls": 3,
+        "iterations": 2,
+        "tool_calls": ["query_sleep", "trigger_whoop_sync", "query_sleep"],
+        "usage": { "input_tokens_total": 15, "output_tokens_total": 235, "cache_creation_input_tokens_total": 200, "cache_read_input_tokens_total": 27110 }
+      }
+    },
+    {
+      "id": "multi-domain",
+      "category": "broader multi-domain question uses parallel model-chosen reads",
+      "live": true,
+      "text": "How did recovery and sleep look today?",
+      "prefetch": null,
+      "model_turns": [
+        { "tool_uses": [
+          { "name": "query_recovery", "input": { "start_date": "2026-11-14", "end_date": "2026-11-14" } },
+          { "name": "query_sleep", "input": { "start_date": "2026-11-14", "end_date": "2026-11-14" } }
+        ], "usage": { "input_tokens": 5, "output_tokens": 90, "cache_creation_input_tokens": 0, "cache_read_input_tokens": 9000 } },
+        { "usage": { "input_tokens": 6, "output_tokens": 520, "cache_creation_input_tokens": 600, "cache_read_input_tokens": 9000 } }
+      ],
+      "tool_results": { "query_recovery": "[{\"date\":\"2026-11-14\",\"recovery_score\":78}]", "query_sleep": "[{\"date\":\"2026-11-14\",\"performance\":82}]" },
+      "expect": {
+        "model_calls": 2,
+        "iterations": 1,
+        "tool_calls": ["query_recovery", "query_sleep"],
+        "usage": { "input_tokens_total": 11, "output_tokens_total": 610, "cache_creation_input_tokens_total": 600, "cache_read_input_tokens_total": 18000 }
+      }
+    },
+    {
+      "id": "legacy-null-cache-usage",
+      "category": "null cache usage fields count as zero",
+      "live": false,
+      "text": "How did I sleep last night?",
+      "prefetch": {
+        "tool": "query_sleep",
+        "input": { "start_date": "2026-11-14", "end_date": "2026-11-14" },
+        "result": { "content": "[{\"date\":\"2026-11-14\",\"performance\":82}]" },
+        "used": true
+      },
+      "model_turns": [
+        { "usage": { "input_tokens": 9600, "output_tokens": 400, "cache_creation_input_tokens": null, "cache_read_input_tokens": null } }
+      ],
+      "expect": {
+        "model_calls": 1,
+        "iterations": 0,
+        "tool_calls": ["query_sleep"],
+        "usage": { "input_tokens_total": 9600, "output_tokens_total": 400, "cache_creation_input_tokens_total": 0, "cache_read_input_tokens_total": 0 }
+      }
+    }
+  ],
+  "live_workload": {
+    "status": "not_run",
+    "$comment": "Run each `live: true` case on new threads against a local server (scripts/bench-coach-replies.py). Keep the user's chosen model, effort, output limit and dataset fixed across baseline/optimized comparisons; test other providers in separate batches. Count background title calls separately. Label environment as local, device, or production — never mix them.",
+    "case_ids": ["recovery-week-recognized", "sleep-last-night-recognized", "follow-up", "multi-domain", "slow-missing-data"],
+    "repetitions_per_case": 3,
+    "record_fields": [
+      "case_id", "run_index", "environment", "provider", "model", "effort", "source_revision", "started_at",
+      "client_completion_ms", "first_streamed_text_ms", "first_answer_text_after_tools_ms",
+      "model_calls", "tool_calls", "prefetch_used", "error",
+      "uncached_input_tokens", "output_tokens", "cache_read_input_tokens", "cache_creation_input_tokens",
+      "grounded", "fallback_observed"
+    ],
+    "runs": []
+  }
+}

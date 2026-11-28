@@ -4,6 +4,7 @@ import "@/styles/coach.css";
 import {
   createChatThread,
   getChatThreadById,
+  getChatThreadContext,
   getChatThreadMessages,
   getChatThreads,
   getLatestChatThread,
@@ -59,6 +60,7 @@ export default async function CoachPage({
   // so there is no `key={thread.id}` remount either.
   const threads = getChatThreads(user.id);
   const messages = getChatThreadMessages(user.id, activeThread.id);
+  const initialContext = getChatThreadContext(user.id, activeThread.id);
   const initialModelPref = modelPrefForSelection(
     resolveCoachProvider(user.id),
   );
@@ -72,6 +74,7 @@ export default async function CoachPage({
       initialThreadId={activeThread.id}
       initialThreads={threads}
       initialMessages={messages}
+      initialContext={initialContext}
       initialModelPref={initialModelPref}
       initialCoachEffort={initialCoachEffort}
       initialCursorModelParams={initialCursorModelParams}

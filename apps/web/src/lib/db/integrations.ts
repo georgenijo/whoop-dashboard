@@ -372,19 +372,39 @@ export function getIntegration(
  * The flag is reset to 0 by upsertIntegration on every successful token
  * write, so a subsequent successful refresh OR fresh OAuth callback both
  * clear it without an explicit unset call.
+ *
+ * Returns `true` only when this call actually changed the stored value (a
+ * real 0→1 or 1→0 transition on an existing row). The `needs_reauth != ?`
+ * guard makes the read-compare-write atomic in one SQLite statement, so two
+ * concurrent callers can never both observe the same transition — the
+ * reauth push (#287) keys "fire exactly once" off this return value.
  */
 export function setIntegrationNeedsReauth(
   user_id: number,
   provider: string,
   value: boolean
-): void {
+): boolean {
   const db = openWrite();
-  if (!db) return;
+  if (!db) return false;
   try {
-    if (!hasTable(db, "integrations")) return;
-    db.prepare(
-      "UPDATE integrations SET needs_reauth = ?, updated_at = ? WHERE user_id = ? AND provider = ?"
-    ).run(value ? 1 : 0, new Date().toISOString(), user_id, provider);
+    if (!hasTable(db, "integrations")) return false;
+    // `needs_reauth != ?` makes this a transition, not a blind write: the
+    // return value is true only when the flag actually changed, so callers
+    // can log (and later push on) the 0→1 edge exactly once instead of on
+    // every failed refresh against an already-flagged row (#263).
+    const info = db
+      .prepare(
+        "UPDATE integrations SET needs_reauth = ?, updated_at = ? " +
+          "WHERE user_id = ? AND provider = ? AND needs_reauth != ?"
+      )
+      .run(
+        value ? 1 : 0,
+        new Date().toISOString(),
+        user_id,
+        provider,
+        value ? 1 : 0
+      );
+    return info.changes > 0;
   } finally {
     db.close();
   }

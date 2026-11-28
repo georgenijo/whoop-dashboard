@@ -56,6 +56,7 @@ export default function AIInsightCard({
       ) : (
         <>
           <p>Connect Whoop to unlock AI-generated insights about your recovery, sleep, and strain.</p>
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- API redirect, not a page; the api/[[...rest]] catch-all (#233) makes the rule match every /api href. */}
           <a
             href="/api/auth/login"
             className="empty-state"

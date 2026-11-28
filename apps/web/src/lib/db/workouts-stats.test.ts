@@ -48,14 +48,15 @@ function seed(
     kilojoule: number;
     strain: number;
     max_hr: number;
+    avg_hr: number;
   }>,
 ): void {
   const db = new Database(dbFile);
   try {
     db.prepare(
       `INSERT INTO workouts
-        (user_id, id, date, sport, duration_sec, distance_m, kilojoule, strain, max_hr)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (user_id, id, date, sport, duration_sec, distance_m, kilojoule, strain, max_hr, avg_hr)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       userId,
       id,
@@ -66,6 +67,7 @@ function seed(
       fields.kilojoule ?? null,
       fields.strain ?? null,
       fields.max_hr ?? null,
+      fields.avg_hr ?? null,
     );
   } finally {
     db.close();
@@ -161,5 +163,81 @@ describe("getPersonalRecords", () => {
     // no max_hr seeded
     expect(pr.topHr.value).toBeNull();
     expect(pr.topHr.meta).toBeNull();
+  });
+});
+
+describe("per-sport filter (issue #430)", () => {
+  function seedMix(): void {
+    seed(1, "r1", "2026-03-02", { sport: "Running", strain: 10, avg_hr: 150 });
+    seed(1, "r2", "2026-03-20", { sport: "Running", strain: 14, avg_hr: 160 });
+    seed(1, "r3", "2026-04-05", { sport: "Running", strain: 12 });
+    seed(1, "w1", "2026-03-10", { sport: "Walking", strain: 4, avg_hr: 100 });
+    seed(1, "h1", "2026-03-11", { sport: "HIIT/Circuit", strain: 15 });
+    seed(1, "n1", "2026-03-12", {}); // NULL sport → "Unknown" in the breakdown
+    seed(2, "x1", "2026-03-05", { sport: "Running", strain: 20, avg_hr: 190 });
+  }
+
+  it("lists only that sport's sessions for the user, newest first", () => {
+    seedMix();
+    const rows = workouts.getWorkoutRowsRange(1, "2026-01-01", "2026-12-31", "Running");
+    expect(rows.map((r) => r.id)).toEqual(["r3", "r2", "r1"]);
+    expect(rows.every((r) => r.sport === "Running")).toBe(true);
+    // window still applies on top of the sport filter
+    expect(
+      workouts.getWorkoutRowsRange(1, "2026-04-01", "2026-04-30", "Running").map((r) => r.id),
+    ).toEqual(["r3"]);
+  });
+
+  it("matches names with reserved URL characters exactly", () => {
+    seedMix();
+    expect(
+      workouts.getWorkoutRowsRange(1, "2026-01-01", "2026-12-31", "HIIT/Circuit").map((r) => r.id),
+    ).toEqual(["h1"]);
+  });
+
+  it("drills the breakdown's Unknown row into the NULL-sport sessions", () => {
+    seedMix();
+    const unknown = workouts
+      .getSportBreakdown(1, "2026-01-01", "2026-12-31")
+      .find((r) => r.sport === "Unknown");
+    const rows = workouts.getWorkoutRowsRange(1, "2026-01-01", "2026-12-31", "Unknown");
+    expect(rows.map((r) => r.id)).toEqual(["n1"]);
+    expect(rows.length).toBe(unknown?.count);
+  });
+
+  it("every breakdown count equals its drill-down list length", () => {
+    seedMix();
+    for (const b of workouts.getSportBreakdown(1, "2026-01-01", "2026-12-31")) {
+      expect(workouts.getWorkoutRowsRange(1, "2026-01-01", "2026-12-31", b.sport)).toHaveLength(
+        b.count,
+      );
+    }
+  });
+
+  it("returns nothing for a sport the user never logged", () => {
+    seedMix();
+    expect(workouts.getWorkoutRowsRange(1, "2026-01-01", "2026-12-31", "Rowing")).toEqual([]);
+    expect(workouts.getMonthlyRollup(1, "2026-01-01", "2026-12-31", "Rowing")).toEqual([]);
+  });
+
+  it("rolls up strain and avg HR per month for one sport only", () => {
+    seedMix();
+    const rows = workouts.getMonthlyRollup(1, "2026-01-01", "2026-12-31", "Running");
+    expect(rows.map((r) => r.month)).toEqual(["2026-03", "2026-04"]);
+    const [mar, apr] = rows;
+    expect(mar.count).toBe(2);
+    expect(mar.avgStrain).toBeCloseTo(12);
+    expect(mar.avgHr).toBeCloseTo(155); // Walking (100) and user 2 (190) excluded
+    expect(apr.count).toBe(1);
+    expect(apr.avgHr).toBeNull(); // no HR on r3 — honest null, not 0
+  });
+
+  it("omitting sport keeps the all-sport rollup", () => {
+    seedMix();
+    const mar = workouts
+      .getMonthlyRollup(1, "2026-03-01", "2026-03-31")
+      .find((r) => r.month === "2026-03");
+    expect(mar?.count).toBe(5);
+    expect(mar?.avgHr).toBeCloseTo((150 + 160 + 100) / 3);
   });
 });
