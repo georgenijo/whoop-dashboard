@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Settings,
   Sparkles,
+  Trophy,
   type LucideIcon,
 } from "lucide-react";
 
@@ -31,4 +32,5 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   bell: Bell,
   menu: Menu,
   gauge: Gauge,
+  trophy: Trophy,
 };

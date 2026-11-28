@@ -24,9 +24,11 @@ const more: Item[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
-const moreHrefs = new Set(more.map((m) => m.href));
+// Added to the "More" drawer only when RECORDS_PAGE=1 (the layout passes `showRecords`).
+const RECORDS_ITEM: Item = { href: "/records", label: "Records", icon: "trophy" };
 
-export default function BottomNav() {
+export default function BottomNav({ showRecords = false }: { showRecords?: boolean }) {
+  const moreItems = showRecords ? [RECORDS_ITEM, ...more] : more;
   const pathname = usePathname();
   const params = useSearchParams();
   const range = params.get("range");
@@ -42,7 +44,7 @@ export default function BottomNav() {
   }
 
   const withRange = (h: string) => (range ? `${h}?range=${range}` : h);
-  const moreActive = moreHrefs.has(pathname);
+  const moreActive = moreItems.some((m) => m.href === pathname);
 
   return (
     <>
@@ -55,7 +57,7 @@ export default function BottomNav() {
           />
           <div className="bn-drawer" role="dialog" aria-label="More navigation">
             <div className="bn-drawer-handle" />
-            {more.map((m) => {
+            {moreItems.map((m) => {
               const Icon = NAV_ICONS[m.icon];
               return (
                 <Link

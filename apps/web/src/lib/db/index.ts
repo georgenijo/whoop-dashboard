@@ -74,7 +74,7 @@ export {
 } from "./workouts";
 
 export type { PRStats, PRValue, PRStreak } from "./prs";
-export { getPRStats } from "./prs";
+export { getPRStats, getRecordSeries } from "./prs";
 
 export type { JournalRow } from "./journal";
 export { getJournalRange } from "./journal";

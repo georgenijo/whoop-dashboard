@@ -15,6 +15,9 @@ const nav: NavItem[] = [
   { href: "/stats", label: "Stats", icon: "bar-chart-3" },
 ];
 
+// Added only when RECORDS_PAGE=1 (the layout passes `showRecords`).
+const RECORDS_ITEM: NavItem = { href: "/records", label: "Records", icon: "trophy" };
+
 const secondary: NavItem[] = [
   { href: "/coach", label: "Coach", icon: "sparkles" },
   { href: "/plans", label: "Plans", icon: "clipboard-list" },
@@ -23,7 +26,7 @@ const secondary: NavItem[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ showRecords = false }: { showRecords?: boolean }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const range = searchParams.get("range");
@@ -38,7 +41,7 @@ export default function Sidebar() {
 
       <div className="sb-nav">
         <div className="sb-group-label">Dashboard</div>
-        {nav.map((n) => {
+        {(showRecords ? [...nav, RECORDS_ITEM] : nav).map((n) => {
           const Icon = NAV_ICONS[n.icon];
           return (
             <Link

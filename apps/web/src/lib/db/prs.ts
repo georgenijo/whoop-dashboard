@@ -2,6 +2,8 @@ import "server-only";
 import { forUser } from "./scoped";
 import { SLEEP_DEDUP_WHERE } from "./sleep";
 import { dbPath } from "./connection";
+import { getStepsRange } from "./steps";
+import type { RecordSeries } from "@/lib/analytics/records";
 
 export type PRValue = { value: number; date: string } | null;
 export type PRStreak = {
@@ -155,4 +157,58 @@ export function getPRStats(userId: number): PRStats {
     statsCache.set(cacheKey, stats);
   }
   return stats;
+}
+
+// ---------------------------------------------------------------------------
+// Full-history record series for the /records page (RECORDS_PAGE=1).
+//
+// Only called by that page, so with the flag off none of these reads run.
+// Filters match the PR queries above so the page and the Overview card agree:
+// HRV/RHR ignore NULL and non-positive readings (getBestHRV/getLowestRHR),
+// sleep uses the same non-nap, one-row-per-date dedup as getStreaks, and
+// steps go through the existing steps reader (one resolved source, open
+// in-progress Whoop cycles excluded — a partial count is not a day's total).
+// ---------------------------------------------------------------------------
+
+function positive(v: number | null): number | null {
+  return v !== null && v > 0 ? v : null;
+}
+
+export function getRecordSeries(userId: number): RecordSeries {
+  const scoped = forUser(userId);
+  const recovery = scoped.all<{
+    date: string;
+    recovery_score: number | null;
+    hrv: number | null;
+    rhr: number | null;
+  }>(
+    "SELECT date, recovery_score, hrv, rhr FROM recovery WHERE user_id = ? ORDER BY date ASC",
+  );
+  const cycles = scoped.all<{ date: string; strain: number | null }>(
+    "SELECT date, strain FROM cycles WHERE strain IS NOT NULL AND user_id = ? ORDER BY date ASC",
+  );
+  // Time asleep = light + deep + REM (awake time in bed excluded). NULL when
+  // no stage data exists at all, so an unstaged row can't read as 0 h.
+  const sleep = scoped.all<{ date: string; asleep_ms: number | null; performance: number | null }>(
+    `SELECT s.date,
+            CASE WHEN s.light_ms IS NULL AND s.deep_ms IS NULL AND s.rem_ms IS NULL THEN NULL
+                 ELSE COALESCE(s.light_ms, 0) + COALESCE(s.deep_ms, 0) + COALESCE(s.rem_ms, 0) END AS asleep_ms,
+            s.performance
+     FROM sleep s WHERE COALESCE(s.nap, 0) = 0 AND ${SLEEP_DEDUP_WHERE} AND s.user_id = ? ORDER BY s.date ASC`,
+  );
+  const workouts = scoped.all<{ date: string; duration_sec: number; sport: string | null }>(
+    "SELECT date, duration_sec, sport FROM workouts WHERE duration_sec IS NOT NULL AND duration_sec > 0 AND user_id = ? ORDER BY date ASC, id ASC",
+  );
+  const steps = getStepsRange(userId, "0000-01-01", "9999-12-31").filter((r) => !r.is_partial);
+
+  return {
+    hrv: recovery.map((r) => ({ date: r.date, value: positive(r.hrv) })),
+    rhr: recovery.map((r) => ({ date: r.date, value: positive(r.rhr) })),
+    recovery: recovery.map((r) => ({ date: r.date, value: r.recovery_score })),
+    strain: cycles.map((r) => ({ date: r.date, value: r.strain })),
+    sleepDuration: sleep.map((r) => ({ date: r.date, value: positive(r.asleep_ms) })),
+    sleepPerformance: sleep.map((r) => ({ date: r.date, value: r.performance })),
+    workoutDuration: workouts.map((r) => ({ date: r.date, value: r.duration_sec, note: r.sport })),
+    steps: steps.map((r) => ({ date: r.date, value: positive(r.steps) })),
+  };
 }

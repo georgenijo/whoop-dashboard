@@ -31,6 +31,26 @@ DB read-only, or those writes will fail. If the DB is missing or empty (e.g.
 before the first Whoop sync), the Overview renders with muted empty states and
 no runtime errors.
 
+## Feature flags
+
+Server-side env flags, off by default, read per request.
+
+### `RECORDS_PAGE=1` — Personal Records page (`/records`)
+
+- **Off (default, any value other than `1`):** `/records` returns 404 before
+  any auth or DB read, no Sidebar or BottomNav entry renders, and no other
+  page changes.
+- **On:** adds "Records" to the Sidebar's Dashboard group and the BottomNav
+  "More" drawer. The page is plain server-rendered markup (no client JS). For
+  best HRV, lowest resting HR, best recovery, highest day strain, longest
+  sleep (time asleep), best sleep performance, longest workout and most steps
+  it shows the standing record and its date, how it compares with the median
+  of the user's last 90 days, the previous three records it replaced, and the
+  days since it was last set or matched — plus the existing streak records.
+  Reads are the user's own rows only (`getRecordSeries` in
+  `src/lib/db/prs.ts`); the history logic is pure
+  (`src/lib/analytics/records.ts`). No tables, migrations or network calls.
+
 ## Design tokens
 
 - `src/app/theme.css` — verbatim copy of the Whoop+ design kit's
