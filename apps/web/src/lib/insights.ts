@@ -163,21 +163,20 @@ export async function pregenerateInsight(userId: number): Promise<boolean> {
 }
 
 /**
- * Called after a Whoop webhook changes a user's data. Runs in after(), so the
- * webhook's 200 to Whoop never waits on the delay or the model. Must run
- * inside a request scope.
+ * Called after a Whoop webhook changes a user's data. The delay runs on an
+ * unref'd timer rather than in after(), so a restart never waits on it: if the
+ * process stops first, the attempt is dropped and the next app open generates
+ * the brief as before. Never throws into the webhook response.
  */
 export function scheduleInsightPregeneration(userId: number): void {
-  after(async () => {
-    await new Promise((resolve) => setTimeout(resolve, INSIGHT_PREGENERATE_DELAY_MS));
-    try {
-      await pregenerateInsight(userId);
-    } catch (err) {
+  const timer = setTimeout(() => {
+    pregenerateInsight(userId).catch((err) => {
       // regenerateInsight records its own failures; this only guards the
-      // status/lock reads from escaping into the after() runner.
+      // status/lock reads from becoming an unhandled rejection.
       log.error({ user_id: userId, err: err instanceof Error ? err.message : String(err) }, "insight_pregenerate_failed");
-    }
-  });
+    });
+  }, INSIGHT_PREGENERATE_DELAY_MS);
+  timer.unref?.();
 }
 
 export async function regenerateInsight(

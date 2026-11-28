@@ -352,21 +352,21 @@ describe("insight pregeneration after new Whoop data", () => {
     expect(sdk.create).toHaveBeenCalledTimes(1);
   });
 
-  it("waits for the webhook burst before generating, outside the webhook response", async () => {
+  it("waits for the webhook burst before generating, outside after() so restarts never wait on it", async () => {
     bootstrap();
     vi.useFakeTimers({ toFake: ["Date", "setTimeout"] });
     vi.setSystemTime(new Date("2026-11-10T03:30:00Z"));
     sdk.create.mockResolvedValue({ content: [{ type: "text", text: "Debounced brief" }] });
     scheduleInsightPregeneration(2);
     scheduleInsightPregeneration(2);
-    expect(nextServer.after).toHaveBeenCalledTimes(2);
-    const runs = nextServer.after.mock.calls.map(([fn]) => (fn as () => Promise<void>)());
+    expect(nextServer.after).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(INSIGHT_PREGENERATE_DELAY_MS - 1);
     expect(sdk.create).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
-    await Promise.all(runs);
+    await vi.waitFor(() => expect(getLatestInsight(2)?.insight).toBe("Debounced brief"));
+    // The second delivery found the first holding the lock.
     expect(sdk.create).toHaveBeenCalledTimes(1);
-    expect(getLatestInsight(2)?.insight).toBe("Debounced brief");
+    expect(getInsightStatus(2, true)).toMatchObject({ isStale: false, isRegenerating: false });
   });
 });
 
