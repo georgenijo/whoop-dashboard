@@ -32,9 +32,26 @@ struct RootView: View {
                 onSignOut()
             })
         }
+        .onAppear { applyPendingPushRoute() }
+        .onReceive(NotificationCenter.default.publisher(for: .pushRouteRequested)) { _ in
+            applyPendingPushRoute()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .coachComposeRequested)) { note in
             navigation.composeRequest = CoachComposeRequest(draft: note.object as? String)
             tab = .coach
+        }
+    }
+
+    /// A tapped push (#287) can arrive before this view exists (cold launch),
+    /// so the route waits in `PushRouter` until we drain it here.
+    private func applyPendingPushRoute() {
+        switch PushRouter.shared.consume() {
+        case .whoopReconnect:
+            // Settings hosts WhoopConnectorCard and its Reconnect button.
+            tab = .home
+            showsSettings = true
+        case nil:
+            break
         }
     }
 }
