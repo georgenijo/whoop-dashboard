@@ -26,7 +26,10 @@ const more: Item[] = [
 
 const moreHrefs = new Set(more.map((m) => m.href));
 
-export default function BottomNav() {
+// Shown in the More drawer only when the server passes `showAlerts` (HEALTH_ALERTS=1).
+const ALERTS_ITEM: Item = { href: "/alerts", label: "Alerts", icon: "bell" };
+
+export default function BottomNav({ showAlerts = false }: { showAlerts?: boolean }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const range = params.get("range");
@@ -42,7 +45,8 @@ export default function BottomNav() {
   }
 
   const withRange = (h: string) => (range ? `${h}?range=${range}` : h);
-  const moreActive = moreHrefs.has(pathname);
+  const drawerItems = showAlerts ? [ALERTS_ITEM, ...more] : more;
+  const moreActive = moreHrefs.has(pathname) || (showAlerts && pathname === ALERTS_ITEM.href);
 
   return (
     <>
@@ -55,7 +59,7 @@ export default function BottomNav() {
           />
           <div className="bn-drawer" role="dialog" aria-label="More navigation">
             <div className="bn-drawer-handle" />
-            {more.map((m) => {
+            {drawerItems.map((m) => {
               const Icon = NAV_ICONS[m.icon];
               return (
                 <Link

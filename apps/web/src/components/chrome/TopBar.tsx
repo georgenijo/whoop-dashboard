@@ -31,6 +31,7 @@ const TITLES: Record<string, string> = {
   "/perf": "Performance",
   "/history": "History",
   "/settings": "Settings",
+  "/alerts": "Alerts",
 };
 
 function formatToday(): string {

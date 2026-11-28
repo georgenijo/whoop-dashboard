@@ -39,3 +39,35 @@ no runtime errors.
   to the kit source so future kit refreshes diff cleanly.
 - `src/app/globals.css` — aurora / glass / layout / card / chart styles
   ported from the kit's `ui_kits/dashboard/styles.css`.
+
+## Feature flags
+
+### `HEALTH_ALERTS=1` — Health Alerts center (`/alerts`)
+
+Off by default. Server-side env flag, read per request
+(`src/lib/health-alerts-flag.ts`); only the exact value `1` enables it.
+
+- **Off:** `/alerts` returns 404 before any auth or DB read, the Sidebar and
+  the mobile More drawer show no Alerts entry, and the dashboard layout does no
+  extra reads.
+- **On:** adds "Alerts" to the Sidebar's Intelligence group (with a count badge
+  for `watch`/`act` alerts; `info` never badges) and to the mobile More drawer.
+  The page lists the signals the app already computes, most urgent first, each
+  with severity (`info` / `watch` / `act`), a one-line explanation with the
+  numbers, since-when, and what usually helps. With nothing current it shows
+  "Nothing to flag" and the per-check status.
+
+Rules live in `src/lib/analytics/healthAlerts.ts` (pure, no AI, no network) and
+reuse the existing analytics so an alert never disagrees with its card:
+illness signal (`illness.ts`), overtraining score (`ots.ts`), HRV below the
+30-day 1.5σ band (`trends.ts`, same as `HRVTrend`), resting HR above the 14-day
+baseline, skin-temp run (`skinTemp.ts`, shared with `SkinTempDeviationCard`),
+respiratory rate outside ±2 br/min, Whoop's sleep-debt figure, and data
+freshness. When the illness alert fires it absorbs the per-metric RHR / HRV /
+skin-temp / resp alerts it is built from. Reads are the last 60 days through the
+user-scoped `getRecoveryRange` / `getSleepRange` / `getStrainRange` plus
+`getLastSuccessfulSyncAt`, deduped per request with `cache()`. Guidance only,
+not medical advice.
+
+To enable it in production, add `Environment=HEALTH_ALERTS=1` to the
+`whoop-web` service drop-in and restart the service.

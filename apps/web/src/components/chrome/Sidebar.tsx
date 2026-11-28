@@ -23,7 +23,11 @@ const secondary: NavItem[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
-export default function Sidebar() {
+// Health Alerts entry (HEALTH_ALERTS=1). The server passes `alerts` only when
+// the flag is on; `count` is the watch/act alert count for the badge.
+const ALERTS_ITEM: NavItem = { href: "/alerts", label: "Alerts", icon: "bell" };
+
+export default function Sidebar({ alerts }: { alerts?: { count: number } }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const range = searchParams.get("range");
@@ -53,6 +57,24 @@ export default function Sidebar() {
           );
         })}
         <div className="sb-group-label">Intelligence</div>
+        {alerts && (
+          <Link
+            href={ALERTS_ITEM.href}
+            className={`sb-link ${pathname === ALERTS_ITEM.href ? "active" : ""}`}
+            data-track={`nav:${ALERTS_ITEM.href}`}
+          >
+            <NAV_ICONS.bell size={17} strokeWidth={1.8} aria-hidden />
+            {ALERTS_ITEM.label}
+            {alerts.count > 0 && (
+              <span
+                className="sb-badge"
+                aria-label={`${alerts.count} alert${alerts.count === 1 ? "" : "s"}`}
+              >
+                {alerts.count}
+              </span>
+            )}
+          </Link>
+        )}
         {secondary.map((n) => {
           const Icon = NAV_ICONS[n.icon];
           return (
