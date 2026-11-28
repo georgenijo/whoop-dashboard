@@ -129,7 +129,7 @@ Threads have auto-titles via the configured title model fired in `after()` (Next
   Assuming `(user_id, date)` everywhere is wrong and was the cause of a stale test suite. The rebuild runs once at first `openWrite()` against a pre-Phase-D DB — idempotent via `PRAGMA table_info` gate. **NEVER write domain tables from Python**; the Next.js side is the sole owner.
 - Read paths against domain tables MUST go through `forUser(userId).all/get/read(...)` in `apps/web/src/lib/db/scoped.ts`. The wrapper appends `userId` as the trailing positional `?`; call sites write `... AND user_id = ?` as the LAST placeholder. A CI vitest (`scoped.test.ts`) blocks any stray `FROM recovery|cycles|sleep|workouts|daily_summary|body_measurements` outside the wrapper + allowlist.
 - Other read paths use `safeQuery` (read-only open). Other write paths use `safeWriteQuery` or direct `openWrite()`.
-- Lazy-bootstrapped tables: `users`, `sessions`, `chat_threads`, `chat_messages`, `chat_logs`, `sync_logs`, `route_logs`, `app_settings`, `integrations`, `user_settings`, `device_tokens`, `webhook_events`. `route_logs`'s migration is factored into `migrateRouteLogsSchema()` (`connection.ts`) so it can be shared with `logs.ts`'s `openRouteLogWrite()`, which deliberately opens its own connection instead of calling `openWrite()` — see that function's doc comment for the hot-path cost rationale (issue #505).
+- Lazy-bootstrapped tables: `users`, `sessions`, `chat_threads`, `chat_messages`, `chat_logs`, `sync_logs`, `route_logs`, `app_settings`, `integrations`, `user_settings`, `device_tokens`, `webhook_events`, `credential_health`. `route_logs`'s migration is factored into `migrateRouteLogsSchema()` (`connection.ts`) so it can be shared with `logs.ts`'s `openRouteLogWrite()`, which deliberately opens its own connection instead of calling `openWrite()` — see that function's doc comment for the hot-path cost rationale (issue #505).
 
 ### Auth
 
@@ -168,8 +168,8 @@ Adding a third-party script, font, image host, or `fetch` target means widening 
 - Naps excluded at query time (`WHERE nap = 0`), not at sync — naps still land in DB
 - Whoop API base: `https://api.prod.whoop.com/developer`
 - Required env: `WHOOP_CLIENT_ID`, `WHOOP_CLIENT_SECRET`, `ANTHROPIC_API_KEY`
-- Optional env: `WHOOP_REDIRECT_URI`, `WHOOP_DB_PATH`, `WHOOP_TOKENS_PATH`, `CYCLES_RECONCILE_LOOKBACK_DAYS` (default 30 — look-back for the per-sync orphaned-cycles reconcile in `sync.ts`; historical orphans are handled by the one-time `app_settings`-guarded backfill instead, so this rarely needs changing), `WHOOP_REFRESH_SECRET` (bearer secret for `POST /api/whoop/refresh`, the background refresh-only keepalive on a 30-min systemd timer, #273 — route fails closed with 404 when unset)
-- Optional push env (iOS only, all five required for push to work): `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, `APNS_PRIVATE_KEY`, `APNS_ENVIRONMENT`. Set `ENABLE_PUSH_DEBUG=1` to expose `/api/devices/test-push` in production.
+- Optional env: `WHOOP_REDIRECT_URI`, `WHOOP_DB_PATH`, `WHOOP_TOKENS_PATH`, `CYCLES_RECONCILE_LOOKBACK_DAYS` (default 30 — look-back for the per-sync orphaned-cycles reconcile in `sync.ts`; historical orphans are handled by the one-time `app_settings`-guarded backfill instead, so this rarely needs changing), `WHOOP_REFRESH_SECRET` (bearer secret for `POST /api/whoop/refresh`, the background refresh-only keepalive on a 30-min systemd timer, #273 — route fails closed with 404 when unset), `COACH_KEY_PROBE=on` (default off; the same keepalive tick also probes the shared `CURSOR_API_KEY` via Cursor's `GET /v1/models` and records status in `credential_health`, shown on `/logs`, #525)
+- Optional push env (iOS only, all five required for push to work): `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, `APNS_PRIVATE_KEY`, `APNS_ENVIRONMENT`. Set `ENABLE_PUSH_DEBUG=1` to expose `/api/devices/test-push` in production. `WHOOP_REAUTH_PUSH=log|on` (default off) pushes "Whoop disconnected — tap to reconnect." on a real `needs_reauth` 0→1 transition (`apps/web/src/lib/whoop/reauth-push.ts`, #287); iOS deep-links the tap to Settings via `PushRoute`.
 - Use Anthropic SDK, not raw HTTP. Default chat model: `claude-sonnet-5-5`; titles and daily insights: `claude-haiku-5-5`. All three are owned by `apps/web/src/lib/coach/model-defaults.ts` with env overrides `COACH_DEFAULT_MODEL` / `COACH_TITLE_MODEL` / `COACH_INSIGHT_MODEL` (issue #587). Before a title or insight call the configured ID is checked against the account catalog (`resolveCatalogModel` in `apps/web/src/lib/coach/model-resolution.ts`) and falls back to the newest same-family catalog model with a once-per-process warning.
 
 ## Deploy
@@ -220,7 +220,11 @@ What it guarantees, and why each one is there:
   `require()`-ing from that tree — it 500s until a retry completes, without
   anyone having restarted anything (issue #516). The install step is skipped
   entirely when the lockfile hasn't changed, so the window only opens on
-  deploys that touch `package-lock.json`.
+  deploys that touch `package-lock.json`. Detaching does not close that window on a
+  *successful* in-place install (~15s); `DEPLOY_STAGED_INSTALL=1` (opt-in,
+  #524) runs `npm ci` in `<repo>/.deploy-state/install-staging` and renames the
+  finished tree in before the build (old tree kept as `node_modules.prev`,
+  restored if the build fails). See `docs/operations/environment-and-deploy.md`.
 - **Sha verification.** "The service is up" does not catch a restart that kept
   serving the old bundle; the deployed sha is compared against `/api/health`.
 - **Rollback recipe** printed on success and on any failure after the snapshot,

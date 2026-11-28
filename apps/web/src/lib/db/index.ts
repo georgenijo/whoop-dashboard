@@ -118,6 +118,7 @@ export {
 export type {
   ChatThread,
   ChatThreadSummary,
+  ChatThreadContext,
   ChatMessage,
   ChatMessageInsert,
   ChatMessageStatus,
@@ -130,6 +131,8 @@ export {
   setChatThreadTitle,
   deleteChatThread,
   resolveChatThread,
+  getChatThreadContext,
+  setChatThreadContext,
   getChatThreadMessages,
   getChatThreadConversation,
   addChatMessages,

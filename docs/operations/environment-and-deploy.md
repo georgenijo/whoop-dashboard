@@ -82,10 +82,12 @@ kept out of this repository.
 | `COACH_CURSOR_TRANSPORT` | Cursor ACP rollout is enabled | `legacy` (default) or `acp`; controls both model discovery and turns |
 | `COACH_CURSOR_ACP_IDLE_TTL_MS` | ACP session idle lifetime needs tuning | Default 600000 (10 minutes) |
 | `COACH_CURSOR_ACP_MAX_SESSIONS` | ACP process capacity needs tuning | Default 4 live sessions |
+| `COACH_TURN_ROUTING` | Measuring the #489 turn router | Unset/anything else = off. `shadow` records the router's lane, tool envelope, confidence, features and `router_ms` in `chat_logs.details.routing` (plus `timing.router_ms`) next to the tools the turn actually used (`observed_tools`); execution is unchanged. No enforcing mode exists yet |
 | `CURSOR_BACKEND_URL` | Cursor endpoint override is needed | Coach model discovery and turns |
 | `PUBLIC_ORIGIN` | Production redirects are generated | Web auth |
 | `ADMIN_APPLE_SUB` | Admin webhook replay is enabled | Admin authorization |
 | `WHOOP_REFRESH_SECRET` | Refresh-only keepalive timer is enabled (#273) | `POST /api/whoop/refresh` bearer auth — fails closed (404) when unset |
+| `COACH_KEY_PROBE` | Optional; `on` enables the shared-key probe (#525) | Each keepalive tick also checks the shared `CURSOR_API_KEY` against Cursor's `GET /v1/models` (no model turn) and records `ok`/`invalid`/`unreachable` in `credential_health`, shown on `/logs`. Two consecutive rejections open one incident (hook: `registerSharedCredentialIncidentHandler` in `lib/coach/shared-key-probe.ts`). Off by default; requires the keepalive timer |
 | `LOG_LEVEL` | Default logging is not wanted | Structured logger |
 | `APPLE_BUNDLE_ID` | Native Sign in with Apple is enabled | iOS identity verification |
 | `APPLE_SERVICES_ID` | Web Sign in with Apple is enabled | Web Apple OAuth |
@@ -99,6 +101,8 @@ kept out of this repository.
 | `APNS_PRIVATE_KEY` | Push delivery is enabled | APNs |
 | `APNS_ENVIRONMENT` | Push delivery is enabled | APNs |
 | `ENABLE_PUSH_DEBUG` | Temporary push diagnostics are explicitly wanted | Debug route |
+| `WHOOP_REAUTH_PUSH` | Opting in to the Whoop-disconnected push (`log` = record only, `on` = send); default off | Reauth push (#287) |
+| `COACH_FAILURE_ALERTS` | Sustained-failure alerting is wanted: `log` (track + log only) or `push` (also APNs to the `ADMIN_APPLE_SUB` user). Unset = off | Failure alerts (#444) |
 
 `ENABLE_PUSH_DEBUG` must remain unset or `0` during normal production.
 
@@ -209,6 +213,51 @@ underneath it. The failure message says the lock was left held and repeats
 the same manual-clear recipe; only run it once you have actually confirmed
 on opti that nothing is still running (`fleet exec opti 'pgrep -af "next
 build|npm ci"'`).
+
+### Staged dependency install (opt-in, #524)
+
+By default, when `package-lock.json` changed, `scripts/deploy` runs `npm ci`
+in place in `apps/web`. npm deletes `node_modules` before repopulating it, so
+for the install's duration (~15s) the running `whoop-web` service lazily
+`require()`s from a tree being rebuilt, and a failed install leaves it on a
+half-populated tree.
+
+`DEPLOY_STAGED_INSTALL=1 scripts/deploy` runs `scripts/lib/staged-install.sh`
+on opti instead:
+
+1. Clear `<repo>/.deploy-state/install-staging` (left by an earlier failed or
+   killed run) and copy `package.json`, `package-lock.json` and `.npmrc` into it.
+2. Run `npm ci` there. The live `apps/web/node_modules` is untouched. A failed
+   install stops the deploy with the service still serving the old tree.
+3. Write the lockfile marker into the staged tree, then swap it in: the old
+   live tree becomes `.deploy-state/node_modules.prev` (one kept, rotated each
+   time). The swap uses `mv --exchange` (atomic) on coreutils >= 9.5. opti has
+   9.4, so there it is two renames, with the live path absent for microseconds.
+4. Build. If the build fails, the build script puts back both `.next.prev`
+   and `node_modules.prev`.
+5. Restart and verify, as before.
+
+`.deploy-state/` sits at the repo root, outside `apps/web`, because
+`apps/web/tsconfig.json` includes `**/*.ts` and excludes only `node_modules`,
+so a `node_modules.prev` inside `apps/web` would be type-checked by
+`next build`. It is gitignored. Disk cost is one extra tree (~820 MB) plus a
+second one during the install.
+
+The swap happens **before** the build, not in a stop → swap → start step after
+it. `next build` resolves `next`, esbuild and the native `better-sqlite3` from
+`apps/web/node_modules`, so it needs the new tree in place, and building in a
+separate copy would mean relocating a `.next` built elsewhere. After the swap,
+the old server process loads the new versions for any module it has not yet
+required, until the restart. That mismatch is not new: the in-place install
+already leaves the old server on new modules for the whole build, and the build
+moves `.next` aside under the running service. Staging removes the
+half-written tree and the outage after a failed install. The restart window
+does not get longer.
+
+Rollback after a staged deploy: the printed recipe adds
+`bash scripts/lib/staged-install.sh restore <apps/web> <.deploy-state>` to the
+build-level step. To make staging the default, change `DEPLOY_STAGED_INSTALL`'s
+default in `scripts/deploy` after a few opted-in deploys have succeeded.
 
 ## Refresh-only keepalive (#273)
 

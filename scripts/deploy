@@ -28,7 +28,10 @@
 #      and lazily `require()`-ing from that tree, so it 500s until a retry
 #      completes — without anyone having touched the service. Both steps use
 #      the same setsid + exit-code-sentinel + fresh-connection-poll machinery
-#      (see poll_detached_step below).
+#      (see poll_detached_step below). Detaching does NOT stop a successful
+#      in-place `npm ci` from deleting and repopulating the live tree for the
+#      install's duration (~15s); DEPLOY_STAGED_INSTALL=1 (opt-in, issue #524)
+#      installs into a staging tree and renames it in instead — see phase 3.
 #   3. VERIFY THE RUNNING SHA, not just that the service is up. Prod once ran
 #      three commits behind main for a day with the fix for a live coach-timeout
 #      bug merged and undeployed, because nothing reported what was serving.
@@ -124,7 +127,8 @@
 #
 # Env overrides: DEPLOY_NODE_VERSION (bypass .nvmrc — needed to deploy a ref
 # that predates it), DEPLOY_FLEET_NODE, DEPLOY_APP_ROOT, DEPLOY_REPO_URL,
-# DEPLOY_LOCK_DIR (see property 7 — validated the same way --ref is).
+# DEPLOY_LOCK_DIR (see property 7 — validated the same way --ref is),
+# DEPLOY_STAGED_INSTALL=1 (stage `npm ci` and swap it in; see phase 3).
 set -euo pipefail
 
 # poll_detached_step uses a nameref (`local -n`), which needs bash >= 4.3.
@@ -170,6 +174,12 @@ INSTALL_POLL_INTERVAL=${DEPLOY_INSTALL_POLL_INTERVAL:-15}
 INSTALL_LOG=/tmp/whoop-deploy-install.log
 INSTALL_EXIT=/tmp/whoop-deploy-install.exit
 INSTALL_SH=/tmp/whoop-deploy-install.sh
+# Opt-in staged install (issue #524). 0 (default) keeps the in-place `npm ci`.
+# 1 installs into $STATE_DIR/install-staging via scripts/lib/staged-install.sh
+# and renames the finished tree into apps/web/node_modules, so the live tree is
+# never half-written and a failed install leaves it untouched. See phase 3.
+STAGED_INSTALL=${DEPLOY_STAGED_INSTALL:-0}
+NM_SWAPPED=0   # set once a staged install has swapped node_modules this run
 # On-box mutual-exclusion lock for phases 1-5 (see header property 7). A
 # directory, not a plain file: it is built fully-populated off to the side and
 # atomically `mv -T`'d into place (see acquire_deploy_lock) — plain `mkdir` is
@@ -316,22 +326,38 @@ for _var in PORT BACKUP_KEEP BUILD_POLL_SECONDS BUILD_POLL_INTERVAL INSTALL_POLL
 done
 [ "$BUILD_POLL_INTERVAL" -gt 0 ] || die "DEPLOY_BUILD_POLL_INTERVAL must be > 0"
 [ "$INSTALL_POLL_INTERVAL" -gt 0 ] || die "DEPLOY_INSTALL_POLL_INTERVAL must be > 0"
+[[ "$STAGED_INSTALL" =~ ^[01]$ ]] || die "DEPLOY_STAGED_INSTALL must be 0 or 1, got: $STAGED_INSTALL"
 
 command -v fleet >/dev/null 2>&1 || die "fleet CLI is required"
 
 DB_PATH="$APP_ROOT/shared/whoop_data.db"
 WEB_DIR="$APP_ROOT/apps/web"
+# Staged-install scratch + node_modules.prev. Outside apps/web on purpose (its
+# tsconfig would type-check a node_modules.prev there) but on the same
+# filesystem, so the swap is a rename. Gitignored.
+STATE_DIR="$APP_ROOT/.deploy-state"
+STAGED_INSTALL_SH="$APP_ROOT/scripts/lib/staged-install.sh"
 BACKUP_PATH=""      # set once the snapshot lands; gates the rollback recipe
 ROLLBACK_SHA=""     # the sha that was deployed BEFORE this run
 
 print_rollback() {
+  # A staged install (DEPLOY_STAGED_INSTALL=1) that swapped node_modules this
+  # run kept the old tree as $STATE_DIR/node_modules.prev; rolling back .next
+  # alone would pair the old build with the new dependencies.
+  local nm_restore="" nm_note=""
+  if [ "$NM_SWAPPED" = 1 ]; then
+    nm_restore=" && bash $STAGED_INSTALL_SH restore $WEB_DIR $STATE_DIR"
+    nm_note="
+  # This deploy also swapped in new node_modules; the restore step puts the
+  # previous tree back from $STATE_DIR/node_modules.prev."
+  fi
   cat <<EOF
 
 Rollback (SINGLE STEP ONLY — the next deploy overwrites both .next.prev and
 takes a fresh snapshot, so this recipe does not stack across deploys):
 
   # 1. Build-level rollback. Fast, leaves the DB alone. Try this first.
-  fleet exec $FLEET_NODE 'cd $WEB_DIR && rm -rf .next && mv .next.prev .next && sudo systemctl restart whoop-web'
+  fleet exec $FLEET_NODE 'cd $WEB_DIR && rm -rf .next && mv .next.prev .next${nm_restore} && sudo systemctl restart whoop-web'${nm_note}
 
   # 2. Code + DB rollback. Only if this deploy migrated the schema.
   fleet exec $FLEET_NODE 'sudo systemctl stop whoop-web'
@@ -976,10 +1002,37 @@ NEED_CI=$(printf '%s\n' "$SYNC_OUT" | sed -n 's/^##NEED_CI=//p' | tail -1)
 # lock-message check (unlike the build's "Another next build process" string,
 # npm has no equivalent reliable marker in its log) — the pgrep guard at
 # launch is the stacking protection here.
+#
+# DEPLOY_STAGED_INSTALL=1 (opt-in, issue #524) closes the in-place window: the
+# detached step runs scripts/lib/staged-install.sh from the just-synced
+# checkout, which runs `npm ci` in $STATE_DIR/install-staging and renames the
+# finished tree into apps/web/node_modules (old tree kept as
+# $STATE_DIR/node_modules.prev). A failed or stalled install then leaves the
+# live tree exactly as it was.
+#
+# Ordering is install to staging -> swap -> build -> restart, NOT the
+# "build -> stop -> swap -> start" the issue floated. `next build` resolves
+# its dependencies (next itself, esbuild, the native better-sqlite3) from
+# apps/web/node_modules, so building against the new lockfile needs the new
+# tree in place first; building in a separate copy of apps/web would mean
+# relocating a .next built elsewhere, which Next does not promise works. And
+# `next start` cannot be trusted to tolerate the swap without a restart: route
+# chunks lazily `require()` from node_modules, so after the swap they load the
+# new versions next to the old ones already in memory. That skew is not new:
+# today's in-place install leaves the service on new node_modules + old
+# server for the whole build, and the build itself moves .next aside under the
+# running service. Staging removes the half-written tree and the
+# failed-install outage; the restart in phase 5 ends the skew as before, with
+# no longer restart window. If the build fails, the build script swaps
+# node_modules.prev back along with .next.prev.
 if [ "$NEED_CI" = "1" ]; then
-  say "Installing dependencies (detached; ~10-60s typical)"
+  if [ "$STAGED_INSTALL" = 1 ]; then
+    say "Installing dependencies into a staging tree (detached; ~10-60s typical)"
+  else
+    say "Installing dependencies (detached; ~10-60s typical)"
+  fi
   fleet exec --timeout 120 "$FLEET_NODE" \
-    "bash -s -- '$WEB_DIR' '$NODE_VERSION' '$INSTALL_SH' '$INSTALL_LOG' '$INSTALL_EXIT'" <<'REMOTE_INSTALL_LAUNCH' \
+    "bash -s -- '$WEB_DIR' '$NODE_VERSION' '$INSTALL_SH' '$INSTALL_LOG' '$INSTALL_EXIT' '$STAGED_INSTALL' '$STAGED_INSTALL_SH' '$STATE_DIR'" <<'REMOTE_INSTALL_LAUNCH' \
     || die "could not launch the dependency install on $FLEET_NODE"
 set -euo pipefail
 WEB_DIR=$1
@@ -987,6 +1040,15 @@ NODE_VERSION=$2
 INSTALL_SH=$3
 INSTALL_LOG=$4
 INSTALL_EXIT=$5
+STAGED_INSTALL=$6
+STAGED_INSTALL_SH=$7
+STATE_DIR=$8
+# The helper comes from the checkout phase 2 just reset to the target sha, so a
+# ref that predates it cannot use staged mode. Refuse before touching anything.
+if [ "$STAGED_INSTALL" = 1 ] && [ ! -f "$STAGED_INSTALL_SH" ]; then
+  echo "DEPLOY_STAGED_INSTALL=1 but $STAGED_INSTALL_SH is not in the deployed ref — re-run without it" >&2
+  exit 1
+fi
 # Same reasoning as the build launcher: re-check here (not just in phase 2)
 # because this directory is prepended to the PATH the detached script builds,
 # and a missing dir would silently fall through to the login shell's Node
@@ -1026,6 +1088,16 @@ if [ -n "$RUNNING" ]; then
 fi
 
 rm -f "$INSTALL_LOG" "$INSTALL_EXIT" "$INSTALL_SH"
+if [ "$STAGED_INSTALL" = 1 ]; then
+  # The helper writes the lockfile marker into the staged tree before the
+  # swap, so a live tree carrying a marker is always a complete one.
+  cat > "$INSTALL_SH" <<INNER
+#!/usr/bin/env bash
+export PATH="$NODE_BIN_DIR:\$PATH"
+bash "$STAGED_INSTALL_SH" install "$WEB_DIR" "$STATE_DIR"
+echo "\$?" > "$INSTALL_EXIT"
+INNER
+else
 cat > "$INSTALL_SH" <<INNER
 #!/usr/bin/env bash
 export PATH="$NODE_BIN_DIR:\$PATH"
@@ -1042,19 +1114,41 @@ if [ "\$rc" -eq 0 ]; then
 fi
 echo "\$rc" > "$INSTALL_EXIT"
 INNER
+fi
 chmod +x "$INSTALL_SH"
 setsid nohup bash "$INSTALL_SH" > "$INSTALL_LOG" 2>&1 < /dev/null &
 echo "launched (log: $INSTALL_LOG)"
 REMOTE_INSTALL_LAUNCH
 
+  if [ "$STAGED_INSTALL" = 1 ]; then
+    INSTALL_STALL_NOTE="     The service is still up: the install runs in $STATE_DIR/install-staging
+     and the live node_modules is untouched until it finishes. If it does
+     finish later, it swaps the new tree in under the old, unrestarted build
+     (mismatched dependencies until a restart). Once it has stopped, re-run
+     scripts/deploy to build and restart; the staging tree is cleared and a
+     failed install retries."
+  else
+    INSTALL_STALL_NOTE="     THE RUNNING SERVICE MAY BE BROKEN. npm ci removes node_modules before
+     repopulating it, so the live service is serving off a tree mid-rewrite.
+     Check now:  fleet exec $FLEET_NODE 'curl -s -o /dev/null -w \"%{http_code}\\n\" http://127.0.0.1:8501/api/health'
+     Recover by re-running scripts/deploy — the install retries."
+  fi
   INSTALL_RC=""
   poll_detached_step "npm ci" "$INSTALL_EXIT" "$INSTALL_LOG" \
     "$INSTALL_POLL_SECONDS" "$INSTALL_POLL_INTERVAL" "" INSTALL_RC \
-    "     THE RUNNING SERVICE MAY BE BROKEN. npm ci removes node_modules before
-     repopulating it, so the live service is serving off a tree mid-rewrite.
-     Check now:  fleet exec $FLEET_NODE 'curl -s -o /dev/null -w \"%{http_code}\\n\" http://127.0.0.1:8501/api/health'
-     Recover by re-running scripts/deploy — the install retries." \
+    "$INSTALL_STALL_NOTE" \
     "     Kill it:  fleet exec $FLEET_NODE 'pgrep -af \"^bash $INSTALL_SH\$\"'"
+  if [ "$INSTALL_RC" != "0" ] && [ "$STAGED_INSTALL" = 1 ]; then
+    echo "--- last 30 lines of install log ---"
+    fleet exec --timeout 60 "$FLEET_NODE" "tail -30 '$INSTALL_LOG' || true" || true
+    # The helper exits non-zero before its swap on every npm failure and puts
+    # the old tree back if the swap itself fails, so this one IS untouched.
+    die "staged npm ci exited $INSTALL_RC — NOT building or restarting the service.
+     The live node_modules was not modified; prod is still serving $CHECKOUT_SHA.
+     The failed staging tree is left at $STATE_DIR/install-staging for
+     inspection; the next deploy clears it and retries.
+     Full log: fleet exec $FLEET_NODE 'cat $INSTALL_LOG'"
+  fi
   if [ "$INSTALL_RC" != "0" ]; then
     echo "--- last 30 lines of install log ---"
     fleet exec --timeout 60 "$FLEET_NODE" "tail -30 '$INSTALL_LOG' || true" || true
@@ -1072,6 +1166,7 @@ REMOTE_INSTALL_LAUNCH
      written, so the install retries.
      Full log: fleet exec $FLEET_NODE 'cat $INSTALL_LOG'"
   fi
+  if [ "$STAGED_INSTALL" = 1 ]; then NM_SWAPPED=1; fi
 fi
 
 # --- 4. build (detached — MUST survive a dropped connection) ------------------
@@ -1090,7 +1185,7 @@ fi
 # opti has 7.8G and the default cap is correct.
 say "Building (detached; ~2-6 min)"
 fleet exec --timeout 120 "$FLEET_NODE" \
-  "bash -s -- '$WEB_DIR' '$NODE_VERSION' '$BUILD_SH' '$BUILD_LOG' '$BUILD_EXIT'" <<'REMOTE_BUILD_LAUNCH' \
+  "bash -s -- '$WEB_DIR' '$NODE_VERSION' '$BUILD_SH' '$BUILD_LOG' '$BUILD_EXIT' '$NM_SWAPPED' '$STAGED_INSTALL_SH' '$STATE_DIR'" <<'REMOTE_BUILD_LAUNCH' \
   || die "could not launch the build on $FLEET_NODE"
 set -euo pipefail
 WEB_DIR=$1
@@ -1098,6 +1193,15 @@ NODE_VERSION=$2
 BUILD_SH=$3
 BUILD_LOG=$4
 BUILD_EXIT=$5
+NM_SWAPPED=$6
+STAGED_INSTALL_SH=$7
+STATE_DIR=$8
+# Only a staged install from THIS deploy may be undone on build failure; an
+# older node_modules.prev from an earlier deploy must never be swapped in.
+NM_RESTORE=""
+if [ "$NM_SWAPPED" = 1 ]; then
+  NM_RESTORE="bash '$STAGED_INSTALL_SH' restore '$WEB_DIR' '$STATE_DIR' || echo 'node_modules restore FAILED' >&2"
+fi
 # Re-check here, not just in the sync phase: this directory is prepended to the
 # PATH the detached script builds, and if it does not exist the PATH silently
 # falls through to the login shell's Node (24.x on opti) — which compiles
@@ -1142,6 +1246,7 @@ if [ "\$rc" -ne 0 ]; then
   echo "build failed — restoring previous .next" >&2
   rm -rf .next
   if [ -d .next.prev ]; then mv .next.prev .next; fi
+  $NM_RESTORE
 fi
 echo "\$rc" > "$BUILD_EXIT"
 INNER
@@ -1158,7 +1263,21 @@ poll_detached_step "build" "$BUILD_EXIT" "$BUILD_LOG" "$BUILD_POLL_SECONDS" "$BU
 if [ "$BUILD_RC" != "0" ]; then
   echo "--- last 30 lines of build log ---"
   fleet exec --timeout 60 "$FLEET_NODE" "tail -30 '$BUILD_LOG' || true" || true
-  die "build exited $BUILD_RC — NOT restarting the service. Previous .next was restored.
+  NM_RESTORE_MSG=""
+  if [ "$NM_SWAPPED" = 1 ]; then
+    # The build script swaps node_modules.prev back on failure; confirm from
+    # its log rather than assume, since the service is serving off that tree.
+    if fleet exec --timeout 60 "$FLEET_NODE" "grep -q 'node_modules restore FAILED' '$BUILD_LOG' && echo failed || true" 2>/dev/null | grep -q failed; then
+      NM_RESTORE_MSG="
+     The previous node_modules could NOT be swapped back — the live tree is
+     the new one from this deploy. Undo by hand:
+       fleet exec $FLEET_NODE 'bash $STAGED_INSTALL_SH restore $WEB_DIR $STATE_DIR'"
+    else
+      NM_SWAPPED=0
+      NM_RESTORE_MSG=", and the previous node_modules was swapped back"
+    fi
+  fi
+  die "build exited $BUILD_RC — NOT restarting the service. Previous .next was restored$NM_RESTORE_MSG.
      Full log: fleet exec $FLEET_NODE 'cat $BUILD_LOG'"
 fi
 
