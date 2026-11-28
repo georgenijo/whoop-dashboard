@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Scale,
   Settings,
+  Share2,
   Sparkles,
   Trophy,
   type LucideIcon,
@@ -43,4 +44,5 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   "file-text": FileText,
   scale: Scale,
   "heart-pulse": HeartPulse,
+  share: Share2,
 };
