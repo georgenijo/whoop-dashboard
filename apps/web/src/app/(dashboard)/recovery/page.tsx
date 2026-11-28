@@ -14,6 +14,7 @@ import RecoveryCalendarCard from "@/components/recovery/RecoveryCalendarCard";
 import RecoveryDriversCard from "@/components/recovery/RecoveryDriversCard";
 import RecoveryOutlookCard from "@/components/recovery/RecoveryOutlookCard";
 import {
+  getJournalRange,
   getOverviewSnapshot,
   getRecoveryByDayOfWeek,
   getRecoveryRange,
@@ -34,6 +35,8 @@ import {
   computeRecoveryDrivers,
   isRecoveryDriversEnabled,
 } from "@/lib/analytics/recoveryDrivers";
+import { buildChartMarkers, type ChartMarker } from "@/lib/analytics/chartMarkers";
+import { isChartMarkersEnabled } from "@/lib/chart-markers-flag";
 import {
   RECOVERY_OUTLOOK_LOOKBACK_DAYS,
   computeRecoveryOutlook,
@@ -141,6 +144,23 @@ export default async function RecoveryPage({
     recoveryDrivers = <RecoveryDriversCard result={result} />;
   }
 
+  // CHART_MARKERS=1 only: event markers on the recovery + HRV charts. Two
+  // window-bounded, user-scoped reads (workouts, journal); strain and recovery
+  // come from rows already loaded above. The illness fetch's 14-day pre-window
+  // lead-in lets a big drop on the window's first day see the day before it.
+  // Flag off = neither read runs and both charts get `markers={undefined}`.
+  let chartMarkers: ChartMarker[] | undefined;
+  if (isChartMarkersEnabled()) {
+    chartMarkers = buildChartMarkers({
+      start: window.start,
+      end: window.end,
+      recovery: illnessRecovery,
+      cycles: strainTrend,
+      workouts: getWorkoutRowsRange(user.id, window.start, window.end),
+      journal: getJournalRange(user.id, window.start, window.end),
+    });
+  }
+
   // RECOVERY_OUTLOOK=1 only: a fixed 90-day lookback independent of the range
   // picker. Three extra user-scoped reads; flag off does none of them.
   let recoveryOutlook: ReactNode = null;
@@ -193,8 +213,9 @@ export default async function RecoveryPage({
             data={recoveryData}
             unit="%"
             showRollingToggle
+            markers={chartMarkers}
           />
-          <HRVTrend subtitle={rangeLabel} data={hrvSeries} />
+          <HRVTrend subtitle={rangeLabel} data={hrvSeries} markers={chartMarkers} />
           <SkinTempDeviationCard data={skinTempSeries} rangeLabel={rangeLabel} />
         </div>
         <div className="col">
