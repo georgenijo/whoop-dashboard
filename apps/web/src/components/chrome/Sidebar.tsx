@@ -26,6 +26,9 @@ const secondary: NavItem[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
+// Shown only when the server passes `showReport` (HEALTH_REPORT=1).
+const reportItem: NavItem = { href: "/report", label: "Health report", icon: "file-text" };
+
 // Health Alerts entry (HEALTH_ALERTS=1). The server passes `alerts` only when
 // the flag is on; `count` is the watch/act alert count for the badge.
 const ALERTS_ITEM: NavItem = { href: "/alerts", label: "Alerts", icon: "bell" };
@@ -41,11 +44,13 @@ export default function Sidebar({
   compareEnabled = false,
   showRecords = false,
   alerts,
+  showReport = false,
 }: {
   showWeekly?: boolean;
   compareEnabled?: boolean;
   showRecords?: boolean;
   alerts?: { count: number };
+  showReport?: boolean;
 } = {}) {
   const items = [
     ...nav,
@@ -99,7 +104,10 @@ export default function Sidebar({
             )}
           </Link>
         )}
-        {(showWeekly ? [weeklyItem, ...secondary] : secondary).map((n) => {
+        {[
+          ...(showWeekly ? [weeklyItem] : []),
+          ...(showReport ? [...secondary.slice(0, -1), reportItem, ...secondary.slice(-1)] : secondary),
+        ].map((n) => {
           const Icon = NAV_ICONS[n.icon];
           return (
             <Link

@@ -5,6 +5,7 @@ import {
   Bell,
   ClipboardList,
   Dumbbell,
+  FileText,
   Flame,
   Gauge,
   GitCompareArrows,
@@ -37,4 +38,5 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   "calendar-days": CalendarDays,
   "git-compare": GitCompareArrows,
   trophy: Trophy,
+  "file-text": FileText,
 };

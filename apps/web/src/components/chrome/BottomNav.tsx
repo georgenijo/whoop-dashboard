@@ -24,6 +24,9 @@ const more: Item[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
+// Shown only when the server passes `showReport` (HEALTH_REPORT=1).
+const reportItem: Item = { href: "/report", label: "Health report", icon: "file-text" };
+
 // Shown only when the server passes `showWeekly` (WEEKLY_REVIEW=1).
 const weeklyItem: Item = { href: "/weekly", label: "Weekly review", icon: "calendar-days" };
 
@@ -41,18 +44,20 @@ export default function BottomNav({
   compareEnabled = false,
   showRecords = false,
   showAlerts = false,
+  showReport = false,
 }: {
   showWeekly?: boolean;
   compareEnabled?: boolean;
   showRecords?: boolean;
   showAlerts?: boolean;
+  showReport?: boolean;
 } = {}) {
   const drawerItems = [
     ...(showAlerts ? [ALERTS_ITEM] : []),
     ...(showRecords ? [RECORDS_ITEM] : []),
     ...(showWeekly ? [weeklyItem] : []),
     ...(compareEnabled ? [compareItem] : []),
-    ...more,
+    ...(showReport ? [...more.slice(0, -1), reportItem, ...more.slice(-1)] : more),
   ];
   const pathname = usePathname();
   const params = useSearchParams();

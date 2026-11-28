@@ -249,3 +249,26 @@ not medical advice.
 
 To enable it in production, add `Environment=HEALTH_ALERTS=1` to the
 `whoop-web` service drop-in and restart the service.
+### `HEALTH_REPORT=1` — printable health summary (`/report`)
+
+(`src/lib/health-report-flag.ts`); only the exact value `1` enables it.
+
+- **Off (unset or any other value):** `/report` renders Next's not-found page
+- **On:** adds "Health report" to the Sidebar's Intelligence group and the
+  BottomNav "More" drawer. The page summarizes the last 7, 30 (default) or 90
+  days (`?days=`, validated against that allowlist; anything else falls back to
+  30) for sharing with a coach or clinician: average, min and max (with dates)
+  of recovery, HRV, resting HR, sleep duration (light + deep + REM, main sleep
+  only), sleep efficiency and performance, day strain, respiratory rate, and
+  skin temperature when Whoop recorded it (plus the largest deviation from the
+  period's own mean); workout count and total time; best/worst recovery and
+  longest sleep; and data coverage (`27/30 days scored recovery`).
+- **Print:** "Print / Save as PDF" calls `window.print()`. `@media print`
+  styles (`src/styles/report.css`, imported only by this page) hide the app
+  chrome and the period picker, print black on white, and avoid breaking
+  sections and table rows across pages.
+- No CSV link: there is no CSV export on `main` to reuse yet.
+  `getStrainRange`, and `getWorkoutRowsRange` readers; the logic is in
+  `src/lib/analytics/healthReport.ts`, which is pure.
+
+To enable it in production, add `Environment=HEALTH_REPORT=1` to the
