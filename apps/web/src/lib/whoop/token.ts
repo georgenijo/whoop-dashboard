@@ -11,6 +11,7 @@ import {
   getIntegration,
   setIntegrationNeedsReauth,
 } from "@/lib/db/integrations";
+import { notifyWhoopNeedsReauth } from "@/lib/whoop/reauth-push";
 
 // Post-Phase-D: the encrypted `integrations` row is the sole token store.
 // The legacy `tokens.json` file fallback (#330) is gone. If the row is
@@ -317,10 +318,13 @@ async function refreshTokens(
         `[token] refresh rejected after an ambiguous earlier attempt user_id=${userId} status=${status} error=${errorCode ?? "none"} — the lost attempt may have rotated the token; not flagging needs_reauth on this flight`
       );
     } else if (setIntegrationNeedsReauth(userId, WHOOP_PROVIDER, true)) {
-      // Transition-only: an already-flagged row doesn't re-log.
+      // Transition-only: an already-flagged row doesn't re-log or re-push.
       console.error(
         `[token] needs_reauth SET user_id=${userId} reason=${errorCode ?? `status_${status}`} — Whoop rejected the stored refresh token; user must reconnect`
       );
+      // Push only on a real 0→1 transition (#287). Fire-and-forget: APNs
+      // latency or failure must not hold up (or break) the refresh caller.
+      void notifyWhoopNeedsReauth(userId);
     }
   }
   return null;

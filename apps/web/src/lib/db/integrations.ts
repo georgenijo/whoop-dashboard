@@ -372,6 +372,12 @@ export function getIntegration(
  * The flag is reset to 0 by upsertIntegration on every successful token
  * write, so a subsequent successful refresh OR fresh OAuth callback both
  * clear it without an explicit unset call.
+ *
+ * Returns `true` only when this call actually changed the stored value (a
+ * real 0→1 or 1→0 transition on an existing row). The `needs_reauth != ?`
+ * guard makes the read-compare-write atomic in one SQLite statement, so two
+ * concurrent callers can never both observe the same transition — the
+ * reauth push (#287) keys "fire exactly once" off this return value.
  */
 export function setIntegrationNeedsReauth(
   user_id: number,

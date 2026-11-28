@@ -302,7 +302,7 @@ describe("integrations + vault", () => {
     expect(integrations.getIntegration(1, "whoop")?.needs_reauth).toBe(true);
   });
 
-  it("setIntegrationNeedsReauth reports a transition only once (#263)", async () => {
+  it("setIntegrationNeedsReauth reports only real transitions (#287)", async () => {
     const { integrations } = await loadModules();
     integrations.upsertIntegration({
       user_id: 1,
@@ -311,11 +311,14 @@ describe("integrations + vault", () => {
       refresh_token: "r",
       expires_at: "2026-05-09T00:00:00+00:00",
     });
+    // 0→1 is a transition; 1→1 is not.
     expect(integrations.setIntegrationNeedsReauth(1, "whoop", true)).toBe(true);
-    // Already flagged: no transition, flag unchanged.
     expect(integrations.setIntegrationNeedsReauth(1, "whoop", true)).toBe(false);
     expect(integrations.getIntegration(1, "whoop")?.needs_reauth).toBe(true);
-    // Missing row: no transition.
+    // 1→0 is a transition; 0→0 is not.
+    expect(integrations.setIntegrationNeedsReauth(1, "whoop", false)).toBe(true);
+    expect(integrations.setIntegrationNeedsReauth(1, "whoop", false)).toBe(false);
+    // Missing row never reports a transition.
     expect(integrations.setIntegrationNeedsReauth(2, "whoop", true)).toBe(false);
   });
 
