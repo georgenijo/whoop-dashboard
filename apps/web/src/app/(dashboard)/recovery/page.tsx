@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { headers } from "next/headers";
 import KPIStrip from "@/components/overview/KPIStrip";
 import TrendChart from "@/components/charts/TrendChart";
@@ -9,6 +10,7 @@ import OvertrainingCard from "@/components/recovery/OvertrainingCard";
 import IllnessSignalCard from "@/components/recovery/IllnessSignalCard";
 import SkinTempDeviationCard from "@/components/recovery/SkinTempDeviationCard";
 import Spo2TrendCard from "@/components/recovery/Spo2TrendCard";
+import RecoveryCalendarCard from "@/components/recovery/RecoveryCalendarCard";
 import {
   getOverviewSnapshot,
   getRecoveryByDayOfWeek,
@@ -19,6 +21,11 @@ import {
 import { requireAuthOrSignin } from "@/lib/auth";
 import { computeIllnessSignal } from "@/lib/analytics/illness";
 import { computeRebound } from "@/lib/analytics/rebound";
+import {
+  buildRecoveryCalendar,
+  isRecoveryCalendarEnabled,
+  windowStartFor,
+} from "@/lib/analytics/recoveryCalendar";
 import { resolveRangeWindow, rowsInWindow, shiftDate } from "@/lib/range";
 import { localToday } from "@/lib/date";
 
@@ -92,6 +99,17 @@ export default async function RecoveryPage({
 
   const reboundEvents = computeRebound(trend);
 
+  // RECOVERY_CALENDAR=1 only: one extra user-scoped read covering the trailing
+  // 12 months, independent of the range picker. Flag off = no read, no card.
+  let recoveryCalendar: ReactNode = null;
+  if (isRecoveryCalendarEnabled()) {
+    const today = window.end; // resolveRangeWindow's `today` (localToday())
+    const calendarRows = getRecoveryRange(user.id, windowStartFor(today), today);
+    recoveryCalendar = (
+      <RecoveryCalendarCard calendar={buildRecoveryCalendar(calendarRows, today)} />
+    );
+  }
+
   return (
     <>
       <KPIStrip
@@ -106,6 +124,8 @@ export default async function RecoveryPage({
       />
 
       <OvertrainingCard recovery={otsRecovery} cycles={otsCycles} />
+
+      {recoveryCalendar}
 
       <DayOfWeekRecovery rows={dowRecovery} rangeLabel={rangeLabel} />
 
