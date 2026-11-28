@@ -469,6 +469,20 @@ function migrateSchema(db: DB): void {
         PRIMARY KEY (user_id, token)
       );
       CREATE UNIQUE INDEX IF NOT EXISTS idx_device_tokens_token ON device_tokens(token);
+      -- Sustained-failure incidents (#444). One row per (user, trigger kind);
+      -- status flips open -> resolved and back, which debounces alerts to one
+      -- per incident. Written only when COACH_FAILURE_ALERTS is log|push.
+      CREATE TABLE IF NOT EXISTS failure_incidents (
+        user_id INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        status TEXT NOT NULL,
+        cause TEXT,
+        opened_at TEXT,
+        resolved_at TEXT,
+        notified_at TEXT,
+        delivery TEXT,
+        PRIMARY KEY (user_id, kind)
+      );
       -- Dead-letter queue for Whoop webhook deliveries. Every signature-valid
       -- event lands here pending; handler outcome moves it to succeeded /
       -- failed / discarded. Failed rows can be replayed via

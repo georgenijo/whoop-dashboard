@@ -100,6 +100,7 @@ kept out of this repository.
 | `APNS_PRIVATE_KEY` | Push delivery is enabled | APNs |
 | `APNS_ENVIRONMENT` | Push delivery is enabled | APNs |
 | `ENABLE_PUSH_DEBUG` | Temporary push diagnostics are explicitly wanted | Debug route |
+| `COACH_FAILURE_ALERTS` | Sustained-failure alerting is wanted: `log` (track + log only) or `push` (also APNs to the `ADMIN_APPLE_SUB` user). Unset = off | Failure alerts (#444) |
 
 `ENABLE_PUSH_DEBUG` must remain unset or `0` during normal production.
 
