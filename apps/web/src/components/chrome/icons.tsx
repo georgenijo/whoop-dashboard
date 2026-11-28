@@ -18,6 +18,7 @@ import {
   Scale,
   Settings,
   Sparkles,
+  Target,
   Trophy,
   type LucideIcon,
 } from "lucide-react";
@@ -43,4 +44,5 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   "file-text": FileText,
   scale: Scale,
   "heart-pulse": HeartPulse,
+  target: Target,
 };
