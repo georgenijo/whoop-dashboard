@@ -15,6 +15,9 @@ const nav: NavItem[] = [
   { href: "/stats", label: "Stats", icon: "bar-chart-3" },
 ];
 
+// Added only when TRAINING_LOAD=1 (the layout passes `showTrainingLoad`).
+const TRAINING_LOAD_ITEM: NavItem = { href: "/load", label: "Load", icon: "scale" };
+
 const secondary: NavItem[] = [
   { href: "/coach", label: "Coach", icon: "sparkles" },
   { href: "/plans", label: "Plans", icon: "clipboard-list" },
@@ -23,7 +26,7 @@ const secondary: NavItem[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ showTrainingLoad = false }: { showTrainingLoad?: boolean }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const range = searchParams.get("range");
@@ -38,7 +41,7 @@ export default function Sidebar() {
 
       <div className="sb-nav">
         <div className="sb-group-label">Dashboard</div>
-        {nav.map((n) => {
+        {(showTrainingLoad ? [...nav, TRAINING_LOAD_ITEM] : nav).map((n) => {
           const Icon = NAV_ICONS[n.icon];
           return (
             <Link

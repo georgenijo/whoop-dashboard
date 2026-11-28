@@ -11,6 +11,7 @@ import {
   Menu,
   Moon,
   RefreshCw,
+  Scale,
   Settings,
   Sparkles,
   type LucideIcon,
@@ -31,4 +32,5 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   bell: Bell,
   menu: Menu,
   gauge: Gauge,
+  scale: Scale,
 };
