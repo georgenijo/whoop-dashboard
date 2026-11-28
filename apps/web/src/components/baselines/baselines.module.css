@@ -1,0 +1,32 @@
+.head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--s4); }
+.toggle { display: inline-flex; border: var(--stroke) solid var(--rule); border-radius: 8px; overflow: hidden; }
+.toggle a { padding: 6px 12px; color: var(--fg-3); font-size: var(--t-sm); text-decoration: none; }
+.toggle a[aria-current="page"] { color: var(--fg); background: rgba(255, 255, 255, 0.06); }
+.method { color: var(--fg-3); font-size: var(--t-xs); margin: var(--s3) 0 0; max-width: 72ch; }
+.grid { list-style: none; margin: var(--s5, 24px) 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--s4); }
+.metric { display: flex; flex-direction: column; gap: var(--s3); min-width: 0; }
+.metricHead { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.name { color: var(--fg); font-size: var(--t-sm); font-weight: 500; }
+.pill { font-size: var(--t-xs); padding: 2px 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); white-space: nowrap; }
+.values { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s3); }
+.kLabel { color: var(--fg-3); font-size: var(--t-xs); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+.kValue { color: var(--fg); font-family: var(--font-num); font-size: var(--t-lg, 18px); font-weight: 450; margin-top: 2px; }
+.kSub { color: var(--fg-3); font-size: var(--t-xs); margin-top: 2px; }
+.spark { width: 100%; height: 56px; display: block; }
+.band { fill: rgba(0, 212, 170, 0.14); }
+.baseline { stroke: rgba(0, 212, 170, 0.6); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.line { fill: none; stroke: var(--fg-2); stroke-width: 1.5; stroke-linejoin: round; }
+.dot { fill: #00d4aa; }
+.trend { color: var(--fg-2); font-size: var(--t-xs); font-family: var(--font-num); }
+.summary { color: var(--fg); font-size: var(--t-sm); margin: 0; }
+.about { color: var(--fg-3); font-size: var(--t-xs); margin: 0; }
+.building { padding: var(--s2) 0; }
+.meter { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.06); overflow: hidden; }
+.meter span { display: block; height: 100%; background: #5aa9ff; }
+.good { color: #00d4aa; }
+.bad { color: #ff4d6a; }
+.neutral { color: var(--fg-2); }
+.muted { color: var(--fg-3); }
+@media (max-width: 720px) {
+  .grid { grid-template-columns: 1fr; }
+}

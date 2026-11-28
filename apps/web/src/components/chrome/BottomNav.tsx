@@ -27,6 +27,11 @@ const more: Item[] = [
 // Added to the "More" drawer only when TRAINING_LOAD=1 (the layout passes `showTrainingLoad`).
 const TRAINING_LOAD_ITEM: Item = { href: "/load", label: "Load", icon: "scale" };
 
+// Added first in the "More" drawer only when SHARE_CARD=1 (the layout passes `showShareCard`).
+const SHARE_CARD_ITEM: Item = { href: "/share/today", label: "Share today", icon: "share" };
+// Added to the "More" drawer only when BASELINES_PAGE=1 (the layout passes `showBaselines`).
+const BASELINES_ITEM: Item = { href: "/baselines", label: "Baselines", icon: "target" };
+
 // Added before Logs in the "More" drawer only when DATA_HEALTH=1 (the layout passes `showDataHealth`).
 const DATA_HEALTH_ITEM: Item = { href: "/data-health", label: "Data health", icon: "heart-pulse" };
 
@@ -46,7 +51,7 @@ const compareItem: Item = { href: "/compare", label: "Compare", icon: "git-compa
 const RECORDS_ITEM: Item = { href: "/records", label: "Records", icon: "trophy" };
 
 // Added to the "More" drawer only when GOALS_PAGE=1 (the layout passes `showGoals`).
-const GOALS_ITEM: Item = { href: "/goals", label: "Goals", icon: "target" };
+const GOALS_ITEM: Item = { href: "/goals", label: "Goals", icon: "flag" };
 
 export default function BottomNav({
   showWeekly = false,
@@ -57,6 +62,8 @@ export default function BottomNav({
   showTrainingLoad = false,
   showDataHealth = false,
   showGoals = false,
+  showShareCard = false,
+  showBaselines = false,
 }: {
   showWeekly?: boolean;
   compareEnabled?: boolean;
@@ -66,12 +73,16 @@ export default function BottomNav({
   showTrainingLoad?: boolean;
   showDataHealth?: boolean;
   showGoals?: boolean;
+  showShareCard?: boolean;
+  showBaselines?: boolean;
 } = {}) {
   const moreItems = showDataHealth
     ? more.flatMap((m) => (m.href === "/logs" ? [DATA_HEALTH_ITEM, m] : [m]))
     : more;
   const drawerItems = [
+    ...(showShareCard ? [SHARE_CARD_ITEM] : []),
     ...(showTrainingLoad ? [TRAINING_LOAD_ITEM] : []),
+    ...(showBaselines ? [BASELINES_ITEM] : []),
     ...(showAlerts ? [ALERTS_ITEM] : []),
     ...(showRecords ? [RECORDS_ITEM] : []),
     ...(showGoals ? [GOALS_ITEM] : []),

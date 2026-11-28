@@ -236,6 +236,40 @@ Server-side env flags; anything other than the exact value `1` is off.
   `src/lib/analytics/dataHealth.ts`. No tables, migrations, LLM or network
   calls.
 
+### `SHARE_CARD=1` — Shareable daily snapshot card (`/share/today`)
+
+- **Off (default, any value other than `1`):** `/share/today` and
+  `/api/share/today` return 404 before any auth or DB read, no Sidebar or
+  BottomNav entry renders, and no other page changes.
+- **On:** adds "Share today" as the last item in the Sidebar's main group and
+  the first item in the BottomNav "More" drawer. The page (server-rendered, no
+  client JS) shows a 4:5 card meant to be screenshotted: recovery (ring + Whoop
+  band), sleep (time asleep + Whoop performance band), strain so far (+ Whoop
+  strain category and workout count), HRV and resting HR (each compared with
+  the user's own median over the 30 days before the card's day; at least 7
+  readings, ±5% reads as "Usual"), and a one-line recap. If today has nothing
+  synced yet, the card shows yesterday, labelled "Yesterday".
+  - `?hide=1` hides every number (bands and colours only; workout count
+    becomes "a workout"/"workouts"); `?theme=light` picks the light theme
+    (dark is the default). Both are plain links on the page.
+  - "Download PNG" fetches `/api/share/today` with the same options: a
+    1080 x 1350 PNG rendered by `next/og` `ImageResponse` from the same JSX
+    tree as the page, sent `Content-Disposition: attachment` with
+    `Cache-Control: no-store, private`.
+  - Privacy: both routes need the normal signed-in session (the page
+    redirects to `/signin`, the image route returns 401) and only ever read
+    the session user's own rows. There are no share links, tokens or public
+    URLs. The card carries no name, email, ids, sport names or journal text;
+    every string is generated ASCII, so the PNG uses `next/og`'s bundled font
+    and never fetches a fallback font or emoji glyph.
+  Reads go through the existing user-scoped readers (`getRecoveryRange` for
+  32 days, `getSleepRange`, `getStrainRange`, `getWorkoutRowsRange` for today
+  and yesterday) in the user's tz (`getInsightTimezone`, UTC fallback). The
+  per-day shaping reuses the Day detail model (`buildDayDetail`), so the
+  numbers match `/day/[date]`; the card model is pure in
+  `src/lib/share/todayCard.ts`. No tables, migrations, dependencies, LLM or
+  network calls.
+
 ## Design tokens
 
 - `src/app/theme.css` — verbatim copy of the Whoop+ design kit's
@@ -449,4 +483,43 @@ Server-side env flag, off by default, read per request
   `src/lib/analytics/sleepRegularity.ts` (pure, unit-tested).
 
 To enable it in production, add `Environment=SLEEP_REGULARITY=1` to the
+`whoop-web` service environment and restart the service.
+
+## Feature flag: `BASELINES_PAGE=1` — Your baselines page (`/baselines`)
+
+Server-side env flag, off by default, read per request
+(`src/lib/baselines-flag.ts`); only the exact value `1` enables it.
+
+- **Off (default, any other value):** `/baselines` returns 404 before any auth
+  or DB read, no Sidebar or More-drawer entry is rendered, and no other page
+  changes or reads anything extra.
+- **On:** a "Baselines" nav entry (Sidebar Dashboard group and the mobile More
+  drawer) opens a server-rendered page (no client JS) that answers "what is
+  normal for me?" for HRV, resting HR, respiratory rate, skin temperature,
+  sleep duration (light + deep + REM), sleep performance, recovery and day
+  strain. The window is 30 days by default, or `?window=60` / `?window=90`
+  (any other value falls back to 30). Per metric:
+  - **Baseline** = median of the daily values in the window.
+  - **Normal range** = 25th–75th percentile (linear interpolation, the
+    existing `percentile` helper from `recoveryOutlook.ts`) — the middle half
+    of your days, shaded on an inline-SVG sparkline with the baseline dashed.
+    Values on an edge count as within.
+  - **Latest value** (no older than 3 days) and whether it is below / within /
+    above the range, in plain words. Skin temperature is shown as a signed
+    deviation from the baseline. Day strain uses yesterday, because today's
+    strain is still accumulating.
+  - **Baseline trend**: today's baseline vs the same-length window that ended
+    60 days ago; a move under max(metric minimum, ¼ of the band width) is
+    "steady". HRV/sleep/recovery up and RHR down read as positive;
+    respiratory rate, skin temperature and strain stay neutral.
+  - A short "what this means" sentence, plus "Building baseline — N of 14
+    days" until a metric has 14 values in the window.
+- **Data:** three user-scoped range reads (`getRecoveryRange`,
+  `getSleepRange` — non-nap, one row per wake day — and `getStrainRange`)
+  covering the window plus the 60-day trend look-back. No writes, tables,
+  migrations, network or LLM calls. Dates are local `YYYY-MM-DD` shifted with
+  UTC arithmetic, so DST never adds or drops a day. Logic is in
+  `src/lib/analytics/baselines.ts` (pure, unit-tested).
+
+To enable it in production, add `Environment=BASELINES_PAGE=1` to the
 `whoop-web` service environment and restart the service.

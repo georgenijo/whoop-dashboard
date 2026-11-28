@@ -6,6 +6,7 @@ import {
   ClipboardList,
   Dumbbell,
   FileText,
+  Flag,
   Flame,
   Gauge,
   HeartPulse,
@@ -17,6 +18,7 @@ import {
   RefreshCw,
   Scale,
   Settings,
+  Share2,
   Sparkles,
   Target,
   Trophy,
@@ -44,5 +46,7 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   "file-text": FileText,
   scale: Scale,
   "heart-pulse": HeartPulse,
+  share: Share2,
   target: Target,
+  flag: Flag,
 };
