@@ -3,7 +3,10 @@ import { requireAuthOrSignin } from "@/lib/auth";
 import { getChatLogs, getChatThreadInfo, getRouteLogs, getSyncLogs, recentClientLogs } from "@/lib/db";
 import ChatLogsByThread from "./ChatLogsByThread";
 import ClientLogsTable from "./ClientLogsTable";
+import { isSharedKeyProbeEnabled, SHARED_CURSOR_CREDENTIAL } from "@/lib/coach/shared-key-probe";
+import { getCredentialHealth } from "@/lib/db/credential-health";
 import CollapsibleCard from "./CollapsibleCard";
+import CredentialHealthCard from "./CredentialHealthCard";
 import RouteLogsTable from "./RouteLogsTable";
 import SyncLogsTable from "./SyncLogsTable";
 
@@ -36,6 +39,12 @@ export default async function LogsPage() {
   // has been writing to client_logs since the CSP PR shipped, but nothing
   // read them back — a write-only report pipe. This is the read path.
   const clientLogs = recentClientLogs({ user_id: user.id, limit: 200 });
+  // #525: server-wide credential status (no key material, just ok/invalid/
+  // unreachable + timestamps), shown to every signed-in user because any of
+  // them may be falling back to the shared key.
+  const sharedKeyHealth = getCredentialHealth(SHARED_CURSOR_CREDENTIAL);
+  const sharedKeyProbeEnabled = isSharedKeyProbeEnabled();
+  const sharedKeyConfigured = Boolean(process.env.CURSOR_API_KEY?.trim());
   const cspViolationCount = clientLogs.filter((l) => l.message === "csp-violation").length;
 
   // Resolve thread metadata for grouping. Pull thread_id from the column when
@@ -112,6 +121,12 @@ export default async function LogsPage() {
           <div className="delta flat">last {logs.length} req</div>
         </div>
       </div>
+
+      <CredentialHealthCard
+        row={sharedKeyHealth}
+        enabled={sharedKeyProbeEnabled}
+        configured={sharedKeyConfigured}
+      />
 
       <CollapsibleCard
         title="Chat by thread"

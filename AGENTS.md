@@ -41,7 +41,7 @@ Both web and iOS clients call the same `/api/*` routes on Next.js. Bearer-token 
 3. **Preserve the `shared/whoop_data.db` repository contract.** Local/dev uses that path. Production sets `WHOOP_DB_PATH=/home/george/services/whoop-dashboard/shared/whoop_data.db`, outside immutable releases.
 4. **Do not add runtime reads from `tokens.json`.** It is a legacy, gitignored
    one-time migration input; move or remove it only in an explicit cleanup issue.
-5. **Do not touch `streamlit/`.** Legacy app, deprecated.
+5. **Do not touch `streamlit/`.** It is a legacy Python helper library (`streamlit/whoop/`) used only by `scripts/` and `tests/`; there is no Streamlit app anymore.
 6. **Match existing style.** TypeScript strict, Next.js App Router conventions. Two-space indent. No emoji unless asked.
 7. **No new top-level dependencies** unless the issue explicitly approves. Adding a package is a design decision.
 8. **No secrets in code.** Read from env vars. The repo `.env` is gitignored.

@@ -224,6 +224,9 @@ describe("runCursorAcpTurn", () => {
       cache_creation_input_tokens_total: 1,
       cache_read_input_tokens_total: 2,
       calls: 1,
+      // Issue #608 — one per-turn figure: best available, flagged approximate.
+      context_tokens: 13,
+      context_approximate: true,
     });
     expect(detailState).toMatchObject({
       iterations: 2,
@@ -773,5 +776,110 @@ describe("runCursorAcpTurn", () => {
       expect.objectContaining({ id: "pending-tool", status: "error" }),
     );
     expect(toolDetails).toHaveLength(1);
+  });
+
+  describe("abort and error compatibility (#552)", () => {
+    function chunk(text: string) {
+      return {
+        sessionId: "session-1",
+        update: {
+          sessionUpdate: "agent_message_chunk" as const,
+          content: { type: "text" as const, text },
+        },
+      };
+    }
+
+    it("leaves only consistent partial rows in the accumulator when a turn aborts mid-reply", async () => {
+      const controller = new AbortController();
+      const reason = new Error("user stopped");
+      runtime.prompt.mockImplementationOnce(async (_text, _signal, onUpdate) => {
+        onUpdate(chunk("Let me check. "));
+        onUpdate({
+          sessionId: "session-1",
+          update: {
+            sessionUpdate: "tool_call",
+            toolCallId: "tool-1",
+            title: "Query recovery",
+            status: "in_progress",
+            rawInput: {},
+          },
+        });
+        onUpdate(chunk("Recovery is"));
+        controller.abort(reason);
+        throw reason;
+      });
+      const accumulator: Parameters<typeof runCursorAcpTurn>[0]["accumulator"] =
+        [];
+      const textDeltas: string[] = [];
+      const detailState: DetailState = { iterations: 0 };
+
+      await expect(
+        runCursorAcpTurn(
+          baseArgs(detailState, {
+            accumulator,
+            options: {
+              signal: controller.signal,
+              onTextDelta: (delta) => textDeltas.push(delta),
+            },
+          }),
+        ),
+      ).rejects.toBe(reason);
+
+      // What persistence.flushAborted would write: the user turn plus the
+      // reply streamed after the tool boundary. Pre-tool narration was live
+      // only, and no tool_use row is left without its tool_result.
+      expect(accumulator.map((row) => [row.role, row.content])).toEqual([
+        ["user", "How is my recovery?"],
+        ["assistant", "Recovery is"],
+      ]);
+      const blocks = accumulator.flatMap((row) =>
+        Array.isArray(row.blocks) ? (row.blocks as Array<{ type: string }>) : [],
+      );
+      expect(blocks.filter((block) => block.type === "tool_use")).toHaveLength(
+        blocks.filter((block) => block.type === "tool_result").length,
+      );
+      expect(textDeltas.join("")).toContain("Recovery is");
+      expect(detailState.cursor).toMatchObject({
+        requested_model: "gpt-5.6-luna",
+        resolved_model: runtime.diagnostics.resolvedModel,
+        transport: "acp",
+        terminal_seen: false,
+      });
+    });
+
+    it.each([
+      ["auth", "Cursor API key rejected"],
+      ["timeout", "Cursor coach timed out"],
+      ["agent", "Cursor ACP prompt failed: ACP connection closed"],
+    ] as const)(
+      "propagates a %s classification unchanged with process diagnostics",
+      async (reason, message) => {
+        const { CursorAgentError } = await import("./cursor-errors");
+        const failure = new CursorAgentError(reason, message);
+        const previous = { ...runtime.diagnostics.process };
+        runtime.diagnostics.process = {
+          exitCode: null,
+          signal: "SIGKILL",
+          cancelled: reason === "timeout",
+          timedOut: reason === "timeout",
+        } as unknown as typeof runtime.diagnostics.process;
+        runtime.prompt.mockRejectedValueOnce(failure);
+        const detailState: DetailState = { iterations: 0 };
+        try {
+          await expect(runCursorAcpTurn(baseArgs(detailState))).rejects.toBe(
+            failure,
+          );
+          expect(detailState.cursor!.acp!.process).toEqual({
+            exit_code: null,
+            signal: "SIGKILL",
+            cancelled: reason === "timeout",
+            timed_out: reason === "timeout",
+          });
+          expect(detailState.cursor!.requested_model).toBe("gpt-5.6-luna");
+        } finally {
+          runtime.diagnostics.process = previous;
+        }
+      },
+    );
   });
 });

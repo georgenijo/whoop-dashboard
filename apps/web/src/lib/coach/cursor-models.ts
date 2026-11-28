@@ -284,6 +284,17 @@ async function listCursorModelsForKeyAcp(
   }
 }
 
+/**
+ * Plain HTTPS catalog lookup (`GET /v1/models`) regardless of the configured
+ * Cursor transport. Used by the shared-key health probe (#525): it validates
+ * the credential without spawning a cursor-agent process or spending a turn.
+ */
+export function listCursorModelsViaHttp(
+  apiKey: string,
+): Promise<CursorModelOption[]> {
+  return listCursorModelsForKeyLegacy(apiKey);
+}
+
 export async function listCursorModelsForKey(
   apiKey: string,
   userId = 1,

@@ -85,17 +85,25 @@ tokens.json       Whoop OAuth tokens — legacy single-user file; integrations t
 
 ### Coach (`apps/web/src/app/api/chat/route.ts`)
 
-Agentic loop. Five tools defined in `src/lib/coach-tools.ts`:
+The route owns auth, streaming, logging and persistence, then hands the turn to `runCoachProviderTurn` in `src/lib/coach/provider-runner.ts`, which dispatches on the selected provider (`src/lib/coach/provider.ts`, `"anthropic" | "cursor"`):
 
-- `query_recovery`, `query_sleep`, `query_strain`, `query_workouts`, `query_journal`
-- All take `start_date` / `end_date` (YYYY-MM-DD), return raw rows from SQLite
+- **Anthropic** — in-process Anthropic SDK agentic loop in `src/lib/coach/loop.ts`.
+- **Cursor** — Cursor Agent driven over ACP (`cursor-acp-*.ts`; persistent per-user/thread sessions when `COACH_CURSOR_TRANSPORT=acp`, the production setting) or the legacy per-turn CLI transport (`cursor-loop.ts`, the code default). Cursor reaches the Whoop data through the bundled stdio MCP server in `apps/web/src/coach-mcp/`, whose allowlist is `coach-mcp/tool-policy.ts`.
 
-Caps:
+Models are picked from live provider catalogs (`anthropic-models.ts`, `cursor-models.ts` / `cursor-acp-models.ts`) and stored per user as `provider:model` preferences.
+
+Eleven tools are defined in `src/lib/coach/tools.ts` and executed through `executeTool({ userId })`:
+
+- Reads: `query_recovery`, `query_sleep`, `query_strain`, `query_workouts`, `query_naps`, `query_steps`, `query_journal`, `query_daily_snapshot`, `query_workout_plans`
+- Writes: `save_workout_plan`, `trigger_whoop_sync` (user-scoped, deduplicated per turn, sync cooldown enforced)
+- The Cursor MCP surface exposes all eleven plus `view_chat_image`. A tool registered only in `tools.ts` is invisible to Cursor until it is also added to `tool-policy.ts`.
+
+Caps (Anthropic loop, `loop.ts`):
 - `MAX_TOOL_ITERATIONS = 8` (round-trips, not parallel calls)
 - `MAX_OUTPUT_TOKENS = 16384` (thinking + reply combined)
 - On `stop_reason === "max_tokens"`, returns partial text with truncation marker (no throw)
 
-Conversations are persisted in `chat_messages` keyed by `thread_id`. The model's `tool_use` and `tool_result` content blocks are stored as JSON in the `blocks` column so multi-turn conversations preserve full tool context across reloads. Synthetic `[tool_result]` rows are filtered from UI by `getChatMessages` and `getChatThreads` queries.
+Conversations are persisted in `chat_messages` keyed by `thread_id`. The model's `tool_use` and `tool_result` content blocks are stored as JSON in the `blocks` column so multi-turn conversations preserve full tool context across reloads. Synthetic `[tool_result]` rows are filtered from the UI by `getChatThreadMessages` and `getChatThreads` in `src/lib/db/coach.ts`.
 
 Threads have auto-titles via the configured title model fired in `after()` (Next.js post-response hook), only on first turn of a blank-title thread. Persistence is buffered in memory and committed atomically via `addChatMessages` (uses `db.transaction(fn)`) — failed API calls leave the DB untouched.
 
@@ -121,7 +129,7 @@ Threads have auto-titles via the configured title model fired in `after()` (Next
   Assuming `(user_id, date)` everywhere is wrong and was the cause of a stale test suite. The rebuild runs once at first `openWrite()` against a pre-Phase-D DB — idempotent via `PRAGMA table_info` gate. **NEVER write domain tables from Python**; the Next.js side is the sole owner.
 - Read paths against domain tables MUST go through `forUser(userId).all/get/read(...)` in `apps/web/src/lib/db/scoped.ts`. The wrapper appends `userId` as the trailing positional `?`; call sites write `... AND user_id = ?` as the LAST placeholder. A CI vitest (`scoped.test.ts`) blocks any stray `FROM recovery|cycles|sleep|workouts|daily_summary|body_measurements` outside the wrapper + allowlist.
 - Other read paths use `safeQuery` (read-only open). Other write paths use `safeWriteQuery` or direct `openWrite()`.
-- Lazy-bootstrapped tables: `users`, `sessions`, `chat_threads`, `chat_messages`, `chat_logs`, `sync_logs`, `route_logs`, `app_settings`, `integrations`, `user_settings`, `device_tokens`, `webhook_events`. `route_logs`'s migration is factored into `migrateRouteLogsSchema()` (`connection.ts`) so it can be shared with `logs.ts`'s `openRouteLogWrite()`, which deliberately opens its own connection instead of calling `openWrite()` — see that function's doc comment for the hot-path cost rationale (issue #505).
+- Lazy-bootstrapped tables: `users`, `sessions`, `chat_threads`, `chat_messages`, `chat_logs`, `sync_logs`, `route_logs`, `app_settings`, `integrations`, `user_settings`, `device_tokens`, `webhook_events`, `credential_health`. `route_logs`'s migration is factored into `migrateRouteLogsSchema()` (`connection.ts`) so it can be shared with `logs.ts`'s `openRouteLogWrite()`, which deliberately opens its own connection instead of calling `openWrite()` — see that function's doc comment for the hot-path cost rationale (issue #505).
 
 ### Auth
 
@@ -160,9 +168,9 @@ Adding a third-party script, font, image host, or `fetch` target means widening 
 - Naps excluded at query time (`WHERE nap = 0`), not at sync — naps still land in DB
 - Whoop API base: `https://api.prod.whoop.com/developer`
 - Required env: `WHOOP_CLIENT_ID`, `WHOOP_CLIENT_SECRET`, `ANTHROPIC_API_KEY`
-- Optional env: `WHOOP_REDIRECT_URI`, `WHOOP_DB_PATH`, `WHOOP_TOKENS_PATH`, `CYCLES_RECONCILE_LOOKBACK_DAYS` (default 30 — look-back for the per-sync orphaned-cycles reconcile in `sync.ts`; historical orphans are handled by the one-time `app_settings`-guarded backfill instead, so this rarely needs changing), `WHOOP_REFRESH_SECRET` (bearer secret for `POST /api/whoop/refresh`, the background refresh-only keepalive on a 30-min systemd timer, #273 — route fails closed with 404 when unset)
+- Optional env: `WHOOP_REDIRECT_URI`, `WHOOP_DB_PATH`, `WHOOP_TOKENS_PATH`, `CYCLES_RECONCILE_LOOKBACK_DAYS` (default 30 — look-back for the per-sync orphaned-cycles reconcile in `sync.ts`; historical orphans are handled by the one-time `app_settings`-guarded backfill instead, so this rarely needs changing), `WHOOP_REFRESH_SECRET` (bearer secret for `POST /api/whoop/refresh`, the background refresh-only keepalive on a 30-min systemd timer, #273 — route fails closed with 404 when unset), `COACH_KEY_PROBE=on` (default off; the same keepalive tick also probes the shared `CURSOR_API_KEY` via Cursor's `GET /v1/models` and records status in `credential_health`, shown on `/logs`, #525)
 - Optional `COACH_HONO_API=1` — enables the parallel Hono API mount at `apps/web/src/app/api/[[...rest]]/route.ts` (#233 phase 1). Default off. Every existing `app/api/<name>/route.ts` still outranks the catch-all, so with it on, the only new reachable paths are `/api/openapi.json` (draft spec, authenticated) and Hono's JSON 404. `/api/dashboard/today` moves to Hono only when its Next route file is deleted — that is the cutover step.
-- Optional push env (iOS only, all five required for push to work): `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, `APNS_PRIVATE_KEY`, `APNS_ENVIRONMENT`. Set `ENABLE_PUSH_DEBUG=1` to expose `/api/devices/test-push` in production.
+- Optional push env (iOS only, all five required for push to work): `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_BUNDLE_ID`, `APNS_PRIVATE_KEY`, `APNS_ENVIRONMENT`. Set `ENABLE_PUSH_DEBUG=1` to expose `/api/devices/test-push` in production. `WHOOP_REAUTH_PUSH=log|on` (default off) pushes "Whoop disconnected — tap to reconnect." on a real `needs_reauth` 0→1 transition (`apps/web/src/lib/whoop/reauth-push.ts`, #287); iOS deep-links the tap to Settings via `PushRoute`.
 - Use Anthropic SDK, not raw HTTP. Default chat model: `claude-sonnet-5-5`; titles and daily insights: `claude-haiku-5-5`. All three are owned by `apps/web/src/lib/coach/model-defaults.ts` with env overrides `COACH_DEFAULT_MODEL` / `COACH_TITLE_MODEL` / `COACH_INSIGHT_MODEL` (issue #587). Before a title or insight call the configured ID is checked against the account catalog (`resolveCatalogModel` in `apps/web/src/lib/coach/model-resolution.ts`) and falls back to the newest same-family catalog model with a once-per-process warning.
 
 ## Deploy
@@ -213,7 +221,11 @@ What it guarantees, and why each one is there:
   `require()`-ing from that tree — it 500s until a retry completes, without
   anyone having restarted anything (issue #516). The install step is skipped
   entirely when the lockfile hasn't changed, so the window only opens on
-  deploys that touch `package-lock.json`.
+  deploys that touch `package-lock.json`. Detaching does not close that window on a
+  *successful* in-place install (~15s); `DEPLOY_STAGED_INSTALL=1` (opt-in,
+  #524) runs `npm ci` in `<repo>/.deploy-state/install-staging` and renames the
+  finished tree in before the build (old tree kept as `node_modules.prev`,
+  restored if the build fails). See `docs/operations/environment-and-deploy.md`.
 - **Sha verification.** "The service is up" does not catch a restart that kept
   serving the old bundle; the deployed sha is compared against `/api/health`.
 - **Rollback recipe** printed on success and on any failure after the snapshot,

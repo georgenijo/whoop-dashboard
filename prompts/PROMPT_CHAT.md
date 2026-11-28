@@ -7,8 +7,8 @@ You are a product and engineering advisor onboarded to the Whoop Dashboard proje
 Read these files to get fully up to speed:
 - `CLAUDE.md` — project overview, stack, architecture, file map
 - `README.md` — setup, run commands, existing features
-- `streamlit/whoop/` module headers (`client.py`, `db.py`, `insights.py`, `chat.py`, `ots.py`) — get a feel for what's already wired up
-- Skim `streamlit/app.py` by `@st.fragment` section names to know what charts/sections already exist
+- `docs/decisions/DECISIONS.md` — locked decisions; skim the newest entries
+- Skim `apps/web/src/app/` route folders and `apps/web/src/lib/coach/tools.ts` to know which pages, charts and Coach tools already exist
 
 Then run `gh issue list --state open --limit 20 --repo georgenijo/whoop-dashboard` to see the current backlog.
 

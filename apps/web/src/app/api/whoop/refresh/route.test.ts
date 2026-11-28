@@ -12,6 +12,7 @@ const getValidAccessTokenMock = vi.fn<
   (userId: number, forceRefresh?: boolean) => Promise<string | null>
 >();
 const addSyncLogMock = vi.fn();
+const runSharedKeyProbeMock = vi.fn();
 
 const logMock = {
   debug: vi.fn(),
@@ -40,6 +41,10 @@ vi.mock("@/lib/whoop/token", () => ({
     getValidAccessTokenMock(userId, forceRefresh),
 }));
 
+vi.mock("@/lib/coach/shared-key-probe", () => ({
+  runSharedKeyProbe: () => runSharedKeyProbeMock(),
+}));
+
 const SECRET = "test-refresh-secret-value";
 
 type RouteModule = typeof import("./route");
@@ -65,6 +70,8 @@ beforeEach(async () => {
   logMock.error.mockReset();
   logMock.fatal.mockReset();
   listIntegrationUserIdsMock.mockReturnValue([]);
+  runSharedKeyProbeMock.mockReset();
+  runSharedKeyProbeMock.mockResolvedValue({ ran: false, reason: "disabled" });
   delete process.env.WHOOP_REFRESH_SECRET;
   route = await import("./route");
 });
@@ -279,5 +286,60 @@ describe("POST /api/whoop/refresh — refresh fan-out", () => {
     expect(getValidAccessTokenMock).toHaveBeenCalledTimes(1);
     const body = (await second.json()) as { skipped?: boolean };
     expect(body.skipped).toBe(true);
+  });
+});
+
+describe("POST /api/whoop/refresh — shared Cursor key probe (#525)", () => {
+  beforeEach(() => {
+    process.env.WHOOP_REFRESH_SECRET = SECRET;
+  });
+
+  it("does not run the probe for unauthorized callers", async () => {
+    const res = await route.POST(makeRequest("Bearer wrong"));
+    expect(res.status).toBe(401);
+    expect(runSharedKeyProbeMock).not.toHaveBeenCalled();
+  });
+
+  it("reports a skipped probe when the flag is off", async () => {
+    listIntegrationUserIdsMock.mockReturnValue([1]);
+    getValidAccessTokenMock.mockResolvedValue("access-token");
+    const res = await route.POST(makeRequest(`Bearer ${SECRET}`));
+    expect(res.status).toBe(200);
+    expect(runSharedKeyProbeMock).toHaveBeenCalledTimes(1);
+    const body = (await res.json()) as { key_probe: unknown };
+    expect(body.key_probe).toEqual({ status: "skipped", reason: "disabled" });
+  });
+
+  it("an invalid shared key does not change the Whoop keepalive status code", async () => {
+    listIntegrationUserIdsMock.mockReturnValue([1]);
+    getValidAccessTokenMock.mockResolvedValue("access-token");
+    runSharedKeyProbeMock.mockResolvedValue({
+      ran: true,
+      status: "invalid",
+      last_checked: "x",
+      last_ok: null,
+      consecutive_invalid: 2,
+      incident: "opened",
+    });
+    const res = await route.POST(makeRequest(`Bearer ${SECRET}`));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { key_probe: unknown };
+    expect(body.key_probe).toEqual({ status: "invalid", incident: "opened" });
+  });
+
+  it("a probe rejection is contained", async () => {
+    listIntegrationUserIdsMock.mockReturnValue([1]);
+    getValidAccessTokenMock.mockResolvedValue("access-token");
+    runSharedKeyProbeMock.mockRejectedValue(new Error("boom"));
+    const res = await route.POST(makeRequest(`Bearer ${SECRET}`));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { key_probe: unknown };
+    expect(body.key_probe).toEqual({ status: "skipped", reason: "error" });
+  });
+
+  it("does not probe during the cooldown window", async () => {
+    await route.POST(makeRequest(`Bearer ${SECRET}`));
+    await route.POST(makeRequest(`Bearer ${SECRET}`));
+    expect(runSharedKeyProbeMock).toHaveBeenCalledTimes(1);
   });
 });
