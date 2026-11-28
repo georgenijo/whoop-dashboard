@@ -17,6 +17,8 @@ const nav: NavItem[] = [
 
 // Added only when RECORDS_PAGE=1 (the layout passes `showRecords`).
 const RECORDS_ITEM: NavItem = { href: "/records", label: "Records", icon: "trophy" };
+// Added only when TRAINING_LOAD=1 (the layout passes `showTrainingLoad`).
+const TRAINING_LOAD_ITEM: NavItem = { href: "/load", label: "Load", icon: "scale" };
 
 const secondary: NavItem[] = [
   { href: "/coach", label: "Coach", icon: "sparkles" },
@@ -45,17 +47,20 @@ export default function Sidebar({
   showRecords = false,
   alerts,
   showReport = false,
+  showTrainingLoad = false,
 }: {
   showWeekly?: boolean;
   compareEnabled?: boolean;
   showRecords?: boolean;
   alerts?: { count: number };
   showReport?: boolean;
+  showTrainingLoad?: boolean;
 } = {}) {
   const items = [
     ...nav,
     ...(compareEnabled ? [compareItem] : []),
     ...(showRecords ? [RECORDS_ITEM] : []),
+    ...(showTrainingLoad ? [TRAINING_LOAD_ITEM] : []),
   ];
   const pathname = usePathname();
   const searchParams = useSearchParams();

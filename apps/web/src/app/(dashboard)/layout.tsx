@@ -18,6 +18,7 @@ import { isHealthAlertsEnabled } from "@/lib/health-alerts-flag";
 import { loadHealthAlerts } from "@/lib/health-alerts";
 import { alertBadgeCount } from "@/lib/analytics/healthAlerts";
 import { isHealthReportEnabled } from "@/lib/health-report-flag";
+import { isTrainingLoadEnabled } from "@/lib/training-load-flag";
 import "../globals.css";
 import "../../styles/quiet-instrument.css";
 
@@ -101,6 +102,7 @@ export default async function RootLayout({
   const compareEnabled = isPeriodCompareEnabled();
   const showRecords = isRecordsPageEnabled();
   const showReport = isHealthReportEnabled();
+  const showTrainingLoad = isTrainingLoadEnabled();
 
   const route = requestHeaders.get("x-whoop-route-log-route");
   const startedAt = requestHeaders.get("x-whoop-route-log-started-at");
@@ -153,6 +155,7 @@ export default async function RootLayout({
               showRecords={showRecords}
               alerts={alertsNav}
               showReport={showReport}
+              showTrainingLoad={showTrainingLoad}
             />
           </Suspense>
           <main className="main">
@@ -171,6 +174,7 @@ export default async function RootLayout({
             showRecords={showRecords}
             showAlerts={alertsNav !== undefined}
             showReport={showReport}
+            showTrainingLoad={showTrainingLoad}
           />
         </Suspense>
       </body>

@@ -14,6 +14,7 @@ import {
   Menu,
   Moon,
   RefreshCw,
+  Scale,
   Settings,
   Sparkles,
   Trophy,
@@ -39,4 +40,5 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   "git-compare": GitCompareArrows,
   trophy: Trophy,
   "file-text": FileText,
+  scale: Scale,
 };

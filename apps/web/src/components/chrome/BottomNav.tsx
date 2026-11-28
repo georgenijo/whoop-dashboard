@@ -24,6 +24,9 @@ const more: Item[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
+// Added to the "More" drawer only when TRAINING_LOAD=1 (the layout passes `showTrainingLoad`).
+const TRAINING_LOAD_ITEM: Item = { href: "/load", label: "Load", icon: "scale" };
+
 // Shown only when the server passes `showReport` (HEALTH_REPORT=1).
 const reportItem: Item = { href: "/report", label: "Health report", icon: "file-text" };
 
@@ -45,14 +48,17 @@ export default function BottomNav({
   showRecords = false,
   showAlerts = false,
   showReport = false,
+  showTrainingLoad = false,
 }: {
   showWeekly?: boolean;
   compareEnabled?: boolean;
   showRecords?: boolean;
   showAlerts?: boolean;
   showReport?: boolean;
+  showTrainingLoad?: boolean;
 } = {}) {
   const drawerItems = [
+    ...(showTrainingLoad ? [TRAINING_LOAD_ITEM] : []),
     ...(showAlerts ? [ALERTS_ITEM] : []),
     ...(showRecords ? [RECORDS_ITEM] : []),
     ...(showWeekly ? [weeklyItem] : []),
