@@ -53,9 +53,10 @@ After confirmation, implement the fix. Stay focused — fix the bug, nothing els
 ## 7. Verify
 
 Before committing:
-- `python3 -m py_compile streamlit/app.py streamlit/whoop/*.py sync/daily_sync.py` — no syntax errors
-- For dashboard/chart bugs: run `streamlit run streamlit/app.py` (serves on `http://localhost:8501`) and visually confirm the bug is gone and nothing else regressed
-- For sync/DB bugs: run `python3 sync/daily_sync.py` locally (requires valid `tokens.json`) and confirm expected output
+- From `apps/web/`: `npm test`, `npm run lint`, `npm run build` — all must pass
+- For dashboard/chart or API bugs: use the `whoop-dev` skill to run a dev server against a snapshot DB and confirm the bug is gone and nothing else regressed
+- For sync/DB bugs: cover the fix with a vitest against a temp `WHOOP_DB_PATH` (see `apps/web/src/lib/sync.test.ts`); Whoop sync runs only through `/api/sync` and the webhook handler
+- For Python helper changes (`streamlit/whoop/`, `scripts/`, `tests/`): `pytest tests/`
 
 If any check fails, fix before proceeding.
 

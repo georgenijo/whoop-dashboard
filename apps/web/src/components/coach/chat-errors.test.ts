@@ -21,6 +21,7 @@ describe("classifyCoachFailure", () => {
     [{ status: 504 }, "timeout"],
     [{ kind: "quota_exceeded", status: 402 }, "quota"],
     [{ kind: "network_error", status: 503 }, "network"],
+    [{ reason: "out_of_memory", kind: "server_error", status: 503 }, "out_of_memory"],
     [{ kind: "server_error", status: 500 }, "unknown"],
     [{ reason: "something_new", status: 500 }, "unknown"],
   ])("maps %j to %s", (info, errorClass) => {

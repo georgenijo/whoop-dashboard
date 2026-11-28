@@ -25,6 +25,9 @@ import {
   effectiveAnthropicEffort,
   type AnthropicModelOption,
 } from "@/lib/coach/anthropic-model-options";
+import { contextWindowFor } from "@/lib/coach/context-window";
+import CoachContextMeter from "@/components/coach/CoachContextMeter";
+import type { ThreadContext } from "@/components/coach/useChatSend";
 
 type ModelCatalogStatus =
   "loading" | "ready" | "not_configured" | "invalid_key" | "unavailable";
@@ -44,6 +47,8 @@ type Props = {
   initialCursorModelParams?: CursorModelParamsByModel;
   disabled: boolean;
   onSavingChange: (saving: boolean) => void;
+  /** Open thread's context figure (issue #608); null hides the meter. */
+  context?: ThreadContext | null;
 };
 
 const EFFORT_OPTIONS: Array<{
@@ -84,6 +89,7 @@ export default function CoachModelPicker({
   initialCursorModelParams = {},
   disabled,
   onSavingChange,
+  context = null,
 }: Props) {
   const router = useRouter();
   const menuId = useId();
@@ -541,6 +547,16 @@ export default function CoachModelPicker({
 
   return (
     <div className="coach-model-control" ref={controlRef}>
+      {context ? (
+        <CoachContextMeter
+          tokens={context.tokens}
+          approximate={context.approximate}
+          window={contextWindowFor(
+            modelPref,
+            selectedOption.anthropicModel?.max_input_tokens,
+          )}
+        />
+      ) : null}
       <button
         ref={triggerRef}
         type="button"

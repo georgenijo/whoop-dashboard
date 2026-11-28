@@ -103,6 +103,7 @@ const stub = (name: string) => ({ default: () => <span data-stub={name} /> });
 vi.mock("@/components/chrome/Sidebar", () => stub("Sidebar"));
 vi.mock("@/components/chrome/TopBar", () => stub("TopBar"));
 vi.mock("@/components/chrome/BottomNav", () => stub("BottomNav"));
+vi.mock("@/components/chrome/CommandPalette", () => stub("CommandPalette"));
 vi.mock("@/components/ClientLogBootstrap", () => stub("ClientLogBootstrap"));
 vi.mock("@/components/WebVitalsReporter", () => stub("WebVitalsReporter"));
 vi.mock("@/components/ErrorBoundary", () => ({

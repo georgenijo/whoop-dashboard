@@ -7,7 +7,15 @@ import {
   type WorkoutRow,
   getBodyMeasurements,
   getRecoveryTrend,
+  getSimilarWorkoutCandidates,
 } from "@/lib/db";
+import SimilarWorkoutsCard from "@/components/workouts/SimilarWorkoutsCard";
+import {
+  compareSimilarWorkouts,
+  lookbackStart,
+  monthEnd,
+} from "@/lib/analytics/similarWorkouts";
+import { isSimilarWorkoutsEnabled } from "@/lib/similar-workouts-flag";
 import { requireAuthOrSignin } from "@/lib/auth";
 import { isDayDetailEnabled } from "@/lib/day-detail-flag";
 import {
@@ -173,6 +181,21 @@ export default async function WorkoutDetailPage({
 
   const pctOfMax = (hr: number | null): number | null =>
     maxHr && hr != null ? Math.round((hr / maxHr) * 100) : null;
+
+  // SIMILAR_WORKOUTS=1 only: one bounded same-sport read (past year through the
+  // end of this session's month). Flag off = no read, no card.
+  const similarResult = isSimilarWorkoutsEnabled()
+    ? compareSimilarWorkouts(
+        workout,
+        getSimilarWorkoutCandidates(
+          user.id,
+          workout.sport,
+          workout.id,
+          lookbackStart(workout.date),
+          monthEnd(workout.date),
+        ),
+      )
+    : null;
 
   const timeRange = formatTimeRange(
     workout.start_utc ?? null,
@@ -454,6 +477,8 @@ export default async function WorkoutDetailPage({
           )}
 
           {hasSignal ? <RouteCard /> : null}
+
+          {similarResult ? <SimilarWorkoutsCard result={similarResult} /> : null}
         </div>
       </div>
     </>

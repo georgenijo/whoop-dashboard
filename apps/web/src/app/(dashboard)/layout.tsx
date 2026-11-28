@@ -6,11 +6,21 @@ import { Geist, Geist_Mono } from "next/font/google";
 import Sidebar from "@/components/chrome/Sidebar";
 import TopBar from "@/components/chrome/TopBar";
 import BottomNav from "@/components/chrome/BottomNav";
+import CommandPalette from "@/components/chrome/CommandPalette";
+import { isCommandPaletteEnabled } from "@/lib/ui/command-palette-flag";
 import ClientLogBootstrap from "@/components/ClientLogBootstrap";
 import WebVitalsReporter from "@/components/WebVitalsReporter";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { addRouteLog } from "@/lib/db";
 import { requireAuthOrSignin } from "@/lib/auth";
+import { isWeeklyReviewEnabled } from "@/lib/weekly-flag";
+import { isPeriodCompareEnabled } from "@/lib/period-compare-flag";
+import { isRecordsPageEnabled } from "@/lib/records-flag";
+import { isHealthAlertsEnabled } from "@/lib/health-alerts-flag";
+import { loadHealthAlerts } from "@/lib/health-alerts";
+import { alertBadgeCount } from "@/lib/analytics/healthAlerts";
+import { isHealthReportEnabled } from "@/lib/health-report-flag";
+import { isTrainingLoadEnabled } from "@/lib/training-load-flag";
 import "../globals.css";
 import "../../styles/quiet-instrument.css";
 
@@ -90,6 +100,12 @@ export default async function RootLayout({
     new Request("http://localhost", { headers: requestHeaders }),
   );
 
+  const showWeekly = isWeeklyReviewEnabled();
+  const compareEnabled = isPeriodCompareEnabled();
+  const showRecords = isRecordsPageEnabled();
+  const showReport = isHealthReportEnabled();
+  const showTrainingLoad = isTrainingLoadEnabled();
+
   const route = requestHeaders.get("x-whoop-route-log-route");
   const startedAt = requestHeaders.get("x-whoop-route-log-started-at");
   const startMs = Number(requestHeaders.get("x-whoop-route-log-start-ms"));
@@ -110,6 +126,17 @@ export default async function RootLayout({
     );
   }
 
+  // Health Alerts nav entry + badge (HEALTH_ALERTS=1). Flag off: no reads,
+  // no entry. A failed read hides the badge rather than breaking the shell.
+  let alertsNav: { count: number } | undefined;
+  if (isHealthAlertsEnabled()) {
+    try {
+      alertsNav = { count: alertBadgeCount(loadHealthAlerts(user.id)) };
+    } catch {
+      alertsNav = { count: 0 };
+    }
+  }
+
   return (
     <html
       lang="en"
@@ -124,11 +151,20 @@ export default async function RootLayout({
         <WebVitalsReporter />
         <div className="app">
           <Suspense fallback={null}>
-            <Sidebar />
+            <Sidebar
+              showWeekly={showWeekly}
+              compareEnabled={compareEnabled}
+              showRecords={showRecords}
+              alerts={alertsNav}
+              showReport={showReport}
+              showTrainingLoad={showTrainingLoad}
+            />
           </Suspense>
           <main className="main">
             <Suspense fallback={null}>
-              <TopBar />
+              {/* COMMAND_PALETTE=1 only: flag off never references the client
+                  component, so no chunk, key listener or header button. */}
+              <TopBar trailing={isCommandPaletteEnabled() ? <CommandPalette /> : null} />
             </Suspense>
             <div className="content">
               <ErrorBoundary>{children}</ErrorBoundary>
@@ -136,7 +172,14 @@ export default async function RootLayout({
           </main>
         </div>
         <Suspense fallback={null}>
-          <BottomNav />
+          <BottomNav
+            showWeekly={showWeekly}
+            compareEnabled={compareEnabled}
+            showRecords={showRecords}
+            showAlerts={alertsNav !== undefined}
+            showReport={showReport}
+            showTrainingLoad={showTrainingLoad}
+          />
         </Suspense>
       </body>
     </html>
