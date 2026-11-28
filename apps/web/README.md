@@ -430,3 +430,45 @@ Server-side env flag, off by default, read per request
 
 To enable it in production, add `Environment=SLEEP_REGULARITY=1` to the
 `whoop-web` service environment and restart the service.
+
+## Feature flag: `WORKOUT_CALENDAR=1` — Workout calendar (`/workouts/calendar`)
+
+Server-side env flag, off by default, read per request
+(`src/lib/workout-calendar-flag.ts`); only the exact value `1` enables it.
+
+- **Off (default, any other value):** `/workouts/calendar` returns 404 before
+  any auth or DB read, `/workouts` renders no link to it and makes no extra
+  reads, and no nav entry exists.
+- **On:** `/workouts` gains a "Workout calendar →" link card at the top. The
+  page shows a Monday-first month grid (leading/trailing days from the
+  neighbouring months are dimmed and not counted):
+  - each day: sport icons in the `sportColor` palette (up to 3, then `+n`),
+    total workout minutes, the day's peak session strain as a number, and a
+    strain tint by Whoop band (light < 10, moderate 10–14, high 14–18,
+    all out 18+). Every cell carries a full text `aria-label`, so nothing
+    is colour-only. Whoop day strain isn't additive, so the tint uses the
+    hardest session rather than a sum.
+  - a month summary: sessions, hours, average strain per session, busiest
+    day (most minutes, ties to more sessions), rest days, longest streak of
+    consecutive training days and longest rest gap. For the current month only
+    days up to today count; later days show as "upcoming", not rest.
+  - clicking a day with one workout opens `/workouts/[id]`; a day with several
+    opens an inline panel listing them (no extra route). The grid is
+    `role="grid"` with a roving tab stop: arrow keys move by day/week,
+    Home/End (Ctrl for the whole grid), Enter activates, Escape closes the panel.
+  - `?month=YYYY-MM` picks the month. It must be a real month between
+    2012-01 and the current month in the user's zone; anything else
+    (malformed, `2026-13`, a future month) falls back to the current month.
+    Prev/next links stop at those bounds.
+- **Data:** one user-scoped `getWorkoutRowsRange` read bounded to the grid
+  (at most 6 weeks) ± 1 day. Workouts are bucketed by their local *start*
+  day in the user's `user_settings.tz` (UTC on a missing/invalid zone), so a
+  session crossing midnight counts on the day it began; rows without a start
+  timestamp use their stored `date`. Grid arithmetic runs on date strings
+  through UTC midnights, so DST changes never add or drop a day. No writes,
+  tables, network or LLM calls. Logic: `src/lib/analytics/workoutCalendar.ts`
+  (pure, unit-tested). UI: `src/components/workouts/WorkoutCalendarView.tsx`
+  and `WorkoutCalendarGrid.tsx` (client, for keyboard navigation and the panel).
+
+To enable it in production, add `Environment=WORKOUT_CALENDAR=1` to the
+`whoop-web` service environment and restart the service.

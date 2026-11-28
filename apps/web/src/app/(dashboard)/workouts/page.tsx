@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { headers } from "next/headers";
 import SportFrequencyChart from "@/components/charts/SportFrequencyChart";
 import WorkoutZoneChart from "@/components/charts/WorkoutZoneChart";
@@ -12,6 +13,7 @@ import { resolveRangeWindow } from "@/lib/range";
 import { localToday } from "@/lib/date";
 import { computeVsUsualChips } from "@/lib/analytics/similarWorkouts";
 import { isSimilarWorkoutsEnabled } from "@/lib/similar-workouts-flag";
+import { isWorkoutCalendarEnabled } from "@/lib/workout-calendar-flag";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +42,22 @@ export default async function WorkoutsPage({
 
   return (
     <>
+      {isWorkoutCalendarEnabled() && (
+        <Link
+          href="/workouts/calendar"
+          className="card"
+          data-testid="workout-calendar-link"
+          style={{ display: "block", marginBottom: 24, textDecoration: "none", color: "inherit" }}
+        >
+          <div className="card-title">
+            <span className="dot" style={{ background: "#ffaa00", color: "#ffaa00" }} />
+            Workout calendar →
+          </div>
+          <div className="card-sub" style={{ marginTop: 4 }}>
+            Month view of every session, training streaks and rest days
+          </div>
+        </Link>
+      )}
       <SportFrequencyChart rows={rangeRows} rangeLabel={rangeLabel} />
 
       <WorkoutZoneChart rows={rangeRows} maxHR={maxHR} rangeLabel={rangeLabel} />

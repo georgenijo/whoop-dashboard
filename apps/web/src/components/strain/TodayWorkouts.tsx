@@ -45,7 +45,7 @@ const SPORT_ICON: Record<string, LucideIcon> = {
   crossfit: Flame,
 };
 
-function iconForSport(sport: string | null | undefined): LucideIcon {
+export function iconForSport(sport: string | null | undefined): LucideIcon {
   if (!sport) return Activity;
   const key = sport.toLowerCase();
   if (SPORT_ICON[key]) return SPORT_ICON[key];

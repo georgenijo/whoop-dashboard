@@ -38,6 +38,12 @@ describe("titleForPath", () => {
     expect(titleForPath("/sleep")).toBe("Sleep");
   });
 
+  it("titles /workouts/calendar without changing /workouts or /workouts/<id>", () => {
+    expect(titleForPath("/workouts/calendar")).toBe("Workout calendar");
+    expect(titleForPath("/workouts")).toBe("Workouts");
+    expect(titleForPath("/workouts/abc-123")).toBe("Workouts");
+  });
+
   it("titles every page added in the Nov 27 frontier batch, never Overview", () => {
     const pages: Record<string, string> = {
       "/weekly": "Weekly review",
