@@ -114,7 +114,7 @@ describe("Hono /api/dashboard/today parity with the Next route", () => {
     const viaNext = await nextRoute.GET(req(`/api/dashboard/today${qs}`));
 
     expect(viaHono.status).toBe(viaNext.status);
-    expect(viaHono.headers.get("content-type")).toMatch(/^application\/json/);
+    expect(viaHono.headers.get("content-type")).toBe(viaNext.headers.get("content-type"));
     expect(await viaHono.text()).toBe(await viaNext.text());
   });
 
