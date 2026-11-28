@@ -24,6 +24,9 @@ import {
   recordGenerationFailure,
   retryAt,
 } from "@/lib/ai-generation";
+import { forModule } from "@/lib/logger";
+
+const log = forModule("insights");
 
 const INSIGHT_MAX_TOKENS = 2048;
 const INSIGHT_DAYS = 30;
@@ -117,6 +120,18 @@ export type InsightRefresh = {
 // never waits on the model. Missing credentials are persisted as a visible
 // failure by the gate rather than thrown. Must run inside a request scope.
 export function scheduleInsightRegeneration(userId: number, hasData: boolean): InsightRefresh {
+  const { status, lock, apiKey } = claimInsightRegeneration(userId, hasData);
+  if (lock !== null && apiKey !== null) {
+    after(() => regenerateInsight(userId, apiKey, lock));
+  }
+  return { status, refreshing: status.isRegenerating || lock !== null };
+}
+
+function claimInsightRegeneration(userId: number, hasData: boolean): {
+  status: InsightStatus;
+  lock: SettingLock | null;
+  apiKey: string | null;
+} {
   const before = getInsightStatus(userId, hasData);
   let apiKey: string | null = null;
   try {
@@ -125,12 +140,74 @@ export function scheduleInsightRegeneration(userId: number, hasData: boolean): I
     apiKey = null;
   }
   const lock = acquireInsightRegenerationLock(before, apiKey);
-  const status = getInsightStatus(userId, hasData);
-  if (lock !== null && apiKey !== null) {
-    const key = apiKey;
-    after(() => regenerateInsight(userId, key, lock));
+  return { status: getInsightStatus(userId, hasData), lock, apiKey };
+}
+
+// Whoop's sleep.updated and recovery.updated for the same night arrive within
+// milliseconds of each other, followed by cycle refreshes. Waiting lets the
+// whole burst land so one generation covers it instead of a sleep-only brief
+// that is immediately stale again.
+export const INSIGHT_PREGENERATE_DELAY_MS = 20_000;
+
+/**
+ * Regenerate the brief now if new Whoop data has made it stale, so the next
+ * app open reads a finished brief instead of waiting on the model. Same lock,
+ * backoff, and missing-key gate as the request-time path; a concurrent page
+ * load that already holds the lock wins and this is a no-op.
+ */
+export async function pregenerateInsight(userId: number): Promise<boolean> {
+  const { lock, apiKey } = claimInsightRegeneration(userId, true);
+  if (lock === null || apiKey === null) return false;
+  trackDetachedLease(lock);
+  try {
+    await regenerateInsight(userId, apiKey, lock);
+  } finally {
+    detachedLeases.delete(lock);
   }
-  return { status, refreshing: status.isRegenerating || lock !== null };
+  return true;
+}
+
+// Pregeneration runs outside after(), so Next does not drain it on shutdown.
+// Release any lease it still holds as the process exits, so the next app
+// open regenerates at once instead of seeing "regenerating" until the lease
+// expires. releaseSettingLock is synchronous and token-checked, so this is
+// safe in an exit handler and a no-op for a lease that already ended.
+const detachedLeases = new Set<SettingLock>();
+let exitHookInstalled = false;
+
+function trackDetachedLease(lock: SettingLock): void {
+  detachedLeases.add(lock);
+  if (exitHookInstalled) return;
+  exitHookInstalled = true;
+  process.once("exit", releaseDetachedLeases);
+}
+
+export function releaseDetachedLeases(): void {
+  for (const lock of detachedLeases) {
+    try {
+      releaseSettingLock(lock);
+    } catch {
+      // Exit path: nothing useful to do; the lease TTL still bounds it.
+    }
+  }
+  detachedLeases.clear();
+}
+
+/**
+ * Called after a Whoop webhook changes a user's data. The delay runs on an
+ * unref'd timer rather than in after(), so a restart never waits on it: if the
+ * process stops first, the attempt is dropped and the next app open generates
+ * the brief as before. Never throws into the webhook response.
+ */
+export function scheduleInsightPregeneration(userId: number): void {
+  const timer = setTimeout(() => {
+    pregenerateInsight(userId).catch((err) => {
+      // regenerateInsight records its own failures; this only guards the
+      // status/lock reads from becoming an unhandled rejection.
+      log.error({ user_id: userId, err: err instanceof Error ? err.message : String(err) }, "insight_pregenerate_failed");
+    });
+  }, INSIGHT_PREGENERATE_DELAY_MS);
+  timer.unref?.();
 }
 
 export async function regenerateInsight(

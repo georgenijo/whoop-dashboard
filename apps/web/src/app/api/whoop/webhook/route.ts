@@ -14,6 +14,7 @@ import {
   type WhoopWebhookEvent,
 } from "@/lib/whoop/webhook-handler";
 import { forModule } from "@/lib/logger";
+import { scheduleInsightPregeneration } from "@/lib/insights";
 
 const log = forModule("whoop.webhook");
 
@@ -140,6 +141,9 @@ export async function POST(req: Request) {
         status: "ok",
         details: baseDetails,
       });
+      // Write the daily brief now that new data has landed, so opening the
+      // app reads it instead of starting generation and polling for it.
+      if (eventUserId !== null) scheduleInsightPregeneration(eventUserId);
     }
     return new Response("ok", { status: 200 });
   } catch (err) {

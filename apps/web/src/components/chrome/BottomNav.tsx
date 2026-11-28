@@ -27,6 +27,9 @@ const more: Item[] = [
 // Added to the "More" drawer only when TRAINING_LOAD=1 (the layout passes `showTrainingLoad`).
 const TRAINING_LOAD_ITEM: Item = { href: "/load", label: "Load", icon: "scale" };
 
+// Added before Logs in the "More" drawer only when DATA_HEALTH=1 (the layout passes `showDataHealth`).
+const DATA_HEALTH_ITEM: Item = { href: "/data-health", label: "Data health", icon: "heart-pulse" };
+
 // Shown only when the server passes `showReport` (HEALTH_REPORT=1).
 const reportItem: Item = { href: "/report", label: "Health report", icon: "file-text" };
 
@@ -49,6 +52,7 @@ export default function BottomNav({
   showAlerts = false,
   showReport = false,
   showTrainingLoad = false,
+  showDataHealth = false,
 }: {
   showWeekly?: boolean;
   compareEnabled?: boolean;
@@ -56,14 +60,18 @@ export default function BottomNav({
   showAlerts?: boolean;
   showReport?: boolean;
   showTrainingLoad?: boolean;
+  showDataHealth?: boolean;
 } = {}) {
+  const moreItems = showDataHealth
+    ? more.flatMap((m) => (m.href === "/logs" ? [DATA_HEALTH_ITEM, m] : [m]))
+    : more;
   const drawerItems = [
     ...(showTrainingLoad ? [TRAINING_LOAD_ITEM] : []),
     ...(showAlerts ? [ALERTS_ITEM] : []),
     ...(showRecords ? [RECORDS_ITEM] : []),
     ...(showWeekly ? [weeklyItem] : []),
     ...(compareEnabled ? [compareItem] : []),
-    ...(showReport ? [...more.slice(0, -1), reportItem, ...more.slice(-1)] : more),
+    ...(showReport ? [...moreItems.slice(0, -1), reportItem, ...moreItems.slice(-1)] : moreItems),
   ];
   const pathname = usePathname();
   const params = useSearchParams();

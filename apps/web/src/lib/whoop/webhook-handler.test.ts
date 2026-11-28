@@ -424,7 +424,7 @@ describe("handleEvent — sleep.updated re-dates and recomputes both old and new
       user_id: 1001,
     });
 
-    expect(outcome.kind).toBe("handled");
+    expect(outcome).toEqual({ kind: "noop", reason: "not_scored" });
     const db = new Database(dbFile);
     try {
       const row = db
@@ -455,6 +455,6 @@ describe("handleEvent — sleep.updated re-dates and recomputes both old and new
       user_id: 1001,
     });
 
-    expect(outcome.kind).toBe("handled");
+    expect(outcome).toEqual({ kind: "noop", reason: "not_scored" });
   });
 });

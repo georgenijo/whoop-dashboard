@@ -95,6 +95,26 @@ The logic lives in `src/lib/analytics/sleepPlan.ts` (pure, unit-tested):
   `getStrainRange`, `getWorkoutRowsRange`), no network or LLM calls. Unset
   (default) or any other value: `/recovery` renders exactly as before and
   does no extra reads.
+- `RECOVERY_OUTLOOK=1` — shows a **Tomorrow's recovery outlook** card at the
+  top of `/recovery`: a likely band for tomorrow's recovery (e.g. 55–72%)
+  built only from the user's own last 90 days (independent of the range
+  picker). Each past day is tagged with its night's sleep-need-met bucket
+  (<70 / 70–84 / 85%+, Whoop's performance colours) and its prior day's
+  strain bucket (<10 / 10–13.9 / 14+). The band is the 25th–75th percentile
+  of recovery on past days matching tonight's assumed sleep (the user's usual
+  bucket over the last 14 nights) × today's strain so far; with fewer than 5
+  matching days it falls back to the sleep bucket alone, then to all days
+  with a wider 10th–90th band. Also shown: the band for each sleep scenario,
+  the two biggest levers (robust Theil–Sen slopes, e.g. "+1 h of sleep
+  tonight — typically +6 pts for you"; only for changes inside the user's own
+  observed range), the number of similar days, a low/medium/high confidence
+  label by sample size, and explicit "not a prediction of Whoop's score"
+  wording. Fewer than 14 scored days shows "not enough data". Pure
+  computation in `src/lib/analytics/recoveryOutlook.ts` (thresholds are named
+  constants there); three extra user-scoped reads (`getRecoveryRange`,
+  `getSleepRange`, `getStrainRange`), no network or LLM calls. Unset
+  (default) or any other value: `/recovery` renders exactly as before and
+  does no extra reads.
 - `RECOVERY_CALENDAR=1` — shows a **Recovery calendar** card on `/recovery`
   (below the overtraining card): a GitHub-style heatmap of the trailing 12
   months of daily recovery (53 week columns x 7 days, Monday-first per
@@ -165,6 +185,36 @@ Server-side env flags; anything other than the exact value `1` is off.
   no ratio. "Today" is the user's `user_settings.tz` date. Reads go through
   the existing user-scoped `getStrainRange`; the math is pure. No tables,
   migrations, LLM or network calls.
+
+### `DATA_HEALTH=1` — Data health page (`/data-health`)
+
+- **Off (default, any value other than `1`):** `/data-health` returns 404
+  before any auth or DB read, no Sidebar or BottomNav entry renders, and no
+  other page changes.
+- **On:** adds "Data health" just above Logs in the Sidebar's Intelligence
+  group and the BottomNav "More" drawer. The page (server-rendered, no client
+  JS) shows how complete the user's data is over the last 30 or 90 days
+  (`?window=30|90`, default 30):
+  - a one-cell-per-day strip for recovery score, HRV, resting HR, respiratory
+    rate, skin temperature, SpO2, sleep, day strain and workouts, with the
+    coverage %, longest gap and gap count. Today counts as "pending" (not
+    missing) until its data lands. Workouts are activity days, so a rest day
+    is never "missing". A sensor that never reported in the window (often
+    SpO2/skin temp) shows "Not recorded" instead of a red strip;
+  - what the gaps affect, plus minimum-history checks for flag-gated
+    features that are switched on (Training Load, sleep plan, recovery
+    drivers, weekly review), using those modules' own exported constants;
+  - duplicate/overlap warnings: two main sleeps on one date (charts keep the
+    longest, the same rule as `SLEEP_DEDUP_WHERE`) and overlapping
+    sleep/nap intervals;
+  - the last successful and failed sync per source from `sync_logs`
+    (token keepalive rows ignored).
+  Days are the user's `user_settings.tz` calendar days (UTC fallback). Reads
+  go through the existing user-scoped readers (`getRecoveryRange`,
+  `getSleepRangeRaw`, `getNaps`, `getStrainRange`, `getWorkoutRowsRange`,
+  `getSyncLogs`, 120 days); the logic is pure in
+  `src/lib/analytics/dataHealth.ts`. No tables, migrations, LLM or network
+  calls.
 
 ## Design tokens
 
