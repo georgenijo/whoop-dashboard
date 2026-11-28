@@ -157,6 +157,42 @@ when Coach had to rely on Cursor's generic `MCP: tool` notifications. Any
 writer from malformed, partial, or unavailable channel output. Provider
 notifications never add a second work-log entry once exact events are present.
 
+#### Cursor ACP automated coverage (#537 / #552)
+
+Every row runs in `cd apps/web && npm test` against the deterministic fake
+agent (`src/lib/coach/__fixtures__/fake-cursor-acp.mjs`, selected by
+`FAKE_CURSOR_ACP_SCENARIO`). Nothing calls Cursor or needs a real credential.
+Process-level rows also assert that the agent's whole process group is dead
+(including a grandchild that ignores SIGTERM) and that the workspace is gone.
+
+| Contract | Scenario / test file |
+|---|---|
+| Spawn failure, startup exit, bounded and redacted stderr prefix+tail | `startup-error`, `startup-split-secret`: `cursor-acp-runtime`, `cursor-acp-lifecycle` |
+| Auth rejected / auth required at `session/new` → `auth`, never `cursor_login` | `auth-error`, `auth-required`: `cursor-acp-lifecycle` |
+| Agent exits during model config; config error; config/catalog hang | `config-exit`, `config-error`, `config-hang`, `catalog-hang`: `cursor-acp-runtime`, `cursor-acp-lifecycle` |
+| Model removed between catalog and apply; model never advertised | `model-removed`, unadvertised id: `cursor-acp-lifecycle` |
+| Exit before first event, crash mid-tool, truncated or malformed frame | `exit-before-event`, `crash-mid-tool`, `truncated-response`, `malformed-response`: `cursor-acp-lifecycle` |
+| Stray non-JSON line is tolerated | `garbage-line`: `cursor-acp-lifecycle` |
+| Credential split across stderr chunks during a prompt | `prompt-split-secret`: `cursor-acp-lifecycle` |
+| Cancel honoured; cancel ignored → SIGKILL escalation | `slow`, `cancel-ignored`: `cursor-acp-runtime`, `cursor-acp-lifecycle` |
+| Cumulative usage counter reset | `usage-reset`: `cursor-acp-lifecycle` |
+| Startup single-flight, per-thread serialization, cross-thread parallelism | `cursor-acp-registry` |
+| Credential / prompt / history fingerprint invalidation | `cursor-acp-registry` |
+| LRU capacity eviction skips busy sessions; full capacity rejects; failed start frees its slot | `cursor-acp-registry` |
+| Idle TTL deferred during an over-TTL turn, then evicts; no timers left behind | `cursor-acp-registry` (fake timers) |
+| Shutdown drains pending starts, disposes active sessions, rejects queued/new turns | `cursor-acp-registry` |
+| Turn-epoch reset across two turns of one persistent MCP process | `cursor-acp-mcp-state`, `coach-mcp/turn-state` |
+| Attachment manifest rotation; no user/path/epoch crossover | `cursor-acp-mcp-state`, `cursor-acp-workspace` |
+| Compiled MCP server required for ACP (fails closed without it) | `cursor-mcp-launch` |
+| Text, tools, usage, timings, generic `MCP: tool`, exact audit, tool cap | `cursor-acp-turn` |
+| Partial abort rows stay consistent; error classes and process diagnostics pass through | `cursor-acp-turn` |
+| Canary env allowlist, split-secret redaction, missing target model | `cursor-acp-canary` |
+
+Production-only by design: the 120 s prompt wall clock (it shares the cancel →
+SIGKILL path exercised above), the SIGTERM/SIGINT registry shutdown hooks
+(disabled under `NODE_ENV=test`), `session/load` (Coach never uses it), and
+the real Cursor catalog and credentials (the authenticated canary above).
+
 ```bash
 scripts/deploy --check
 scripts/deploy
