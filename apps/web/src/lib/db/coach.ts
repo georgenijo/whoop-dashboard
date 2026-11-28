@@ -1,5 +1,5 @@
 import "server-only";
-import { type DB, hasTable, openRead, openWrite, safeReadQuery, safeWriteQuery } from "./connection";
+import { type DB, hasColumn, hasTable, openRead, openWrite, safeReadQuery, safeWriteQuery } from "./connection";
 import {
   type ChatAttachment,
   type ChatAttachmentInsert,
@@ -32,6 +32,17 @@ export type ChatThread = {
   title: string | null;
   created_at: string;
   updated_at: string;
+};
+
+/**
+ * Issue #608 — how full the thread's context window was on its latest reply.
+ * `tokens` is the prompt size of the last model call (input + cache read +
+ * cache creation). `approximate` marks providers that only report a
+ * cumulative per-turn snapshot (Cursor).
+ */
+export type ChatThreadContext = {
+  tokens: number;
+  approximate: boolean;
 };
 
 export type ChatThreadSummary = {
@@ -265,6 +276,47 @@ export function createChatThread(userId: number, title: string | null = null): C
       return thread ?? null;
     }) ?? null
   );
+}
+
+/**
+ * Tenant-scoped read of a thread's context figure. Null when the thread is
+ * not the user's, has never had a reply, or the DB predates the column — the
+ * meter is hidden in all three cases rather than reading "0".
+ */
+export function getChatThreadContext(userId: number, threadId: number): ChatThreadContext | null {
+  return (
+    safeReadQuery((db) => {
+      if (!hasTable(db, "chat_threads") || !hasColumn(db, "chat_threads", "context_tokens")) {
+        return null;
+      }
+      const row = db
+        .prepare(
+          "SELECT context_tokens, context_approximate FROM chat_threads WHERE id = ? AND user_id = ? LIMIT 1"
+        )
+        .get(threadId, userId) as
+        | { context_tokens: number | null; context_approximate: number | null }
+        | undefined;
+      if (!row || row.context_tokens == null || row.context_tokens <= 0) return null;
+      return { tokens: row.context_tokens, approximate: row.context_approximate === 1 };
+    }) ?? null
+  );
+}
+
+/** Record the context figure from a completed turn. Owner-checked. */
+export function setChatThreadContext(
+  userId: number,
+  threadId: number,
+  context: ChatThreadContext
+): void {
+  const db = openWrite();
+  if (!db) return;
+  try {
+    db.prepare(
+      "UPDATE chat_threads SET context_tokens = ?, context_approximate = ? WHERE id = ? AND user_id = ?"
+    ).run(Math.round(context.tokens), context.approximate ? 1 : 0, threadId, userId);
+  } finally {
+    db.close();
+  }
 }
 
 export function setChatThreadTitle(threadId: number, title: string | null): void {
@@ -593,7 +645,10 @@ export function clearChatMessages(threadId = 1): void {
     const clear = db.transaction(() => {
       db.prepare("DELETE FROM chat_messages WHERE thread_id = ?").run(threadId);
       db.prepare("DELETE FROM chat_attachments WHERE thread_id = ?").run(threadId);
-      db.prepare("UPDATE chat_threads SET updated_at = datetime('now') WHERE id = ?").run(threadId);
+      // An emptied thread has no context left; hide the meter until the next reply.
+      db.prepare(
+        "UPDATE chat_threads SET updated_at = datetime('now'), context_tokens = NULL, context_approximate = 0 WHERE id = ?"
+      ).run(threadId);
     });
     clear();
   } finally {

@@ -4,8 +4,10 @@ import type { AuthSource } from "@/lib/auth";
 import {
   addChatLog,
   addChatMessages,
+  setChatThreadContext,
   setChatThreadTitle,
   type ChatMessageInsert,
+  type ChatThreadContext,
 } from "@/lib/db";
 import type { ApiKeyOrigin } from "./api-key";
 import { classifyChatError } from "./error-mapping";
@@ -24,6 +26,12 @@ import { type ToolDetail, chatLogToolSummaries } from "./tools";
 import { resolveCoachProvider } from "./provider";
 import { runCoachProviderTurn } from "./provider-runner";
 import { CoachWorkLogCollector } from "./work-log";
+import {
+  type CoachRoutingReceipt,
+  coachTurnRoutingMode,
+  recentUserTextsFromBlocks,
+  shadowRouteCoachTurn,
+} from "./turn-router";
 import type { CoachWorkLog } from "./work-log-types";
 import {
   acquireGenerationLock, classifyGenerationError, clearGenerationFailure,
@@ -74,7 +82,12 @@ export async function runAndPersistCoachTurn(
   apiKeyOrigin: ApiKeyOrigin,
   options: RunAnthropicOptions = {},
   handle?: CoachTurnHandle
-): Promise<{ reply: string; workLog: CoachWorkLog; presentationBlocks: CoachPresentationBlock[] }> {
+): Promise<{
+  reply: string;
+  workLog: CoachWorkLog;
+  presentationBlocks: CoachPresentationBlock[];
+  context: ChatThreadContext | null;
+}> {
   const startedAt = new Date().toISOString();
   const startMs = Date.now();
   const promptPreview = turn.displayText
@@ -106,6 +119,12 @@ export async function runAndPersistCoachTurn(
 
   // Sanitised failure class for the #444 detector; set only on the error path.
   let errorClass: string | null = null;
+
+  // Issue #489 — shadow routing. Default-off (COACH_TURN_ROUTING unset): no
+  // router code runs. In shadow mode the plan is only recorded; the turn still
+  // executes on the existing provider path below.
+  const routing = computeShadowRouting(turn, conversation);
+
   const buildDetails = () =>
     JSON.stringify({
       ...(errorClass ? { error_class: errorClass } : {}),
@@ -127,8 +146,17 @@ export async function runAndPersistCoachTurn(
       timing: {
         persistence_ms: detailState.persistence_ms ?? null,
         first_text_ms: detailState.first_text_ms ?? null,
+        ...(routing ? { router_ms: routing.router_ms } : {}),
       },
       ...(detailState.cursor ? { cursor: detailState.cursor } : {}),
+      ...(routing
+        ? {
+            routing: {
+              ...routing,
+              observed_tools: [...new Set(toolDetails.map((detail) => detail.name))],
+            },
+          }
+        : {}),
     });
 
   try {
@@ -163,6 +191,25 @@ export async function runAndPersistCoachTurn(
     addChatMessages(thread.id, result.messages);
     detailState.persistence_ms = Date.now() - persistenceStartedMs;
     handle?.markCommitted();
+    // Issue #608 — only a completed turn updates the meter; a failed or
+    // aborted turn leaves the previous figure in place. No usage reported
+    // (or zero) keeps whatever was there rather than writing a fake 0.
+    const context: ChatThreadContext | null =
+      usage.context_tokens != null && usage.context_tokens > 0
+        ? { tokens: usage.context_tokens, approximate: usage.context_approximate === true }
+        : null;
+    if (context) {
+      // The turn is already committed; a failed meter write must not turn it
+      // into an error (and a Retry would then duplicate it).
+      try {
+        setChatThreadContext(userId, thread.id, context);
+      } catch (err) {
+        console.warn("[coach] context_tokens write failed", {
+          thread_id: thread.id,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
     addChatLog({
       user_id: userId,
       started_at: startedAt,
@@ -181,6 +228,7 @@ export async function runAndPersistCoachTurn(
       reply: presentation.reply,
       workLog,
       presentationBlocks: presentation.presentationBlocks,
+      context,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -205,6 +253,35 @@ export async function runAndPersistCoachTurn(
       thread_id: thread.id,
     });
     throw err;
+  }
+}
+
+/** Never throws: a routing problem must not affect a live turn. */
+export function computeShadowRouting(
+  turn: CoachUserTurn,
+  conversation: CoachConversationMessage[],
+  env: Record<string, string | undefined> = process.env,
+): CoachRoutingReceipt | null {
+  if (coachTurnRoutingMode(env) !== "shadow") return null;
+  try {
+    // Same day frame the Cursor prefetch uses (cursor-loop.ts).
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+    return shadowRouteCoachTurn({
+      text: turn.displayText,
+      hasImages: turn.images.length > 0,
+      recentUserTexts: recentUserTextsFromBlocks(conversation),
+      today,
+    });
+  } catch (err) {
+    console.warn("[coach] shadow routing failed", {
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return null;
   }
 }
 

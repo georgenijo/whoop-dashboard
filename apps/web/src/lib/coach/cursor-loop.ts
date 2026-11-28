@@ -1043,6 +1043,14 @@ export async function runCursorTurn(
             usage.cache_read_input_tokens_total += terminal.usage.cacheReadTokens;
             usage.cache_creation_input_tokens_total += terminal.usage.cacheWriteTokens;
             usage.calls += 1;
+            // Issue #608 — Cursor reports one cumulative snapshot per turn,
+            // not per model call, so this is the best available figure and
+            // may overstate a multi-call turn. Flagged approximate ("~").
+            usage.context_tokens =
+              terminal.usage.inputTokens +
+              terminal.usage.cacheReadTokens +
+              terminal.usage.cacheWriteTokens;
+            usage.context_approximate = true;
           }
           terminalResultText = terminal.resultText;
           terminalError = terminal.isError ? terminal.errorText : "";
