@@ -186,6 +186,36 @@ Server-side env flags; anything other than the exact value `1` is off.
   the existing user-scoped `getStrainRange`; the math is pure. No tables,
   migrations, LLM or network calls.
 
+### `DATA_HEALTH=1` — Data health page (`/data-health`)
+
+- **Off (default, any value other than `1`):** `/data-health` returns 404
+  before any auth or DB read, no Sidebar or BottomNav entry renders, and no
+  other page changes.
+- **On:** adds "Data health" just above Logs in the Sidebar's Intelligence
+  group and the BottomNav "More" drawer. The page (server-rendered, no client
+  JS) shows how complete the user's data is over the last 30 or 90 days
+  (`?window=30|90`, default 30):
+  - a one-cell-per-day strip for recovery score, HRV, resting HR, respiratory
+    rate, skin temperature, SpO2, sleep, day strain and workouts, with the
+    coverage %, longest gap and gap count. Today counts as "pending" (not
+    missing) until its data lands. Workouts are activity days, so a rest day
+    is never "missing". A sensor that never reported in the window (often
+    SpO2/skin temp) shows "Not recorded" instead of a red strip;
+  - what the gaps affect, plus minimum-history checks for flag-gated
+    features that are switched on (Training Load, sleep plan, recovery
+    drivers, weekly review), using those modules' own exported constants;
+  - duplicate/overlap warnings: two main sleeps on one date (charts keep the
+    longest, the same rule as `SLEEP_DEDUP_WHERE`) and overlapping
+    sleep/nap intervals;
+  - the last successful and failed sync per source from `sync_logs`
+    (token keepalive rows ignored).
+  Days are the user's `user_settings.tz` calendar days (UTC fallback). Reads
+  go through the existing user-scoped readers (`getRecoveryRange`,
+  `getSleepRangeRaw`, `getNaps`, `getStrainRange`, `getWorkoutRowsRange`,
+  `getSyncLogs`, 120 days); the logic is pure in
+  `src/lib/analytics/dataHealth.ts`. No tables, migrations, LLM or network
+  calls.
+
 ## Design tokens
 
 - `src/app/theme.css` — verbatim copy of the Whoop+ design kit's

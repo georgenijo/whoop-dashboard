@@ -8,6 +8,7 @@ import {
   FileText,
   Flame,
   Gauge,
+  HeartPulse,
   GitCompareArrows,
   LayoutDashboard,
   List,
@@ -41,4 +42,5 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   trophy: Trophy,
   "file-text": FileText,
   scale: Scale,
+  "heart-pulse": HeartPulse,
 };
