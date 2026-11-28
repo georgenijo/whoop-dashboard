@@ -6,6 +6,7 @@ import {
   Dumbbell,
   Flame,
   Gauge,
+  GitCompareArrows,
   LayoutDashboard,
   List,
   Menu,
@@ -31,4 +32,5 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   bell: Bell,
   menu: Menu,
   gauge: Gauge,
+  "git-compare": GitCompareArrows,
 };

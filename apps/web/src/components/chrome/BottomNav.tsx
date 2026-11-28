@@ -26,7 +26,11 @@ const more: Item[] = [
 
 const moreHrefs = new Set(more.map((m) => m.href));
 
-export default function BottomNav() {
+// Default-off /compare entry (PERIOD_COMPARE=1); the server layout decides.
+const compareItem: Item = { href: "/compare", label: "Compare", icon: "git-compare" };
+
+export default function BottomNav({ compareEnabled = false }: { compareEnabled?: boolean } = {}) {
+  const moreItems = compareEnabled ? [compareItem, ...more] : more;
   const pathname = usePathname();
   const params = useSearchParams();
   const range = params.get("range");
@@ -42,7 +46,8 @@ export default function BottomNav() {
   }
 
   const withRange = (h: string) => (range ? `${h}?range=${range}` : h);
-  const moreActive = moreHrefs.has(pathname);
+  const moreActive =
+    moreHrefs.has(pathname) || (compareEnabled && pathname === compareItem.href);
 
   return (
     <>
@@ -55,7 +60,7 @@ export default function BottomNav() {
           />
           <div className="bn-drawer" role="dialog" aria-label="More navigation">
             <div className="bn-drawer-handle" />
-            {more.map((m) => {
+            {moreItems.map((m) => {
               const Icon = NAV_ICONS[m.icon];
               return (
                 <Link

@@ -23,7 +23,11 @@ const secondary: NavItem[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
-export default function Sidebar() {
+// Default-off /compare entry (PERIOD_COMPARE=1); the server layout decides.
+const compareItem: NavItem = { href: "/compare", label: "Compare", icon: "git-compare" };
+
+export default function Sidebar({ compareEnabled = false }: { compareEnabled?: boolean } = {}) {
+  const items = compareEnabled ? [...nav, compareItem] : nav;
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const range = searchParams.get("range");
@@ -38,7 +42,7 @@ export default function Sidebar() {
 
       <div className="sb-nav">
         <div className="sb-group-label">Dashboard</div>
-        {nav.map((n) => {
+        {items.map((n) => {
           const Icon = NAV_ICONS[n.icon];
           return (
             <Link
