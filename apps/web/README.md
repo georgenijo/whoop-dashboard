@@ -397,3 +397,36 @@ Server-side env flag, off by default, read per request.
   already loads. Logic: `src/lib/analytics/chartMarkers.ts` (pure, string
   dates, DST-proof). UI: `src/components/charts/ChartMarkers.tsx`. No tables,
   migrations, AI calls or network calls.
+## Feature flag: `SLEEP_REGULARITY=1` — Sleep regularity page (`/sleep/regularity`)
+
+Server-side env flag, off by default, read per request
+(`src/lib/sleep-regularity-flag.ts`); only the exact value `1` enables it.
+
+- **Off (default, any other value):** `/sleep/regularity` returns 404 before
+  any auth or DB read, `/sleep` renders no link to it and makes no extra
+  reads, and no nav entry exists.
+- **On:** `/sleep` gains a "Sleep regularity →" link card at the top. The page
+  (server-rendered, no client JS) covers the last 30 days by default, or 14
+  with `?window=14` (any other value falls back to 30). It shows:
+  - the **Sleep Regularity Index** (Phillips et al. 2017):
+    `SRI = 200 × P(match) − 100`, where P(match) is the chance that the
+    sleep/wake state in a 5-minute local clock slot is the same 24 h later.
+    Only back-to-back nights that both have data are compared (a missing
+    night counts as missing, not as a night awake). It needs 5 such pairs;
+    "asleep" means inside Whoop's in-bed window.
+  - bedtime and wake-time consistency: median, SD in minutes, and the
+    earliest/latest time with its date (circular around midnight via the
+    20:00 bedtime anchor shared with `bedtime.ts`)
+  - weekday-vs-weekend **social jetlag**: the gap in mean mid-sleep between
+    nights waking Sat/Sun and the other nights
+  - a per-night bedtime→wake range chart (inline SVG, 6 pm–2 pm axis),
+    plus a plain-language rating and one schedule tip
+  - "Not enough data yet" below 7 nights in the window
+- **Data:** a single user-scoped `getSleepRange` read: non-nap,
+  one row per wake day via `SLEEP_DEDUP_WHERE`. No writes, network or LLM
+  calls. Times are local wall-clock, so a DST night reads an hour
+  longer/shorter but stays aligned to the clock. Logic is in
+  `src/lib/analytics/sleepRegularity.ts` (pure, unit-tested).
+
+To enable it in production, add `Environment=SLEEP_REGULARITY=1` to the
+`whoop-web` service environment and restart the service.
