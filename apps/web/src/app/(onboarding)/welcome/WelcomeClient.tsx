@@ -304,6 +304,7 @@ export default function WelcomeClient({
         {/* Full-document navigation is the desired behaviour — /api/auth/login
             returns a 302 to Whoop. An anchor (not router.push) ensures the
             browser follows the redirect cleanly across the route group. */}
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- API redirect, not a page; the api/[[...rest]] catch-all (#233) makes the rule match every /api href. */}
         <a href="/api/auth/login" style={PRIMARY_BTN_STYLE}>
           Connect Whoop
         </a>
