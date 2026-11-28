@@ -655,6 +655,19 @@ function migrateSchema(db: DB): void {
         key_hash TEXT,
         PRIMARY KEY (user_id, kind)
       );
+      -- Issue #525: last-known health of server-side credentials (today only
+      -- the shared CURSOR_API_KEY), written by the keepalive-driven probe in
+      -- lib/coach/shared-key-probe.ts. One row per credential name. Holds
+      -- status + timestamps only — never key material or a key fingerprint.
+      CREATE TABLE IF NOT EXISTS credential_health (
+        credential TEXT PRIMARY KEY,
+        status TEXT NOT NULL,
+        last_checked TEXT NOT NULL,
+        last_ok TEXT,
+        consecutive_invalid INTEGER NOT NULL DEFAULT 0,
+        incident_open INTEGER NOT NULL DEFAULT 0,
+        detail TEXT
+      );
     `);
     const chatCols = db.prepare("PRAGMA table_info(chat_messages)").all() as {
       name: string;
