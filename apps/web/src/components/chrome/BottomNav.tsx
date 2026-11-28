@@ -27,8 +27,18 @@ const more: Item[] = [
 // Shown only when the server passes `showWeekly` (WEEKLY_REVIEW=1).
 const weeklyItem: Item = { href: "/weekly", label: "Weekly review", icon: "calendar-days" };
 
-export default function BottomNav({ showWeekly = false }: { showWeekly?: boolean }) {
-  const drawerItems = showWeekly ? [weeklyItem, ...more] : more;
+// Default-off /compare entry (PERIOD_COMPARE=1); the server layout decides.
+const compareItem: Item = { href: "/compare", label: "Compare", icon: "git-compare" };
+
+export default function BottomNav({
+  showWeekly = false,
+  compareEnabled = false,
+}: { showWeekly?: boolean; compareEnabled?: boolean } = {}) {
+  const drawerItems = [
+    ...(showWeekly ? [weeklyItem] : []),
+    ...(compareEnabled ? [compareItem] : []),
+    ...more,
+  ];
   const pathname = usePathname();
   const params = useSearchParams();
   const range = params.get("range");

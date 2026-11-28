@@ -15,4 +15,8 @@ describe("titleForPath", () => {
   it("falls back to Overview for unknown sections", () => {
     expect(titleForPath("/nope/x")).toBe("Overview");
   });
+
+  it("titles /compare instead of falling back to Overview", () => {
+    expect(titleForPath("/compare")).toBe("Compare periods");
+  });
 });

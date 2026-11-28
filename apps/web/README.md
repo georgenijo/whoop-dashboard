@@ -152,3 +152,27 @@ only the exact value `1` enables it.
 To enable it in production, add `Environment=WEEKLY_REVIEW=1` to the
 `whoop-web` systemd drop-in and restart the service. That is an operator
 action; this change does not enable it anywhere.
+### `PERIOD_COMPARE=1` — Compare periods (`/compare`)
+
+Off by default. With the flag unset (or any value other than exactly `1`),
+`/compare` returns 404 before any auth lookup or data read in the page, the
+Sidebar and mobile "More" drawer show no Compare entry, and nothing else
+changes visually.
+
+With `PERIOD_COMPARE=1` in the server environment, a **Compare** nav entry
+appears and `/compare` shows two date ranges side by side: average and change
+for recovery, HRV, resting HR, sleep duration / performance / consistency, day
+strain, and workouts and workout minutes (as per-week rates), each with a
+direction-aware arrow, a per-metric "about the same" noise band, and a paired
+daily sparkline.
+
+- Presets: `?preset=month` (month-to-date vs last month), `?preset=30d`
+  (default; last 30 days vs the 30 before), `?preset=year` (year-to-date vs
+  the same dates last year).
+- Custom: `?a_from=YYYY-MM-DD&a_to=…&b_from=…&b_to=…` via the plain GET form.
+  Reversed ends are swapped, future ends are clamped to today, spans longer
+  than 400 days are shortened to the most recent 400, and an invalid or
+  wholly-future range falls back to the preset with an error shown.
+- Pure logic lives in `src/lib/analytics/comparePeriods.ts`; reads use the
+  existing user-scoped `get*Range` readers. No new tables, network calls, or
+  client JavaScript.
