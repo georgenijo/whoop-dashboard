@@ -11,6 +11,7 @@ import {
   getIntegration,
   setIntegrationNeedsReauth,
 } from "@/lib/db/integrations";
+import { notifyWhoopNeedsReauth } from "@/lib/whoop/reauth-push";
 
 // Post-Phase-D: the encrypted `integrations` row is the sole token store.
 // The legacy `tokens.json` file fallback (#330) is gone. If the row is
@@ -163,7 +164,13 @@ async function refreshTokens(
       // unknown error codes → log only.
       resp.status === 401
     ) {
-      setIntegrationNeedsReauth(userId, WHOOP_PROVIDER, true);
+      // Push only on a real 0→1 transition (#287). The flag write is a
+      // conditional UPDATE, so a chain that is already flagged (1→1) returns
+      // false here and never re-notifies. Fire-and-forget: APNs latency or
+      // failure must not hold up (or break) the refresh caller.
+      if (setIntegrationNeedsReauth(userId, WHOOP_PROVIDER, true)) {
+        void notifyWhoopNeedsReauth(userId);
+      }
     }
     return null;
   }

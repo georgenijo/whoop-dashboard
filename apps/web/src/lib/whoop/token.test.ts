@@ -32,6 +32,15 @@ vi.mock("@/lib/db/integrations", () => ({
     setIntegrationNeedsReauthMock(...args),
 }));
 
+// The reauth push (#287) is mocked so these tests assert WHEN it fires; its
+// own behaviour (flag modes, debounce, APNs fan-out) lives in
+// reauth-push.test.ts.
+const notifyWhoopNeedsReauthMock = vi.fn(async () => ({ status: "disabled" }));
+vi.mock("@/lib/whoop/reauth-push", () => ({
+  notifyWhoopNeedsReauth: (...args: unknown[]) =>
+    notifyWhoopNeedsReauthMock(...(args as [])),
+}));
+
 const fetchMock = vi.fn<(...args: Parameters<typeof fetch>) => Promise<Response>>();
 
 const STORED_INTEGRATION = {
@@ -64,6 +73,9 @@ beforeEach(() => {
   saveTokensMock.mockReset();
   getIntegrationMock.mockReset();
   setIntegrationNeedsReauthMock.mockReset();
+  // Default: the flag write is a real 0→1 transition.
+  setIntegrationNeedsReauthMock.mockReturnValue(true);
+  notifyWhoopNeedsReauthMock.mockClear();
   getIntegrationMock.mockReturnValue(STORED_INTEGRATION);
   saveTokensMock.mockResolvedValue(undefined);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -79,6 +91,42 @@ afterEach(() => {
 });
 
 describe("getValidAccessToken → refreshTokens reauth detection", () => {
+  it("pushes once on the 0→1 transition (#287)", async () => {
+    const { getValidAccessToken } = await import("./token");
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: "invalid_grant" }, 400));
+    await getValidAccessToken(1);
+    expect(notifyWhoopNeedsReauthMock).toHaveBeenCalledTimes(1);
+    expect(notifyWhoopNeedsReauthMock).toHaveBeenCalledWith(1);
+  });
+
+  it("does not push when the flag was already set (1→1, #287)", async () => {
+    const { getValidAccessToken } = await import("./token");
+    setIntegrationNeedsReauthMock.mockReturnValue(false);
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: "invalid_grant" }, 400));
+    await getValidAccessToken(1);
+    expect(setIntegrationNeedsReauthMock).toHaveBeenCalledWith(1, "whoop", true);
+    expect(notifyWhoopNeedsReauthMock).not.toHaveBeenCalled();
+  });
+
+  it("does not push on a successful refresh (1→0 recovery, #287)", async () => {
+    const { getValidAccessToken } = await import("./token");
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        { access_token: "new-a", refresh_token: "new-r", expires_in: 3600 },
+        200,
+      ),
+    );
+    expect(await getValidAccessToken(1)).toBe("new-a");
+    expect(notifyWhoopNeedsReauthMock).not.toHaveBeenCalled();
+  });
+
+  it("does not push on transient 5xx (#287)", async () => {
+    const { getValidAccessToken } = await import("./token");
+    fetchMock.mockResolvedValueOnce(jsonResponse({}, 503));
+    await getValidAccessToken(1);
+    expect(notifyWhoopNeedsReauthMock).not.toHaveBeenCalled();
+  });
+
   it("flips needs_reauth on 400 invalid_request from the refresh grant (Whoop's dead-token signal, #263/#414)", async () => {
     const { getValidAccessToken } = await import("./token");
 

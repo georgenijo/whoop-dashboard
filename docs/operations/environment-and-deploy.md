@@ -99,6 +99,7 @@ kept out of this repository.
 | `APNS_PRIVATE_KEY` | Push delivery is enabled | APNs |
 | `APNS_ENVIRONMENT` | Push delivery is enabled | APNs |
 | `ENABLE_PUSH_DEBUG` | Temporary push diagnostics are explicitly wanted | Debug route |
+| `WHOOP_REAUTH_PUSH` | Opting in to the Whoop-disconnected push (`log` = record only, `on` = send); default off | Reauth push (#287) |
 
 `ENABLE_PUSH_DEBUG` must remain unset or `0` during normal production.
 
