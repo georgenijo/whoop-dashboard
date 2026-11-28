@@ -99,6 +99,7 @@ kept out of this repository.
 | `APNS_PRIVATE_KEY` | Push delivery is enabled | APNs |
 | `APNS_ENVIRONMENT` | Push delivery is enabled | APNs |
 | `ENABLE_PUSH_DEBUG` | Temporary push diagnostics are explicitly wanted | Debug route |
+| `DATA_EXPORT` | Set to `1` to enable the user-owned CSV/JSON export (`/api/export` + Settings card); default off — see `docs/data-export.md` | Data export |
 
 `ENABLE_PUSH_DEBUG` must remain unset or `0` during normal production.
 

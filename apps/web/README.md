@@ -31,6 +31,13 @@ DB read-only, or those writes will fail. If the DB is missing or empty (e.g.
 before the first Whoop sync), the Overview renders with muted empty states and
 no runtime errors.
 
+## Feature flags
+
+- `DATA_EXPORT=1` — enables `GET /api/export` and the "Export my data" card on
+  `/settings` (CSV/JSON download of the signed-in user's own data). Off by
+  default: the route 404s and the settings page is unchanged. See
+  `../../docs/data-export.md`.
+
 ## Design tokens
 
 - `src/app/theme.css` — verbatim copy of the Whoop+ design kit's
