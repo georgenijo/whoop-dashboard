@@ -21,6 +21,7 @@ import { getUserSettings, type ChatMessageInsert } from "@/lib/db";
 import { dbPath } from "@/lib/db/connection";
 import { buildCursorSystemPrompt } from "./prompts";
 import { CursorAgentError, resolveCursorKey } from "./cursor-key";
+import { describeCursorExit, type CursorExitInfo } from "./cursor-errors";
 import type { DetailState, RunAnthropicOptions, Usage } from "./loop";
 import {
   captureToolResponse,
@@ -774,6 +775,10 @@ export async function runCursorTurn(
     }>,
     terminal_subtype: null as string | null,
     terminal_seen: false,
+    // How the cursor-agent process ended, from Node's `close` (code, signal).
+    // null until close fires (early-exit rejects may never see it). A signal
+    // death is code null + signal name — issue #475-C.
+    exit: null as CursorExitInfo | null,
     // Counts every `started` tool_call event that carries a real MCP tool
     // name (see the `!a?.toolName` guard below, which excludes internal MCP
     // bookkeeping calls) — not just completed ones, so a hung tool call that
@@ -822,7 +827,7 @@ export async function runCursorTurn(
   const toolMeta = new Map<string, { name: string; input: unknown; startedMs: number }>();
 
   try {
-    const exitInfo = await new Promise<{ code: number | null }>((resolve, reject) => {
+    const exitInfo = await new Promise<CursorExitInfo>((resolve, reject) => {
       const spawnStartedMs = Date.now();
       const child = spawn(
         CURSOR_AGENT_BIN,
@@ -976,7 +981,7 @@ export async function runCursorTurn(
         captureEarlyExitTiming();
         reject(err);
       });
-      child.on("close", (code) => {
+      child.on("close", (code: number | null, signal: NodeJS.Signals | null) => {
         // Cursor normally newline-terminates stream-json records, but retain a
         // valid terminal record even if a CLI version closes directly after it.
         if (buf.trim()) {
@@ -994,7 +999,9 @@ export async function runCursorTurn(
           terminalElapsedMs == null
             ? null
             : Math.max(0, closeElapsedMs - terminalElapsedMs);
-        resolve({ code });
+        const exit: CursorExitInfo = { code, signal: signal ?? null };
+        cursorDetail.exit = exit;
+        resolve(exit);
       });
 
       function handleEvent(evt: StreamEvent) {
@@ -1043,6 +1050,14 @@ export async function runCursorTurn(
             usage.cache_read_input_tokens_total += terminal.usage.cacheReadTokens;
             usage.cache_creation_input_tokens_total += terminal.usage.cacheWriteTokens;
             usage.calls += 1;
+            // Issue #608 — Cursor reports one cumulative snapshot per turn,
+            // not per model call, so this is the best available figure and
+            // may overstate a multi-call turn. Flagged approximate ("~").
+            usage.context_tokens =
+              terminal.usage.inputTokens +
+              terminal.usage.cacheReadTokens +
+              terminal.usage.cacheWriteTokens;
+            usage.context_approximate = true;
           }
           terminalResultText = terminal.resultText;
           terminalError = terminal.isError ? terminal.errorText : "";
@@ -1255,8 +1270,9 @@ export async function runCursorTurn(
         auth ? "auth" : "agent",
         auth
           ? "Cursor API key rejected"
-          : `cursor-agent exited ${exitInfo.code}: ${stderr.slice(0, 200)}`,
+          : `cursor-agent ${describeCursorExit(exitInfo)}: ${stderr.slice(0, 200)}`,
         auth ? keyOrigin : undefined,
+        exitInfo,
       );
     }
 

@@ -11,12 +11,14 @@ import IllnessSignalCard from "@/components/recovery/IllnessSignalCard";
 import SkinTempDeviationCard from "@/components/recovery/SkinTempDeviationCard";
 import Spo2TrendCard from "@/components/recovery/Spo2TrendCard";
 import RecoveryCalendarCard from "@/components/recovery/RecoveryCalendarCard";
+import RecoveryDriversCard from "@/components/recovery/RecoveryDriversCard";
 import {
   getOverviewSnapshot,
   getRecoveryByDayOfWeek,
   getRecoveryRange,
   getSleepRange,
   getStrainRange,
+  getWorkoutRowsRange,
 } from "@/lib/db";
 import { requireAuthOrSignin } from "@/lib/auth";
 import { computeIllnessSignal } from "@/lib/analytics/illness";
@@ -26,6 +28,11 @@ import {
   isRecoveryCalendarEnabled,
   windowStartFor,
 } from "@/lib/analytics/recoveryCalendar";
+import {
+  RECOVERY_DRIVERS_LOOKBACK_DAYS,
+  computeRecoveryDrivers,
+  isRecoveryDriversEnabled,
+} from "@/lib/analytics/recoveryDrivers";
 import { resolveRangeWindow, rowsInWindow, shiftDate } from "@/lib/range";
 import { localToday } from "@/lib/date";
 
@@ -110,6 +117,24 @@ export default async function RecoveryPage({
     );
   }
 
+  // RECOVERY_DRIVERS=1 only: a fixed lookback independent of the range picker
+  // (a 7-day window can never clear the minimum-data gate). Four extra
+  // user-scoped reads; flag off does none of them.
+  let recoveryDrivers: ReactNode = null;
+  if (isRecoveryDriversEnabled()) {
+    const today = localToday();
+    // One extra day so the earliest recovery can pair with its prior-day strain.
+    const start = shiftDate(today, -RECOVERY_DRIVERS_LOOKBACK_DAYS);
+    const driversStart = shiftDate(today, -(RECOVERY_DRIVERS_LOOKBACK_DAYS - 1));
+    const result = computeRecoveryDrivers({
+      recovery: getRecoveryRange(user.id, driversStart, today),
+      sleep: getSleepRange(user.id, driversStart, today),
+      cycles: getStrainRange(user.id, start, today),
+      workouts: getWorkoutRowsRange(user.id, start, today),
+    });
+    recoveryDrivers = <RecoveryDriversCard result={result} />;
+  }
+
   return (
     <>
       <KPIStrip
@@ -122,6 +147,8 @@ export default async function RecoveryPage({
         latestSteps={data.latestSteps}
         previousSteps={data.previousSteps}
       />
+
+      {recoveryDrivers}
 
       <OvertrainingCard recovery={otsRecovery} cycles={otsCycles} />
 

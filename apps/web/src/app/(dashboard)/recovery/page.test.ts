@@ -13,13 +13,14 @@ const db = vi.hoisted(() => ({
   getOverviewSnapshot: vi.fn(() => ({})),
   getRecoveryByDayOfWeek: vi.fn(() => []),
   getRecoveryRange: vi.fn(() => [] as unknown[]),
-  getSleepRange: vi.fn(() => []),
-  getStrainRange: vi.fn(() => []),
+  getSleepRange: vi.fn(() => [] as unknown[]),
+  getStrainRange: vi.fn(() => [] as unknown[]),
+  getWorkoutRowsRange: vi.fn(() => [] as unknown[]),
 }));
 vi.mock("@/lib/db", () => db);
 
 import RecoveryPage from "./page";
-import RecoveryCalendarCard from "@/components/recovery/RecoveryCalendarCard";
+import RecoveryDriversCard from "@/components/recovery/RecoveryDriversCard";
 
 function findCard(node: ReactNode): ReactElement | null {
   if (Array.isArray(node)) {
@@ -30,37 +31,39 @@ function findCard(node: ReactNode): ReactElement | null {
     return null;
   }
   if (!isValidElement(node)) return null;
-  if (node.type === RecoveryCalendarCard) return node;
+  if (node.type === RecoveryDriversCard) return node;
   return findCard((node.props as { children?: ReactNode }).children);
 }
 
-const render = () => RecoveryPage({ searchParams: Promise.resolve({ range: "30d" }) });
+const render = () => RecoveryPage({ searchParams: Promise.resolve({}) });
 
-describe("/recovery RECOVERY_CALENDAR flag", () => {
+describe("/recovery RECOVERY_DRIVERS flag", () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => vi.unstubAllEnvs());
 
-  it("flag off: no card and no extra recovery read", async () => {
-    vi.stubEnv("RECOVERY_CALENDAR", "");
+  it("flag off: no card and no extra reads", async () => {
+    vi.stubEnv("RECOVERY_DRIVERS", "");
     const tree = await render();
     expect(findCard(tree)).toBeNull();
-    // Only the existing illness-baseline read.
+    expect(db.getWorkoutRowsRange).not.toHaveBeenCalled();
+    // only the page's existing range-window reads
     expect(db.getRecoveryRange).toHaveBeenCalledTimes(1);
-    expect(db.getRecoveryRange).toHaveBeenCalledWith(7, "2026-10-15", "2026-11-27");
+    expect(db.getSleepRange).toHaveBeenCalledTimes(1);
+    expect(db.getStrainRange).toHaveBeenCalledTimes(1);
   });
 
-  it("flag on: one extra user-scoped 12-month read feeds the card", async () => {
-    vi.stubEnv("RECOVERY_CALENDAR", "1");
-    db.getRecoveryRange.mockReturnValue([
-      { date: "2026-11-27", recovery_score: 82, hrv: 60, rhr: 50, spo2: 96, skin_temp: 33 },
-    ]);
+  it("flag on: renders the card from user-scoped 120-day reads", async () => {
+    vi.stubEnv("RECOVERY_DRIVERS", "1");
     const tree = await render();
     const card = findCard(tree);
     expect(card).not.toBeNull();
-    expect(db.getRecoveryRange).toHaveBeenCalledTimes(2);
-    expect(db.getRecoveryRange).toHaveBeenLastCalledWith(7, "2025-11-28", "2026-11-27");
-    const cal = (card!.props as { calendar: { daysScored: number; today: string } }).calendar;
-    expect(cal.today).toBe("2026-11-27");
-    expect(cal.daysScored).toBe(1);
+    expect((card!.props as { result: { status: string } }).result.status).toBe("insufficient");
+    expect(db.getRecoveryRange).toHaveBeenCalledWith(7, "2026-07-31", "2026-11-27");
+    expect(db.getSleepRange).toHaveBeenCalledWith(7, "2026-07-31", "2026-11-27");
+    expect(db.getStrainRange).toHaveBeenCalledWith(7, "2026-07-30", "2026-11-27");
+    expect(db.getWorkoutRowsRange).toHaveBeenCalledWith(7, "2026-07-30", "2026-11-27");
+    for (const fn of [db.getRecoveryRange, db.getSleepRange, db.getStrainRange, db.getWorkoutRowsRange]) {
+      for (const call of fn.mock.calls as unknown[][]) expect(call[0]).toBe(7);
+    }
   });
 });

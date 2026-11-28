@@ -6,6 +6,18 @@ Maintained via the `/decisions` skill. See `~/.claude/skills/decisions/SKILL.md`
 
 ---
 
+## 2026-11-28: Coach adds no second agent runtime; Anthropic stays on the Messages SDK loop
+
+**Decision:** Do not add or migrate to a second native agent runtime. That covers the Claude Agent SDK, the Claude ACP adapter, Codex app-server, an OpenAI provider, and a generic ACP wrapper. Anthropic keeps its in-process Messages SDK loop. Cursor ACP remains the only agent-runtime provider and the route to GPT models. Reopen this decision only on a named trigger: (1) direct OpenAI BYOK is requested or Cursor stops serving GPT models, in which case add an in-process OpenAI Responses API provider, not Codex or ACP; (2) Anthropic ships a needed capability reachable only through the Agent SDK; (3) Cursor ACP is retired or fails its soak.
+
+**Rationale:** None of the options solves a concrete Coach problem. GPT models already run through Cursor ACP. Hosted products may not use claude.ai or ChatGPT subscription auth (vendor docs, accessed 2026-11-28). Provider-owned transcripts would conflict with SQLite as the canonical cross-client history, and Coach deliberately denies coding-agent shell and file tools. The agent runtimes would add a child process per session, a second catalog authority, and tenant-isolation hardening. The Agent SDK, for example, loads `~/.claude` settings and memory unless they are explicitly disabled. These costs would recur on every vendor upgrade, while the hard parts would stay app-owned anyway: tenant scoping, the tool cap, audit events, and persistence.
+
+**Status:** active
+
+**References:** #554, #537, `docs/decisions/2026-11-28-second-provider-runtime.md`, `apps/web/src/lib/coach/provider-runner.ts`, `apps/web/src/lib/coach/loop.ts`
+
+---
+
 ## 2026-11-15: Let the Coach list pane be hidden and resized on iPhone Duo
 
 **Decision:** On the Duo inner display the Coach thread list opens with its edge at the end of the fold, but it is no longer held open at a fixed width. People can drag the divider (280 pt minimum, conversation keeps 300 pt) or hide the list, which moves the sidebar button to the top left of the conversation. New chat moves from the list header to the conversation toolbar, so the system places it on the side rail on both displays.

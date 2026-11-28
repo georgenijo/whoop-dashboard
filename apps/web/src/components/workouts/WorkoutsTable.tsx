@@ -3,7 +3,14 @@
 import Link from "next/link";
 import type { WorkoutRow } from "@/lib/db";
 
-type Props = { rows: WorkoutRow[] };
+type Props = {
+  rows: WorkoutRow[];
+  title?: string;
+  /** Overrides the "N sessions" header count, e.g. when `rows` is capped. */
+  countLabel?: string;
+  emptyTitle?: string;
+  emptySub?: string;
+};
 
 const ZONES = [
   { key: "zone_0_ms" as const, label: "Z0", color: "#1e3a8a" },
@@ -42,20 +49,26 @@ function formatMinutes(ms: number | null): string {
 
 const HEADERS = ["Date", "Sport", "Duration", "Strain", "Avg HR", "Max HR", "kcal"];
 
-export default function WorkoutsTable({ rows }: Props) {
+export default function WorkoutsTable({
+  rows,
+  title = "Recent workouts",
+  countLabel,
+  emptyTitle = "No workouts in range",
+  emptySub = "Adjust the date range or sync Whoop",
+}: Props) {
   return (
     <div className="card" style={{ overflowX: "auto" }}>
       <div className="card-head">
         <div className="card-title">
           <span className="dot" style={{ background: "#ffaa00", color: "#ffaa00" }} />
-          Recent workouts
+          {title}
         </div>
-        <span className="card-sub">{rows.length} sessions</span>
+        <span className="card-sub">{countLabel ?? `${rows.length} sessions`}</span>
       </div>
       {rows.length === 0 ? (
         <div className="empty-state">
-          <div className="title">No workouts in range</div>
-          <div className="sub">Adjust the date range or sync Whoop</div>
+          <div className="title">{emptyTitle}</div>
+          <div className="sub">{emptySub}</div>
         </div>
       ) : (
         <div style={{ minWidth: 760, fontFamily: "var(--font-mono)", fontSize: 12 }}>
