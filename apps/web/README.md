@@ -109,6 +109,13 @@ The logic lives in `src/lib/analytics/sleepPlan.ts` (pure, unit-tested):
   `getRecoveryRange` read over the 12-month window; no network or LLM calls,
   no client JS. Unset (default) or any other value: `/recovery` renders
   exactly as before and does no extra reads.
+Server-side env flags, read at request time. Each is **off unless set to
+exactly `1`**; when off, nothing new is reachable or rendered and no extra DB
+reads run.
+
+| Flag | Effect when `1` |
+|---|---|
+| `MORNING_BRIEF` | Adds a "Today" morning-brief card to the top of the Overview (`/`): readiness (recovery score, zone, vs the prior 7-day average), last night's sleep (hours vs need, performance, bed → wake), yesterday's strain and workouts, at most one "watch out" (illness signal from `lib/analytics/illness.ts`, else overtraining from `lib/analytics/ots.ts`), and one fixed-rule suggestion. Pure rules in `src/lib/analytics/morningBrief.ts`; reads via `readOverviewMorningBriefInputs` in `src/lib/db/morning-brief.ts` (existing user-scoped range readers, 30-day look-back). No AI, no network. If today's recovery is not scored yet it shows the latest scored day and says so; stale data shows the same "Last synced … · N days ago" banner as `/strain`. |
 
 ## Design tokens
 
