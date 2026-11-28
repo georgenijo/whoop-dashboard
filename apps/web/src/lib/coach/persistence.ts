@@ -25,6 +25,12 @@ import { type ToolDetail, chatLogToolSummaries } from "./tools";
 import { resolveCoachProvider } from "./provider";
 import { runCoachProviderTurn } from "./provider-runner";
 import { CoachWorkLogCollector } from "./work-log";
+import {
+  type CoachRoutingReceipt,
+  coachTurnRoutingMode,
+  recentUserTextsFromBlocks,
+  shadowRouteCoachTurn,
+} from "./turn-router";
 import type { CoachWorkLog } from "./work-log-types";
 import {
   acquireGenerationLock, classifyGenerationError, clearGenerationFailure,
@@ -110,6 +116,11 @@ export async function runAndPersistCoachTurn(
       : undefined,
   });
 
+  // Issue #489 — shadow routing. Default-off (COACH_TURN_ROUTING unset): no
+  // router code runs. In shadow mode the plan is only recorded; the turn still
+  // executes on the existing provider path below.
+  const routing = computeShadowRouting(turn, conversation);
+
   const buildDetails = () =>
     JSON.stringify({
       full_prompt: turn.displayText,
@@ -130,8 +141,17 @@ export async function runAndPersistCoachTurn(
       timing: {
         persistence_ms: detailState.persistence_ms ?? null,
         first_text_ms: detailState.first_text_ms ?? null,
+        ...(routing ? { router_ms: routing.router_ms } : {}),
       },
       ...(detailState.cursor ? { cursor: detailState.cursor } : {}),
+      ...(routing
+        ? {
+            routing: {
+              ...routing,
+              observed_tools: [...new Set(toolDetails.map((detail) => detail.name))],
+            },
+          }
+        : {}),
     });
 
   try {
@@ -222,6 +242,35 @@ export async function runAndPersistCoachTurn(
       thread_id: thread.id,
     });
     throw err;
+  }
+}
+
+/** Never throws: a routing problem must not affect a live turn. */
+export function computeShadowRouting(
+  turn: CoachUserTurn,
+  conversation: CoachConversationMessage[],
+  env: Record<string, string | undefined> = process.env,
+): CoachRoutingReceipt | null {
+  if (coachTurnRoutingMode(env) !== "shadow") return null;
+  try {
+    // Same day frame the Cursor prefetch uses (cursor-loop.ts).
+    const today = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/New_York",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+    return shadowRouteCoachTurn({
+      text: turn.displayText,
+      hasImages: turn.images.length > 0,
+      recentUserTexts: recentUserTextsFromBlocks(conversation),
+      today,
+    });
+  } catch (err) {
+    console.warn("[coach] shadow routing failed", {
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return null;
   }
 }
 
