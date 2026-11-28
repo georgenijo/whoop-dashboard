@@ -319,3 +319,31 @@ Server-side env flag, off by default, read per request.
   (`src/lib/day-detail.ts`); the model is pure
   (`src/lib/analytics/dayDetail.ts`). No tables, migrations, AI calls or
   network calls.
+
+## Feature flag: `CHART_MARKERS=1` — event markers on the recovery charts
+
+Server-side env flag, off by default, read per request.
+
+- **Off (default, any value other than `1`):** `/recovery` does no extra
+  reads, and the "Recovery score" and "HRV trend" charts render byte-identical
+  markup (pinned by baseline HTML in
+  `src/components/charts/__fixtures__/`).
+- **On:** both charts gain a marker lane under the plot and a legend toggle
+  row (**Workouts**, **Journal**, **Big drops**, each with a count). Markers:
+  ▲ workout day (sized by the day's highest workout strain: <10 small,
+  10–14 medium, ≥14 large), ◆ high-strain day (cycle strain ≥ 14, with or
+  without a logged workout), ■ journal entry (title / tags / mood), ▼ big drop
+  (recovery fell ≥ 20 points from the previous calendar day; a gap never
+  counts). Every kind has its own shape and a text label, so colour is never
+  the only cue. Each marker is a button: Tab reaches it, focus or hover shows
+  a tooltip naming the event and date, and its `aria-label` carries the same
+  sentence. Each category has its own row, so same-day events never overlap;
+  in dense ranges, neighbours closer than 2.5% of the chart width merge into
+  one counted marker whose label lists every event. A marker sits on its
+  date's plotted point, so a date with no score on that chart shows no marker.
+- Cost: two window-bounded, user-scoped reads (`getWorkoutRowsRange`,
+  `getJournalRange`; the journal read returns nothing when the optional
+  `journal` table is absent). Strain and recovery come from rows the page
+  already loads. Logic: `src/lib/analytics/chartMarkers.ts` (pure, string
+  dates, DST-proof). UI: `src/components/charts/ChartMarkers.tsx`. No tables,
+  migrations, AI calls or network calls.
