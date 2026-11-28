@@ -158,8 +158,39 @@ export const INSIGHT_PREGENERATE_DELAY_MS = 20_000;
 export async function pregenerateInsight(userId: number): Promise<boolean> {
   const { lock, apiKey } = claimInsightRegeneration(userId, true);
   if (lock === null || apiKey === null) return false;
-  await regenerateInsight(userId, apiKey, lock);
+  trackDetachedLease(lock);
+  try {
+    await regenerateInsight(userId, apiKey, lock);
+  } finally {
+    detachedLeases.delete(lock);
+  }
   return true;
+}
+
+// Pregeneration runs outside after(), so Next does not drain it on shutdown.
+// Release any lease it still holds as the process exits, so the next app
+// open regenerates at once instead of seeing "regenerating" until the lease
+// expires. releaseSettingLock is synchronous and token-checked, so this is
+// safe in an exit handler and a no-op for a lease that already ended.
+const detachedLeases = new Set<SettingLock>();
+let exitHookInstalled = false;
+
+function trackDetachedLease(lock: SettingLock): void {
+  detachedLeases.add(lock);
+  if (exitHookInstalled) return;
+  exitHookInstalled = true;
+  process.once("exit", releaseDetachedLeases);
+}
+
+export function releaseDetachedLeases(): void {
+  for (const lock of detachedLeases) {
+    try {
+      releaseSettingLock(lock);
+    } catch {
+      // Exit path: nothing useful to do; the lease TTL still bounds it.
+    }
+  }
+  detachedLeases.clear();
 }
 
 /**

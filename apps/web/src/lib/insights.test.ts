@@ -44,6 +44,7 @@ import {
   insightToday,
   pregenerateInsight,
   regenerateInsight,
+  releaseDetachedLeases,
   scheduleInsightPregeneration,
 } from "./insights";
 import { titleChatThread } from "./coach/persistence";
@@ -352,6 +353,20 @@ describe("insight pregeneration after new Whoop data", () => {
     expect(sdk.create).toHaveBeenCalledTimes(1);
   });
 
+  it("releases a detached pass's lease when the process exits mid-generation", async () => {
+    bootstrap();
+    let finish: (value: unknown) => void = () => {};
+    sdk.create.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const run = pregenerateInsight(2);
+    await vi.waitFor(() => expect(sdk.create).toHaveBeenCalledTimes(1));
+    expect(getInsightStatus(2, true).isRegenerating).toBe(true);
+    // Simulates the exit hook firing on a graceful restart.
+    releaseDetachedLeases();
+    expect(getInsightStatus(2, true)).toMatchObject({ isStale: true, isRegenerating: false });
+    finish({ content: [{ type: "text", text: "Late" }] });
+    await run;
+  });
+
   it("waits for the webhook burst before generating, outside after() so restarts never wait on it", async () => {
     bootstrap();
     vi.useFakeTimers({ toFake: ["Date", "setTimeout"] });
@@ -363,8 +378,9 @@ describe("insight pregeneration after new Whoop data", () => {
     await vi.advanceTimersByTimeAsync(INSIGHT_PREGENERATE_DELAY_MS - 1);
     expect(sdk.create).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
+    // Started exactly at the deadline, not on a later tick.
+    expect(sdk.create).toHaveBeenCalledTimes(1);
     await vi.waitFor(() => expect(getLatestInsight(2)?.insight).toBe("Debounced brief"));
-    // The second delivery found the first holding the lock.
     expect(sdk.create).toHaveBeenCalledTimes(1);
     expect(getInsightStatus(2, true)).toMatchObject({ isStale: false, isRegenerating: false });
   });
