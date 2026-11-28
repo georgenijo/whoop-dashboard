@@ -26,7 +26,13 @@ const secondary: NavItem[] = [
 // Default-off /compare entry (PERIOD_COMPARE=1); the server layout decides.
 const compareItem: NavItem = { href: "/compare", label: "Compare", icon: "git-compare" };
 
-export default function Sidebar({ compareEnabled = false }: { compareEnabled?: boolean } = {}) {
+// Shown only when the server passes `showWeekly` (WEEKLY_REVIEW=1).
+const weeklyItem: NavItem = { href: "/weekly", label: "Weekly review", icon: "calendar-days" };
+
+export default function Sidebar({
+  showWeekly = false,
+  compareEnabled = false,
+}: { showWeekly?: boolean; compareEnabled?: boolean } = {}) {
   const items = compareEnabled ? [...nav, compareItem] : nav;
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -57,7 +63,7 @@ export default function Sidebar({ compareEnabled = false }: { compareEnabled?: b
           );
         })}
         <div className="sb-group-label">Intelligence</div>
-        {secondary.map((n) => {
+        {(showWeekly ? [weeklyItem, ...secondary] : secondary).map((n) => {
           const Icon = NAV_ICONS[n.icon];
           return (
             <Link
