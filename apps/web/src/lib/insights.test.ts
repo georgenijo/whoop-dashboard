@@ -13,6 +13,8 @@ vi.mock("@anthropic-ai/sdk", () => ({
     constructor(options: unknown) { sdk.options(options); }
   },
 }));
+const nextServer = vi.hoisted(() => ({ after: vi.fn() }));
+vi.mock("next/server", () => ({ after: nextServer.after }));
 const catalog = vi.hoisted(() => ({ list: vi.fn() }));
 vi.mock("@/lib/coach/anthropic-models", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/coach/anthropic-models")>();
@@ -35,7 +37,16 @@ const defaultCatalog = [
 import { openWrite } from "./db/connection";
 import { getLatestInsight, saveInsight } from "./db/summary";
 import { getGenerationFailure } from "./db/ai-generation";
-import { acquireInsightRegenerationLock, getInsightStatus, insightToday, regenerateInsight } from "./insights";
+import {
+  INSIGHT_PREGENERATE_DELAY_MS,
+  acquireInsightRegenerationLock,
+  getInsightStatus,
+  insightToday,
+  pregenerateInsight,
+  regenerateInsight,
+  releaseDetachedLeases,
+  scheduleInsightPregeneration,
+} from "./insights";
 import { titleChatThread } from "./coach/persistence";
 
 let root: string;
@@ -299,6 +310,79 @@ describe("insight reliability", () => {
     });
     expect(sdk.create.mock.calls[0][0]).not.toHaveProperty("thinking");
     expect(getLatestInsight(2)?.insight).toBe("Direct advice");
+  });
+});
+
+describe("insight pregeneration after new Whoop data", () => {
+  beforeEach(() => {
+    vi.stubEnv("ANTHROPIC_API_KEY", "env-fixture-key");
+    nextServer.after.mockReset();
+  });
+
+  it("writes the brief once new data lands and skips when it is already current", async () => {
+    bootstrap();
+    sdk.create.mockResolvedValue({ content: [{ type: "text", text: "Pre-written brief" }] });
+    expect(await pregenerateInsight(2)).toBe(true);
+    expect(sdk.options).toHaveBeenCalledWith(expect.objectContaining({ apiKey: "env-fixture-key" }));
+    expect(getLatestInsight(2)?.insight).toBe("Pre-written brief");
+    expect(getInsightStatus(2, true)).toMatchObject({ isStale: false, isRegenerating: false });
+
+    // A page load now finds a current brief and has nothing to wait on.
+    expect(await pageLoad()).toBeNull();
+    expect(await pregenerateInsight(2)).toBe(false);
+    expect(sdk.create).toHaveBeenCalledTimes(1);
+
+    // A later recovery update makes it stale again, so the next webhook rewrites it.
+    vi.setSystemTime(new Date("2026-11-10T04:00:00Z"));
+    sql((db) => db.prepare("UPDATE recovery SET raw = ? WHERE user_id = 2")
+      .run(JSON.stringify({ updated_at: "2026-11-10T03:59:00Z" })));
+    expect(getInsightStatus(2, true).isStale).toBe(true);
+    sdk.create.mockResolvedValue({ content: [{ type: "text", text: "Updated brief" }] });
+    expect(await pregenerateInsight(2)).toBe(true);
+    expect(getLatestInsight(2)?.insight).toBe("Updated brief");
+  });
+
+  it("yields to a generation already in flight and honors the failure backoff", async () => {
+    bootstrap();
+    const held = acquireInsightRegenerationLock(getInsightStatus(2, true), "env-fixture-key")!;
+    expect(held).not.toBeNull();
+    expect(await pregenerateInsight(2)).toBe(false);
+    sdk.create.mockRejectedValue(new Error("provider unavailable"));
+    await regenerateInsight(2, "env-fixture-key", held);
+    expect(await pregenerateInsight(2)).toBe(false);
+    expect(sdk.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases a detached pass's lease when the process exits mid-generation", async () => {
+    bootstrap();
+    let finish: (value: unknown) => void = () => {};
+    sdk.create.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const run = pregenerateInsight(2);
+    await vi.waitFor(() => expect(sdk.create).toHaveBeenCalledTimes(1));
+    expect(getInsightStatus(2, true).isRegenerating).toBe(true);
+    // Simulates the exit hook firing on a graceful restart.
+    releaseDetachedLeases();
+    expect(getInsightStatus(2, true)).toMatchObject({ isStale: true, isRegenerating: false });
+    finish({ content: [{ type: "text", text: "Late" }] });
+    await run;
+  });
+
+  it("waits for the webhook burst before generating, outside after() so restarts never wait on it", async () => {
+    bootstrap();
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout"] });
+    vi.setSystemTime(new Date("2026-11-10T03:30:00Z"));
+    sdk.create.mockResolvedValue({ content: [{ type: "text", text: "Debounced brief" }] });
+    scheduleInsightPregeneration(2);
+    scheduleInsightPregeneration(2);
+    expect(nextServer.after).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(INSIGHT_PREGENERATE_DELAY_MS - 1);
+    expect(sdk.create).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    // Started exactly at the deadline, not on a later tick.
+    expect(sdk.create).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(getLatestInsight(2)?.insight).toBe("Debounced brief"));
+    expect(sdk.create).toHaveBeenCalledTimes(1);
+    expect(getInsightStatus(2, true)).toMatchObject({ isStale: false, isRegenerating: false });
   });
 });
 
