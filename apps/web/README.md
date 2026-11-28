@@ -116,6 +116,23 @@ reads run.
 | Flag | Effect when `1` |
 |---|---|
 | `MORNING_BRIEF` | Adds a "Today" morning-brief card to the top of the Overview (`/`): readiness (recovery score, zone, vs the prior 7-day average), last night's sleep (hours vs need, performance, bed → wake), yesterday's strain and workouts, at most one "watch out" (illness signal from `lib/analytics/illness.ts`, else overtraining from `lib/analytics/ots.ts`), and one fixed-rule suggestion. Pure rules in `src/lib/analytics/morningBrief.ts`; reads via `readOverviewMorningBriefInputs` in `src/lib/db/morning-brief.ts` (existing user-scoped range readers, 30-day look-back). No AI, no network. If today's recovery is not scored yet it shows the latest scored day and says so; stale data shows the same "Last synced … · N days ago" banner as `/strain`. |
+Server-side env flags, off by default, read per request.
+
+### `RECORDS_PAGE=1` — Personal Records page (`/records`)
+
+- **Off (default, any value other than `1`):** `/records` returns 404 before
+  any auth or DB read, no Sidebar or BottomNav entry renders, and no other
+  page changes.
+- **On:** adds "Records" to the Sidebar's Dashboard group and the BottomNav
+  "More" drawer. The page is plain server-rendered markup (no client JS). For
+  best HRV, lowest resting HR, best recovery, highest day strain, longest
+  sleep (time asleep), best sleep performance, longest workout and most steps
+  it shows the standing record and its date, how it compares with the median
+  of the user's last 90 days, the previous three records it replaced, and the
+  days since it was last set or matched — plus the existing streak records.
+  Reads are the user's own rows only (`getRecordSeries` in
+  `src/lib/db/prs.ts`); the history logic is pure
+  (`src/lib/analytics/records.ts`). No tables, migrations or network calls.
 
 ## Design tokens
 

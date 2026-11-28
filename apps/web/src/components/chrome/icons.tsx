@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Settings,
   Sparkles,
+  Trophy,
   type LucideIcon,
 } from "lucide-react";
 
@@ -35,4 +36,5 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   gauge: Gauge,
   "calendar-days": CalendarDays,
   "git-compare": GitCompareArrows,
+  trophy: Trophy,
 };

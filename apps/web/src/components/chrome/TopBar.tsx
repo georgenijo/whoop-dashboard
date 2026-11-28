@@ -27,6 +27,7 @@ const TITLES: Record<string, string> = {
   "/stats": "Stats",
   "/weekly": "Weekly review",
   "/compare": "Compare periods",
+  "/records": "Records",
   "/coach": "Coach",
   "/plans": "Plans",
   "/logs": "Logs",

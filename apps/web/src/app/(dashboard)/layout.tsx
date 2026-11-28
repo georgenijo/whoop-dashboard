@@ -13,6 +13,7 @@ import { addRouteLog } from "@/lib/db";
 import { requireAuthOrSignin } from "@/lib/auth";
 import { isWeeklyReviewEnabled } from "@/lib/weekly-flag";
 import { isPeriodCompareEnabled } from "@/lib/period-compare-flag";
+import { isRecordsPageEnabled } from "@/lib/records-flag";
 import "../globals.css";
 import "../../styles/quiet-instrument.css";
 
@@ -94,6 +95,7 @@ export default async function RootLayout({
 
   const showWeekly = isWeeklyReviewEnabled();
   const compareEnabled = isPeriodCompareEnabled();
+  const showRecords = isRecordsPageEnabled();
 
   const route = requestHeaders.get("x-whoop-route-log-route");
   const startedAt = requestHeaders.get("x-whoop-route-log-started-at");
@@ -129,7 +131,7 @@ export default async function RootLayout({
         <WebVitalsReporter />
         <div className="app">
           <Suspense fallback={null}>
-            <Sidebar showWeekly={showWeekly} compareEnabled={compareEnabled} />
+            <Sidebar showWeekly={showWeekly} compareEnabled={compareEnabled} showRecords={showRecords} />
           </Suspense>
           <main className="main">
             <Suspense fallback={null}>
@@ -141,7 +143,7 @@ export default async function RootLayout({
           </main>
         </div>
         <Suspense fallback={null}>
-          <BottomNav showWeekly={showWeekly} compareEnabled={compareEnabled} />
+          <BottomNav showWeekly={showWeekly} compareEnabled={compareEnabled} showRecords={showRecords} />
         </Suspense>
       </body>
     </html>

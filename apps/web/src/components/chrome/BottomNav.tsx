@@ -30,11 +30,16 @@ const weeklyItem: Item = { href: "/weekly", label: "Weekly review", icon: "calen
 // Default-off /compare entry (PERIOD_COMPARE=1); the server layout decides.
 const compareItem: Item = { href: "/compare", label: "Compare", icon: "git-compare" };
 
+// Added to the "More" drawer only when RECORDS_PAGE=1 (the layout passes `showRecords`).
+const RECORDS_ITEM: Item = { href: "/records", label: "Records", icon: "trophy" };
+
 export default function BottomNav({
   showWeekly = false,
   compareEnabled = false,
-}: { showWeekly?: boolean; compareEnabled?: boolean } = {}) {
+  showRecords = false,
+}: { showWeekly?: boolean; compareEnabled?: boolean; showRecords?: boolean } = {}) {
   const drawerItems = [
+    ...(showRecords ? [RECORDS_ITEM] : []),
     ...(showWeekly ? [weeklyItem] : []),
     ...(compareEnabled ? [compareItem] : []),
     ...more,

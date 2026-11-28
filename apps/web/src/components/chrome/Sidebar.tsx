@@ -15,6 +15,9 @@ const nav: NavItem[] = [
   { href: "/stats", label: "Stats", icon: "bar-chart-3" },
 ];
 
+// Added only when RECORDS_PAGE=1 (the layout passes `showRecords`).
+const RECORDS_ITEM: NavItem = { href: "/records", label: "Records", icon: "trophy" };
+
 const secondary: NavItem[] = [
   { href: "/coach", label: "Coach", icon: "sparkles" },
   { href: "/plans", label: "Plans", icon: "clipboard-list" },
@@ -32,8 +35,13 @@ const weeklyItem: NavItem = { href: "/weekly", label: "Weekly review", icon: "ca
 export default function Sidebar({
   showWeekly = false,
   compareEnabled = false,
-}: { showWeekly?: boolean; compareEnabled?: boolean } = {}) {
-  const items = compareEnabled ? [...nav, compareItem] : nav;
+  showRecords = false,
+}: { showWeekly?: boolean; compareEnabled?: boolean; showRecords?: boolean } = {}) {
+  const items = [
+    ...nav,
+    ...(compareEnabled ? [compareItem] : []),
+    ...(showRecords ? [RECORDS_ITEM] : []),
+  ];
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const range = searchParams.get("range");
