@@ -333,7 +333,7 @@ describe("insight pregeneration after new Whoop data", () => {
 
     // A later recovery update makes it stale again, so the next webhook rewrites it.
     vi.setSystemTime(new Date("2026-11-10T04:00:00Z"));
-    sql((db) => db.prepare("UPDATE recovery SET raw = ? WHERE user_id = 2")
+    sql((db) => db.prepare("UPDATE recovery SET recovery_score = 64, raw = ? WHERE user_id = 2")
       .run(JSON.stringify({ updated_at: "2026-11-10T03:59:00Z" })));
     expect(getInsightStatus(2, true).isStale).toBe(true);
     sdk.create.mockResolvedValue({ content: [{ type: "text", text: "Updated brief" }] });
@@ -341,21 +341,46 @@ describe("insight pregeneration after new Whoop data", () => {
     expect(getLatestInsight(2)?.insight).toBe("Updated brief");
   });
 
-  it("rewrites once when recovery commits while the sleep-only brief is being written", async () => {
+  it("rewrites once when a recovery older than the brief commits while it is being written", async () => {
     bootstrap();
+    sql((db) => db.prepare("INSERT INTO sleep (user_id, sleep_id, date, raw) VALUES (2, 's-1', '2026-11-10', ?)")
+      .run(JSON.stringify({ updated_at: "2026-11-10T03:05:00Z" })));
     sdk.create
       .mockImplementationOnce(async () => {
-        // Recovery for the same night lands mid-generation, with a Whoop
-        // timestamp older than the brief's eventual created_at.
-        sql((db) => db.prepare("UPDATE recovery SET raw = ? WHERE user_id = 2")
-          .run(JSON.stringify({ updated_at: "2026-11-10T03:29:00Z" })));
+        // A previously absent recovery lands mid-generation. Its Whoop
+        // timestamp is older than the sleep's, so the data watermark does
+        // not move; only the brief's recorded inputs can tell.
+        sql((db) => db.prepare("INSERT INTO recovery (user_id, date, recovery_score, raw) VALUES (2, '2026-11-11', 81, ?)")
+          .run(JSON.stringify({ updated_at: "2026-11-10T03:03:00Z" })));
         return { content: [{ type: "text", text: "Sleep-only brief" }] };
       })
       .mockResolvedValueOnce({ content: [{ type: "text", text: "Brief with recovery" }] });
     expect(await pregenerateInsight(2)).toBe(true);
     expect(sdk.create).toHaveBeenCalledTimes(2);
+    expect(sdk.create.mock.calls[1][0].messages[0].content).toContain("Recovery=81%");
     expect(getLatestInsight(2)?.insight).toBe("Brief with recovery");
     expect(getInsightStatus(2, true)).toMatchObject({ isStale: false, isRegenerating: false });
+  });
+
+  it("keeps an incomplete brief stale when the follow-up fails, then retries after backoff", async () => {
+    bootstrap();
+    sdk.create
+      .mockImplementationOnce(async () => {
+        sql((db) => db.prepare("UPDATE recovery SET recovery_score = 35 WHERE user_id = 2").run());
+        return { content: [{ type: "text", text: "Pre-correction brief" }] };
+      })
+      .mockRejectedValueOnce({ status: 503 });
+    await pregenerateInsight(2);
+    expect(sdk.create).toHaveBeenCalledTimes(2);
+    expect(getLatestInsight(2)?.insight).toBe("Pre-correction brief");
+    // The correction kept its Whoop timestamp, yet the brief is still stale.
+    expect(getInsightStatus(2, true)).toMatchObject({ isStale: true, errorClass: "provider_error" });
+    expect(await pregenerateInsight(2)).toBe(false);
+    vi.setSystemTime(Date.now() + 60_000);
+    sdk.create.mockResolvedValueOnce({ content: [{ type: "text", text: "Corrected brief" }] });
+    expect(await pregenerateInsight(2)).toBe(true);
+    expect(getLatestInsight(2)?.insight).toBe("Corrected brief");
+    expect(getInsightStatus(2, true).isStale).toBe(false);
   });
 
   it("yields to a generation already in flight and honors the failure backoff", async () => {

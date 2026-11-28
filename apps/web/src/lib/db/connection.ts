@@ -645,6 +645,11 @@ function migrateSchema(db: DB): void {
         db!.exec("DROP TABLE insights; ALTER TABLE insights_scoped RENAME TO insights");
       }).immediate();
     }
+    // #674: hash of the prompt context a brief was written from, so staleness
+    // tracks the brief's actual inputs rather than provider timestamps.
+    if (!hasColumn(db, "insights", "inputs_hash")) {
+      db.exec("ALTER TABLE insights ADD COLUMN inputs_hash TEXT");
+    }
     db.exec(`
       CREATE TABLE IF NOT EXISTS ai_generation_state (
         user_id INTEGER NOT NULL REFERENCES users(id),

@@ -1,4 +1,5 @@
 import "server-only";
+import { createHash } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { after } from "next/server";
 import {
@@ -73,11 +74,26 @@ function parseTime(value: string | null): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
-function needsRegeneration(insight: InsightRow | null, latestDataAt: string | null, today: string): boolean {
+/** sha256 of the exact prompt context, so staleness tracks the brief's inputs. */
+export function insightInputsHash(context: string): string {
+  return createHash("sha256").update(context).digest("hex");
+}
+
+function needsRegeneration(
+  userId: number, insight: InsightRow | null, latestDataAt: string | null, today: string,
+): boolean {
   if (!latestDataAt) return false;
   if (!insight) return true;
   if (insight.date !== today) return true;
 
+  // A brief records what it was written from. Any new, corrected, or deleted
+  // row inside the window changes the context, even when its provider
+  // timestamp predates the brief (e.g. a recovery that landed mid-generation).
+  if (insight.inputs_hash) {
+    return insightInputsHash(getHealthContext(userId, INSIGHT_DAYS)) !== insight.inputs_hash;
+  }
+
+  // Legacy rows written before inputs_hash existed.
   const insightCreatedMs = parseTime(insight.created_at);
   const latestDataMs = parseTime(latestDataAt);
   if (insightCreatedMs === null || latestDataMs === null) return true;
@@ -94,7 +110,7 @@ export function getInsightStatus(userId: number, hasData: boolean): InsightStatu
     userId,
     today,
     insight,
-    isStale: hasData && needsRegeneration(insight, latestDataAt, today),
+    isStale: hasData && needsRegeneration(userId, insight, latestDataAt, today),
     isRegenerating: isSettingLockActive(generationLockKey(userId, "insight")),
     errorClass: failure?.error_class ?? null,
     nextRetryAt: failure ? retryAt(failure) : null,
@@ -127,7 +143,7 @@ export function scheduleInsightRegeneration(userId: number, hasData: boolean): I
   return { status, refreshing: status.isRegenerating || lock !== null };
 }
 
-function claimInsightRegeneration(userId: number, hasData: boolean, force = false): {
+function claimInsightRegeneration(userId: number, hasData: boolean): {
   status: InsightStatus;
   lock: SettingLock | null;
   apiKey: string | null;
@@ -139,7 +155,7 @@ function claimInsightRegeneration(userId: number, hasData: boolean, force = fals
   } catch {
     apiKey = null;
   }
-  const lock = acquireInsightRegenerationLock(force ? { ...before, isStale: true } : before, apiKey);
+  const lock = acquireInsightRegenerationLock(before, apiKey);
   return { status: getInsightStatus(userId, hasData), lock, apiKey };
 }
 
@@ -156,21 +172,17 @@ export const INSIGHT_PREGENERATE_DELAY_MS = 20_000;
  * load that already holds the lock wins and this is a no-op.
  */
 export async function pregenerateInsight(userId: number): Promise<boolean> {
-  let generated = false;
-  // One follow-up pass: data committed while the model was writing (e.g. a
-  // recovery that lands after the prompt was built) is older than the saved
-  // brief's created_at, so the staleness check alone would treat the brief as
-  // current. Comparing the data watermark before and after catches it.
+  let attempted = false;
+  // A second pass covers data committed while the first was writing: the
+  // saved brief's inputs_hash then no longer matches, so it is still stale.
+  // If that pass fails, the brief stays stale and callers retry after backoff.
   for (let pass = 0; pass < 2; pass++) {
-    const dataBefore = getLatestWhoopDataTimestamp(userId);
-    // The retry skips the created_at staleness gate, which is what misses this case.
-    const { lock, apiKey } = claimInsightRegeneration(userId, true, pass > 0);
-    if (lock === null || apiKey === null) return generated;
+    const { lock, apiKey } = claimInsightRegeneration(userId, true);
+    if (lock === null || apiKey === null) return attempted;
     await regenerateInsight(userId, apiKey, lock);
-    generated = true;
-    if (getLatestWhoopDataTimestamp(userId) === dataBefore) return generated;
+    attempted = true;
   }
-  return generated;
+  return attempted;
 }
 
 /**
@@ -224,7 +236,7 @@ export async function regenerateInsight(
       .trim();
 
     if (!insight) throw new Error("Empty insight response");
-    saveInsight(userId, date, insight);
+    saveInsight(userId, date, insight, insightInputsHash(context));
     clearGenerationFailure(userId, "insight");
   } catch (err) {
     recordGenerationFailure(userId, "insight", classifyGenerationError(err), apiKey);
