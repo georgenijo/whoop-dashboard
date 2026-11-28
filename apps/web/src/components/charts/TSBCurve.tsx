@@ -12,14 +12,13 @@ import {
   YAxis,
 } from "recharts";
 import type { CycleRow } from "@/lib/db";
+import { computeTrainingLoad } from "@/lib/analytics/trainingLoad";
 
 const COLOR_CTL = "#00aaff";
 const COLOR_ATL = "#ffaa00";
 const COLOR_TSB_FRESH = "#00d4aa";
 const COLOR_TSB_FATIGUE = "#ff3b3b";
 
-const CTL_SPAN = 42;
-const ATL_SPAN = 7;
 type ChartRow = {
   date: string;
   shortDate: string;
@@ -32,19 +31,7 @@ type ChartRow = {
 };
 
 function computeTSB(rows: CycleRow[], displayStart: string): ChartRow[] {
-  if (rows.length === 0) return [];
-  const alphaCtl = 2 / (CTL_SPAN + 1);
-  const alphaAtl = 2 / (ATL_SPAN + 1);
-  const seed = rows[0].strain ?? 0;
-  let ctl = seed;
-  let atl = seed;
-  const raw: { date: string; ctl: number; atl: number; tsb: number }[] = [];
-  for (const r of rows) {
-    const s = r.strain ?? 0;
-    ctl = alphaCtl * s + (1 - alphaCtl) * ctl;
-    atl = alphaAtl * s + (1 - alphaAtl) * atl;
-    raw.push({ date: r.date, ctl, atl, tsb: ctl - atl });
-  }
+  const raw = computeTrainingLoad(rows);
 
   const visible = raw.filter((r) => r.date >= displayStart);
   return visible.map((r, i, arr) => {

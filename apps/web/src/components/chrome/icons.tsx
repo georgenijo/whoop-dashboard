@@ -1,11 +1,13 @@
 import {
   Activity,
   BarChart3,
+  CalendarDays,
   Bell,
   ClipboardList,
   Dumbbell,
   Flame,
   Gauge,
+  GitCompareArrows,
   LayoutDashboard,
   List,
   Menu,
@@ -31,4 +33,6 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   bell: Bell,
   menu: Menu,
   gauge: Gauge,
+  "calendar-days": CalendarDays,
+  "git-compare": GitCompareArrows,
 };

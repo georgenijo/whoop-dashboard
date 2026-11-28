@@ -1,0 +1,76 @@
+/* Weekly review (/weekly, WEEKLY_REVIEW=1). Imported only by that page.
+   Every rule is scoped to `.wr-*` classes or `body:has(.wr-root)`, so loading
+   this sheet changes nothing on any other page. */
+
+.wr-root { display: flex; flex-direction: column; gap: 18px; max-width: 980px; }
+.wr-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.wr-title {
+  font-family: var(--font-display); font-size: 22px; font-weight: 600;
+  letter-spacing: -0.015em; color: var(--fg-0); margin: 0;
+}
+.wr-range { font-family: var(--font-mono); font-size: 11px; color: var(--fg-3); margin-top: 4px; }
+.wr-print {
+  font: inherit; font-size: 12px; color: var(--fg-1);
+  padding: 6px 14px; border-radius: 999px; cursor: pointer;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+}
+.wr-print:hover { border-color: rgba(255,255,255,0.2); }
+.wr-card .card-title { margin-bottom: 12px; }
+.wr-note { color: var(--fg-2); font-size: 13px; line-height: 1.5; margin: 0; }
+.wr-notice {
+  padding: 10px 14px; border-radius: 12px;
+  border: 1px dashed rgba(255,255,255,0.14); background: rgba(255,255,255,0.02);
+}
+.wr-highlights { margin: 0; padding-left: 18px; display: grid; gap: 6px; color: var(--fg-1); font-size: 14px; line-height: 1.45; }
+
+.wr-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.wr-table th, .wr-table td {
+  text-align: left; padding: 9px 8px; font-size: 13px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.wr-table thead th {
+  border-top: 0; font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.12em; color: var(--fg-3);
+}
+.wr-table tbody th { font-weight: 500; color: var(--fg-1); }
+.wr-table td { color: var(--fg-0); font-family: var(--font-mono); }
+.wr-n { color: var(--fg-3); font-size: 11px; }
+.wr-delta { color: var(--fg-3); }
+.wr-delta.good { color: #00d4aa; }
+.wr-delta.bad { color: #ff6b6b; }
+.wr-delta.neutral { color: var(--fg-2); }
+
+.wr-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+.wr-dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: 13px; }
+.wr-dl dt { color: var(--fg-2); }
+.wr-dl dd { margin: 0; color: var(--fg-0); font-family: var(--font-mono); text-align: right; }
+
+@media (max-width: 760px) {
+  .wr-grid { grid-template-columns: minmax(0, 1fr); }
+  .wr-table th, .wr-table td { padding: 8px 4px; font-size: 12px; }
+}
+
+@media print {
+  body:has(.wr-root) .sidebar,
+  body:has(.wr-root) .topbar,
+  body:has(.wr-root) .bottom-nav,
+  body:has(.wr-root) .bn-drawer,
+  body:has(.wr-root) .bn-drawer-backdrop,
+  .wr-print { display: none !important; }
+  body:has(.wr-root) { background: #fff !important; color: #000 !important; }
+  body:has(.wr-root) .app,
+  body:has(.wr-root) .main,
+  body:has(.wr-root) .content { display: block !important; padding: 0 !important; margin: 0 !important; background: #fff !important; }
+  .wr-root { max-width: none; gap: 10px; color: #000; }
+  .wr-root .card {
+    background: none !important; border: 1px solid #bbb !important;
+    break-inside: avoid; padding: 10px 12px;
+  }
+  .wr-title, .wr-root .card-title, .wr-table td, .wr-table tbody th, .wr-dl dd, .wr-highlights { color: #000 !important; }
+  .wr-range, .wr-note, .wr-n, .wr-dl dt, .wr-table thead th, .wr-root .card-sub { color: #444 !important; }
+  .wr-delta.good { color: #0a6b4f !important; }
+  .wr-delta.bad { color: #a11 !important; }
+  .wr-delta.neutral, .wr-delta { color: #444; }
+  .wr-table th, .wr-table td { border-top-color: #ddd; }
+  .wr-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+}

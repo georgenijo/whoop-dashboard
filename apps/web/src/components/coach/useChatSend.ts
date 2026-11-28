@@ -64,6 +64,22 @@ export type ChatMessage = {
   attachments: ChatAttachment[];
 };
 
+/** Issue #608 — mirrors the server's `ChatThreadContext`. */
+export type ThreadContext = {
+  tokens: number;
+  approximate: boolean;
+};
+
+/** Accepts only a well-formed, positive figure; anything else hides the meter. */
+export function parseThreadContext(value: unknown): ThreadContext | null {
+  if (!isRecord(value)) return null;
+  const { tokens, approximate } = value;
+  if (typeof tokens !== "number" || !Number.isFinite(tokens) || tokens <= 0) {
+    return null;
+  }
+  return { tokens, approximate: approximate === true };
+}
+
 export type ComposerMessage = {
   /**
    * Stable React key: `m:<db id>` for persisted rows, `local:<n>` for an
@@ -89,13 +105,16 @@ type FailedTurn = { text: string; images: PendingChatImage[] };
 
 type UseChatSendParams = {
   initialMessages: ChatMessage[];
+  initialContext?: ThreadContext | null;
   threadId: number;
   setThreadId: Dispatch<SetStateAction<number>>;
   refreshThreads: () => Promise<unknown>;
   setBadApiKey?: (value: boolean) => void;
 };
 
-type SendParams = Omit<UseChatSendParams, "initialMessages"> & {
+type SendParams = Omit<UseChatSendParams, "initialMessages" | "initialContext"> & {
+  /** A completed reply reported the thread's new context size (issue #608). */
+  onContext: (threadId: number, context: ThreadContext) => void;
   // Clears the client router cache once a turn has settled (see
   // `sendChatMessage`). Injected so the module-level sender stays hook-free.
   refreshRouter: () => void;
@@ -149,6 +168,7 @@ type StreamHandlers = {
     reply: string,
     workLog: CoachWorkLog | null,
     presentationBlocks: CoachPresentationBlock[],
+    context: ThreadContext | null,
   ) => void;
 };
 
@@ -504,6 +524,34 @@ async function refreshPersistedMessages(
   }
 }
 
+/**
+ * Thread switch: the transcript plus its context-window figure in one
+ * request (`include=context`, issue #608).
+ */
+async function loadThread(
+  threadId: number,
+): Promise<{ messages: ComposerMessage[]; context: ThreadContext | null } | null> {
+  try {
+    const response = await fetch(
+      `/api/chat/history?thread_id=${encodeURIComponent(threadId)}&include=context`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) return null;
+    const body = (await response.json()) as unknown;
+    // A bare array is the pre-#608 body shape; treat it as "no figure".
+    if (Array.isArray(body)) {
+      return { messages: toComposerMessages(body as ChatMessage[]), context: null };
+    }
+    if (!isRecord(body) || !Array.isArray(body.messages)) return null;
+    return {
+      messages: toComposerMessages(body.messages as ChatMessage[]),
+      context: parseThreadContext(body.context),
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function responseError(response: Response): Promise<CoachRequestError> {
   const body = await response.text();
   try {
@@ -663,6 +711,7 @@ async function readChatStream(
         typeof payload.reply === "string" ? payload.reply : "",
         parseCoachWorkLog(payload.work_log),
         parseCoachPresentationBlocks(payload.presentation_blocks),
+        parseThreadContext(payload.context),
       );
     } else if (event === "error") {
       throw new CoachRequestError(
@@ -788,7 +837,8 @@ async function sendChatMessage(params: SendParams) {
         endAssistantTool(params.setMessages, assistantIndex, event),
       progressTool: (event) =>
         progressAssistantTool(params.setMessages, assistantIndex, event),
-      done: (reply, workLog, presentationBlocks) => {
+      done: (reply, workLog, presentationBlocks, context) => {
+        if (context && isCurrent()) params.onContext(responseThreadId, context);
         finishAssistant(
           params.setMessages,
           assistantIndex,
@@ -876,6 +926,7 @@ async function sendChatMessage(params: SendParams) {
 
 export function useChatSend({
   initialMessages,
+  initialContext = null,
   threadId,
   setThreadId,
   refreshThreads,
@@ -897,6 +948,19 @@ export function useChatSend({
   const abortRef = useRef<AbortController | null>(null);
   const turnRef = useRef(0);
   const threadCacheRef = useRef(new Map<number, ComposerMessage[]>());
+  // Issue #608 — context-window figure for the open thread. Null hides the
+  // meter: a new thread, or one with no reply recorded since the column
+  // existed. Per-thread cache so switching back paints it instantly.
+  const [context, setContext] = useState<ThreadContext | null>(initialContext);
+  const contextCacheRef = useRef(new Map<number, ThreadContext | null>());
+  const threadIdRef = useRef(threadId);
+  useEffect(() => {
+    threadIdRef.current = threadId;
+  }, [threadId]);
+  const handleContext = useCallback((forThread: number, next: ThreadContext) => {
+    contextCacheRef.current.set(forThread, next);
+    if (threadIdRef.current === forThread) setContext(next);
+  }, []);
   // Sending waits for the selected thread's history, so a new turn is never
   // appended to (or overwritten by) a transcript that is still loading.
   const threadLoadingRef = useRef(false);
@@ -986,6 +1050,9 @@ export function useChatSend({
     if (previousThreadId !== null && !abortRef.current) {
       threadCacheRef.current.set(previousThreadId, messagesRef.current);
     }
+    if (previousThreadId === null) {
+      contextCacheRef.current.set(threadId, initialContext);
+    }
     turnRef.current += 1;
     const load = turnRef.current;
     abortRef.current?.abort();
@@ -1006,21 +1073,24 @@ export function useChatSend({
     }
     const cached = threadCacheRef.current.get(threadId);
     setMessages(cached ?? []);
+    setContext(contextCacheRef.current.get(threadId) ?? null);
     threadLoadingRef.current = true;
     setThreadLoad(cached ? "idle" : "loading");
-    void refreshPersistedMessages(threadId).then((loaded) => {
+    void loadThread(threadId).then((loaded) => {
       // A later switch, or unmount, owns the transcript now.
       if (turnRef.current !== load) return;
       threadLoadingRef.current = false;
       if (loaded) {
-        threadCacheRef.current.set(threadId, loaded);
-        setMessages(loaded);
+        threadCacheRef.current.set(threadId, loaded.messages);
+        contextCacheRef.current.set(threadId, loaded.context);
+        setMessages(loaded.messages);
+        setContext(loaded.context);
         setThreadLoad("idle");
       } else {
         setThreadLoad(cached ? "idle" : "error");
       }
     });
-  }, [initialMessages, setPendingImages, threadId]);
+  }, [initialContext, initialMessages, setPendingImages, threadId]);
 
   useEffect(
     () => () => {
@@ -1058,10 +1128,12 @@ export function useChatSend({
         refreshRouter,
         setBadApiKey,
         onTurnFailed: rememberFailedTurn,
+        onContext: handleContext,
       });
     },
     [
       getPendingImages,
+      handleContext,
       messages,
       rememberFailedTurn,
       pendingImages,
@@ -1167,10 +1239,12 @@ export function useChatSend({
       refreshRouter,
       setBadApiKey,
       onTurnFailed: rememberFailedTurn,
+      onContext: handleContext,
       retry: true,
     });
   }, [
     getPendingImages,
+    handleContext,
     messages,
     refreshRouter,
     refreshThreads,
@@ -1199,6 +1273,8 @@ export function useChatSend({
     retry,
     /** `loading`: fetching a just-selected thread; `error`: that fetch failed. */
     threadLoad,
+    /** Context-window figure for the open thread; null hides the meter. */
+    context,
     progress: activeMessage?.workLog ?? null,
     progressLabel: workPhaseLabel(
       activeMessage?.workLog,
