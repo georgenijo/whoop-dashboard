@@ -236,16 +236,19 @@ The shared tool layer contains:
 - `query_strain`
 - `query_workouts`
 - `query_naps`
+- `query_steps`
 - `query_journal`
 - `query_daily_snapshot`
 - `query_workout_plans`
 - `save_workout_plan`
 - `trigger_whoop_sync`
 
-The Anthropic loop can use the complete set. Cursor runs in a throwaway
-per-turn workspace through a bundled stdio MCP server; it receives the scoped
-query and plan tools plus `view_chat_image`, while manual sync remains outside
-the Cursor MCP surface.
+The Anthropic loop calls these in process. Cursor reaches the same set through
+the bundled stdio MCP server in `apps/web/src/coach-mcp/` — including the
+`save_workout_plan` and `trigger_whoop_sync` writes — plus `view_chat_image`.
+With `COACH_CURSOR_TRANSPORT=acp` (the production setting) Cursor turns run on
+persistent ACP sessions isolated per user, thread, credential and prompt; the
+legacy transport (code default) runs each turn in a throwaway workspace.
 
 All data access is bound to the authenticated user. The Anthropic loop is
 capped at eight tool iterations and 16,384 output tokens. Personal encrypted
@@ -362,7 +365,7 @@ in [`docs/operations/frame-morning-brief.md`](docs/operations/frame-morning-brie
   Oracle service definitions remain available only in Git history.
 - `infra/terraform/` is the retired Oracle baseline. Do not apply it to create
   or modify the current production environment.
-- The rebuild documents under `docs/rebuild/` describe historical migration
+- The rebuild documents under `docs/archive/rebuild/` describe historical migration
   work, not current implementation guidance.
 
 ## Project guidance

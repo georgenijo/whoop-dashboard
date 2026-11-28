@@ -24,11 +24,26 @@ const more: Item[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
+// Shown only when the server passes `showWeekly` (WEEKLY_REVIEW=1).
+const weeklyItem: Item = { href: "/weekly", label: "Weekly review", icon: "calendar-days" };
+
+// Default-off /compare entry (PERIOD_COMPARE=1); the server layout decides.
+const compareItem: Item = { href: "/compare", label: "Compare", icon: "git-compare" };
+
 // Added to the "More" drawer only when RECORDS_PAGE=1 (the layout passes `showRecords`).
 const RECORDS_ITEM: Item = { href: "/records", label: "Records", icon: "trophy" };
 
-export default function BottomNav({ showRecords = false }: { showRecords?: boolean }) {
-  const moreItems = showRecords ? [RECORDS_ITEM, ...more] : more;
+export default function BottomNav({
+  showWeekly = false,
+  compareEnabled = false,
+  showRecords = false,
+}: { showWeekly?: boolean; compareEnabled?: boolean; showRecords?: boolean } = {}) {
+  const drawerItems = [
+    ...(showRecords ? [RECORDS_ITEM] : []),
+    ...(showWeekly ? [weeklyItem] : []),
+    ...(compareEnabled ? [compareItem] : []),
+    ...more,
+  ];
   const pathname = usePathname();
   const params = useSearchParams();
   const range = params.get("range");
@@ -44,7 +59,7 @@ export default function BottomNav({ showRecords = false }: { showRecords?: boole
   }
 
   const withRange = (h: string) => (range ? `${h}?range=${range}` : h);
-  const moreActive = moreItems.some((m) => m.href === pathname);
+  const moreActive = drawerItems.some((m) => m.href === pathname);
 
   return (
     <>
@@ -57,7 +72,7 @@ export default function BottomNav({ showRecords = false }: { showRecords?: boole
           />
           <div className="bn-drawer" role="dialog" aria-label="More navigation">
             <div className="bn-drawer-handle" />
-            {moreItems.map((m) => {
+            {drawerItems.map((m) => {
               const Icon = NAV_ICONS[m.icon];
               return (
                 <Link

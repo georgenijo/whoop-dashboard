@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { headers } from "next/headers";
 import KPIStrip from "@/components/overview/KPIStrip";
 import TrendChart from "@/components/charts/TrendChart";
@@ -5,8 +6,15 @@ import TSBCurve from "@/components/charts/TSBCurve";
 import TodayKpis from "@/components/strain/TodayKpis";
 import TodayWorkouts from "@/components/strain/TodayWorkouts";
 import FreshnessBanner from "@/components/strain/FreshnessBanner";
+import StrainTargetCard from "@/components/strain/StrainTargetCard";
+import {
+  computeStrainTarget,
+  isStrainTargetEnabled,
+  todayStrainSoFar,
+} from "@/lib/analytics/strainTarget";
 import {
   getOverviewSnapshot,
+  getRecoveryRange,
   getStrainRange,
   getTodayStrainAggregate,
   getTodayWorkouts,
@@ -45,6 +53,24 @@ export default async function StrainPage({
   const todayAgg = getTodayStrainAggregate(user.id, today);
   const todayWorkouts = getTodayWorkouts(user.id, today);
 
+  // STRAIN_TARGET=1 only: one extra user-scoped read (4 weeks of recovery for
+  // the band + illness baselines). Cycle history reuses `tsbTrend`, which
+  // always ends today and spans >= 180 days before it.
+  let strainTarget: ReactNode = null;
+  if (isStrainTargetEnabled()) {
+    const recovery = getRecoveryRange(user.id, shiftDate(today, -27), today);
+    const target = computeStrainTarget({ today, recovery, cycles: tsbTrend });
+    const soFar = todayStrainSoFar(today, tsbTrend, todayWorkouts);
+    strainTarget = (
+      <StrainTargetCard
+        target={target}
+        strainSoFar={soFar.value}
+        strainSource={soFar.source}
+        workoutCount={todayAgg.workout_count}
+      />
+    );
+  }
+
   const latestStrainDate = trend.length > 0 ? trend[trend.length - 1].date : null;
 
   return (
@@ -60,6 +86,8 @@ export default async function StrainPage({
         latestSteps={data.latestSteps}
         previousSteps={data.previousSteps}
       />
+
+      {strainTarget}
 
       <TodayKpis
         totalKilojoule={todayAgg.total_kilojoule}

@@ -86,6 +86,21 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         return summary
     }
 
-    // didReceive (tap handler) lives in #274b — the foundation PR doesn't
-    // deep-link anywhere yet.
+    // MARK: - Tap handler (#287)
+
+    /// The user tapped a notification. Pushes carrying a known `route`
+    /// (e.g. the Whoop-disconnected alert) deep-link via `PushRouter`;
+    /// anything else just opens the app.
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let userInfo = response.notification.request.content.userInfo
+        ClientLogger.shared.lifecycle("push_tapped", details: Self.payloadSummary(userInfo))
+        if let route = PushRoute(userInfo: userInfo) {
+            Task { @MainActor in PushRouter.shared.handle(route) }
+        }
+        completionHandler()
+    }
 }

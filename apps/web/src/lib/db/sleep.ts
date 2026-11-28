@@ -128,9 +128,9 @@ export function getSleepRange(
  * correct. For the Coach's `query_sleep` tool it would be data suppression:
  * the model is reasoning about what actually happened, and a second sleep
  * on one date is a real event it should see, not noise to be deduped away
- * (issue #440 review, WARN 4). Keep this the only caller of the
- * undeduped shape; anything chart- or summary-facing should use
- * `getSleepRange` instead.
+ * (issue #440 review, WARN 4). The same reasoning applies to the user data
+ * export (`/api/export`), the other caller. Anything chart- or
+ * summary-facing should use `getSleepRange` instead.
  */
 export function getSleepRangeRaw(
   userId: number,

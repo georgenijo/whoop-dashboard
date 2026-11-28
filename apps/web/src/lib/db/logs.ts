@@ -1,4 +1,5 @@
 import "server-only";
+import { evaluateCoachFailures, evaluateSyncStaleness } from "@/lib/alerts/failure-alerts";
 import { hasColumn, hasTable, openWrite, safeQuery } from "./connection";
 
 // route_logs rows are written through the shared process-wide write handle
@@ -50,6 +51,8 @@ export function addChatLog(log: Omit<ChatLog, "id"> & { user_id: number }): void
       log.details ?? null,
       log.thread_id ?? null
     );
+    // #444: cheap write-time failure detector; no-op unless COACH_FAILURE_ALERTS is set.
+    evaluateCoachFailures(db, log.user_id);
   } finally {
     db.close();
   }
@@ -170,6 +173,9 @@ export function addSyncLog(log: Omit<SyncLog, "id">): void {
       log.details ?? null,
       log.partial ? 1 : 0
     );
+    // #444: the 30-min keepalive writes here per tenant, so this doubles as
+    // the periodic tick for the no-successful-sync-in-36h check.
+    evaluateSyncStaleness(db, log.user_id);
   } finally {
     db.close();
   }
