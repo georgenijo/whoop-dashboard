@@ -16,6 +16,7 @@ import BedtimePatternsCard from "@/components/charts/BedtimePatternsCard";
 import NapTrackerCard from "@/components/charts/NapTrackerCard";
 import NapRecoveryScatter from "@/components/charts/NapRecoveryScatter";
 import DeepSleepEfficiencyCard from "@/components/charts/DeepSleepEfficiencyCard";
+import TonightSleepPlanCard from "@/components/charts/TonightSleepPlanCard";
 import { headers } from "next/headers";
 import {
   getOverviewSnapshot,
@@ -29,6 +30,11 @@ import { computeApneaSignal } from "@/lib/analytics/apnea";
 import { computeBedtimeRecoveryCorr, computeBedtimePatterns } from "@/lib/analytics/bedtime";
 import { computeNapImpact, withStartHour } from "@/lib/analytics/naps";
 import { computeDeepSleepEfficiency } from "@/lib/analytics/deepSleep";
+import {
+  computeSleepPlan,
+  isSleepPlanEnabled,
+  SLEEP_PLAN_LOOKBACK_DAYS,
+} from "@/lib/analytics/sleepPlan";
 import { msToHoursNumber } from "@/lib/format";
 import { resolveRangeWindow, shiftDate } from "@/lib/range";
 import { localToday } from "@/lib/date";
@@ -66,6 +72,11 @@ export default async function SleepPage({
     trend,
     getStrainRange(user.id, priorStrainStart, window.end),
   );
+
+  // SLEEP_PLAN=1 gates the "Tonight" card. Flag off: no extra reads, no
+  // render. It uses its own fixed lookback so the plan doesn't change with
+  // the range picker.
+  const sleepPlan = isSleepPlanEnabled() ? loadSleepPlan(user.id) : null;
 
   const durationData = trend.map((r) => ({ date: r.date, value: msToHoursNumber(r.in_bed_ms) }));
   const needData = trend.map((r) => ({ date: r.date, value: msToHoursNumber(r.sleep_need_ms) }));
@@ -148,7 +159,18 @@ export default async function SleepPage({
 
       <ApneaRiskCard rows={apneaRows} rangeLabel={rangeLabel} />
       <DeepSleepEfficiencyCard rows={deepSleepEffRows} rangeLabel={rangeLabel} />
+      {sleepPlan && <TonightSleepPlanCard plan={sleepPlan} />}
       <SleepDebtChart rows={trend} rangeLabel={rangeLabel} />
     </>
+  );
+}
+
+function loadSleepPlan(userId: number) {
+  const today = localToday();
+  const start = shiftDate(today, -(SLEEP_PLAN_LOOKBACK_DAYS - 1));
+  return computeSleepPlan(
+    getSleepRange(userId, start, today),
+    getRecoveryRange(userId, start, today),
+    today,
   );
 }

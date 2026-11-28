@@ -9,7 +9,7 @@ vi.mock("server-only", () => ({}));
 
 import { openWrite } from "./connection";
 import { getStrainRange } from "./strain";
-import { buildLoadSummary } from "@/lib/analytics/trainingLoad";
+import { buildLoadSummary } from "@/lib/analytics/acwr";
 
 const tmpRoot = mkdtempSync(path.join(tmpdir(), "whoop-training-load-"));
 

@@ -6,7 +6,7 @@ import {
   zoneMeta,
   type LoadPoint,
   type LoadSummary,
-} from "@/lib/analytics/trainingLoad";
+} from "@/lib/analytics/acwr";
 
 /** Chart y-axis ceiling; ratios above it are drawn at the top edge. */
 export const CHART_MAX_RATIO = 2;

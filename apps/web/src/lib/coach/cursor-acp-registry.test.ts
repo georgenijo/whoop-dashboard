@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CursorAcpRuntime } from "./cursor-acp-runtime";
 import { CursorAcpSessionRegistry } from "./cursor-acp-registry";
 
@@ -309,5 +309,220 @@ describe("CursorAcpSessionRegistry", () => {
     await expect(registry.run(input(), async () => {})).rejects.toThrow(
       "shutting down",
     );
+  });
+
+  describe("lifecycle pressure (#552)", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("single-flights a slow startup across queued turns on one thread", async () => {
+      const start = deferred<CursorAcpRuntime>();
+      const factoryCalled = deferred<void>();
+      const runtime = fakeRuntime();
+      const factory = vi.fn(async () => {
+        factoryCalled.resolve();
+        return start.promise;
+      });
+      const registry = new CursorAcpSessionRegistry(factory, 60_000, 4);
+      const seen: Array<{ runtime: CursorAcpRuntime; reused: boolean }> = [];
+
+      const runs = [1, 2, 3].map(() =>
+        registry.run(input(), async (active, session) => {
+          seen.push({ runtime: active, reused: session.reused });
+        }),
+      );
+      await factoryCalled.promise;
+      start.resolve(runtime);
+      await Promise.all(runs);
+
+      expect(factory).toHaveBeenCalledTimes(1);
+      expect(seen.map((entry) => entry.runtime)).toEqual([
+        runtime,
+        runtime,
+        runtime,
+      ]);
+      expect(seen.map((entry) => entry.reused)).toEqual([false, true, true]);
+      await registry.disposeAll();
+    });
+
+    it("replaces a session when the system prompt fingerprint changes", async () => {
+      const first = fakeRuntime();
+      const second = fakeRuntime();
+      const factory = vi
+        .fn()
+        .mockResolvedValueOnce(first)
+        .mockResolvedValueOnce(second);
+      const registry = new CursorAcpSessionRegistry(factory, 60_000, 4);
+
+      await registry.run(input(), async () => {});
+      await registry.run(
+        input({ promptFingerprint: "prompt-2" }),
+        async (active) => expect(active).toBe(second),
+      );
+
+      expect(first.dispose).toHaveBeenCalledOnce();
+      expect(registry.size()).toBe(1);
+      await registry.disposeAll();
+    });
+
+    it("evicts a runtime that became unhealthy during its turn", async () => {
+      const first = fakeRuntime();
+      const second = fakeRuntime();
+      const factory = vi
+        .fn()
+        .mockResolvedValueOnce(first)
+        .mockResolvedValueOnce(second);
+      const registry = new CursorAcpSessionRegistry(factory, 60_000, 4);
+
+      await registry.run(input(), async (active) => {
+        (active as unknown as { healthy: boolean }).healthy = false;
+      });
+      expect(first.dispose).toHaveBeenCalledOnce();
+      expect(registry.size()).toBe(0);
+
+      await registry.run(input(), async (active, session) => {
+        expect(active).toBe(second);
+        expect(session.reused).toBe(false);
+      });
+      await registry.disposeAll();
+    });
+
+    it("releases the thread and keeps the session after an operation throws", async () => {
+      const runtime = fakeRuntime();
+      const factory = vi.fn(async () => runtime);
+      const registry = new CursorAcpSessionRegistry(factory, 60_000, 4);
+
+      const failed = registry.run(input(), async () => {
+        throw new Error("turn failed");
+      });
+      const next = registry.run(input(), async (_active, session) => {
+        expect(session.reused).toBe(true);
+        return "ok";
+      });
+
+      await expect(failed).rejects.toThrow("turn failed");
+      await expect(next).resolves.toBe("ok");
+      expect(factory).toHaveBeenCalledOnce();
+      expect(runtime.dispose).not.toHaveBeenCalled();
+      await registry.disposeAll();
+    });
+
+    it("does not leak a capacity slot when startup fails", async () => {
+      const runtime = fakeRuntime();
+      const factory = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("spawn failed"))
+        .mockResolvedValueOnce(runtime);
+      const registry = new CursorAcpSessionRegistry(factory, 60_000, 1);
+
+      await expect(
+        registry.run(input({ threadId: 1 }), async () => {}),
+      ).rejects.toThrow("spawn failed");
+      expect(registry.size()).toBe(0);
+      await registry.run(input({ threadId: 2 }), async (active) =>
+        expect(active).toBe(runtime),
+      );
+      expect(registry.size()).toBe(1);
+      await registry.disposeAll();
+    });
+
+    it("evicts the idle session rather than the busy one at capacity", async () => {
+      const busy = fakeRuntime();
+      const idle = fakeRuntime();
+      const incoming = fakeRuntime();
+      const factory = vi
+        .fn()
+        .mockResolvedValueOnce(busy)
+        .mockResolvedValueOnce(idle)
+        .mockResolvedValueOnce(incoming);
+      const registry = new CursorAcpSessionRegistry(factory, 60_000, 2);
+      const busyStarted = deferred<void>();
+      const releaseBusy = deferred<void>();
+
+      // The busy session is the least recently used one, so plain LRU would
+      // pick it; an active prompt must never be evicted.
+      const active = registry.run(input({ threadId: 1 }), async () => {
+        busyStarted.resolve();
+        await releaseBusy.promise;
+      });
+      await busyStarted.promise;
+      await registry.run(input({ threadId: 2 }), async () => {});
+      await registry.run(input({ threadId: 3 }), async () => {});
+
+      expect(busy.dispose).not.toHaveBeenCalled();
+      expect(idle.dispose).toHaveBeenCalledOnce();
+      releaseBusy.resolve();
+      await active;
+      expect(registry.size()).toBe(2);
+      await registry.disposeAll();
+    });
+
+    it("defers idle eviction until an over-TTL turn finishes", async () => {
+      vi.useFakeTimers();
+      const runtime = fakeRuntime();
+      const registry = new CursorAcpSessionRegistry(
+        vi.fn(async () => runtime),
+        1_000,
+        4,
+      );
+      const started = deferred<void>();
+      const release = deferred<void>();
+
+      const turn = registry.run(input(), async () => {
+        started.resolve();
+        await release.promise;
+      });
+      await started.promise;
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(runtime.dispose).not.toHaveBeenCalled();
+      expect(registry.size()).toBe(1);
+
+      release.resolve();
+      await turn;
+      await vi.advanceTimersByTimeAsync(999);
+      expect(runtime.dispose).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(runtime.dispose).toHaveBeenCalledOnce();
+      expect(registry.size()).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("disposes an active session at shutdown and rejects queued and new turns", async () => {
+      vi.useFakeTimers();
+      const runtime = fakeRuntime();
+      const registry = new CursorAcpSessionRegistry(
+        vi.fn(async () => runtime),
+        60_000,
+        4,
+      );
+      const started = deferred<void>();
+      const release = deferred<void>();
+
+      const active = registry.run(input(), async () => {
+        started.resolve();
+        await release.promise;
+        return "finished";
+      });
+      await started.promise;
+      const queued = registry.run(input(), async () => "never");
+      const queuedOutcome = queued.then(
+        () => "resolved",
+        (error: unknown) => (error as Error).message,
+      );
+
+      await registry.disposeAll();
+      expect(runtime.dispose).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+
+      release.resolve();
+      await expect(active).resolves.toBe("finished");
+      await expect(queuedOutcome).resolves.toMatch("shutting down");
+      await expect(registry.run(input(), async () => {})).rejects.toThrow(
+        "shutting down",
+      );
+      expect(runtime.dispose).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+    });
   });
 });

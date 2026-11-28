@@ -75,6 +75,7 @@ export function anthropicModelOption(model: ModelInfo): AnthropicModelOption {
     thinking,
     efforts,
     max_tokens: model.max_tokens ?? null,
+    max_input_tokens: model.max_input_tokens ?? null,
     output_effort: capabilities ? capabilities.effort.supported : thinking === "adaptive",
     strict_tools: capabilities?.structured_outputs?.supported ?? false,
   };

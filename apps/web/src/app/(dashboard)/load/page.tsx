@@ -6,7 +6,7 @@ import {
   CHRONIC_DAYS,
   buildLoadSummary,
   shiftDay,
-} from "@/lib/analytics/trainingLoad";
+} from "@/lib/analytics/acwr";
 import { requireAuthOrSignin } from "@/lib/auth";
 import { getStrainRange, getUserSettings } from "@/lib/db";
 import { isTrainingLoadEnabled } from "@/lib/training-load-flag";

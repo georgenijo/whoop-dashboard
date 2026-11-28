@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { buildLoadSummary, shiftDay, type DailyStrain } from "@/lib/analytics/trainingLoad";
+import { buildLoadSummary, shiftDay, type DailyStrain } from "@/lib/analytics/acwr";
 import TrainingLoadView, { CHART_MAX_RATIO, ratioPath } from "./TrainingLoadView";
 
 const TODAY = "2026-11-27";

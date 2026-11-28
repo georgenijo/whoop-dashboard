@@ -1,0 +1,117 @@
+/* Printable health summary (/report, HEALTH_REPORT=1). Only imported by that
+   page, so nothing here reaches any other route. Every selector is scoped to
+   the report (`.hr-*`) or, under @media print, to a body that contains one. */
+
+.hr-report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+  max-width: 900px;
+  color: var(--fg);
+}
+
+.hr-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--s4);
+}
+.hr-title { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; color: var(--fg-0); }
+.hr-range { margin: 4px 0 0; font-family: var(--font-mono); font-size: 12px; color: var(--fg-2); }
+
+.hr-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); }
+.hr-days { display: inline-flex; border: 1px solid var(--border-default); border-radius: 8px; overflow: hidden; }
+.hr-day {
+  padding: 6px 12px;
+  font-size: 12.5px;
+  color: var(--fg-2);
+  text-decoration: none;
+}
+.hr-day + .hr-day { border-left: 1px solid var(--border-default); }
+.hr-day.active { color: var(--fg-0); background: var(--bg-lift); }
+.hr-print-btn {
+  padding: 6px 14px;
+  font-size: 12.5px;
+  color: var(--fg-0);
+  background: var(--bg-lift);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.hr-coverage { margin: 0; font-size: 13px; color: var(--fg-2); }
+.hr-coverage strong { color: var(--fg-0); font-variant-numeric: tabular-nums; }
+.hr-empty { margin: 0; padding: var(--s5); border: 1px dashed var(--border-default); border-radius: 12px; color: var(--fg-2); }
+
+.hr-section h2 {
+  margin: 0 0 var(--s3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+
+.hr-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.hr-table th,
+.hr-table td { padding: 8px 10px; border-bottom: 1px solid var(--border-subtle); text-align: left; vertical-align: top; }
+.hr-table thead th { font-size: 11px; font-weight: 600; color: var(--fg-3); text-transform: uppercase; letter-spacing: 0.08em; }
+.hr-table tbody th { font-weight: 500; color: var(--fg-0); }
+.hr-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.hr-when { display: block; font-size: 11px; color: var(--fg-3); }
+.hr-none { color: var(--fg-3); font-style: italic; }
+.hr-note { margin: var(--s3) 0 0; font-size: 12.5px; color: var(--fg-2); }
+
+.hr-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s5); }
+@media (max-width: 640px) {
+  .hr-grid { grid-template-columns: minmax(0, 1fr); }
+  .hr-table { font-size: 12.5px; }
+  .hr-table th, .hr-table td { padding: 6px 6px; }
+}
+.hr-dl { margin: 0; display: grid; gap: 6px; }
+.hr-notable { display: flex; justify-content: space-between; gap: var(--s3); padding: 6px 0; border-bottom: 1px solid var(--border-subtle); font-size: 13.5px; }
+.hr-notable dt { color: var(--fg-2); }
+.hr-notable dd { margin: 0; color: var(--fg-0); font-variant-numeric: tabular-nums; text-align: right; }
+
+.hr-foot { font-size: 11.5px; color: var(--fg-3); border-top: 1px solid var(--border-subtle); padding-top: var(--s3); }
+
+@media print {
+  @page { margin: 14mm; }
+
+  /* Strip the app chrome: only the report prints. */
+  body:has(.hr-report) .sidebar,
+  body:has(.hr-report) .topbar,
+  body:has(.hr-report) .bottom-nav,
+  body:has(.hr-report) .bn-drawer,
+  body:has(.hr-report) .bn-drawer-backdrop,
+  .hr-no-print { display: none !important; }
+
+  body:has(.hr-report) .app { display: block !important; grid-template-columns: none !important; }
+  body:has(.hr-report) .main,
+  body:has(.hr-report) .content { width: auto !important; max-width: none !important; margin: 0 !important; padding: 0 !important; }
+
+  html:has(.hr-report),
+  body:has(.hr-report),
+  body:has(.hr-report) .app,
+  body:has(.hr-report) .main { background: #fff !important; color: #000 !important; }
+
+  .hr-report,
+  .hr-report * {
+    color: #000 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+  .hr-report { max-width: none; gap: 12pt; font-size: 10.5pt; }
+  .hr-table th, .hr-table td, .hr-notable, .hr-foot { border-color: #999 !important; }
+  .hr-when, .hr-none, .hr-foot, .hr-range { color: #333 !important; }
+
+  /* Page-break safety: never split a table row, a section heading from its
+     content, or a notable-day pair across pages. */
+  .hr-section { break-inside: avoid; page-break-inside: avoid; }
+  .hr-section h2 { break-after: avoid; page-break-after: avoid; }
+  .hr-table tr, .hr-notable { break-inside: avoid; page-break-inside: avoid; }
+  .hr-table thead { display: table-header-group; }
+  .hr-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

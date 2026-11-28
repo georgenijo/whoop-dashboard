@@ -10,6 +10,8 @@ import { requireAuthOrSignin } from "@/lib/auth";
 import { computeCardiacDrift } from "@/lib/analytics/cardiacDrift";
 import { resolveRangeWindow } from "@/lib/range";
 import { localToday } from "@/lib/date";
+import { computeVsUsualChips } from "@/lib/analytics/similarWorkouts";
+import { isSimilarWorkoutsEnabled } from "@/lib/similar-workouts-flag";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +34,9 @@ export default async function WorkoutsPage({
   const body = getBodyMeasurements(user.id);
   const maxHR = body?.max_heart_rate ?? null;
   const driftReport = computeCardiacDrift(rangeRows);
+  // SIMILAR_WORKOUTS=1: "vs usual" chips from the rows already loaded above —
+  // no extra query. Comparisons only see sessions inside the selected range.
+  const vsUsual = isSimilarWorkoutsEnabled() ? computeVsUsualChips(rangeRows) : undefined;
 
   return (
     <>
@@ -50,7 +55,7 @@ export default async function WorkoutsPage({
         </div>
       </div>
 
-      <WorkoutsTable rows={rangeResult.rows} />
+      <WorkoutsTable rows={rangeResult.rows} vsUsual={vsUsual} />
     </>
   );
 }

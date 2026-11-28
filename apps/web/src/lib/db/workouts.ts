@@ -242,16 +242,34 @@ export type WorkoutsRangeResult = {
   total_count: number;
 };
 
-/** Uncapped rows for user-facing range visualizations. */
+/**
+ * Optional per-sport filter shared by the Stats aggregations (issue #430).
+ * Matches the same `COALESCE(sport, 'Unknown')` label `getSportBreakdown`
+ * groups by, so every row the Stats page lists — including "Unknown" for
+ * NULL-sport workouts — drills down to exactly the sessions it counted.
+ * Returns an empty clause when no sport is given.
+ */
+function sportFilter(sport: string | undefined): { clause: string; params: string[] } {
+  if (sport === undefined) return { clause: "", params: [] };
+  return { clause: " AND COALESCE(sport, 'Unknown') = ?", params: [sport] };
+}
+
+/**
+ * Uncapped rows for user-facing range visualizations, newest first. Pass
+ * `sport` to restrict to one sport (the `/stats/[sport]` session list).
+ */
 export function getWorkoutRowsRange(
   userId: number,
   startDate: string,
   endDate: string,
+  sport?: string,
 ): WorkoutRow[] {
   const range = dateRangeClause(startDate, endDate);
+  const bySport = sportFilter(sport);
   return forUser(userId).all<WorkoutRow>(
-    `SELECT ${WORKOUT_COLUMNS} FROM workouts WHERE ${range.clause} AND user_id = ? ORDER BY date DESC`,
+    `SELECT ${WORKOUT_COLUMNS} FROM workouts WHERE ${range.clause}${bySport.clause} AND user_id = ? ORDER BY date DESC, start_utc DESC`,
     ...range.params,
+    ...bySport.params,
   );
 }
 
@@ -582,36 +600,44 @@ export type MonthlyRollupRow = {
   month: string;
   count: number;
   avgStrain: number | null;
+  /** mean of per-session avg HR (bpm); null when no session carries HR. */
+  avgHr: number | null;
   /** true for the current (in-progress) month or a partial first month. */
   partial: boolean;
 };
 
 /**
- * Per-month workout count + average strain for every month >= `fromDate`,
- * oldest first. Powers the year-over-year trend chart. A month is `partial`
- * when it's the current calendar month, or the earliest month in the series
+ * Per-month workout count + average strain / avg HR for every month in
+ * `[fromDate, toDate]`, oldest first; pass `sport` to restrict to one sport.
+ * Powers the Stats activity trend and the per-sport trend charts. A month is
+ * `partial` when it's the current calendar month, or the earliest month in the series
  * whose data doesn't start on the 1st (the Dec-2025 backfill boundary).
  */
 export function getMonthlyRollup(
   userId: number,
   fromDate: string,
   toDate = "9999-12-31",
+  sport?: string,
 ): MonthlyRollupRow[] {
+  const bySport = sportFilter(sport);
   const rows = forUser(userId).all<{
     ym: string;
     cnt: number;
     avg_strain: number | null;
+    avg_hr: number | null;
     first_day: string;
   }>(
     `SELECT substr(date, 1, 7) AS ym,
             COUNT(*) AS cnt,
             AVG(strain) AS avg_strain,
+            AVG(avg_hr) AS avg_hr,
             MIN(date) AS first_day
        FROM workouts
-      WHERE date >= ? AND date <= ? AND user_id = ?
+      WHERE date >= ? AND date <= ?${bySport.clause} AND user_id = ?
       GROUP BY ym ORDER BY ym ASC`,
     fromDate,
     toDate,
+    ...bySport.params,
   );
 
   const now = new Date();
@@ -621,7 +647,37 @@ export function getMonthlyRollup(
     month: r.ym,
     count: r.cnt,
     avgStrain: r.avg_strain,
+    avgHr: r.avg_hr,
     partial:
       r.ym === currentYm || (i === 0 && !r.first_day.endsWith("-01")),
   }));
+}
+
+/** Row cap for `getSimilarWorkoutCandidates` — keeps the detail page's one extra read bounded. */
+export const SIMILAR_CANDIDATES_LIMIT = 250;
+
+/**
+ * Same-sport sessions for the detail page's "Compare with similar workouts"
+ * card (`SIMILAR_WORKOUTS=1`): one bounded, user-scoped read over
+ * `[startDate, endDate]`, newest first, excluding the session itself. Sport is
+ * matched trimmed + case-insensitively, and a `null` sport matches `null`/blank.
+ * Duration filtering and "earlier than" ordering happen in the pure
+ * `lib/analytics/similarWorkouts` module.
+ */
+export function getSimilarWorkoutCandidates(
+  userId: number,
+  sport: string | null,
+  excludeId: string,
+  startDate: string,
+  endDate: string,
+): WorkoutRow[] {
+  const range = dateRangeClause(startDate, endDate);
+  return forUser(userId).all<WorkoutRow>(
+    `SELECT ${WORKOUT_COLUMNS} FROM workouts
+      WHERE COALESCE(LOWER(TRIM(sport)), '') = ? AND id != ? AND ${range.clause} AND user_id = ?
+      ORDER BY date DESC LIMIT ${SIMILAR_CANDIDATES_LIMIT}`,
+    (sport ?? "").trim().toLowerCase(),
+    excludeId,
+    ...range.params,
+  );
 }

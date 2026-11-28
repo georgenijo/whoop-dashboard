@@ -1,11 +1,14 @@
 import {
   Activity,
   BarChart3,
+  CalendarDays,
   Bell,
   ClipboardList,
   Dumbbell,
+  FileText,
   Flame,
   Gauge,
+  GitCompareArrows,
   LayoutDashboard,
   List,
   Menu,
@@ -14,6 +17,7 @@ import {
   Scale,
   Settings,
   Sparkles,
+  Trophy,
   type LucideIcon,
 } from "lucide-react";
 
@@ -32,5 +36,9 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   bell: Bell,
   menu: Menu,
   gauge: Gauge,
+  "calendar-days": CalendarDays,
+  "git-compare": GitCompareArrows,
+  trophy: Trophy,
+  "file-text": FileText,
   scale: Scale,
 };

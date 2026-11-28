@@ -12,7 +12,7 @@ import {
   loadOn,
   shiftDay,
   type DailyStrain,
-} from "./trainingLoad";
+} from "./acwr";
 
 /** `n` consecutive days ending on `end`, strain from `f(i)` (i=0 is oldest). */
 function days(end: string, n: number, f: (i: number) => number | null): DailyStrain[] {
