@@ -61,6 +61,7 @@ import {
 import type { DetailState, Usage } from "./loop";
 import { CURSOR_COMPOSER_MODEL } from "./provider";
 import { executeTool } from "./tools";
+import { CursorAgentError } from "./cursor-errors";
 
 type FakeChild = EventEmitter & {
   pid: number | undefined;
@@ -920,4 +921,65 @@ it("writes owner-only legacy MCP config with the scoped Whoop credential environ
   child.stdout.end();
   child.emit("close", 0);
   await turn.catch(() => undefined);
+});
+
+// Issue #475-C: Node's `close` passes (code, signal). A signal death arrives
+// as code null; before this fix the signal was discarded and every such turn
+// logged as "cursor-agent exited null" with no way to tell SIGKILL from SIGSEGV.
+describe("runCursorTurn process exit signal (issue #475-C)", () => {
+  it("names the signal in the error and records it in the cursor detail blob", async () => {
+    const child = fakeChild();
+    spawnMock.mockReturnValue(child);
+    const detailState: DetailState = { iterations: 0 };
+    const turn = runCursorTurn(baseArgs(detailState));
+    await waitForSpawn();
+
+    child.stdout.end();
+    child.emit("close", null, "SIGKILL");
+
+    const err = await turn.then(
+      () => {
+        throw new Error("expected rejection");
+      },
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(CursorAgentError);
+    const agentErr = err as CursorAgentError;
+    expect(agentErr.reason).toBe("agent");
+    expect(agentErr.message).toBe("cursor-agent killed by SIGKILL: ");
+    expect(agentErr.message).not.toContain("exited null");
+    expect(agentErr.exit).toEqual({ code: null, signal: "SIGKILL" });
+    expect(detailState.cursor?.exit).toEqual({ code: null, signal: "SIGKILL" });
+  });
+
+  it("keeps the numeric exit code (signal null) for an ordinary non-zero exit", async () => {
+    const child = fakeChild();
+    spawnMock.mockReturnValue(child);
+    const detailState: DetailState = { iterations: 0 };
+    const turn = runCursorTurn(baseArgs(detailState));
+    await waitForSpawn();
+
+    child.stderr.write("boom");
+    child.stdout.end();
+    await new Promise((r) => setImmediate(r));
+    child.emit("close", 2, null);
+
+    const err = (await turn.catch((e: unknown) => e)) as CursorAgentError;
+    expect(err).toBeInstanceOf(CursorAgentError);
+    expect(err.message).toBe("cursor-agent exited 2: boom");
+    expect(err.exit).toEqual({ code: 2, signal: null });
+    expect(detailState.cursor?.exit).toEqual({ code: 2, signal: null });
+  });
+
+  it("records a clean exit as { code: 0, signal: null }", async () => {
+    const child = fakeChild();
+    spawnMock.mockReturnValue(child);
+    const detailState: DetailState = { iterations: 0 };
+    const turn = runCursorTurn(baseArgs(detailState));
+    await waitForSpawn();
+    child.stdout.end();
+    child.emit("close", 0);
+    await turn.catch(() => undefined);
+    expect(detailState.cursor?.exit).toEqual({ code: 0, signal: null });
+  });
 });

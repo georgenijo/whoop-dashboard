@@ -79,6 +79,21 @@ export function classifyChatError(err: unknown): ClassifiedChatError {
         message: "The Cursor coach took too long. Try again.",
       };
     }
+    const signal = err.exit?.code === null ? err.exit.signal : null;
+    if (signal) {
+      // The subprocess died by signal before replying (issue #475-C). Say
+      // which one: SIGKILL with no timeout is almost always the kernel or the
+      // service cgroup reclaiming memory, which a user can't fix by resending
+      // immediately; anything else (SIGSEGV, SIGABRT, …) is a CLI crash.
+      return {
+        status: 502,
+        kind: "upstream_error",
+        message:
+          signal === "SIGKILL"
+            ? "The Cursor coach process was killed (SIGKILL) before it replied — the server may be short on memory. Try again in a moment."
+            : `The Cursor coach process crashed (${signal}) before it replied. Try again.`,
+      };
+    }
     return {
       status: 502,
       kind: "upstream_error",

@@ -139,6 +139,11 @@ export type DetailState = {
     }>;
     terminal_subtype: string | null;
     terminal_seen: boolean;
+    // Legacy transport only: how the cursor-agent process ended, from Node's
+    // `close` (code, signal). A signal death is `{ code: null, signal }`.
+    // null when close never fired (early-exit reject). The ACP transport
+    // records the same pair under `acp.process` instead. Issue #475-C.
+    exit?: { code: number | null; signal: NodeJS.Signals | null } | null;
     // Counts every `started` tool_call event with a real MCP tool name — see
     // ./cursor-loop's `!a?.toolName` guard. May exceed the completed count
     // in `tool_events` when a call never finishes.
