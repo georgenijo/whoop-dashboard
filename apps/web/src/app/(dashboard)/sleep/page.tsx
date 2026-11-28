@@ -17,6 +17,7 @@ import NapTrackerCard from "@/components/charts/NapTrackerCard";
 import NapRecoveryScatter from "@/components/charts/NapRecoveryScatter";
 import DeepSleepEfficiencyCard from "@/components/charts/DeepSleepEfficiencyCard";
 import TonightSleepPlanCard from "@/components/charts/TonightSleepPlanCard";
+import Link from "next/link";
 import { headers } from "next/headers";
 import {
   getOverviewSnapshot,
@@ -38,6 +39,7 @@ import {
 import { msToHoursNumber } from "@/lib/format";
 import { resolveRangeWindow, shiftDate } from "@/lib/range";
 import { localToday } from "@/lib/date";
+import { isSleepRegularityEnabled } from "@/lib/sleep-regularity-flag";
 
 export const dynamic = "force-dynamic";
 
@@ -84,6 +86,22 @@ export default async function SleepPage({
 
   return (
     <>
+      {isSleepRegularityEnabled() && (
+        <Link
+          href="/sleep/regularity"
+          className="card"
+          data-testid="sleep-regularity-link"
+          style={{ display: "block", marginBottom: 24, textDecoration: "none", color: "inherit" }}
+        >
+          <div className="card-title">
+            <span className="dot" style={{ background: "#7b61ff", color: "#7b61ff" }} />
+            Sleep regularity →
+          </div>
+          <div className="card-sub" style={{ marginTop: 4 }}>
+            Regularity index, bed/wake consistency and social jetlag
+          </div>
+        </Link>
+      )}
       <KPIStrip
         latestRecovery={data.latestRecovery}
         previousRecovery={data.previousRecovery}

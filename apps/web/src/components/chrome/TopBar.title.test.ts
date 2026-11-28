@@ -29,6 +29,11 @@ describe("titleForPath", () => {
     expect(titleForPath("/day/2026-11-27")).toBe("Day detail");
   });
 
+  it("titles /sleep/regularity without changing /sleep", () => {
+    expect(titleForPath("/sleep/regularity")).toBe("Sleep regularity");
+    expect(titleForPath("/sleep")).toBe("Sleep");
+  });
+
   it("titles every page added in the Nov 27 frontier batch, never Overview", () => {
     const pages: Record<string, string> = {
       "/weekly": "Weekly review",

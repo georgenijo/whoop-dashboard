@@ -4,7 +4,9 @@ import type { SleepRow } from "@/lib/db/sleep";
 const BEDTIME_ANCHOR = 20;
 const WAKE_ANCHOR = 0;
 
-function parseLocalParts(s: string | null): { date: string; hours: number } | null {
+/** Parse a Whoop `*_local` wall-clock string (no offset) into its calendar
+ *  date and fractional clock hour. Exported for `sleepRegularity.ts`. */
+export function parseLocalParts(s: string | null): { date: string; hours: number } | null {
   if (!s) return null;
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
   if (!m) return null;
@@ -13,13 +15,15 @@ function parseLocalParts(s: string | null): { date: string; hours: number } | nu
   return { date, hours };
 }
 
-function bedtimeHourFromAnchor(s: string | null): number | null {
+/** Hours after the 20:00 bedtime anchor (0..24). */
+export function bedtimeHourFromAnchor(s: string | null): number | null {
   const parts = parseLocalParts(s);
   if (!parts) return null;
   return ((parts.hours - BEDTIME_ANCHOR + 24) % 24);
 }
 
-function wakeHourFromAnchor(s: string | null): number | null {
+/** Hours after the 00:00 wake anchor (0..24). */
+export function wakeHourFromAnchor(s: string | null): number | null {
   const parts = parseLocalParts(s);
   if (!parts) return null;
   return ((parts.hours - WAKE_ANCHOR + 24) % 24);
@@ -143,7 +147,8 @@ function dayOfWeek(date: string): number {
   return new Date(date + "T00:00:00").getDay();
 }
 
-function stddev(values: number[]): number {
+/** Population standard deviation; 0 for fewer than two values. */
+export function stddev(values: number[]): number {
   if (values.length < 2) return 0;
   const mean = values.reduce((a, b) => a + b, 0) / values.length;
   const variance =
@@ -251,3 +256,4 @@ export function computeBedtimePatterns(sleep: SleepRow[]): BedtimePatternsResult
 }
 
 export const BEDTIME_ANCHOR_HOUR = BEDTIME_ANCHOR;
+export const WAKE_ANCHOR_HOUR = WAKE_ANCHOR;

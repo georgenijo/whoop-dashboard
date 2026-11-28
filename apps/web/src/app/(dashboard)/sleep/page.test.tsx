@@ -62,3 +62,36 @@ describe("/sleep SLEEP_PLAN flag", () => {
     expect(db.getRecoveryRange).toHaveBeenLastCalledWith(7, "2026-10-22", "2026-11-20");
   });
 });
+
+function regularityLinks(tree: ReactNode): ReactElement[] {
+  const out: ReactElement[] = [];
+  const walk = (n: ReactNode) => {
+    if (Array.isArray(n)) return n.forEach(walk);
+    if (!isValidElement(n)) return;
+    if ((n.props as { href?: string }).href === "/sleep/regularity") out.push(n);
+    walk((n.props as { children?: ReactNode }).children);
+  };
+  walk(tree);
+  return out;
+}
+
+describe("/sleep SLEEP_REGULARITY link", () => {
+  beforeEach(() => {
+    Object.values(db).forEach((fn) => fn.mockClear());
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it.each([undefined, "", "0", "true"])("flag %s: no link and no extra reads", async (v) => {
+    vi.stubEnv("SLEEP_REGULARITY", v as string);
+    const tree = await SleepPage({ searchParams: Promise.resolve({}) });
+    expect(regularityLinks(tree)).toHaveLength(0);
+    expect(db.getSleepRange).toHaveBeenCalledTimes(1);
+  });
+
+  it("flag on: links to /sleep/regularity without any extra reads", async () => {
+    vi.stubEnv("SLEEP_REGULARITY", "1");
+    const tree = await SleepPage({ searchParams: Promise.resolve({}) });
+    expect(regularityLinks(tree)).toHaveLength(1);
+    expect(db.getSleepRange).toHaveBeenCalledTimes(1);
+  });
+});
