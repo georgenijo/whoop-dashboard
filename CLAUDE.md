@@ -85,17 +85,25 @@ tokens.json       Whoop OAuth tokens — legacy single-user file; integrations t
 
 ### Coach (`apps/web/src/app/api/chat/route.ts`)
 
-Agentic loop. Five tools defined in `src/lib/coach-tools.ts`:
+The route owns auth, streaming, logging and persistence, then hands the turn to `runCoachProviderTurn` in `src/lib/coach/provider-runner.ts`, which dispatches on the selected provider (`src/lib/coach/provider.ts`, `"anthropic" | "cursor"`):
 
-- `query_recovery`, `query_sleep`, `query_strain`, `query_workouts`, `query_journal`
-- All take `start_date` / `end_date` (YYYY-MM-DD), return raw rows from SQLite
+- **Anthropic** — in-process Anthropic SDK agentic loop in `src/lib/coach/loop.ts`.
+- **Cursor** — Cursor Agent driven over ACP (`cursor-acp-*.ts`; persistent per-user/thread sessions when `COACH_CURSOR_TRANSPORT=acp`, the production setting) or the legacy per-turn CLI transport (`cursor-loop.ts`, the code default). Cursor reaches the Whoop data through the bundled stdio MCP server in `apps/web/src/coach-mcp/`, whose allowlist is `coach-mcp/tool-policy.ts`.
 
-Caps:
+Models are picked from live provider catalogs (`anthropic-models.ts`, `cursor-models.ts` / `cursor-acp-models.ts`) and stored per user as `provider:model` preferences.
+
+Eleven tools are defined in `src/lib/coach/tools.ts` and executed through `executeTool({ userId })`:
+
+- Reads: `query_recovery`, `query_sleep`, `query_strain`, `query_workouts`, `query_naps`, `query_steps`, `query_journal`, `query_daily_snapshot`, `query_workout_plans`
+- Writes: `save_workout_plan`, `trigger_whoop_sync` (user-scoped, deduplicated per turn, sync cooldown enforced)
+- The Cursor MCP surface exposes all eleven plus `view_chat_image`. A tool registered only in `tools.ts` is invisible to Cursor until it is also added to `tool-policy.ts`.
+
+Caps (Anthropic loop, `loop.ts`):
 - `MAX_TOOL_ITERATIONS = 8` (round-trips, not parallel calls)
 - `MAX_OUTPUT_TOKENS = 16384` (thinking + reply combined)
 - On `stop_reason === "max_tokens"`, returns partial text with truncation marker (no throw)
 
-Conversations are persisted in `chat_messages` keyed by `thread_id`. The model's `tool_use` and `tool_result` content blocks are stored as JSON in the `blocks` column so multi-turn conversations preserve full tool context across reloads. Synthetic `[tool_result]` rows are filtered from UI by `getChatMessages` and `getChatThreads` queries.
+Conversations are persisted in `chat_messages` keyed by `thread_id`. The model's `tool_use` and `tool_result` content blocks are stored as JSON in the `blocks` column so multi-turn conversations preserve full tool context across reloads. Synthetic `[tool_result]` rows are filtered from the UI by `getChatThreadMessages` and `getChatThreads` in `src/lib/db/coach.ts`.
 
 Threads have auto-titles via the configured title model fired in `after()` (Next.js post-response hook), only on first turn of a blank-title thread. Persistence is buffered in memory and committed atomically via `addChatMessages` (uses `db.transaction(fn)`) — failed API calls leave the DB untouched.
 

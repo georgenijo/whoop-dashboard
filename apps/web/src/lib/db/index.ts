@@ -131,7 +131,6 @@ export {
   setChatThreadTitle,
   deleteChatThread,
   resolveChatThread,
-  getChatThreadSummary,
   getChatThreadContext,
   setChatThreadContext,
   getChatThreadMessages,
