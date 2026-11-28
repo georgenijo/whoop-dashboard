@@ -1,6 +1,6 @@
 // @vitest-environment node
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/headers", () => ({ headers: async () => new Headers() }));
@@ -44,7 +44,14 @@ vi.mock("@/lib/db", () => ({
   getMonthlyRollup: vi.fn(() => []),
 }));
 
+import * as db from "@/lib/db";
 import StatsPage from "./page";
+
+async function render() {
+  return renderToStaticMarkup(await StatsPage({ searchParams: Promise.resolve({}) }));
+}
+
+afterEach(() => vi.unstubAllEnvs());
 
 describe("Stats page sport rows (issue #430)", () => {
   it("links each sport row to its encoded drill-down, carrying the range", async () => {
@@ -60,5 +67,30 @@ describe("Stats page sport rows (issue #430)", () => {
   it("defaults to the year range when none is selected", async () => {
     const html = renderToStaticMarkup(await StatsPage({ searchParams: Promise.resolve({}) }));
     expect(html).toContain('href="/stats/Running?range=year"');
+  });
+});
+
+describe("Stats page Year in review link", () => {
+  it("is absent with YEAR_REVIEW unset", async () => {
+    vi.stubEnv("YEAR_REVIEW", "");
+    expect(await render()).not.toContain('href="/year"');
+  });
+
+  it("is present with YEAR_REVIEW=1", async () => {
+    vi.stubEnv("YEAR_REVIEW", "1");
+    expect(await render()).toContain('href="/year"');
+  });
+
+  it("also shows on the no-workouts empty state", async () => {
+    vi.stubEnv("YEAR_REVIEW", "1");
+    vi.mocked(db.getAllTimeStats).mockReturnValueOnce({
+      workouts: 0,
+      activeSeconds: null,
+      distanceMeters: null,
+      kilojoules: null,
+    });
+    const html = await render();
+    expect(html).toContain("No workouts logged yet");
+    expect(html).toContain('href="/year"');
   });
 });

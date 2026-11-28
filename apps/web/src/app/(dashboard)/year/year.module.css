@@ -1,0 +1,87 @@
+/* Year in Review (/year). Scoped to this route; reuses the global card,
+   totals-strip, record-grid and sport-row primitives from globals.css. */
+
+.root { display: flex; flex-direction: column; gap: var(--s6, 24px); }
+
+.header {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+}
+.title {
+  font-family: var(--font-display); font-size: 44px; font-weight: 500;
+  letter-spacing: -0.03em; margin: 0 4px 6px; line-height: 1;
+}
+.yearNav {
+  display: grid; grid-template-columns: 72px auto 72px; align-items: center; gap: 8px;
+  font-family: var(--font-mono); font-size: 12px;
+}
+.yearNav a { color: var(--fg-2, #a1a1aa); text-decoration: none; text-align: center; }
+.yearNav a:hover { color: var(--fg-1, #fafafa); }
+.yearNavCurrent { color: var(--fg-1, #fafafa); font-weight: 600; text-align: center; }
+
+.highlights { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; line-height: 1.5; }
+
+.monthList { display: flex; flex-direction: column; gap: 8px; }
+.monthRow {
+  display: grid; grid-template-columns: 40px 1fr 48px minmax(0, 220px);
+  align-items: center; gap: 12px; font-size: 12.5px;
+}
+.monthName { font-family: var(--font-mono); color: var(--fg-2, #a1a1aa); }
+.track { height: 10px; border-radius: 5px; background: rgba(255,255,255,0.05); overflow: hidden; }
+.track > span { display: block; height: 100%; border-radius: 5px; }
+.monthVal { font-family: var(--font-mono); text-align: right; font-variant-numeric: tabular-nums; }
+.monthMeta {
+  font-family: var(--font-mono); font-size: 11px; color: var(--fg-3);
+  font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.monthDays { color: var(--fg-4); }
+.footnote { font-family: var(--font-mono); font-size: 9.5px; color: var(--fg-3); margin-top: 8px; text-align: right; }
+
+.twoUp { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s6, 24px); }
+.twoUp > section { margin: 0; }
+
+.columns { display: grid; grid-template-columns: repeat(12, 1fr); gap: 6px; align-items: end; height: 180px; }
+.column { display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; }
+.columnVal { font-family: var(--font-mono); font-size: 9.5px; color: var(--fg-3); min-height: 12px; }
+.columnBar { flex: 1; width: 100%; display: flex; align-items: flex-end; border-radius: 4px; background: rgba(255,255,255,0.03); }
+.columnBar > span { display: block; width: 100%; border-radius: 4px; background: #5ac8fa; }
+.columnLbl { font-family: var(--font-mono); font-size: 10px; color: var(--fg-3); }
+
+@media (max-width: 768px) {
+  .twoUp { grid-template-columns: 1fr; }
+  .monthRow { grid-template-columns: 32px 1fr 40px; }
+  .monthMeta { grid-column: 2 / -1; }
+  .title { font-size: 36px; }
+}
+
+/* Print: light paper, no app chrome, no page-breaks inside cards. The
+   :has() guard keeps these rules inert on every other route even if this
+   stylesheet stays loaded after client navigation. */
+@media print {
+  :global(body):has(.root) :global(.sidebar),
+  :global(body):has(.root) :global(.topbar),
+  :global(body):has(.root) :global(.bottom-nav) { display: none !important; }
+  :global(body):has(.root),
+  :global(body):has(.root) :global(.app),
+  :global(body):has(.root) :global(.main),
+  :global(body):has(.root) :global(.content) {
+    background: #fff !important; color: #111 !important; padding: 0 !important; margin: 0 !important;
+    display: block !important;
+  }
+  .root { gap: 14px; color: #111; }
+  .root :global(.card),
+  .root :global(.record-card),
+  .root :global(.total-cell),
+  .root :global(.totals-strip) {
+    background: #fff !important; border-color: #ddd !important; box-shadow: none !important;
+    backdrop-filter: none !important; break-inside: avoid; color: #111 !important;
+  }
+  .root :global(.totals-strip::before) { display: none; }
+  .root :global(.card-sub), .root :global(.rc-meta), .root :global(.rc-lbl),
+  .root :global(.lbl), .root :global(.stats-microlabel), .monthMeta, .monthName,
+  .columnVal, .columnLbl, .footnote { color: #555 !important; }
+  .track, .columnBar { background: #eee; }
+  .yearNav { display: none; }
+  .twoUp { grid-template-columns: 1fr 1fr; }
+  .root, .root * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

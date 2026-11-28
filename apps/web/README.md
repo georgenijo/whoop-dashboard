@@ -200,3 +200,10 @@ daily sparkline.
 - Pure logic lives in `src/lib/analytics/comparePeriods.ts`; reads use the
   existing user-scoped `get*Range` readers. No new tables, network calls, or
   client JavaScript.
+Server-side environment flags. Each one is **off unless set to exactly `1`**;
+with the flag off the feature is unreachable, renders nothing, and does no
+extra DB reads.
+
+| Flag | Enables |
+|---|---|
+| `YEAR_REVIEW=1` | **Year in Review** at `/year` (`?y=YYYY`, defaults to the current year in the user's timezone; out-of-range or malformed years fall back to it) plus a "Year in review →" link on `/stats`. A printable annual summary: days scored, yearly and per-month averages (recovery, HRV, RHR, sleep), best/toughest month, longest green-recovery streak, highest-strain day, workout totals with HR-zone minutes and top sports, sleep-consistency trend, personal bests, and 3–5 deterministic highlight sentences. Pure computation in `src/lib/analytics/yearReview.ts` over the existing user-scoped range readers, bounded to one calendar year. Flag off → `/year` is a 404 and the Stats link is absent. |

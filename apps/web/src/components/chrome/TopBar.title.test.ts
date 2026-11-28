@@ -19,4 +19,8 @@ describe("titleForPath", () => {
   it("titles /compare instead of falling back to Overview", () => {
     expect(titleForPath("/compare")).toBe("Compare periods");
   });
+
+  it("titles /year instead of falling back to Overview", () => {
+    expect(titleForPath("/year")).toBe("Year in Review");
+  });
 });

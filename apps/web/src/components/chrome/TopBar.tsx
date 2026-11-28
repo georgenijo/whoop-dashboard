@@ -28,6 +28,7 @@ const TITLES: Record<string, string> = {
   "/weekly": "Weekly review",
   "/compare": "Compare periods",
   "/records": "Records",
+  "/year": "Year in Review",
   "/coach": "Coach",
   "/plans": "Plans",
   "/logs": "Logs",
