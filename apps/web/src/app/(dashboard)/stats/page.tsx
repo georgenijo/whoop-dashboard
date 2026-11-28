@@ -12,6 +12,7 @@ import {
 } from "@/lib/db";
 import { localToday } from "@/lib/date";
 import { shiftDate } from "@/lib/range";
+import { yearReviewEnabled } from "@/lib/year-review-flag";
 
 export const dynamic = "force-dynamic";
 
@@ -296,14 +297,26 @@ export default async function StatsPage({
 
   const allTime = getAllTimeStats(user.id);
 
+  // YEAR_REVIEW=1 only: a link to /year. Flag off renders nothing extra.
+  const yearReviewLink = yearReviewEnabled() ? (
+    <Link href="/year" className="card-sub" data-track="nav:/year">
+      Year in review →
+    </Link>
+  ) : null;
+
   if (allTime.workouts === 0) {
     return (
-      <div className="card">
-        <div className="empty-state">
-          <div className="title">No workouts logged yet</div>
-          <div className="sub">All-time totals, year-over-year trends, and records appear once you have workout history.</div>
+      <>
+        {yearReviewLink && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>{yearReviewLink}</div>
+        )}
+        <div className="card">
+          <div className="empty-state">
+            <div className="title">No workouts logged yet</div>
+            <div className="sub">All-time totals, year-over-year trends, and records appear once you have workout history.</div>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -399,7 +412,8 @@ export default async function StatsPage({
   return (
     <>
       {/* range pills */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 16, marginBottom: 4 }}>
+        {yearReviewLink}
         <div className="range" role="tablist" aria-label="Time range">
           {RANGE_KEYS.map((k) => (
             <Link
