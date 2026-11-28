@@ -166,18 +166,32 @@ function claimInsightRegeneration(userId: number, hasData: boolean): {
 // whole burst land so one generation covers it instead of a sleep-only brief
 // that is immediately stale again.
 export const INSIGHT_PREGENERATE_DELAY_MS = 20_000;
+export const INSIGHT_PREGENERATE_ATTEMPTS = 3;
+export const INSIGHT_PREGENERATE_RETRY_MS = 30_000;
 
 /**
  * Regenerate the brief now if new Whoop data has made it stale, so the next
  * app open reads a finished brief instead of waiting on the model. Same lock,
- * backoff, and missing-key gate as the request-time path; a concurrent page
- * load that already holds the lock wins and this is a no-op.
+ * backoff, and missing-key gate as the request-time path. A concurrent page
+ * load that holds the lock is waited out, then the brief is rechecked.
  */
 export async function pregenerateInsight(userId: number): Promise<boolean> {
-  const { lock, apiKey } = claimInsightRegeneration(userId, true);
-  if (lock === null || apiKey === null) return false;
-  await regenerateInsight(userId, apiKey, lock);
-  return true;
+  let generated = false;
+  // Each attempt re-runs every gate (stale inputs, local date, data present,
+  // current key, backoff). Retrying covers data that lands while a pass is
+  // writing; waiting covers a pass someone else holds, so a webhook update
+  // is never dropped just because a dashboard load won the lock.
+  for (let attempt = 0; attempt < INSIGHT_PREGENERATE_ATTEMPTS; attempt++) {
+    const { status, lock, apiKey } = claimInsightRegeneration(userId, true);
+    if (lock !== null && apiKey !== null) {
+      await regenerateInsight(userId, apiKey, lock);
+      generated = true;
+      continue;
+    }
+    if (!status.isRegenerating) return generated;
+    await new Promise((resolve) => setTimeout(resolve, INSIGHT_PREGENERATE_RETRY_MS));
+  }
+  return generated;
 }
 
 /**
@@ -204,20 +218,14 @@ export async function regenerateInsight(
   lock: SettingLock,
 ): Promise<void> {
   try {
-    // Whoever holds the lock (dashboard load or webhook) covers data that
-    // commits while the model is writing: if the saved brief's inputs no
-    // longer match, write once more before releasing. Two passes at
-    // GENERATION_DEADLINE_MS each stay inside GENERATION_LOCK_TTL_MS. A
-    // failed pass leaves the brief stale, so callers retry after backoff.
-    for (let pass = 0; pass < 2; pass++) {
-      const date = insightToday(userId);
-      const context = getHealthContext(userId, INSIGHT_DAYS);
-      const inputsHash = insightInputsHash(context);
-      const insight = await writeInsight(apiKey, context);
-      saveInsight(userId, date, insight, inputsHash);
-      clearGenerationFailure(userId, "insight");
-      if (insightInputsHash(getHealthContext(userId, INSIGHT_DAYS)) === inputsHash) break;
-    }
+    // One pass per lock, as before. If data commits while the model is
+    // writing, the saved inputs_hash no longer matches and the brief stays
+    // stale for the next caller (pregenerateInsight retries for webhooks).
+    const date = insightToday(userId);
+    const context = getHealthContext(userId, INSIGHT_DAYS);
+    const insight = await writeInsight(apiKey, context);
+    saveInsight(userId, date, insight, insightInputsHash(context));
+    clearGenerationFailure(userId, "insight");
   } catch (err) {
     recordGenerationFailure(userId, "insight", classifyGenerationError(err), apiKey);
   } finally {

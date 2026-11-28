@@ -39,6 +39,7 @@ import { getLatestInsight, saveInsight } from "./db/summary";
 import { getGenerationFailure } from "./db/ai-generation";
 import {
   INSIGHT_PREGENERATE_DELAY_MS,
+  INSIGHT_PREGENERATE_RETRY_MS,
   acquireInsightRegenerationLock,
   getInsightStatus,
   insightToday,
@@ -362,21 +363,29 @@ describe("insight pregeneration after new Whoop data", () => {
     expect(getInsightStatus(2, true)).toMatchObject({ isStale: false, isRegenerating: false });
   });
 
-  it("lets a dashboard-started generation cover data that lands mid-write", async () => {
+  it("waits out a dashboard-held generation and rewrites when data landed mid-write", async () => {
     bootstrap();
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout"] });
+    vi.setSystemTime(new Date("2026-11-10T03:30:00Z"));
+    let webhookTask: Promise<boolean> | null = null;
     sdk.create
       .mockImplementationOnce(async () => {
         sql((db) => db.prepare("INSERT INTO recovery (user_id, date, recovery_score, raw) VALUES (2, '2026-11-11', 77, ?)")
           .run(JSON.stringify({ updated_at: "2026-11-10T00:30:00Z" })));
         // The webhook's delayed task arrives while the dashboard holds the lock.
-        expect(await pregenerateInsight(2)).toBe(false);
+        webhookTask = pregenerateInsight(2);
         return { content: [{ type: "text", text: "Before recovery" }] };
       })
       .mockResolvedValueOnce({ content: [{ type: "text", text: "After recovery" }] });
     expect(await pageLoad()).not.toBeNull();
+    // The dashboard made one call; its brief missed the recovery and stays stale.
+    expect(sdk.create).toHaveBeenCalledTimes(1);
+    expect(getInsightStatus(2, true)).toMatchObject({ isStale: true, isRegenerating: false });
+    await vi.advanceTimersByTimeAsync(INSIGHT_PREGENERATE_RETRY_MS);
+    expect(await webhookTask).toBe(true);
     expect(sdk.create).toHaveBeenCalledTimes(2);
     expect(getLatestInsight(2)?.insight).toBe("After recovery");
-    expect(getInsightStatus(2, true)).toMatchObject({ isStale: false, isRegenerating: false });
+    expect(getInsightStatus(2, true).isStale).toBe(false);
   });
 
   it("keeps an incomplete brief stale when the follow-up fails, then retries after backoff", async () => {
@@ -400,13 +409,19 @@ describe("insight pregeneration after new Whoop data", () => {
     expect(getInsightStatus(2, true).isStale).toBe(false);
   });
 
-  it("yields to a generation already in flight and honors the failure backoff", async () => {
+  it("waits out a generation already in flight and honors the failure backoff", async () => {
     bootstrap();
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout"] });
+    vi.setSystemTime(new Date("2026-11-10T03:30:00Z"));
     const held = acquireInsightRegenerationLock(getInsightStatus(2, true), "env-fixture-key")!;
     expect(held).not.toBeNull();
-    expect(await pregenerateInsight(2)).toBe(false);
+    // Waits for the holder instead of starting a second call alongside it.
+    const waiting = pregenerateInsight(2);
     sdk.create.mockRejectedValue(new Error("provider unavailable"));
     await regenerateInsight(2, "env-fixture-key", held);
+    await vi.advanceTimersByTimeAsync(INSIGHT_PREGENERATE_RETRY_MS);
+    // The holder failed, so the recheck lands in backoff and makes no call.
+    expect(await waiting).toBe(false);
     expect(await pregenerateInsight(2)).toBe(false);
     expect(sdk.create).toHaveBeenCalledTimes(1);
   });
