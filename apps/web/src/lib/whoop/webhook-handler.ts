@@ -41,7 +41,8 @@ export type HandleEventOutcome =
         | "already_deleted"
         | "unknown_event_type"
         | "unknown_whoop_user"
-        | "missing_whoop_user_id";
+        | "missing_whoop_user_id"
+        | "not_scored";
     };
 
 /**
@@ -131,8 +132,10 @@ export async function handleEvent(evt: WhoopWebhookEvent): Promise<HandleEventOu
       // un-gated, that throw would turn a webhook we should accept as a
       // no-op into a 502, and Whoop's 5 retries into a DLQ `failed` row
       // (issue #440 review, second pass, WARN 3).
+      // A noop rather than "handled": nothing was written, so the route must
+      // not schedule a brief regeneration for it.
       if (r.score_state !== "SCORED" || !r.score) {
-        return { kind: "handled" };
+        return { kind: "noop", reason: "not_scored" };
       }
       // Read the row's CURRENT date BEFORE the upsert overwrites it — a row
       // already on a different date (e.g. a legacy row still on its

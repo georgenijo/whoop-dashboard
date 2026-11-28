@@ -2,12 +2,16 @@
 
 import { useRef, useState, useCallback, useMemo } from "react";
 import { smoothPath } from "@/lib/paths";
+import ChartMarkers from "@/components/charts/ChartMarkers";
+import type { ChartMarker } from "@/lib/analytics/chartMarkers";
 
 type DataPoint = { date: string; hrv: number | null };
 
 type Props = {
   subtitle?: string;
   data: DataPoint[];
+  /** CHART_MARKERS=1 only. Absent = the chart renders exactly as before. */
+  markers?: ChartMarker[];
 };
 
 type RollingMode = "raw" | "7d" | "30d";
@@ -70,7 +74,7 @@ function rollingMean(values: (number | null)[], windowSize: number): (number | n
   });
 }
 
-export default function HRVTrend({ subtitle, data }: Props) {
+export default function HRVTrend({ subtitle, data, markers }: Props) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const [mode, setMode] = useState<RollingMode>("7d");
@@ -354,6 +358,9 @@ export default function HRVTrend({ subtitle, data }: Props) {
           <span key={`${label}-${i}`}>{label}</span>
         ))}
       </div>
+      {markers && (
+        <ChartMarkers markers={markers} plottedDates={valid.map((d) => d.date)} chartLabel="HRV trend" />
+      )}
     </div>
   );
 }

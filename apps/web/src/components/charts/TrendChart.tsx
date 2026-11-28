@@ -3,6 +3,8 @@
 import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { smoothPath } from "@/lib/paths";
 import { linearSlope } from "@/lib/stats";
+import ChartMarkers from "@/components/charts/ChartMarkers";
+import type { ChartMarker } from "@/lib/analytics/chartMarkers";
 
 function linearRegression(values: number[]): { x1: number; y1: number; x2: number; y2: number } | null {
   const n = values.length;
@@ -45,6 +47,8 @@ type Props = {
   unit?: string;
   showRollingToggle?: boolean;
   emptySubtext?: string;
+  /** CHART_MARKERS=1 only. Absent = the chart renders exactly as before. */
+  markers?: ChartMarker[];
 };
 
 type Tooltip = {
@@ -89,6 +93,7 @@ export default function TrendChart({
   unit = "",
   showRollingToggle = false,
   emptySubtext = "Sync Whoop to populate this chart",
+  markers,
 }: Props) {
   const bodyRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
@@ -355,6 +360,9 @@ export default function TrendChart({
           <span key={`${label}-${i}`}>{label}</span>
         ))}
       </div>
+      {markers && (
+        <ChartMarkers markers={markers} plottedDates={valid.map((d) => d.date)} insetLeft={28} chartLabel={title} />
+      )}
     </div>
   );
 }

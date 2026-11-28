@@ -20,6 +20,10 @@ describe("titleForPath", () => {
     expect(titleForPath("/compare")).toBe("Compare periods");
   });
 
+  it("titles /data-health instead of falling back to Overview", () => {
+    expect(titleForPath("/data-health")).toBe("Data health");
+  });
+
   it("titles /year instead of falling back to Overview", () => {
     expect(titleForPath("/year")).toBe("Year in Review");
   });
