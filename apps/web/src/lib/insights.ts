@@ -1,5 +1,4 @@
 import "server-only";
-import { createHash } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { after } from "next/server";
 import {
@@ -74,26 +73,11 @@ function parseTime(value: string | null): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
-/** sha256 of the exact prompt context, so staleness tracks the brief's inputs. */
-export function insightInputsHash(context: string): string {
-  return createHash("sha256").update(context).digest("hex");
-}
-
-function needsRegeneration(
-  userId: number, insight: InsightRow | null, latestDataAt: string | null, today: string,
-): boolean {
+function needsRegeneration(insight: InsightRow | null, latestDataAt: string | null, today: string): boolean {
   if (!latestDataAt) return false;
   if (!insight) return true;
   if (insight.date !== today) return true;
 
-  // A brief records what it was written from. Any new, corrected, or deleted
-  // row inside the window changes the context, even when its provider
-  // timestamp predates the brief (e.g. a recovery that landed mid-generation).
-  if (insight.inputs_hash) {
-    return insightInputsHash(getHealthContext(userId, INSIGHT_DAYS)) !== insight.inputs_hash;
-  }
-
-  // Legacy rows written before inputs_hash existed.
   const insightCreatedMs = parseTime(insight.created_at);
   const latestDataMs = parseTime(latestDataAt);
   if (insightCreatedMs === null || latestDataMs === null) return true;
@@ -106,16 +90,12 @@ export function getInsightStatus(userId: number, hasData: boolean): InsightStatu
   const insight = getLatestInsight(userId, today);
   const failure = getGenerationFailure(userId, "insight");
   const latestDataAt = hasData ? getLatestWhoopDataTimestamp(userId) : null;
-  const isStale = hasData && needsRegeneration(userId, insight, latestDataAt, today);
   return {
     userId,
     today,
     insight,
-    isStale,
-    // A queued pregeneration worker will rewrite a stale brief, so clients
-    // keep polling across the gap between one pass's lock and the next.
-    isRegenerating: isSettingLockActive(generationLockKey(userId, "insight"))
-      || (isStale && pregenerations.has(userId)),
+    isStale: hasData && needsRegeneration(insight, latestDataAt, today),
+    isRegenerating: isSettingLockActive(generationLockKey(userId, "insight")),
     errorClass: failure?.error_class ?? null,
     nextRetryAt: failure ? retryAt(failure) : null,
   };
@@ -142,12 +122,7 @@ export type InsightRefresh = {
 export function scheduleInsightRegeneration(userId: number, hasData: boolean): InsightRefresh {
   const { status, lock, apiKey } = claimInsightRegeneration(userId, hasData);
   if (lock !== null && apiKey !== null) {
-    after(async () => {
-      await regenerateInsight(userId, apiKey, lock);
-      // Data that committed mid-write leaves this brief stale; hand off so it
-      // is rewritten without waiting for another request.
-      if (getInsightStatus(userId, hasData).isStale) await requestPregeneration(userId, 0);
-    });
+    after(() => regenerateInsight(userId, apiKey, lock));
   }
   return { status, refreshing: status.isRegenerating || lock !== null };
 }
@@ -164,8 +139,6 @@ function claimInsightRegeneration(userId: number, hasData: boolean): {
   } catch {
     apiKey = null;
   }
-  // A current brief needs no lock, so the first read already is the answer.
-  if (!before.isStale) return { status: before, lock: null, apiKey };
   const lock = acquireInsightRegenerationLock(before, apiKey);
   return { status: getInsightStatus(userId, hasData), lock, apiKey };
 }
@@ -175,76 +148,35 @@ function claimInsightRegeneration(userId: number, hasData: boolean): {
 // whole burst land so one generation covers it instead of a sleep-only brief
 // that is immediately stale again.
 export const INSIGHT_PREGENERATE_DELAY_MS = 20_000;
-/** Most generation passes one worker makes, however many webhooks join it. */
-export const INSIGHT_PREGENERATE_MAX_PASSES = 3;
-/** How often a worker rechecks a lock another caller holds. */
-export const INSIGHT_PREGENERATE_LOCK_POLL_MS = 5_000;
-/**
- * Overall worker budget after the debounce. Covers waiting out a holder that
- * runs to its full message deadline plus catalog lookup, then writing.
- */
-export const INSIGHT_PREGENERATE_DEADLINE_MS = 6 * 60_000;
-
-// One in-process worker per user (production is a single `next start`
-// process). Webhooks that arrive while one is queued or running join it, so
-// a burst costs at most INSIGHT_PREGENERATE_MAX_PASSES generations in total.
-const pregenerations = new Map<number, Promise<boolean>>();
-
-function requestPregeneration(userId: number, delayMs: number): Promise<boolean> {
-  const existing = pregenerations.get(userId);
-  if (existing) return existing;
-  const run = runPregeneration(userId, delayMs)
-    .catch((err) => {
-      // regenerateInsight records its own failures; this only guards the
-      // status/lock reads from escaping into the after() runner.
-      log.error({ user_id: userId, err: err instanceof Error ? err.message : String(err) }, "insight_pregenerate_failed");
-      return false;
-    })
-    .finally(() => pregenerations.delete(userId));
-  pregenerations.set(userId, run);
-  return run;
-}
-
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-async function runPregeneration(userId: number, delayMs: number): Promise<boolean> {
-  if (delayMs > 0) await sleep(delayMs);
-  const deadline = Date.now() + INSIGHT_PREGENERATE_DEADLINE_MS;
-  let passes = 0;
-  while (passes < INSIGHT_PREGENERATE_MAX_PASSES && Date.now() < deadline) {
-    // Every iteration re-runs every gate: stale inputs, local date, data
-    // present, freshly resolved key, and backoff.
-    const { lock, apiKey } = claimInsightRegeneration(userId, true);
-    if (lock !== null && apiKey !== null) {
-      await regenerateInsight(userId, apiKey, lock);
-      passes++;
-      continue;
-    }
-    // Wait out a pass another caller holds, then recheck what it saved.
-    if (!isSettingLockActive(generationLockKey(userId, "insight"))) break;
-    await sleep(INSIGHT_PREGENERATE_LOCK_POLL_MS);
-  }
-  return passes > 0;
-}
 
 /**
- * Regenerate the brief if new Whoop data has made it stale, so the next app
- * open reads a finished brief instead of waiting on the model. Joins the
- * user's queued or running worker if there is one. Resolves true when this
- * worker made at least one generation attempt.
+ * Regenerate the brief now if new Whoop data has made it stale, so the next
+ * app open reads a finished brief instead of waiting on the model. Same lock,
+ * backoff, and missing-key gate as the request-time path; a concurrent page
+ * load that already holds the lock wins and this is a no-op.
  */
-export function pregenerateInsight(userId: number): Promise<boolean> {
-  return requestPregeneration(userId, 0);
+export async function pregenerateInsight(userId: number): Promise<boolean> {
+  const { lock, apiKey } = claimInsightRegeneration(userId, true);
+  if (lock === null || apiKey === null) return false;
+  await regenerateInsight(userId, apiKey, lock);
+  return true;
 }
 
 /**
  * Called after a Whoop webhook changes a user's data. Runs in after(), so the
- * webhook's 200 to Whoop never waits on the delay or the model, and Next
- * keeps the process alive for it. Must run inside a request scope.
+ * webhook's 200 to Whoop never waits on the delay or the model. Must run
+ * inside a request scope.
  */
 export function scheduleInsightPregeneration(userId: number): void {
   after(async () => {
-    await requestPregeneration(userId, INSIGHT_PREGENERATE_DELAY_MS);
+    await new Promise((resolve) => setTimeout(resolve, INSIGHT_PREGENERATE_DELAY_MS));
+    try {
+      await pregenerateInsight(userId);
+    } catch (err) {
+      // regenerateInsight records its own failures; this only guards the
+      // status/lock reads from escaping into the after() runner.
+      log.error({ user_id: userId, err: err instanceof Error ? err.message : String(err) }, "insight_pregenerate_failed");
+    }
   });
 }
 
@@ -254,45 +186,38 @@ export async function regenerateInsight(
   lock: SettingLock,
 ): Promise<void> {
   try {
-    // One pass per lock, as before. If data commits while the model is
-    // writing, the saved inputs_hash no longer matches and the brief stays
-    // stale for the next caller (pregenerateInsight retries for webhooks).
     const date = insightToday(userId);
     const context = getHealthContext(userId, INSIGHT_DAYS);
-    const insight = await writeInsight(apiKey, context);
-    saveInsight(userId, date, insight, insightInputsHash(context));
+    const client = new Anthropic({ apiKey, ...GENERATION_CLIENT_OPTIONS });
+    // Issue #587 — resolve the configured insight model against the account
+    // catalog (same-family fallback) and build the request's thinking/effort
+    // fields through anthropicReasoningConfig so they are only sent to models
+    // that accept them. Insight generation keeps the coach's default effort.
+    const { model, option } = await resolveCatalogModel(apiKey, insightModel());
+    const response = await client.messages.create({
+      model,
+      max_tokens: INSIGHT_MAX_TOKENS,
+      system: SYSTEM_PROMPT,
+      messages: [
+        {
+          role: "user",
+          content: `Analyze my Whoop data and give me insights:\n\n${context}`,
+        },
+      ],
+      ...(option ? anthropicReasoningConfig(DEFAULT_COACH_EFFORT, option, INSIGHT_MAX_TOKENS) : {}),
+    }, { signal: AbortSignal.timeout(GENERATION_DEADLINE_MS) });
+    const insight = response.content
+      .filter((block) => block.type === "text")
+      .map((block) => block.text)
+      .join("")
+      .trim();
+
+    if (!insight) throw new Error("Empty insight response");
+    saveInsight(userId, date, insight);
     clearGenerationFailure(userId, "insight");
   } catch (err) {
     recordGenerationFailure(userId, "insight", classifyGenerationError(err), apiKey);
   } finally {
     releaseSettingLock(lock);
   }
-}
-
-async function writeInsight(apiKey: string, context: string): Promise<string> {
-  const client = new Anthropic({ apiKey, ...GENERATION_CLIENT_OPTIONS });
-  // Issue #587 — resolve the configured insight model against the account
-  // catalog (same-family fallback) and build the request's thinking/effort
-  // fields through anthropicReasoningConfig so they are only sent to models
-  // that accept them. Insight generation keeps the coach's default effort.
-  const { model, option } = await resolveCatalogModel(apiKey, insightModel());
-  const response = await client.messages.create({
-    model,
-    max_tokens: INSIGHT_MAX_TOKENS,
-    system: SYSTEM_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: `Analyze my Whoop data and give me insights:\n\n${context}`,
-      },
-    ],
-    ...(option ? anthropicReasoningConfig(DEFAULT_COACH_EFFORT, option, INSIGHT_MAX_TOKENS) : {}),
-  }, { signal: AbortSignal.timeout(GENERATION_DEADLINE_MS) });
-  const insight = response.content
-    .filter((block) => block.type === "text")
-    .map((block) => block.text)
-    .join("")
-    .trim();
-  if (!insight) throw new Error("Empty insight response");
-  return insight;
 }

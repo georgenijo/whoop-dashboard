@@ -47,8 +47,6 @@ export type InsightRow = {
   date: string;
   insight: string;
   created_at: string | null;
-  /** sha256 of the prompt context it was written from; null for legacy rows. */
-  inputs_hash: string | null;
 };
 
 /** Convenience: 30-day sparklines for each KPI. Missing values become nulls. */
@@ -140,24 +138,20 @@ export function getLatestInsight(userId: number, today?: string): InsightRow | n
     if (!hasTable(db, "insights") || !hasColumn(db, "insights", "user_id")) return null;
     // Legacy rows used UTC dates. Exclude future local days so they cannot
     // outrank a newly generated insight for today; keep older advice as fallback.
-    const hashCol = hasColumn(db, "insights", "inputs_hash") ? "inputs_hash" : "NULL AS inputs_hash";
     return db.prepare(
-      `SELECT date, insight, created_at, ${hashCol} FROM insights WHERE date <= ? AND user_id = ? ORDER BY date DESC LIMIT 1`,
+      "SELECT date, insight, created_at FROM insights WHERE date <= ? AND user_id = ? ORDER BY date DESC LIMIT 1",
     ).get(today ?? getInsightToday(uid), uid) as InsightRow | undefined ?? null;
   });
 }
 
-export function saveInsight(
-  userId: number, date: string, insight: string, inputsHash: string | null = null,
-): void {
+export function saveInsight(userId: number, date: string, insight: string): void {
   const db = openWrite();
   if (!db) throw new Error("Database unavailable");
   try {
     db.prepare(
-      `INSERT INTO insights (user_id, date, insight, created_at, inputs_hash) VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(user_id, date) DO UPDATE SET insight = excluded.insight,
-         created_at = excluded.created_at, inputs_hash = excluded.inputs_hash`,
-    ).run(userId, date, insight, new Date().toISOString(), inputsHash);
+      `INSERT INTO insights (user_id, date, insight, created_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT(user_id, date) DO UPDATE SET insight = excluded.insight, created_at = excluded.created_at`,
+    ).run(userId, date, insight, new Date().toISOString());
   } finally {
     db.close();
   }
@@ -365,7 +359,7 @@ export function getHealthContext(userId: number, days = 30): string {
   }
 
   const workouts = forUser(userId).all<WorkoutRow>(
-    `SELECT id, date, sport, duration_sec, avg_hr, max_hr, strain, kilojoule FROM workouts WHERE user_id = ? ORDER BY date DESC, id DESC LIMIT ${limit}`,
+    `SELECT id, date, sport, duration_sec, avg_hr, max_hr, strain, kilojoule FROM workouts WHERE user_id = ? ORDER BY date DESC LIMIT ${limit}`,
   );
 
   if (workouts.length) {

@@ -11,9 +11,7 @@ export async function GET(req: Request) {
     const status = getInsightStatus(user.id, true);
     const titleFailure = getGenerationFailure(user.id, "title");
     return Response.json({
-      // Not ready while a generation holds the lock: it may still overwrite
-      // the saved brief with a follow-up pass.
-      ready: status.insight !== null && !status.isStale && !status.isRegenerating,
+      ready: status.insight !== null && !status.isStale,
       isRegenerating: status.isRegenerating,
       errorClass: status.errorClass,
       nextRetryAt: status.nextRetryAt,

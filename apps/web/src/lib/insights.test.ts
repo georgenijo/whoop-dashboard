@@ -39,14 +39,12 @@ import { getLatestInsight, saveInsight } from "./db/summary";
 import { getGenerationFailure } from "./db/ai-generation";
 import {
   INSIGHT_PREGENERATE_DELAY_MS,
-  INSIGHT_PREGENERATE_LOCK_POLL_MS,
   acquireInsightRegenerationLock,
   getInsightStatus,
   insightToday,
   pregenerateInsight,
   regenerateInsight,
   scheduleInsightPregeneration,
-  scheduleInsightRegeneration,
 } from "./insights";
 import { titleChatThread } from "./coach/persistence";
 
@@ -335,7 +333,7 @@ describe("insight pregeneration after new Whoop data", () => {
 
     // A later recovery update makes it stale again, so the next webhook rewrites it.
     vi.setSystemTime(new Date("2026-11-10T04:00:00Z"));
-    sql((db) => db.prepare("UPDATE recovery SET recovery_score = 64, raw = ? WHERE user_id = 2")
+    sql((db) => db.prepare("UPDATE recovery SET raw = ? WHERE user_id = 2")
       .run(JSON.stringify({ updated_at: "2026-11-10T03:59:00Z" })));
     expect(getInsightStatus(2, true).isStale).toBe(true);
     sdk.create.mockResolvedValue({ content: [{ type: "text", text: "Updated brief" }] });
@@ -343,120 +341,15 @@ describe("insight pregeneration after new Whoop data", () => {
     expect(getLatestInsight(2)?.insight).toBe("Updated brief");
   });
 
-  it("rewrites once when a recovery older than the brief commits while it is being written", async () => {
+  it("yields to a generation already in flight and honors the failure backoff", async () => {
     bootstrap();
-    sql((db) => db.prepare("INSERT INTO sleep (user_id, sleep_id, date, raw) VALUES (2, 's-1', '2026-11-10', ?)")
-      .run(JSON.stringify({ updated_at: "2026-11-10T03:05:00Z" })));
-    sdk.create
-      .mockImplementationOnce(async () => {
-        // A previously absent recovery lands mid-generation. Its Whoop
-        // timestamp is older than the sleep's, so the data watermark does
-        // not move; only the brief's recorded inputs can tell.
-        sql((db) => db.prepare("INSERT INTO recovery (user_id, date, recovery_score, raw) VALUES (2, '2026-11-11', 81, ?)")
-          .run(JSON.stringify({ updated_at: "2026-11-10T03:03:00Z" })));
-        return { content: [{ type: "text", text: "Sleep-only brief" }] };
-      })
-      .mockResolvedValueOnce({ content: [{ type: "text", text: "Brief with recovery" }] });
-    expect(await pregenerateInsight(2)).toBe(true);
-    expect(sdk.create).toHaveBeenCalledTimes(2);
-    expect(sdk.create.mock.calls[1][0].messages[0].content).toContain("Recovery=81%");
-    expect(getLatestInsight(2)?.insight).toBe("Brief with recovery");
-    expect(getInsightStatus(2, true)).toMatchObject({ isStale: false, isRegenerating: false });
-  });
-
-  it("waits out a dashboard-held generation and rewrites when data landed mid-write", async () => {
-    bootstrap();
-    vi.useFakeTimers({ toFake: ["Date", "setTimeout"] });
-    vi.setSystemTime(new Date("2026-11-10T03:30:00Z"));
-    let webhookTask: Promise<boolean> | null = null;
-    sdk.create
-      .mockImplementationOnce(async () => {
-        sql((db) => db.prepare("INSERT INTO recovery (user_id, date, recovery_score, raw) VALUES (2, '2026-11-11', 77, ?)")
-          .run(JSON.stringify({ updated_at: "2026-11-10T00:30:00Z" })));
-        // The webhook's delayed task arrives while the dashboard holds the lock.
-        webhookTask = pregenerateInsight(2);
-        return { content: [{ type: "text", text: "Before recovery" }] };
-      })
-      .mockResolvedValueOnce({ content: [{ type: "text", text: "After recovery" }] });
-    expect(await pageLoad()).not.toBeNull();
-    // The dashboard made one call; its brief missed the recovery and stays
-    // stale, and the waiting worker keeps clients polling.
-    expect(sdk.create).toHaveBeenCalledTimes(1);
-    expect(getInsightStatus(2, true)).toMatchObject({ isStale: true, isRegenerating: true });
-    await vi.advanceTimersByTimeAsync(INSIGHT_PREGENERATE_LOCK_POLL_MS);
-    expect(await webhookTask).toBe(true);
-    expect(sdk.create).toHaveBeenCalledTimes(2);
-    expect(getLatestInsight(2)?.insight).toBe("After recovery");
-    expect(getInsightStatus(2, true).isStale).toBe(false);
-  });
-
-  it("keeps an incomplete brief stale when the follow-up fails, then retries after backoff", async () => {
-    bootstrap();
-    sdk.create
-      .mockImplementationOnce(async () => {
-        sql((db) => db.prepare("UPDATE recovery SET recovery_score = 35 WHERE user_id = 2").run());
-        return { content: [{ type: "text", text: "Pre-correction brief" }] };
-      })
-      .mockRejectedValueOnce({ status: 503 });
-    await pregenerateInsight(2);
-    expect(sdk.create).toHaveBeenCalledTimes(2);
-    expect(getLatestInsight(2)?.insight).toBe("Pre-correction brief");
-    // The correction kept its Whoop timestamp, yet the brief is still stale.
-    expect(getInsightStatus(2, true)).toMatchObject({ isStale: true, errorClass: "provider_error" });
-    expect(await pregenerateInsight(2)).toBe(false);
-    vi.setSystemTime(Date.now() + 60_000);
-    sdk.create.mockResolvedValueOnce({ content: [{ type: "text", text: "Corrected brief" }] });
-    expect(await pregenerateInsight(2)).toBe(true);
-    expect(getLatestInsight(2)?.insight).toBe("Corrected brief");
-    expect(getInsightStatus(2, true).isStale).toBe(false);
-  });
-
-  it("waits out a generation already in flight and honors the failure backoff", async () => {
-    bootstrap();
-    vi.useFakeTimers({ toFake: ["Date", "setTimeout"] });
-    vi.setSystemTime(new Date("2026-11-10T03:30:00Z"));
     const held = acquireInsightRegenerationLock(getInsightStatus(2, true), "env-fixture-key")!;
     expect(held).not.toBeNull();
-    // Waits for the holder instead of starting a second call alongside it.
-    const waiting = pregenerateInsight(2);
+    expect(await pregenerateInsight(2)).toBe(false);
     sdk.create.mockRejectedValue(new Error("provider unavailable"));
     await regenerateInsight(2, "env-fixture-key", held);
-    await vi.advanceTimersByTimeAsync(INSIGHT_PREGENERATE_LOCK_POLL_MS);
-    // The holder failed, so the recheck lands in backoff and makes no call.
-    expect(await waiting).toBe(false);
     expect(await pregenerateInsight(2)).toBe(false);
     expect(sdk.create).toHaveBeenCalledTimes(1);
-  });
-
-  it("hands off from a dashboard pass that ends stale so the brief is rewritten", async () => {
-    bootstrap();
-    sdk.create
-      .mockImplementationOnce(async () => {
-        // A cron sync corrects a reading while the dashboard's pass is writing.
-        sql((db) => db.prepare("UPDATE recovery SET recovery_score = 41 WHERE user_id = 2").run());
-        return { content: [{ type: "text", text: "Before correction" }] };
-      })
-      .mockResolvedValueOnce({ content: [{ type: "text", text: "After correction" }] });
-    vi.stubEnv("ANTHROPIC_API_KEY", "env-fixture-key");
-    const { refreshing } = scheduleInsightRegeneration(2, true);
-    expect(refreshing).toBe(true);
-    await (nextServer.after.mock.calls[0][0] as () => Promise<void>)();
-    expect(sdk.create).toHaveBeenCalledTimes(2);
-    expect(getLatestInsight(2)?.insight).toBe("After correction");
-    expect(getInsightStatus(2, true)).toMatchObject({ isStale: false, isRegenerating: false });
-  });
-
-  it("reports a stale brief with a queued worker as regenerating", async () => {
-    bootstrap();
-    vi.useFakeTimers({ toFake: ["Date", "setTimeout"] });
-    vi.setSystemTime(new Date("2026-11-10T03:30:00Z"));
-    sdk.create.mockResolvedValue({ content: [{ type: "text", text: "Queued brief" }] });
-    scheduleInsightPregeneration(2);
-    const run = (nextServer.after.mock.calls[0][0] as () => Promise<void>)();
-    expect(getInsightStatus(2, true)).toMatchObject({ isStale: true, isRegenerating: true });
-    await vi.advanceTimersByTimeAsync(INSIGHT_PREGENERATE_DELAY_MS);
-    await run;
-    expect(getInsightStatus(2, true)).toMatchObject({ isStale: false, isRegenerating: false });
   });
 
   it("waits for the webhook burst before generating, outside the webhook response", async () => {

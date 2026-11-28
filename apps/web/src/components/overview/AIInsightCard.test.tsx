@@ -9,13 +9,13 @@ import AIInsightCard from "./AIInsightCard";
 describe("AIInsightCard", () => {
   it("labels today using the same user-local day as generation", () => {
     const html = renderToString(<AIInsightCard hasData refreshing={false} today="2026-11-09"
-      insight={{ date: "2026-11-09", insight: "Local-day advice", created_at: null, inputs_hash: null }} />);
+      insight={{ date: "2026-11-09", insight: "Local-day advice", created_at: null }} />);
     expect(html).toContain("Today");
   });
 
   it.each(["no_key", "bad_key", "provider_error"] as const)("shows %s failures alongside a cached insight", (errorClass) => {
     const html = renderToString(<AIInsightCard hasData refreshing={false} errorClass={errorClass}
-      insight={{ date: "2026-11-09", insight: "Cached advice", created_at: null, inputs_hash: null }} />);
+      insight={{ date: "2026-11-09", insight: "Cached advice", created_at: null }} />);
     expect(html).toContain("Insight unavailable");
     expect(html).toContain(errorClass.replaceAll("_", " "));
     expect(html).toContain("Cached advice");
@@ -28,7 +28,7 @@ describe("AIInsightCard", () => {
         refreshing={false}
         insight={{
           date: "2026-08-12",
-          created_at: null, inputs_hash: null,
+          created_at: null,
           insight:
             '<script>alert(1)</script><img src=x onerror="alert(1)"> Recovery looks good.',
         }}
@@ -48,7 +48,7 @@ describe("AIInsightCard", () => {
         refreshing={false}
         insight={{
           date: "2026-08-12",
-          created_at: null, inputs_hash: null,
+          created_at: null,
           insight:
             "**Great sleep** last night.\n\n- HRV up\n- RHR down\n\nSee [more](https://example.com).",
         }}
