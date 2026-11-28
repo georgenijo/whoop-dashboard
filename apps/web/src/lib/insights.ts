@@ -127,7 +127,7 @@ export function scheduleInsightRegeneration(userId: number, hasData: boolean): I
   return { status, refreshing: status.isRegenerating || lock !== null };
 }
 
-function claimInsightRegeneration(userId: number, hasData: boolean): {
+function claimInsightRegeneration(userId: number, hasData: boolean, force = false): {
   status: InsightStatus;
   lock: SettingLock | null;
   apiKey: string | null;
@@ -139,7 +139,7 @@ function claimInsightRegeneration(userId: number, hasData: boolean): {
   } catch {
     apiKey = null;
   }
-  const lock = acquireInsightRegenerationLock(before, apiKey);
+  const lock = acquireInsightRegenerationLock(force ? { ...before, isStale: true } : before, apiKey);
   return { status: getInsightStatus(userId, hasData), lock, apiKey };
 }
 
@@ -156,10 +156,21 @@ export const INSIGHT_PREGENERATE_DELAY_MS = 20_000;
  * load that already holds the lock wins and this is a no-op.
  */
 export async function pregenerateInsight(userId: number): Promise<boolean> {
-  const { lock, apiKey } = claimInsightRegeneration(userId, true);
-  if (lock === null || apiKey === null) return false;
-  await regenerateInsight(userId, apiKey, lock);
-  return true;
+  let generated = false;
+  // One follow-up pass: data committed while the model was writing (e.g. a
+  // recovery that lands after the prompt was built) is older than the saved
+  // brief's created_at, so the staleness check alone would treat the brief as
+  // current. Comparing the data watermark before and after catches it.
+  for (let pass = 0; pass < 2; pass++) {
+    const dataBefore = getLatestWhoopDataTimestamp(userId);
+    // The retry skips the created_at staleness gate, which is what misses this case.
+    const { lock, apiKey } = claimInsightRegeneration(userId, true, pass > 0);
+    if (lock === null || apiKey === null) return generated;
+    await regenerateInsight(userId, apiKey, lock);
+    generated = true;
+    if (getLatestWhoopDataTimestamp(userId) === dataBefore) return generated;
+  }
+  return generated;
 }
 
 /**

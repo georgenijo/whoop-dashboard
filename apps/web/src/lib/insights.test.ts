@@ -341,6 +341,23 @@ describe("insight pregeneration after new Whoop data", () => {
     expect(getLatestInsight(2)?.insight).toBe("Updated brief");
   });
 
+  it("rewrites once when recovery commits while the sleep-only brief is being written", async () => {
+    bootstrap();
+    sdk.create
+      .mockImplementationOnce(async () => {
+        // Recovery for the same night lands mid-generation, with a Whoop
+        // timestamp older than the brief's eventual created_at.
+        sql((db) => db.prepare("UPDATE recovery SET raw = ? WHERE user_id = 2")
+          .run(JSON.stringify({ updated_at: "2026-11-10T03:29:00Z" })));
+        return { content: [{ type: "text", text: "Sleep-only brief" }] };
+      })
+      .mockResolvedValueOnce({ content: [{ type: "text", text: "Brief with recovery" }] });
+    expect(await pregenerateInsight(2)).toBe(true);
+    expect(sdk.create).toHaveBeenCalledTimes(2);
+    expect(getLatestInsight(2)?.insight).toBe("Brief with recovery");
+    expect(getInsightStatus(2, true)).toMatchObject({ isStale: false, isRegenerating: false });
+  });
+
   it("yields to a generation already in flight and honors the failure backoff", async () => {
     bootstrap();
     const held = acquireInsightRegenerationLock(getInsightStatus(2, true), "env-fixture-key")!;
