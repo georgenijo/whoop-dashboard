@@ -382,7 +382,7 @@ describe("useChatSend work logs", () => {
       tools: [],
     };
     const fetchMock = vi.fn((url: string) =>
-      String(url) === "/api/chat/history?thread_id=2"
+      String(url) === "/api/chat/history?thread_id=2&include=context"
         ? Promise.resolve(
             Response.json([
               {
@@ -1340,5 +1340,83 @@ describe("useChatSend retry with an untrustworthy history read", () => {
     });
     expect(postBodies(fetchMock)).toHaveLength(1);
     expect(result.current.messages.at(-1)?.error?.detail).toMatch(/wasn't resent/);
+  });
+});
+
+describe("useChatSend context-window figure (issue #608)", () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals();
+    router.refresh.mockReset();
+  });
+
+  function renderWithContext(
+    initialContext: { tokens: number; approximate: boolean } | null,
+  ) {
+    return renderHook(
+      ({ id }: { id: number }) =>
+        useChatSend({
+          initialMessages: emptyMessages,
+          initialContext,
+          threadId: id,
+          setThreadId: vi.fn(),
+          refreshThreads: vi.fn(async () => []),
+        }),
+      { initialProps: { id: 1 } },
+    );
+  }
+
+  it("starts hidden for a new thread and shows the figure the done event reports", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        streamResponse([
+          sse("done", {
+            reply: "Hi",
+            work_log: null,
+            context: { tokens: 42_000, approximate: false },
+          }),
+        ]),
+      ),
+    );
+    const { result } = renderWithContext(null);
+    expect(result.current.context).toBeNull();
+    await act(async () => {
+      await result.current.send("hello");
+    });
+    expect(result.current.context).toEqual({ tokens: 42_000, approximate: false });
+  });
+
+  it("keeps the previous figure when done carries none", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => streamResponse([sse("done", { reply: "Hi", work_log: null })])),
+    );
+    const { result } = renderWithContext({ tokens: 9_000, approximate: true });
+    await act(async () => {
+      await result.current.send("hello");
+    });
+    expect(result.current.context).toEqual({ tokens: 9_000, approximate: true });
+  });
+
+  it("loads the selected thread's figure on a client-side switch and restores it on return", async () => {
+    const fetchMock = vi.fn(async (url: string) =>
+      String(url) === "/api/chat/history?thread_id=2&include=context"
+        ? Response.json({ messages: [], context: { tokens: 150_000, approximate: false } })
+        : Response.json({ messages: [], context: { tokens: 5_000, approximate: false } }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { result, rerender } = renderWithContext({ tokens: 5_000, approximate: false });
+    expect(result.current.context).toEqual({ tokens: 5_000, approximate: false });
+
+    rerender({ id: 2 });
+    // Unvisited thread: hidden until its history arrives, never thread 1's figure.
+    expect(result.current.context).toBeNull();
+    await waitFor(() =>
+      expect(result.current.context).toEqual({ tokens: 150_000, approximate: false }),
+    );
+
+    rerender({ id: 1 });
+    // Cached figure paints immediately while the thread revalidates.
+    expect(result.current.context).toEqual({ tokens: 5_000, approximate: false });
   });
 });

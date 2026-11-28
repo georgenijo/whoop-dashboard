@@ -25,13 +25,28 @@ const TITLES: Record<string, string> = {
   "/steps": "Steps",
   "/workouts": "Workouts",
   "/stats": "Stats",
+  "/weekly": "Weekly review",
+  "/compare": "Compare periods",
+  "/records": "Records",
+  "/year": "Year in Review",
+  "/load": "Training Load",
   "/coach": "Coach",
   "/plans": "Plans",
   "/logs": "Logs",
   "/perf": "Performance",
   "/history": "History",
+  "/report": "Health report",
   "/settings": "Settings",
+  "/alerts": "Alerts",
 };
+
+// Nested routes (`/stats/Running`, `/workouts/<id>`) inherit their section's
+// title instead of falling through to "Overview".
+export function titleForPath(pathname: string): string {
+  if (TITLES[pathname]) return TITLES[pathname];
+  const section = "/" + (pathname.split("/")[1] ?? "");
+  return TITLES[section] ?? "Overview";
+}
 
 function formatToday(): string {
   const d = new Date();
@@ -47,7 +62,7 @@ export default function TopBar({ trailing }: { trailing?: ReactNode } = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const title = TITLES[pathname] ?? "Overview";
+  const title = titleForPath(pathname);
   const range = (searchParams.get("range") as Range) ?? "30d";
   const subtitle = useMemo(() => formatToday(), []);
   const [syncing, setSyncing] = useState(false);

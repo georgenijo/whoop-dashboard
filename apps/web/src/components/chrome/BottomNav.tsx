@@ -24,9 +24,47 @@ const more: Item[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
-const moreHrefs = new Set(more.map((m) => m.href));
+// Added to the "More" drawer only when TRAINING_LOAD=1 (the layout passes `showTrainingLoad`).
+const TRAINING_LOAD_ITEM: Item = { href: "/load", label: "Load", icon: "scale" };
 
-export default function BottomNav() {
+// Shown only when the server passes `showReport` (HEALTH_REPORT=1).
+const reportItem: Item = { href: "/report", label: "Health report", icon: "file-text" };
+
+// Shown only when the server passes `showWeekly` (WEEKLY_REVIEW=1).
+const weeklyItem: Item = { href: "/weekly", label: "Weekly review", icon: "calendar-days" };
+
+// Shown in the More drawer only when the server passes `showAlerts` (HEALTH_ALERTS=1).
+const ALERTS_ITEM: Item = { href: "/alerts", label: "Alerts", icon: "bell" };
+
+// Default-off /compare entry (PERIOD_COMPARE=1); the server layout decides.
+const compareItem: Item = { href: "/compare", label: "Compare", icon: "git-compare" };
+
+// Added to the "More" drawer only when RECORDS_PAGE=1 (the layout passes `showRecords`).
+const RECORDS_ITEM: Item = { href: "/records", label: "Records", icon: "trophy" };
+
+export default function BottomNav({
+  showWeekly = false,
+  compareEnabled = false,
+  showRecords = false,
+  showAlerts = false,
+  showReport = false,
+  showTrainingLoad = false,
+}: {
+  showWeekly?: boolean;
+  compareEnabled?: boolean;
+  showRecords?: boolean;
+  showAlerts?: boolean;
+  showReport?: boolean;
+  showTrainingLoad?: boolean;
+} = {}) {
+  const drawerItems = [
+    ...(showTrainingLoad ? [TRAINING_LOAD_ITEM] : []),
+    ...(showAlerts ? [ALERTS_ITEM] : []),
+    ...(showRecords ? [RECORDS_ITEM] : []),
+    ...(showWeekly ? [weeklyItem] : []),
+    ...(compareEnabled ? [compareItem] : []),
+    ...(showReport ? [...more.slice(0, -1), reportItem, ...more.slice(-1)] : more),
+  ];
   const pathname = usePathname();
   const params = useSearchParams();
   const range = params.get("range");
@@ -42,7 +80,7 @@ export default function BottomNav() {
   }
 
   const withRange = (h: string) => (range ? `${h}?range=${range}` : h);
-  const moreActive = moreHrefs.has(pathname);
+  const moreActive = drawerItems.some((m) => m.href === pathname);
 
   return (
     <>
@@ -55,7 +93,7 @@ export default function BottomNav() {
           />
           <div className="bn-drawer" role="dialog" aria-label="More navigation">
             <div className="bn-drawer-handle" />
-            {more.map((m) => {
+            {drawerItems.map((m) => {
               const Icon = NAV_ICONS[m.icon];
               return (
                 <Link

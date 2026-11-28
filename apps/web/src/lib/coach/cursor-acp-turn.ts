@@ -739,6 +739,14 @@ export async function runCursorAcpTurn(
           usage.cache_creation_input_tokens_total +=
             usageDelta.cachedWriteTokens ?? 0;
           usage.calls += 1;
+          // Issue #608 — ACP reports one usage figure per prompt turn, which
+          // may cover several internal model calls. Best available figure,
+          // flagged approximate.
+          usage.context_tokens =
+            usageDelta.inputTokens +
+            (usageDelta.cachedReadTokens ?? 0) +
+            (usageDelta.cachedWriteTokens ?? 0);
+          usage.context_approximate = true;
         }
         if (toolCapError) throw toolCapError;
         const reply = visibleText.value().trim();

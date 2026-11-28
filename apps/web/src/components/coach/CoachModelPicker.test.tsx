@@ -672,3 +672,53 @@ describe("Settings model catalog integration", () => {
     expect(screen.getByRole("combobox", { name: "Coach model" })).toHaveValue("anthropic:claude-opus-live");
   });
 });
+
+describe("CoachModelPicker context meter (issue #608)", () => {
+  it("shows no meter without a recorded figure", async () => {
+    render(
+      <CoachModelPicker
+        initialModelPref="anthropic:claude-sonnet-4-6"
+        initialCoachEffort="high"
+        disabled={false}
+        onSavingChange={() => {}}
+        context={null}
+      />,
+    );
+    await waitFor(() => expect(anthropicCatalogMock).toHaveBeenCalled());
+    expect(screen.queryByRole("meter")).toBeNull();
+  });
+
+  it("uses the table default until the catalog reports max_input_tokens, then the catalog limit", async () => {
+    anthropicCatalogMock.mockImplementation(() =>
+      Response.json({
+        status: "ready",
+        models: [
+          {
+            id: "claude-sonnet-4-6",
+            display_name: "Claude Sonnet 4.6",
+            thinking: "adaptive",
+            efforts: ["off", "high"],
+            max_tokens: 64000,
+            max_input_tokens: 1_000_000,
+          },
+        ],
+      }),
+    );
+    render(
+      <CoachModelPicker
+        initialModelPref="anthropic:claude-sonnet-4-6"
+        initialCoachEffort="high"
+        disabled={false}
+        onSavingChange={() => {}}
+        context={{ tokens: 180_000, approximate: false }}
+      />,
+    );
+    // Before the catalog lands: 200k table window → 90% → red.
+    expect(screen.getByRole("meter")).toHaveTextContent("180k / 200k");
+    expect(screen.getByRole("meter").className).toContain("is-danger");
+    await waitFor(() =>
+      expect(screen.getByRole("meter")).toHaveTextContent("180k / 1M"),
+    );
+    expect(screen.getByRole("meter").className).toContain("is-ok");
+  });
+});

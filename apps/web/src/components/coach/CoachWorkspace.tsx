@@ -10,6 +10,7 @@ import SuggestionChips from "@/components/coach/SuggestionChips";
 import ThreadSidebar from "@/components/coach/ThreadSidebar";
 import {
   type ChatMessage,
+  type ThreadContext,
   type ThreadSummary,
   useCoachThread,
 } from "@/components/coach/useCoachThread";
@@ -21,6 +22,7 @@ type CoachWorkspaceProps = {
   initialThreadId: number;
   initialThreads: ThreadSummary[];
   initialMessages: ChatMessage[];
+  initialContext?: ThreadContext | null;
   initialModelPref: string;
   initialCoachEffort: CoachEffort;
   initialCursorModelParams: CursorModelParamsByModel;
@@ -35,6 +37,7 @@ export default function CoachWorkspace({
   initialThreadId,
   initialThreads,
   initialMessages,
+  initialContext = null,
   initialModelPref,
   initialCoachEffort,
   initialCursorModelParams,
@@ -67,13 +70,14 @@ export default function CoachWorkspace({
     stop,
     retry,
     threadLoad,
+    context,
     handleCreateThread,
     handleSelectThread,
     handleDeleteThread,
     handleKeyDown,
     badApiKey,
     dismissBadApiKey,
-  } = useCoachThread(initialThreadId, initialThreads, initialMessages);
+  } = useCoachThread(initialThreadId, initialThreads, initialMessages, initialContext);
 
   const threadTitle = activeThread?.title?.trim() || "New chat";
   const threadMeta = activeThread ? formatCount(activeThread.message_count) : "";
@@ -174,6 +178,7 @@ export default function CoachWorkspace({
                 initialCursorModelParams={initialCursorModelParams}
                 disabled={loading}
                 onSavingChange={setModelSaving}
+                context={context}
               />
             }
             preparingImages={preparingImages}
