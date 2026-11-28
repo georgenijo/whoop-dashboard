@@ -1,6 +1,7 @@
 import { APIError, APIConnectionError, APIConnectionTimeoutError } from "@anthropic-ai/sdk";
 import { BadApiKeyError } from "./api-key";
 import { CursorAgentError, MissingCursorKeyError } from "./cursor-key";
+import { CursorInsufficientMemoryError } from "./cursor-memory";
 import { AnthropicModelCatalogError, AnthropicModelUnavailableError } from "./anthropic-models";
 
 export type ChatErrorKind =
@@ -24,7 +25,8 @@ export type ChatErrorReason =
   | "overloaded"
   | "timeout"
   | "quota"
-  | "network";
+  | "network"
+  | "out_of_memory";
 
 export interface ClassifiedChatError {
   status: number;
@@ -58,6 +60,18 @@ export function classifyChatError(err: unknown): ClassifiedChatError {
     };
   }
 
+  if (err instanceof CursorInsufficientMemoryError) {
+    // Raised before spawn, so nothing ran and nothing was stored. Retrying
+    // immediately hits the same ceiling — say so instead of "Try again".
+    return {
+      status: 503,
+      kind: "server_error",
+      reason: "out_of_memory",
+      message:
+        "The server is low on memory, so the Cursor coach didn't start. Switch to a Claude model, or try again in a few minutes.",
+    };
+  }
+
   if (err instanceof CursorAgentError) {
     if (err.reason === "auth") {
       return {
@@ -77,6 +91,21 @@ export function classifyChatError(err: unknown): ClassifiedChatError {
         kind: "upstream_error",
         reason: "timeout",
         message: "The Cursor coach took too long. Try again.",
+      };
+    }
+    const signal = err.exit?.code === null ? err.exit.signal : null;
+    if (signal) {
+      // The subprocess died by signal before replying (issue #475-C). Say
+      // which one: SIGKILL with no timeout is almost always the kernel or the
+      // service cgroup reclaiming memory, which a user can't fix by resending
+      // immediately; anything else (SIGSEGV, SIGABRT, …) is a CLI crash.
+      return {
+        status: 502,
+        kind: "upstream_error",
+        message:
+          signal === "SIGKILL"
+            ? "The Cursor coach process was killed (SIGKILL) before it replied — the server may be short on memory. Try again in a moment."
+            : `The Cursor coach process crashed (${signal}) before it replied. Try again.`,
       };
     }
     return {

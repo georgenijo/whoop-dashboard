@@ -55,13 +55,26 @@ def fleet_base(command: str) -> list[str]:
     return ["fleet", "exec", FLEET_NODE, command]
 
 
+FLEET_PROBE_TIMEOUT_S = 60
+
+
 def master_alive() -> bool:
+    """True when a trivial command actually runs on the node.
+
+    `fleet doctor` exits non-zero on warnings too (stale CLI version, a
+    degraded optional service), which made a perfectly usable node look
+    unavailable. A real `fleet exec <node> -- true` round-trip is the only
+    thing every subcommand here depends on, so gate on that.
+    """
     if shutil.which("fleet") is None:
         return False
-    r = subprocess.run(
-        ["fleet", "doctor", FLEET_NODE],
-        capture_output=True, text=True,
-    )
+    try:
+        r = subprocess.run(
+            ["fleet", "exec", FLEET_NODE, "--", "true"],
+            capture_output=True, text=True, timeout=FLEET_PROBE_TIMEOUT_S,
+        )
+    except subprocess.TimeoutExpired:
+        return False
     return r.returncode == 0
 
 

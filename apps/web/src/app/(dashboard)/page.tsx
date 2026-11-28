@@ -9,6 +9,7 @@ import PRsCard from "@/components/overview/PRsCard";
 import SetupCard from "@/components/overview/SetupCard";
 import NeedsReconnectBanner from "@/components/overview/NeedsReconnectBanner";
 import TzBackfill from "@/components/onboarding/TzBackfill";
+import MorningBriefCard from "@/components/overview/MorningBriefCard";
 import {
   getDailySummaryForDates,
   getOverviewSnapshot,
@@ -23,6 +24,8 @@ import { requireAuthOrSignin } from "@/lib/auth";
 import { scheduleInsightRegeneration } from "@/lib/insights";
 import { resolveRangeWindow } from "@/lib/range";
 import { localToday } from "@/lib/date";
+import { readOverviewMorningBriefInputs } from "@/lib/db/morning-brief";
+import { composeMorningBrief, isMorningBriefEnabled } from "@/lib/analytics/morningBrief";
 
 export const dynamic = "force-dynamic";
 
@@ -80,6 +83,14 @@ export default async function OverviewPage({
       ) : whoopStatus.needs_reauth ? (
         <NeedsReconnectBanner />
       ) : null}
+      {isMorningBriefEnabled() ? (
+        <Suspense fallback={null}>
+          <MorningBriefSection
+            userId={user.id}
+            timezones={[userSettings.tz, userSettings.timezone]}
+          />
+        </Suspense>
+      ) : null}
       <div className="hero">
         <RecoveryHero
           score={latestRecovery?.recovery_score ?? null}
@@ -121,6 +132,18 @@ export default async function OverviewPage({
       </div>
     </>
   );
+}
+
+async function MorningBriefSection({
+  userId,
+  timezones,
+}: {
+  userId: number;
+  timezones: (string | null)[];
+}) {
+  await yieldToStream();
+  const brief = composeMorningBrief(readOverviewMorningBriefInputs(userId, timezones));
+  return <MorningBriefCard brief={brief} />;
 }
 
 async function InsightSection({

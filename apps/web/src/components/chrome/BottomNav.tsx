@@ -27,8 +27,38 @@ const more: Item[] = [
 // Shown only when the server passes `showReport` (HEALTH_REPORT=1).
 const reportItem: Item = { href: "/report", label: "Health report", icon: "file-text" };
 
-export default function BottomNav({ showReport = false }: { showReport?: boolean }) {
-  const drawerItems = showReport ? [...more.slice(0, -1), reportItem, ...more.slice(-1)] : more;
+// Shown only when the server passes `showWeekly` (WEEKLY_REVIEW=1).
+const weeklyItem: Item = { href: "/weekly", label: "Weekly review", icon: "calendar-days" };
+
+// Shown in the More drawer only when the server passes `showAlerts` (HEALTH_ALERTS=1).
+const ALERTS_ITEM: Item = { href: "/alerts", label: "Alerts", icon: "bell" };
+
+// Default-off /compare entry (PERIOD_COMPARE=1); the server layout decides.
+const compareItem: Item = { href: "/compare", label: "Compare", icon: "git-compare" };
+
+// Added to the "More" drawer only when RECORDS_PAGE=1 (the layout passes `showRecords`).
+const RECORDS_ITEM: Item = { href: "/records", label: "Records", icon: "trophy" };
+
+export default function BottomNav({
+  showWeekly = false,
+  compareEnabled = false,
+  showRecords = false,
+  showAlerts = false,
+  showReport = false,
+}: {
+  showWeekly?: boolean;
+  compareEnabled?: boolean;
+  showRecords?: boolean;
+  showAlerts?: boolean;
+  showReport?: boolean;
+} = {}) {
+  const drawerItems = [
+    ...(showAlerts ? [ALERTS_ITEM] : []),
+    ...(showRecords ? [RECORDS_ITEM] : []),
+    ...(showWeekly ? [weeklyItem] : []),
+    ...(compareEnabled ? [compareItem] : []),
+    ...(showReport ? [...more.slice(0, -1), reportItem, ...more.slice(-1)] : more),
+  ];
   const pathname = usePathname();
   const params = useSearchParams();
   const range = params.get("range");

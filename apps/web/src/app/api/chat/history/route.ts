@@ -1,4 +1,9 @@
-import { clearChatMessages, getChatThreadById, getChatThreadMessages } from "@/lib/db";
+import {
+  clearChatMessages,
+  getChatThreadById,
+  getChatThreadContext,
+  getChatThreadMessages,
+} from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 
 function parseThreadId(value: string | null): number {
@@ -9,8 +14,16 @@ function parseThreadId(value: string | null): number {
 export async function GET(req: Request) {
   try {
     const { user } = await requireAuth(req);
-    const threadId = parseThreadId(new URL(req.url).searchParams.get("thread_id"));
-    return Response.json(getChatThreadMessages(user.id, threadId));
+    const params = new URL(req.url).searchParams;
+    const threadId = parseThreadId(params.get("thread_id"));
+    const messages = getChatThreadMessages(user.id, threadId);
+    // Issue #608 — `include=context` opts into an object body carrying the
+    // thread's context-window figure. The bare array stays the default so
+    // existing callers are unaffected. Both reads are owner-scoped.
+    if (params.get("include") === "context") {
+      return Response.json({ messages, context: getChatThreadContext(user.id, threadId) });
+    }
+    return Response.json(messages);
   } catch (err) {
     if (err instanceof Response) return err;
     throw err;
