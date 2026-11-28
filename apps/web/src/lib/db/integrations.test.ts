@@ -298,7 +298,7 @@ describe("integrations + vault", () => {
     });
     // Fresh write defaults to false.
     expect(integrations.getIntegration(1, "whoop")?.needs_reauth).toBe(false);
-    integrations.setIntegrationNeedsReauth(1, "whoop", true);
+    expect(integrations.setIntegrationNeedsReauth(1, "whoop", true)).toBe(true);
     expect(integrations.getIntegration(1, "whoop")?.needs_reauth).toBe(true);
   });
 

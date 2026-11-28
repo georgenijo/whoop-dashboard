@@ -388,14 +388,23 @@ export function setIntegrationNeedsReauth(
   if (!db) return false;
   try {
     if (!hasTable(db, "integrations")) return false;
-    const flag = value ? 1 : 0;
-    const res = db
+    // `needs_reauth != ?` makes this a transition, not a blind write: the
+    // return value is true only when the flag actually changed, so callers
+    // can log (and later push on) the 0→1 edge exactly once instead of on
+    // every failed refresh against an already-flagged row (#263).
+    const info = db
       .prepare(
         "UPDATE integrations SET needs_reauth = ?, updated_at = ? " +
           "WHERE user_id = ? AND provider = ? AND needs_reauth != ?"
       )
-      .run(flag, new Date().toISOString(), user_id, provider, flag);
-    return res.changes > 0;
+      .run(
+        value ? 1 : 0,
+        new Date().toISOString(),
+        user_id,
+        provider,
+        value ? 1 : 0
+      );
+    return info.changes > 0;
   } finally {
     db.close();
   }

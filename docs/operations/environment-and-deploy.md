@@ -82,10 +82,12 @@ kept out of this repository.
 | `COACH_CURSOR_TRANSPORT` | Cursor ACP rollout is enabled | `legacy` (default) or `acp`; controls both model discovery and turns |
 | `COACH_CURSOR_ACP_IDLE_TTL_MS` | ACP session idle lifetime needs tuning | Default 600000 (10 minutes) |
 | `COACH_CURSOR_ACP_MAX_SESSIONS` | ACP process capacity needs tuning | Default 4 live sessions |
+| `COACH_TURN_ROUTING` | Measuring the #489 turn router | Unset/anything else = off. `shadow` records the router's lane, tool envelope, confidence, features and `router_ms` in `chat_logs.details.routing` (plus `timing.router_ms`) next to the tools the turn actually used (`observed_tools`); execution is unchanged. No enforcing mode exists yet |
 | `CURSOR_BACKEND_URL` | Cursor endpoint override is needed | Coach model discovery and turns |
 | `PUBLIC_ORIGIN` | Production redirects are generated | Web auth |
 | `ADMIN_APPLE_SUB` | Admin webhook replay is enabled | Admin authorization |
 | `WHOOP_REFRESH_SECRET` | Refresh-only keepalive timer is enabled (#273) | `POST /api/whoop/refresh` bearer auth — fails closed (404) when unset |
+| `COACH_KEY_PROBE` | Optional; `on` enables the shared-key probe (#525) | Each keepalive tick also checks the shared `CURSOR_API_KEY` against Cursor's `GET /v1/models` (no model turn) and records `ok`/`invalid`/`unreachable` in `credential_health`, shown on `/logs`. Two consecutive rejections open one incident (hook: `registerSharedCredentialIncidentHandler` in `lib/coach/shared-key-probe.ts`). Off by default; requires the keepalive timer |
 | `LOG_LEVEL` | Default logging is not wanted | Structured logger |
 | `APPLE_BUNDLE_ID` | Native Sign in with Apple is enabled | iOS identity verification |
 | `APPLE_SERVICES_ID` | Web Sign in with Apple is enabled | Web Apple OAuth |
@@ -100,6 +102,7 @@ kept out of this repository.
 | `APNS_ENVIRONMENT` | Push delivery is enabled | APNs |
 | `ENABLE_PUSH_DEBUG` | Temporary push diagnostics are explicitly wanted | Debug route |
 | `WHOOP_REAUTH_PUSH` | Opting in to the Whoop-disconnected push (`log` = record only, `on` = send); default off | Reauth push (#287) |
+| `COACH_FAILURE_ALERTS` | Sustained-failure alerting is wanted: `log` (track + log only) or `push` (also APNs to the `ADMIN_APPLE_SUB` user). Unset = off | Failure alerts (#444) |
 
 `ENABLE_PUSH_DEBUG` must remain unset or `0` during normal production.
 

@@ -469,6 +469,20 @@ function migrateSchema(db: DB): void {
         PRIMARY KEY (user_id, token)
       );
       CREATE UNIQUE INDEX IF NOT EXISTS idx_device_tokens_token ON device_tokens(token);
+      -- Sustained-failure incidents (#444). One row per (user, trigger kind);
+      -- status flips open -> resolved and back, which debounces alerts to one
+      -- per incident. Written only when COACH_FAILURE_ALERTS is log|push.
+      CREATE TABLE IF NOT EXISTS failure_incidents (
+        user_id INTEGER NOT NULL,
+        kind TEXT NOT NULL,
+        status TEXT NOT NULL,
+        cause TEXT,
+        opened_at TEXT,
+        resolved_at TEXT,
+        notified_at TEXT,
+        delivery TEXT,
+        PRIMARY KEY (user_id, kind)
+      );
       -- Dead-letter queue for Whoop webhook deliveries. Every signature-valid
       -- event lands here pending; handler outcome moves it to succeeded /
       -- failed / discarded. Failed rows can be replayed via
@@ -641,6 +655,19 @@ function migrateSchema(db: DB): void {
         key_hash TEXT,
         PRIMARY KEY (user_id, kind)
       );
+      -- Issue #525: last-known health of server-side credentials (today only
+      -- the shared CURSOR_API_KEY), written by the keepalive-driven probe in
+      -- lib/coach/shared-key-probe.ts. One row per credential name. Holds
+      -- status + timestamps only — never key material or a key fingerprint.
+      CREATE TABLE IF NOT EXISTS credential_health (
+        credential TEXT PRIMARY KEY,
+        status TEXT NOT NULL,
+        last_checked TEXT NOT NULL,
+        last_ok TEXT,
+        consecutive_invalid INTEGER NOT NULL DEFAULT 0,
+        incident_open INTEGER NOT NULL DEFAULT 0,
+        detail TEXT
+      );
     `);
     const chatCols = db.prepare("PRAGMA table_info(chat_messages)").all() as {
       name: string;
@@ -661,6 +688,19 @@ function migrateSchema(db: DB): void {
       db.exec("ALTER TABLE chat_messages ADD COLUMN presentation_blocks TEXT");
     }
     db.exec("CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id, id)");
+    // Issue #608 — context-window meter. Prompt size (input + cache read +
+    // cache creation tokens) of the LAST model call in the thread's latest
+    // turn. Nullable: threads that predate the column, or have never had a
+    // reply, have no figure and show no meter (not "0").
+    // context_approximate = 1 when the provider only reports a per-turn
+    // cumulative snapshot (Cursor), so the UI marks it "~".
+    const threadCols = db.prepare("PRAGMA table_info(chat_threads)").all() as { name: string }[];
+    if (!threadCols.some((c) => c.name === "context_tokens")) {
+      db.exec("ALTER TABLE chat_threads ADD COLUMN context_tokens INTEGER");
+    }
+    if (!threadCols.some((c) => c.name === "context_approximate")) {
+      db.exec("ALTER TABLE chat_threads ADD COLUMN context_approximate INTEGER NOT NULL DEFAULT 0");
+    }
     const sleepCols = db.prepare("PRAGMA table_info(sleep)").all() as { name: string }[];
     const sleepNeedColumns = [
       "need_from_baseline_ms",
