@@ -152,6 +152,24 @@ function killProcessTree(
   }
 }
 
+// Reap anything the agent left behind in its own process group. The agent is
+// spawned `detached`, so its pid is the group id and every member was started
+// by this session (MCP servers, helpers). Called from the leader's `close`
+// event, milliseconds after it was reaped: Linux will not allocate that pid
+// to a new process while any group member still exists, and an empty group
+// yields ESRCH, so in practice this cannot signal an unrelated process (the
+// existing SIGKILL escalation in terminateProcessTree relies on the same
+// property). Without it a descendant that ignores SIGTERM outlives dispose(),
+// and a crashed agent's children are never signalled at all.
+function reapProcessGroup(pid: number | undefined): void {
+  if (pid === undefined) return;
+  try {
+    process.kill(-pid, "SIGKILL");
+  } catch {
+    // ESRCH: the group is already empty.
+  }
+}
+
 async function terminateProcessTree(
   child: ChildProcessWithoutNullStreams,
 ): Promise<void> {
@@ -329,6 +347,7 @@ export class CursorAcpRuntime {
     child.once("close", (code, signal) => {
       diagnostics.process.exitCode = code;
       diagnostics.process.signal = signal;
+      reapProcessGroup(child.pid);
     });
     const spawnFailure = new Promise<never>((_resolve, reject) => {
       child.once("error", reject);
@@ -623,7 +642,13 @@ export class CursorAcpRuntime {
 
   usageDelta(next: AcpUsage | null | undefined): AcpUsage | null {
     if (!next) return null;
-    const previous = this.usageSnapshot;
+    // ACP usage is cumulative per session. If the agent reports a lower total
+    // than last time, its counters restarted; the new totals are then this
+    // turn's usage. Clamping each field to zero would bill the turn as free.
+    const previous =
+      this.usageSnapshot && next.totalTokens < this.usageSnapshot.totalTokens
+        ? null
+        : this.usageSnapshot;
     this.usageSnapshot = next;
     return {
       totalTokens: Math.max(0, next.totalTokens - (previous?.totalTokens ?? 0)),
