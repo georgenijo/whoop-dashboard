@@ -106,12 +106,16 @@ export function getInsightStatus(userId: number, hasData: boolean): InsightStatu
   const insight = getLatestInsight(userId, today);
   const failure = getGenerationFailure(userId, "insight");
   const latestDataAt = hasData ? getLatestWhoopDataTimestamp(userId) : null;
+  const isStale = hasData && needsRegeneration(userId, insight, latestDataAt, today);
   return {
     userId,
     today,
     insight,
-    isStale: hasData && needsRegeneration(userId, insight, latestDataAt, today),
-    isRegenerating: isSettingLockActive(generationLockKey(userId, "insight")),
+    isStale,
+    // A queued pregeneration worker will rewrite a stale brief, so clients
+    // keep polling across the gap between one pass's lock and the next.
+    isRegenerating: isSettingLockActive(generationLockKey(userId, "insight"))
+      || (isStale && pregenerations.has(userId)),
     errorClass: failure?.error_class ?? null,
     nextRetryAt: failure ? retryAt(failure) : null,
   };
@@ -138,7 +142,12 @@ export type InsightRefresh = {
 export function scheduleInsightRegeneration(userId: number, hasData: boolean): InsightRefresh {
   const { status, lock, apiKey } = claimInsightRegeneration(userId, hasData);
   if (lock !== null && apiKey !== null) {
-    after(() => regenerateInsight(userId, apiKey, lock));
+    after(async () => {
+      await regenerateInsight(userId, apiKey, lock);
+      // Data that committed mid-write leaves this brief stale; hand off so it
+      // is rewritten without waiting for another request.
+      if (getInsightStatus(userId, hasData).isStale) await requestPregeneration(userId, 0);
+    });
   }
   return { status, refreshing: status.isRegenerating || lock !== null };
 }
@@ -166,49 +175,76 @@ function claimInsightRegeneration(userId: number, hasData: boolean): {
 // whole burst land so one generation covers it instead of a sleep-only brief
 // that is immediately stale again.
 export const INSIGHT_PREGENERATE_DELAY_MS = 20_000;
-export const INSIGHT_PREGENERATE_ATTEMPTS = 3;
-export const INSIGHT_PREGENERATE_RETRY_MS = 30_000;
-
+/** Most generation passes one worker makes, however many webhooks join it. */
+export const INSIGHT_PREGENERATE_MAX_PASSES = 3;
+/** How often a worker rechecks a lock another caller holds. */
+export const INSIGHT_PREGENERATE_LOCK_POLL_MS = 5_000;
 /**
- * Regenerate the brief now if new Whoop data has made it stale, so the next
- * app open reads a finished brief instead of waiting on the model. Same lock,
- * backoff, and missing-key gate as the request-time path. A concurrent page
- * load that holds the lock is waited out, then the brief is rechecked.
+ * Overall worker budget after the debounce. Covers waiting out a holder that
+ * runs to its full message deadline plus catalog lookup, then writing.
  */
-export async function pregenerateInsight(userId: number): Promise<boolean> {
-  let generated = false;
-  // Each attempt re-runs every gate (stale inputs, local date, data present,
-  // current key, backoff). Retrying covers data that lands while a pass is
-  // writing; waiting covers a pass someone else holds, so a webhook update
-  // is never dropped just because a dashboard load won the lock.
-  for (let attempt = 0; attempt < INSIGHT_PREGENERATE_ATTEMPTS; attempt++) {
-    const { status, lock, apiKey } = claimInsightRegeneration(userId, true);
+export const INSIGHT_PREGENERATE_DEADLINE_MS = 6 * 60_000;
+
+// One in-process worker per user (production is a single `next start`
+// process). Webhooks that arrive while one is queued or running join it, so
+// a burst costs at most INSIGHT_PREGENERATE_MAX_PASSES generations in total.
+const pregenerations = new Map<number, Promise<boolean>>();
+
+function requestPregeneration(userId: number, delayMs: number): Promise<boolean> {
+  const existing = pregenerations.get(userId);
+  if (existing) return existing;
+  const run = runPregeneration(userId, delayMs)
+    .catch((err) => {
+      // regenerateInsight records its own failures; this only guards the
+      // status/lock reads from escaping into the after() runner.
+      log.error({ user_id: userId, err: err instanceof Error ? err.message : String(err) }, "insight_pregenerate_failed");
+      return false;
+    })
+    .finally(() => pregenerations.delete(userId));
+  pregenerations.set(userId, run);
+  return run;
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function runPregeneration(userId: number, delayMs: number): Promise<boolean> {
+  if (delayMs > 0) await sleep(delayMs);
+  const deadline = Date.now() + INSIGHT_PREGENERATE_DEADLINE_MS;
+  let passes = 0;
+  while (passes < INSIGHT_PREGENERATE_MAX_PASSES && Date.now() < deadline) {
+    // Every iteration re-runs every gate: stale inputs, local date, data
+    // present, freshly resolved key, and backoff.
+    const { lock, apiKey } = claimInsightRegeneration(userId, true);
     if (lock !== null && apiKey !== null) {
       await regenerateInsight(userId, apiKey, lock);
-      generated = true;
+      passes++;
       continue;
     }
-    if (!status.isRegenerating) return generated;
-    await new Promise((resolve) => setTimeout(resolve, INSIGHT_PREGENERATE_RETRY_MS));
+    // Wait out a pass another caller holds, then recheck what it saved.
+    if (!isSettingLockActive(generationLockKey(userId, "insight"))) break;
+    await sleep(INSIGHT_PREGENERATE_LOCK_POLL_MS);
   }
-  return generated;
+  return passes > 0;
+}
+
+/**
+ * Regenerate the brief if new Whoop data has made it stale, so the next app
+ * open reads a finished brief instead of waiting on the model. Joins the
+ * user's queued or running worker if there is one. Resolves true when this
+ * worker made at least one generation attempt.
+ */
+export function pregenerateInsight(userId: number): Promise<boolean> {
+  return requestPregeneration(userId, 0);
 }
 
 /**
  * Called after a Whoop webhook changes a user's data. Runs in after(), so the
- * webhook's 200 to Whoop never waits on the delay or the model. Must run
- * inside a request scope.
+ * webhook's 200 to Whoop never waits on the delay or the model, and Next
+ * keeps the process alive for it. Must run inside a request scope.
  */
 export function scheduleInsightPregeneration(userId: number): void {
   after(async () => {
-    await new Promise((resolve) => setTimeout(resolve, INSIGHT_PREGENERATE_DELAY_MS));
-    try {
-      await pregenerateInsight(userId);
-    } catch (err) {
-      // regenerateInsight records its own failures; this only guards the
-      // status/lock reads from escaping into the after() runner.
-      log.error({ user_id: userId, err: err instanceof Error ? err.message : String(err) }, "insight_pregenerate_failed");
-    }
+    await requestPregeneration(userId, INSIGHT_PREGENERATE_DELAY_MS);
   });
 }
 
