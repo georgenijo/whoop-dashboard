@@ -11,6 +11,9 @@ import WebVitalsReporter from "@/components/WebVitalsReporter";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { addRouteLog } from "@/lib/db";
 import { requireAuthOrSignin } from "@/lib/auth";
+import { isWeeklyReviewEnabled } from "@/lib/weekly-flag";
+import { isPeriodCompareEnabled } from "@/lib/period-compare-flag";
+import { isRecordsPageEnabled } from "@/lib/records-flag";
 import { isHealthAlertsEnabled } from "@/lib/health-alerts-flag";
 import { loadHealthAlerts } from "@/lib/health-alerts";
 import { alertBadgeCount } from "@/lib/analytics/healthAlerts";
@@ -93,6 +96,10 @@ export default async function RootLayout({
     new Request("http://localhost", { headers: requestHeaders }),
   );
 
+  const showWeekly = isWeeklyReviewEnabled();
+  const compareEnabled = isPeriodCompareEnabled();
+  const showRecords = isRecordsPageEnabled();
+
   const route = requestHeaders.get("x-whoop-route-log-route");
   const startedAt = requestHeaders.get("x-whoop-route-log-started-at");
   const startMs = Number(requestHeaders.get("x-whoop-route-log-start-ms"));
@@ -138,7 +145,12 @@ export default async function RootLayout({
         <WebVitalsReporter />
         <div className="app">
           <Suspense fallback={null}>
-            <Sidebar alerts={alertsNav} />
+            <Sidebar
+              showWeekly={showWeekly}
+              compareEnabled={compareEnabled}
+              showRecords={showRecords}
+              alerts={alertsNav}
+            />
           </Suspense>
           <main className="main">
             <Suspense fallback={null}>
@@ -150,7 +162,12 @@ export default async function RootLayout({
           </main>
         </div>
         <Suspense fallback={null}>
-          <BottomNav showAlerts={alertsNav !== undefined} />
+          <BottomNav
+            showWeekly={showWeekly}
+            compareEnabled={compareEnabled}
+            showRecords={showRecords}
+            showAlerts={alertsNav !== undefined}
+          />
         </Suspense>
       </body>
     </html>

@@ -323,7 +323,6 @@ describe("pure reads do not take the write lock", () => {
       const threads = coach.getChatThreads(1);
       const latest = coach.getLatestChatThread(1);
       const byId = coach.getChatThreadById(1, threadId);
-      const summary = coach.getChatThreadSummary(1, threadId);
       const messages = coach.getChatThreadMessages(1, threadId);
       const conversation = coach.getChatThreadConversation(1, threadId);
       const elapsed = performance.now() - t0;
@@ -334,7 +333,6 @@ describe("pure reads do not take the write lock", () => {
       expect(threads.map((t) => t.id)).toEqual([threadId]);
       expect(latest?.id).toBe(threadId);
       expect(byId?.title).toBe("hello");
-      expect(summary?.id).toBe(threadId);
       expect(messages.map((m) => m.content)).toEqual(["hi", "hey"]);
       expect(conversation).toHaveLength(2);
       // A write-handle read would wait out the 5000 ms busy timeout (or fail);
@@ -362,7 +360,6 @@ describe("pure reads do not take the write lock", () => {
     coach.getChatThreads(1);
     coach.getLatestChatThread(1);
     coach.getChatThreadById(1, threadId);
-    coach.getChatThreadSummary(1, threadId);
     coach.getChatThreadMessages(1, threadId);
     coach.getChatThreadConversation(1, threadId);
 

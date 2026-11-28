@@ -24,12 +24,36 @@ const more: Item[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
-const moreHrefs = new Set(more.map((m) => m.href));
+// Shown only when the server passes `showWeekly` (WEEKLY_REVIEW=1).
+const weeklyItem: Item = { href: "/weekly", label: "Weekly review", icon: "calendar-days" };
 
 // Shown in the More drawer only when the server passes `showAlerts` (HEALTH_ALERTS=1).
 const ALERTS_ITEM: Item = { href: "/alerts", label: "Alerts", icon: "bell" };
 
-export default function BottomNav({ showAlerts = false }: { showAlerts?: boolean }) {
+// Default-off /compare entry (PERIOD_COMPARE=1); the server layout decides.
+const compareItem: Item = { href: "/compare", label: "Compare", icon: "git-compare" };
+
+// Added to the "More" drawer only when RECORDS_PAGE=1 (the layout passes `showRecords`).
+const RECORDS_ITEM: Item = { href: "/records", label: "Records", icon: "trophy" };
+
+export default function BottomNav({
+  showWeekly = false,
+  compareEnabled = false,
+  showRecords = false,
+  showAlerts = false,
+}: {
+  showWeekly?: boolean;
+  compareEnabled?: boolean;
+  showRecords?: boolean;
+  showAlerts?: boolean;
+} = {}) {
+  const drawerItems = [
+    ...(showAlerts ? [ALERTS_ITEM] : []),
+    ...(showRecords ? [RECORDS_ITEM] : []),
+    ...(showWeekly ? [weeklyItem] : []),
+    ...(compareEnabled ? [compareItem] : []),
+    ...more,
+  ];
   const pathname = usePathname();
   const params = useSearchParams();
   const range = params.get("range");
@@ -45,8 +69,7 @@ export default function BottomNav({ showAlerts = false }: { showAlerts?: boolean
   }
 
   const withRange = (h: string) => (range ? `${h}?range=${range}` : h);
-  const drawerItems = showAlerts ? [ALERTS_ITEM, ...more] : more;
-  const moreActive = moreHrefs.has(pathname) || (showAlerts && pathname === ALERTS_ITEM.href);
+  const moreActive = drawerItems.some((m) => m.href === pathname);
 
   return (
     <>

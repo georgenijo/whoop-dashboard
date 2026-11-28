@@ -1,0 +1,16 @@
+.intro { color: var(--fg-3); font-size: var(--t-sm); max-width: 62ch; margin: 0 0 var(--s6); }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s6) var(--s8); }
+.label { color: var(--fg-3); font-size: var(--t-xs); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; }
+.value { color: var(--fg); font-family: var(--font-num); font-size: var(--t-xl); font-weight: 450; margin-top: var(--s2); }
+.note { color: var(--fg-3); font-size: var(--t-sm); margin-left: var(--s2); font-family: inherit; }
+.meta { color: var(--fg-2); font-size: var(--t-sm); margin-top: var(--s1); }
+.compare { color: var(--fg-2); font-size: var(--t-sm); margin-top: var(--s2); }
+.since { color: var(--fg-3); font-size: var(--t-xs); margin-top: var(--s1); }
+.history { list-style: none; margin: var(--s3) 0 0; padding: 0; border-top: var(--stroke) solid var(--rule); }
+.history li { display: flex; justify-content: space-between; gap: var(--s3); padding: var(--s2) 0 0; color: var(--fg-3); font-size: var(--t-xs); font-family: var(--font-num); }
+.history li span:first-child { color: var(--fg-2); }
+.empty { color: var(--fg-3); font-size: var(--t-sm); margin-top: var(--s2); }
+.streaks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s6); margin-top: var(--s3); }
+@media (max-width: 720px) {
+  .grid, .streaks { grid-template-columns: 1fr; }
+}

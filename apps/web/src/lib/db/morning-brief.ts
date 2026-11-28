@@ -3,8 +3,15 @@ import "server-only";
 import { createHash } from "node:crypto";
 import type { Database as DB } from "better-sqlite3";
 import { hasColumn, hasTable } from "./connection";
-import { SLEEP_DEDUP_WHERE } from "./sleep";
+import { SLEEP_DEDUP_WHERE, getSleepRange } from "./sleep";
 import { forUser } from "./scoped";
+import { getRecoveryRange } from "./recovery";
+import { getStrainRange } from "./strain";
+import { getWorkoutRowsRange } from "./workouts";
+import {
+  MORNING_BRIEF_LOOKBACK_DAYS,
+  type MorningBriefInput,
+} from "@/lib/analytics/morningBrief";
 
 export const MORNING_BRIEF_TTL_MS = 10 * 60 * 1000;
 
@@ -613,4 +620,33 @@ export function buildMorningBrief(options: BuildMorningBriefOptions): MorningBri
       failure: "schema_invalid",
     };
   }
+}
+
+/**
+ * Inputs for the Overview "Today" card (`MORNING_BRIEF=1`). Separate from
+ * `buildMorningBrief` above, which is the frame publisher's account-bound
+ * snapshot contract and stays unchanged. This path is already authenticated
+ * by the page, so it skips the account-binding checks and only composes the
+ * existing user-scoped range readers (every query goes through `forUser`).
+ *
+ * `today` is the user's local date from their IANA zone (settings `tz`, then
+ * `timezone`), falling back to the server's zone when neither is valid.
+ */
+export function readOverviewMorningBriefInputs(
+  userId: number,
+  timezones: readonly (string | null | undefined)[],
+  now: Date = new Date(),
+): MorningBriefInput {
+  const timezone =
+    timezones.map((tz) => tz?.trim() ?? "").find((tz) => tz && isIanaTimezone(tz)) ??
+    Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const today = dateInTimezone(now, timezone);
+  const start = subtractDays(today, MORNING_BRIEF_LOOKBACK_DAYS);
+  return {
+    today,
+    recovery: getRecoveryRange(userId, start, today),
+    sleep: getSleepRange(userId, start, today),
+    cycles: getStrainRange(userId, start, today),
+    workouts: getWorkoutRowsRange(userId, start, today),
+  };
 }

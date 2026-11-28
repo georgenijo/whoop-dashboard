@@ -15,6 +15,9 @@ const nav: NavItem[] = [
   { href: "/stats", label: "Stats", icon: "bar-chart-3" },
 ];
 
+// Added only when RECORDS_PAGE=1 (the layout passes `showRecords`).
+const RECORDS_ITEM: NavItem = { href: "/records", label: "Records", icon: "trophy" };
+
 const secondary: NavItem[] = [
   { href: "/coach", label: "Coach", icon: "sparkles" },
   { href: "/plans", label: "Plans", icon: "clipboard-list" },
@@ -27,7 +30,28 @@ const secondary: NavItem[] = [
 // the flag is on; `count` is the watch/act alert count for the badge.
 const ALERTS_ITEM: NavItem = { href: "/alerts", label: "Alerts", icon: "bell" };
 
-export default function Sidebar({ alerts }: { alerts?: { count: number } }) {
+// Default-off /compare entry (PERIOD_COMPARE=1); the server layout decides.
+const compareItem: NavItem = { href: "/compare", label: "Compare", icon: "git-compare" };
+
+// Shown only when the server passes `showWeekly` (WEEKLY_REVIEW=1).
+const weeklyItem: NavItem = { href: "/weekly", label: "Weekly review", icon: "calendar-days" };
+
+export default function Sidebar({
+  showWeekly = false,
+  compareEnabled = false,
+  showRecords = false,
+  alerts,
+}: {
+  showWeekly?: boolean;
+  compareEnabled?: boolean;
+  showRecords?: boolean;
+  alerts?: { count: number };
+} = {}) {
+  const items = [
+    ...nav,
+    ...(compareEnabled ? [compareItem] : []),
+    ...(showRecords ? [RECORDS_ITEM] : []),
+  ];
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const range = searchParams.get("range");
@@ -42,7 +66,7 @@ export default function Sidebar({ alerts }: { alerts?: { count: number } }) {
 
       <div className="sb-nav">
         <div className="sb-group-label">Dashboard</div>
-        {nav.map((n) => {
+        {items.map((n) => {
           const Icon = NAV_ICONS[n.icon];
           return (
             <Link
@@ -75,7 +99,7 @@ export default function Sidebar({ alerts }: { alerts?: { count: number } }) {
             )}
           </Link>
         )}
-        {secondary.map((n) => {
+        {(showWeekly ? [weeklyItem, ...secondary] : secondary).map((n) => {
           const Icon = NAV_ICONS[n.icon];
           return (
             <Link
