@@ -21,6 +21,8 @@ const RECORDS_ITEM: NavItem = { href: "/records", label: "Records", icon: "troph
 const TRAINING_LOAD_ITEM: NavItem = { href: "/load", label: "Load", icon: "scale" };
 // Added last only when SHARE_CARD=1 (the layout passes `showShareCard`).
 const SHARE_CARD_ITEM: NavItem = { href: "/share/today", label: "Share today", icon: "share" };
+// Added only when BASELINES_PAGE=1 (the layout passes `showBaselines`).
+const BASELINES_ITEM: NavItem = { href: "/baselines", label: "Baselines", icon: "target" };
 
 const secondary: NavItem[] = [
   { href: "/coach", label: "Coach", icon: "sparkles" },
@@ -55,6 +57,7 @@ export default function Sidebar({
   showTrainingLoad = false,
   showDataHealth = false,
   showShareCard = false,
+  showBaselines = false,
 }: {
   showWeekly?: boolean;
   compareEnabled?: boolean;
@@ -64,6 +67,7 @@ export default function Sidebar({
   showTrainingLoad?: boolean;
   showDataHealth?: boolean;
   showShareCard?: boolean;
+  showBaselines?: boolean;
 } = {}) {
   const items = [
     ...nav,
@@ -71,6 +75,7 @@ export default function Sidebar({
     ...(showRecords ? [RECORDS_ITEM] : []),
     ...(showTrainingLoad ? [TRAINING_LOAD_ITEM] : []),
     ...(showShareCard ? [SHARE_CARD_ITEM] : []),
+    ...(showBaselines ? [BASELINES_ITEM] : []),
   ];
   const secondaryItems = showDataHealth
     ? secondary.flatMap((n) => (n.href === "/logs" ? [DATA_HEALTH_ITEM, n] : [n]))

@@ -464,3 +464,42 @@ Server-side env flag, off by default, read per request
 
 To enable it in production, add `Environment=SLEEP_REGULARITY=1` to the
 `whoop-web` service environment and restart the service.
+
+## Feature flag: `BASELINES_PAGE=1` — Your baselines page (`/baselines`)
+
+Server-side env flag, off by default, read per request
+(`src/lib/baselines-flag.ts`); only the exact value `1` enables it.
+
+- **Off (default, any other value):** `/baselines` returns 404 before any auth
+  or DB read, no Sidebar or More-drawer entry is rendered, and no other page
+  changes or reads anything extra.
+- **On:** a "Baselines" nav entry (Sidebar Dashboard group and the mobile More
+  drawer) opens a server-rendered page (no client JS) that answers "what is
+  normal for me?" for HRV, resting HR, respiratory rate, skin temperature,
+  sleep duration (light + deep + REM), sleep performance, recovery and day
+  strain. The window is 30 days by default, or `?window=60` / `?window=90`
+  (any other value falls back to 30). Per metric:
+  - **Baseline** = median of the daily values in the window.
+  - **Normal range** = 25th–75th percentile (linear interpolation, the
+    existing `percentile` helper from `recoveryOutlook.ts`) — the middle half
+    of your days, shaded on an inline-SVG sparkline with the baseline dashed.
+    Values on an edge count as within.
+  - **Latest value** (no older than 3 days) and whether it is below / within /
+    above the range, in plain words. Skin temperature is shown as a signed
+    deviation from the baseline. Day strain uses yesterday, because today's
+    strain is still accumulating.
+  - **Baseline trend**: today's baseline vs the same-length window that ended
+    60 days ago; a move under max(metric minimum, ¼ of the band width) is
+    "steady". HRV/sleep/recovery up and RHR down read as positive;
+    respiratory rate, skin temperature and strain stay neutral.
+  - A short "what this means" sentence, plus "Building baseline — N of 14
+    days" until a metric has 14 values in the window.
+- **Data:** three user-scoped range reads (`getRecoveryRange`,
+  `getSleepRange` — non-nap, one row per wake day — and `getStrainRange`)
+  covering the window plus the 60-day trend look-back. No writes, tables,
+  migrations, network or LLM calls. Dates are local `YYYY-MM-DD` shifted with
+  UTC arithmetic, so DST never adds or drops a day. Logic is in
+  `src/lib/analytics/baselines.ts` (pure, unit-tested).
+
+To enable it in production, add `Environment=BASELINES_PAGE=1` to the
+`whoop-web` service environment and restart the service.

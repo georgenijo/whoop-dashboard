@@ -19,6 +19,7 @@ import {
   Settings,
   Share2,
   Sparkles,
+  Target,
   Trophy,
   type LucideIcon,
 } from "lucide-react";
@@ -45,4 +46,5 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   scale: Scale,
   "heart-pulse": HeartPulse,
   share: Share2,
+  target: Target,
 };
