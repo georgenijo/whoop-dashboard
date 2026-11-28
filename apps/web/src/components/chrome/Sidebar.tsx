@@ -28,6 +28,9 @@ const secondary: NavItem[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
+// Added before Logs only when DATA_HEALTH=1 (the layout passes `showDataHealth`).
+const DATA_HEALTH_ITEM: NavItem = { href: "/data-health", label: "Data health", icon: "heart-pulse" };
+
 // Shown only when the server passes `showReport` (HEALTH_REPORT=1).
 const reportItem: NavItem = { href: "/report", label: "Health report", icon: "file-text" };
 
@@ -48,6 +51,7 @@ export default function Sidebar({
   alerts,
   showReport = false,
   showTrainingLoad = false,
+  showDataHealth = false,
 }: {
   showWeekly?: boolean;
   compareEnabled?: boolean;
@@ -55,6 +59,7 @@ export default function Sidebar({
   alerts?: { count: number };
   showReport?: boolean;
   showTrainingLoad?: boolean;
+  showDataHealth?: boolean;
 } = {}) {
   const items = [
     ...nav,
@@ -62,6 +67,9 @@ export default function Sidebar({
     ...(showRecords ? [RECORDS_ITEM] : []),
     ...(showTrainingLoad ? [TRAINING_LOAD_ITEM] : []),
   ];
+  const secondaryItems = showDataHealth
+    ? secondary.flatMap((n) => (n.href === "/logs" ? [DATA_HEALTH_ITEM, n] : [n]))
+    : secondary;
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const range = searchParams.get("range");
@@ -111,7 +119,7 @@ export default function Sidebar({
         )}
         {[
           ...(showWeekly ? [weeklyItem] : []),
-          ...(showReport ? [...secondary.slice(0, -1), reportItem, ...secondary.slice(-1)] : secondary),
+          ...(showReport ? [...secondaryItems.slice(0, -1), reportItem, ...secondaryItems.slice(-1)] : secondaryItems),
         ].map((n) => {
           const Icon = NAV_ICONS[n.icon];
           return (
