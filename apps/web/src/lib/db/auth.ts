@@ -126,6 +126,7 @@ export const USER_FK_CONFLICT_TABLES = [
   "daily_summary",
   "daily_steps",
   "whoop_cycle_steps",
+  "failure_incidents",
 ] as const;
 
 /**

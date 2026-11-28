@@ -33,6 +33,23 @@ no runtime errors.
 
 ## Feature flags
 
+- `STRAIN_TARGET=1` — shows a **Today's strain target** card on `/strain`
+  (above the Today tiles and charts): a recommended day-strain range on
+  Whoop's 0–21 scale, a bar of today's strain so far against it, and a
+  one-line reason. Computed in `src/lib/analytics/strainTarget.ts` from
+  today's recovery band (falls back to the latest scored day up to 3 days
+  back, and says so), the 7-day average strain, training-stress balance
+  (the same CTL/ATL EWMA as the TSB chart), and capped by the existing
+  illness (`illness.ts`) and overtraining (`ots.ts`) signals. Thresholds are
+  named, documented constants in that file. Pure computation: no network or
+  LLM calls; the only extra read is 28 days of the user's recovery rows via
+  `getRecoveryRange`. Unset (default) or any other value: `/strain` renders
+  exactly as before and does no extra reads. Guidance only, not medical
+  advice — the card says so.
+- `DATA_EXPORT=1` — enables `GET /api/export` and the "Export my data" card on
+  `/settings` (CSV/JSON download of the signed-in user's own data). Off by
+  default: the route 404s and the settings page is unchanged. See
+  `../../docs/data-export.md`.
 ### `SLEEP_PLAN=1` — "Tonight" sleep plan on `/sleep`
 
 Off by default. Server-side env var, read on every request (restart
@@ -69,3 +86,37 @@ The logic lives in `src/lib/analytics/sleepPlan.ts` (pure, unit-tested):
   to the kit source so future kit refreshes diff cleanly.
 - `src/app/globals.css` — aurora / glass / layout / card / chart styles
   ported from the kit's `ui_kits/dashboard/styles.css`.
+
+## Feature flags
+
+### `WEEKLY_REVIEW=1` — Weekly Review page (`/weekly`)
+
+Off by default. Server-side env flag, read per request (`src/lib/weekly-flag.ts`);
+only the exact value `1` enables it.
+
+- **Off (unset or any other value):** `/weekly` renders Next's not-found page
+  before any auth or DB read, no Sidebar or BottomNav entry is rendered, and no
+  other page changes.
+- **On:** adds "Weekly review" to the Sidebar's Intelligence group and the
+  BottomNav "More" drawer. The page compares the last 7 days (today plus the 6
+  dates before, server-local date) with the 7 days before that: average
+  recovery, HRV, resting HR, sleep duration, sleep performance and efficiency,
+  and day strain, plus best/worst recovery day, nights under 7 h, bed/wake
+  spread (the Sleep page's `computeBedtimePatterns`, needs 5+ nights), and
+  workout count, time, and zone-2 minutes. It also shows 2–4 rule-based
+  highlights (no AI).
+- **Noise thresholds:** changes smaller than recovery 5 pts, HRV 3 ms, RHR
+  2 bpm, sleep 20 min, sleep performance 3 pts, efficiency 2 pts, or strain 1.0
+  read as "no real change". Week-over-week deltas need at least 4 scored
+  recovery days in each week, and at least 4 values per metric. Otherwise only
+  the current week is shown.
+- **Print:** the page has a Print button, and `@media print` styles
+  (`src/styles/weekly.css`) hide the app chrome and print black on white.
+- No new tables, migrations, dependencies, network calls, or LLM calls. It
+  reads through the existing user-scoped `getRecoveryRange`, `getSleepRange`,
+  `getStrainRange`, and `getWorkoutRowsRange` readers. All of the logic is in
+  `src/lib/analytics/weekly.ts`, which is pure.
+
+To enable it in production, add `Environment=WEEKLY_REVIEW=1` to the
+`whoop-web` systemd drop-in and restart the service. That is an operator
+action; this change does not enable it anywhere.

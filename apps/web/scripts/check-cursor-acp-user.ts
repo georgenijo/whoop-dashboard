@@ -3,6 +3,7 @@ import "server-only";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import { cursorAcpCanaryChildEnv } from "../src/lib/coach/cursor-acp-canary-env";
 import { resolveCursorKey } from "../src/lib/coach/cursor-key";
 
 async function main(): Promise<void> {
@@ -22,21 +23,7 @@ async function main(): Promise<void> {
     "../../..",
   );
   const canary = path.join(repositoryRoot, "scripts/check-cursor-acp.mjs");
-  const childEnv: NodeJS.ProcessEnv = {
-    CURSOR_API_KEY: key,
-    NODE_ENV: process.env.NODE_ENV,
-  };
-  for (const name of [
-    "HOME",
-    "PATH",
-    "TMPDIR",
-    "LANG",
-    "LC_ALL",
-    "CURSOR_BACKEND_URL",
-  ]) {
-    const value = process.env[name];
-    if (value !== undefined) childEnv[name] = value;
-  }
+  const childEnv = cursorAcpCanaryChildEnv(process.env, key);
 
   process.stderr.write(`Cursor ACP canary credential origin: ${origin}\n`);
   const child = spawn(process.execPath, [canary, agentBin, model], {
