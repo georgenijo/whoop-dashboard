@@ -10,6 +10,7 @@ import OvertrainingCard from "@/components/recovery/OvertrainingCard";
 import IllnessSignalCard from "@/components/recovery/IllnessSignalCard";
 import SkinTempDeviationCard from "@/components/recovery/SkinTempDeviationCard";
 import Spo2TrendCard from "@/components/recovery/Spo2TrendCard";
+import RecoveryCalendarCard from "@/components/recovery/RecoveryCalendarCard";
 import RecoveryDriversCard from "@/components/recovery/RecoveryDriversCard";
 import {
   getOverviewSnapshot,
@@ -22,6 +23,11 @@ import {
 import { requireAuthOrSignin } from "@/lib/auth";
 import { computeIllnessSignal } from "@/lib/analytics/illness";
 import { computeRebound } from "@/lib/analytics/rebound";
+import {
+  buildRecoveryCalendar,
+  isRecoveryCalendarEnabled,
+  windowStartFor,
+} from "@/lib/analytics/recoveryCalendar";
 import {
   RECOVERY_DRIVERS_LOOKBACK_DAYS,
   computeRecoveryDrivers,
@@ -100,6 +106,17 @@ export default async function RecoveryPage({
 
   const reboundEvents = computeRebound(trend);
 
+  // RECOVERY_CALENDAR=1 only: one extra user-scoped read covering the trailing
+  // 12 months, independent of the range picker. Flag off = no read, no card.
+  let recoveryCalendar: ReactNode = null;
+  if (isRecoveryCalendarEnabled()) {
+    const today = window.end; // resolveRangeWindow's `today` (localToday())
+    const calendarRows = getRecoveryRange(user.id, windowStartFor(today), today);
+    recoveryCalendar = (
+      <RecoveryCalendarCard calendar={buildRecoveryCalendar(calendarRows, today)} />
+    );
+  }
+
   // RECOVERY_DRIVERS=1 only: a fixed lookback independent of the range picker
   // (a 7-day window can never clear the minimum-data gate). Four extra
   // user-scoped reads; flag off does none of them.
@@ -134,6 +151,8 @@ export default async function RecoveryPage({
       {recoveryDrivers}
 
       <OvertrainingCard recovery={otsRecovery} cycles={otsCycles} />
+
+      {recoveryCalendar}
 
       <DayOfWeekRecovery rows={dowRecovery} rangeLabel={rangeLabel} />
 

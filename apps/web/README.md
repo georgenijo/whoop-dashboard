@@ -95,6 +95,20 @@ The logic lives in `src/lib/analytics/sleepPlan.ts` (pure, unit-tested):
   `getStrainRange`, `getWorkoutRowsRange`), no network or LLM calls. Unset
   (default) or any other value: `/recovery` renders exactly as before and
   does no extra reads.
+- `RECOVERY_CALENDAR=1` — shows a **Recovery calendar** card on `/recovery`
+  (below the overtraining card): a GitHub-style heatmap of the trailing 12
+  months of daily recovery (53 week columns x 7 days, Monday-first per
+  `WEEK_START_DAY`), each cell colored by the shared `recoveryBand`
+  thresholds (High >=67, Mid 34–66, Low <34) with a hover tooltip (date,
+  score, HRV, RHR). Below it: a text legend with per-band counts, the current
+  and longest run of consecutive green days, best and worst month by average
+  (months with at least 7 scored days), and days-scored coverage. The grid is
+  `role="img"` with a one-sentence summary, backed by visually hidden monthly
+  and daily data tables for screen readers. Built by
+  `src/lib/analytics/recoveryCalendar.ts` from one extra user-scoped
+  `getRecoveryRange` read over the 12-month window; no network or LLM calls,
+  no client JS. Unset (default) or any other value: `/recovery` renders
+  exactly as before and does no extra reads.
 
 ## Design tokens
 
