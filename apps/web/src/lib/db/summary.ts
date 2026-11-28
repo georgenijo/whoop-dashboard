@@ -365,7 +365,7 @@ export function getHealthContext(userId: number, days = 30): string {
   }
 
   const workouts = forUser(userId).all<WorkoutRow>(
-    `SELECT id, date, sport, duration_sec, avg_hr, max_hr, strain, kilojoule FROM workouts WHERE user_id = ? ORDER BY date DESC LIMIT ${limit}`,
+    `SELECT id, date, sport, duration_sec, avg_hr, max_hr, strain, kilojoule FROM workouts WHERE user_id = ? ORDER BY date DESC, id DESC LIMIT ${limit}`,
   );
 
   if (workouts.length) {

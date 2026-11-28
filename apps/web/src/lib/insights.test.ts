@@ -362,6 +362,23 @@ describe("insight pregeneration after new Whoop data", () => {
     expect(getInsightStatus(2, true)).toMatchObject({ isStale: false, isRegenerating: false });
   });
 
+  it("lets a dashboard-started generation cover data that lands mid-write", async () => {
+    bootstrap();
+    sdk.create
+      .mockImplementationOnce(async () => {
+        sql((db) => db.prepare("INSERT INTO recovery (user_id, date, recovery_score, raw) VALUES (2, '2026-11-11', 77, ?)")
+          .run(JSON.stringify({ updated_at: "2026-11-10T00:30:00Z" })));
+        // The webhook's delayed task arrives while the dashboard holds the lock.
+        expect(await pregenerateInsight(2)).toBe(false);
+        return { content: [{ type: "text", text: "Before recovery" }] };
+      })
+      .mockResolvedValueOnce({ content: [{ type: "text", text: "After recovery" }] });
+    expect(await pageLoad()).not.toBeNull();
+    expect(sdk.create).toHaveBeenCalledTimes(2);
+    expect(getLatestInsight(2)?.insight).toBe("After recovery");
+    expect(getInsightStatus(2, true)).toMatchObject({ isStale: false, isRegenerating: false });
+  });
+
   it("keeps an incomplete brief stale when the follow-up fails, then retries after backoff", async () => {
     bootstrap();
     sdk.create

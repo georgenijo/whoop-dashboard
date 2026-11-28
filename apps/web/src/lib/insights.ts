@@ -155,6 +155,8 @@ function claimInsightRegeneration(userId: number, hasData: boolean): {
   } catch {
     apiKey = null;
   }
+  // A current brief needs no lock, so the first read already is the answer.
+  if (!before.isStale) return { status: before, lock: null, apiKey };
   const lock = acquireInsightRegenerationLock(before, apiKey);
   return { status: getInsightStatus(userId, hasData), lock, apiKey };
 }
@@ -172,17 +174,10 @@ export const INSIGHT_PREGENERATE_DELAY_MS = 20_000;
  * load that already holds the lock wins and this is a no-op.
  */
 export async function pregenerateInsight(userId: number): Promise<boolean> {
-  let attempted = false;
-  // A second pass covers data committed while the first was writing: the
-  // saved brief's inputs_hash then no longer matches, so it is still stale.
-  // If that pass fails, the brief stays stale and callers retry after backoff.
-  for (let pass = 0; pass < 2; pass++) {
-    const { lock, apiKey } = claimInsightRegeneration(userId, true);
-    if (lock === null || apiKey === null) return attempted;
-    await regenerateInsight(userId, apiKey, lock);
-    attempted = true;
-  }
-  return attempted;
+  const { lock, apiKey } = claimInsightRegeneration(userId, true);
+  if (lock === null || apiKey === null) return false;
+  await regenerateInsight(userId, apiKey, lock);
+  return true;
 }
 
 /**
@@ -209,38 +204,51 @@ export async function regenerateInsight(
   lock: SettingLock,
 ): Promise<void> {
   try {
-    const date = insightToday(userId);
-    const context = getHealthContext(userId, INSIGHT_DAYS);
-    const client = new Anthropic({ apiKey, ...GENERATION_CLIENT_OPTIONS });
-    // Issue #587 — resolve the configured insight model against the account
-    // catalog (same-family fallback) and build the request's thinking/effort
-    // fields through anthropicReasoningConfig so they are only sent to models
-    // that accept them. Insight generation keeps the coach's default effort.
-    const { model, option } = await resolveCatalogModel(apiKey, insightModel());
-    const response = await client.messages.create({
-      model,
-      max_tokens: INSIGHT_MAX_TOKENS,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: `Analyze my Whoop data and give me insights:\n\n${context}`,
-        },
-      ],
-      ...(option ? anthropicReasoningConfig(DEFAULT_COACH_EFFORT, option, INSIGHT_MAX_TOKENS) : {}),
-    }, { signal: AbortSignal.timeout(GENERATION_DEADLINE_MS) });
-    const insight = response.content
-      .filter((block) => block.type === "text")
-      .map((block) => block.text)
-      .join("")
-      .trim();
-
-    if (!insight) throw new Error("Empty insight response");
-    saveInsight(userId, date, insight, insightInputsHash(context));
-    clearGenerationFailure(userId, "insight");
+    // Whoever holds the lock (dashboard load or webhook) covers data that
+    // commits while the model is writing: if the saved brief's inputs no
+    // longer match, write once more before releasing. Two passes at
+    // GENERATION_DEADLINE_MS each stay inside GENERATION_LOCK_TTL_MS. A
+    // failed pass leaves the brief stale, so callers retry after backoff.
+    for (let pass = 0; pass < 2; pass++) {
+      const date = insightToday(userId);
+      const context = getHealthContext(userId, INSIGHT_DAYS);
+      const inputsHash = insightInputsHash(context);
+      const insight = await writeInsight(apiKey, context);
+      saveInsight(userId, date, insight, inputsHash);
+      clearGenerationFailure(userId, "insight");
+      if (insightInputsHash(getHealthContext(userId, INSIGHT_DAYS)) === inputsHash) break;
+    }
   } catch (err) {
     recordGenerationFailure(userId, "insight", classifyGenerationError(err), apiKey);
   } finally {
     releaseSettingLock(lock);
   }
+}
+
+async function writeInsight(apiKey: string, context: string): Promise<string> {
+  const client = new Anthropic({ apiKey, ...GENERATION_CLIENT_OPTIONS });
+  // Issue #587 — resolve the configured insight model against the account
+  // catalog (same-family fallback) and build the request's thinking/effort
+  // fields through anthropicReasoningConfig so they are only sent to models
+  // that accept them. Insight generation keeps the coach's default effort.
+  const { model, option } = await resolveCatalogModel(apiKey, insightModel());
+  const response = await client.messages.create({
+    model,
+    max_tokens: INSIGHT_MAX_TOKENS,
+    system: SYSTEM_PROMPT,
+    messages: [
+      {
+        role: "user",
+        content: `Analyze my Whoop data and give me insights:\n\n${context}`,
+      },
+    ],
+    ...(option ? anthropicReasoningConfig(DEFAULT_COACH_EFFORT, option, INSIGHT_MAX_TOKENS) : {}),
+  }, { signal: AbortSignal.timeout(GENERATION_DEADLINE_MS) });
+  const insight = response.content
+    .filter((block) => block.type === "text")
+    .map((block) => block.text)
+    .join("")
+    .trim();
+  if (!insight) throw new Error("Empty insight response");
+  return insight;
 }

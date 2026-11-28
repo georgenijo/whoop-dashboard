@@ -9,6 +9,7 @@ vi.mock("server-only", () => ({}));
 import { openWrite } from "@/lib/db/connection";
 import { saveInsight } from "@/lib/db/summary";
 import { saveGenerationFailure } from "@/lib/db/ai-generation";
+import { acquireSettingLock } from "@/lib/db/settings";
 import { signSessionToken } from "@/lib/auth/jwt";
 import { GET } from "./route";
 
@@ -56,5 +57,11 @@ describe("GET /api/insights/status", () => {
     expect(await response.json()).toEqual({
       ready: true, isRegenerating: false, errorClass: null, nextRetryAt: null, titleErrorClass: null,
     });
+  });
+  it("is not ready while a generation still holds the lock, even if the saved brief looks current", async () => {
+    acquireSettingLock("ai_generation:insight:1", 60_000);
+    const { token } = await signSessionToken(1);
+    const response = await GET(request({ cookie: `__Host-coach_session=${token}` }));
+    expect(await response.json()).toMatchObject({ ready: false, isRegenerating: true });
   });
 });
