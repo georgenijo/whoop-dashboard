@@ -139,6 +139,13 @@ describe("Anthropic model discovery", () => {
     expect(await listAnthropicModelsForKey("key")).toHaveLength(1);
   });
 
+  it("carries the Models API input limit for the context meter (issue #608)", async () => {
+    const { anthropicModelOption } = await import("./anthropic-models");
+    expect(anthropicModelOption({ ...model("claude-sonnet-5-5"), max_input_tokens: 1_000_000 }))
+      .toMatchObject({ max_input_tokens: 1_000_000 });
+    expect(anthropicModelOption(model("claude-sonnet-5-5"))).toMatchObject({ max_input_tokens: null });
+  });
+
   it("uses authoritative capabilities, including models without thinking", async () => {
     const { anthropicModelOption } = await import("./anthropic-models");
     const capabilities = {

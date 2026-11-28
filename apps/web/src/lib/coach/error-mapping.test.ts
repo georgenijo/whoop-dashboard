@@ -71,3 +71,34 @@ describe("classifyChatError — Cursor memory pre-flight (issue #475-A)", () => 
     expect(c.message).not.toBe("The Cursor coach hit an error. Try again.");
   });
 });
+
+describe("classifyChatError — Cursor process signal deaths (issue #475-C)", () => {
+  it("tells the user the process was killed, with the signal, instead of a bare retry prompt", () => {
+    const c = classifyChatError(
+      new CursorAgentError("agent", "cursor-agent killed by SIGKILL: ", undefined, {
+        code: null,
+        signal: "SIGKILL",
+      }),
+    );
+    expect(c.status).toBe(502);
+    expect(c.kind).toBe("upstream_error");
+    expect(c.message).toContain("SIGKILL");
+    expect(c.message).toMatch(/short on memory/);
+    expect(c.reason).toBeUndefined();
+  });
+
+  it("calls any other signal a crash and names it", () => {
+    const c = classifyChatError(
+      new CursorAgentError("agent", "x", undefined, { code: null, signal: "SIGSEGV" }),
+    );
+    expect(c.message).toBe("The Cursor coach process crashed (SIGSEGV) before it replied. Try again.");
+  });
+
+  it("keeps the generic copy for a numeric exit or no exit info", () => {
+    const generic = "The Cursor coach hit an error. Try again.";
+    expect(
+      classifyChatError(new CursorAgentError("agent", "x", undefined, { code: 1, signal: null })).message,
+    ).toBe(generic);
+    expect(classifyChatError(new CursorAgentError("agent", "x")).message).toBe(generic);
+  });
+});

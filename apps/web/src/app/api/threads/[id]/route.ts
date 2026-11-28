@@ -1,4 +1,9 @@
-import { deleteChatThread, getChatThreadById, getChatThreadMessages } from "@/lib/db";
+import {
+  deleteChatThread,
+  getChatThreadById,
+  getChatThreadContext,
+  getChatThreadMessages,
+} from "@/lib/db";
 import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +31,8 @@ export async function GET(
     return Response.json({
       thread,
       messages: getChatThreadMessages(user.id, threadId),
+      // Issue #608 — null until the thread's first reply.
+      context: getChatThreadContext(user.id, threadId),
     });
   } catch (err) {
     if (err instanceof Response) return err;

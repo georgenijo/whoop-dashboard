@@ -251,4 +251,3 @@ export function computeBedtimePatterns(sleep: SleepRow[]): BedtimePatternsResult
 }
 
 export const BEDTIME_ANCHOR_HOUR = BEDTIME_ANCHOR;
-export const WAKE_ANCHOR_HOUR = WAKE_ANCHOR;

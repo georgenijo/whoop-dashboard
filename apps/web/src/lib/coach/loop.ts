@@ -47,7 +47,30 @@ export type Usage = {
   cache_creation_input_tokens_total: number;
   cache_read_input_tokens_total: number;
   calls: number;
+  /**
+   * Issue #608 — prompt size of the LAST model call this turn
+   * (input + cache read + cache creation). Unlike the `_total` sums, this is
+   * overwritten per call, not accumulated: every tool iteration re-sends the
+   * whole prompt, so summing would overstate how full the context is.
+   * Absent until a call reports usage.
+   */
+  context_tokens?: number;
+  /** True when `context_tokens` is a provider's cumulative snapshot (Cursor). */
+  context_approximate?: boolean;
 };
+
+/** Prompt-side size of a single usage report. */
+export function promptTokens(usage: {
+  input_tokens: number;
+  cache_creation_input_tokens?: number | null;
+  cache_read_input_tokens?: number | null;
+}): number {
+  return (
+    usage.input_tokens +
+    (usage.cache_creation_input_tokens ?? 0) +
+    (usage.cache_read_input_tokens ?? 0)
+  );
+}
 
 export type DetailState = {
   iterations: number;
@@ -116,6 +139,11 @@ export type DetailState = {
     }>;
     terminal_subtype: string | null;
     terminal_seen: boolean;
+    // Legacy transport only: how the cursor-agent process ended, from Node's
+    // `close` (code, signal). A signal death is `{ code: null, signal }`.
+    // null when close never fired (early-exit reject). The ACP transport
+    // records the same pair under `acp.process` instead. Issue #475-C.
+    exit?: { code: number | null; signal: NodeJS.Signals | null } | null;
     // Counts every `started` tool_call event with a real MCP tool name — see
     // ./cursor-loop's `!a?.toolName` guard. May exceed the completed count
     // in `tool_events` when a call never finishes.
@@ -271,6 +299,9 @@ function addUsageTotals(
   usage.cache_read_input_tokens_total +=
     responseUsage.cache_read_input_tokens ?? 0;
   usage.calls += 1;
+  // Last call wins: the final iteration's prompt is the thread's context size.
+  usage.context_tokens = promptTokens(responseUsage);
+  usage.context_approximate = false;
 }
 
 function emitStreamProgress(

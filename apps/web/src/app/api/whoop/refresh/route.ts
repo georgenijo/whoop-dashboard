@@ -1,4 +1,5 @@
 import { secretMatches } from "@/lib/auth/secret-compare";
+import { runSharedKeyProbe } from "@/lib/coach/shared-key-probe";
 import { listIntegrationUserIds } from "@/lib/db/integrations";
 import { addSyncLog, KEEPALIVE_SYNC_SOURCE } from "@/lib/db/logs";
 import { forModule } from "@/lib/logger";
@@ -140,7 +141,16 @@ export async function POST(req: Request) {
   // dead tenant.
   const userIds = listIntegrationUserIds(WHOOP_PROVIDER, { activeOnly: true });
 
-  const users = await Promise.all(userIds.map(refreshOne));
+  // #525: the same timer tick also probes the shared CURSOR_API_KEY (no-op
+  // unless COACH_KEY_PROBE=on). Runs concurrently so it never extends the
+  // timer's 25s curl budget beyond the probe's own 10s catalog timeout, and
+  // never rejects. Its result is reported in the body but deliberately does
+  // NOT feed the 200/502 status below — that status means "Whoop refresh
+  // chain healthy", and the probe's state lives in credential_health.
+  const [users, keyProbe] = await Promise.all([
+    Promise.all(userIds.map(refreshOne)),
+    runSharedKeyProbe().catch(() => ({ ran: false as const, reason: "error" as const })),
+  ]);
 
   const refreshed = users.filter((u) => u.ok).length;
   const failed = users.length - refreshed;
@@ -171,7 +181,16 @@ export async function POST(req: Request) {
   // success 48x/day while a dead integration silently rots. That silent
   // "OK" response is verbatim the bug #273 exists to prevent.
   return Response.json(
-    { ok: healthy, total: users.length, refreshed, failed, users },
+    {
+      ok: healthy,
+      total: users.length,
+      refreshed,
+      failed,
+      users,
+      key_probe: keyProbe.ran
+        ? { status: keyProbe.status, incident: keyProbe.incident }
+        : { status: "skipped", reason: keyProbe.reason },
+    },
     { status: healthy ? 200 : 502 }
   );
 }
