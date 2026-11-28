@@ -661,6 +661,19 @@ function migrateSchema(db: DB): void {
       db.exec("ALTER TABLE chat_messages ADD COLUMN presentation_blocks TEXT");
     }
     db.exec("CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id, id)");
+    // Issue #608 — context-window meter. Prompt size (input + cache read +
+    // cache creation tokens) of the LAST model call in the thread's latest
+    // turn. Nullable: threads that predate the column, or have never had a
+    // reply, have no figure and show no meter (not "0").
+    // context_approximate = 1 when the provider only reports a per-turn
+    // cumulative snapshot (Cursor), so the UI marks it "~".
+    const threadCols = db.prepare("PRAGMA table_info(chat_threads)").all() as { name: string }[];
+    if (!threadCols.some((c) => c.name === "context_tokens")) {
+      db.exec("ALTER TABLE chat_threads ADD COLUMN context_tokens INTEGER");
+    }
+    if (!threadCols.some((c) => c.name === "context_approximate")) {
+      db.exec("ALTER TABLE chat_threads ADD COLUMN context_approximate INTEGER NOT NULL DEFAULT 0");
+    }
     const sleepCols = db.prepare("PRAGMA table_info(sleep)").all() as { name: string }[];
     const sleepNeedColumns = [
       "need_from_baseline_ms",

@@ -766,6 +766,9 @@ describe("runCursorTurn usage extraction (issue #443)", () => {
       cache_creation_input_tokens_total: 30876,
       cache_read_input_tokens_total: 0,
       calls: 1,
+      // Issue #608 — Cursor's one cumulative snapshot, flagged approximate.
+      context_tokens: 30878,
+      context_approximate: true,
     });
   });
 

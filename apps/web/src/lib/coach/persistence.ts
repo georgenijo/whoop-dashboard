@@ -4,8 +4,10 @@ import type { AuthSource } from "@/lib/auth";
 import {
   addChatLog,
   addChatMessages,
+  setChatThreadContext,
   setChatThreadTitle,
   type ChatMessageInsert,
+  type ChatThreadContext,
 } from "@/lib/db";
 import type { ApiKeyOrigin } from "./api-key";
 import { resolveCatalogModel } from "./model-resolution";
@@ -73,7 +75,12 @@ export async function runAndPersistCoachTurn(
   apiKeyOrigin: ApiKeyOrigin,
   options: RunAnthropicOptions = {},
   handle?: CoachTurnHandle
-): Promise<{ reply: string; workLog: CoachWorkLog; presentationBlocks: CoachPresentationBlock[] }> {
+): Promise<{
+  reply: string;
+  workLog: CoachWorkLog;
+  presentationBlocks: CoachPresentationBlock[];
+  context: ChatThreadContext | null;
+}> {
   const startedAt = new Date().toISOString();
   const startMs = Date.now();
   const promptPreview = turn.displayText
@@ -159,6 +166,25 @@ export async function runAndPersistCoachTurn(
     addChatMessages(thread.id, result.messages);
     detailState.persistence_ms = Date.now() - persistenceStartedMs;
     handle?.markCommitted();
+    // Issue #608 — only a completed turn updates the meter; a failed or
+    // aborted turn leaves the previous figure in place. No usage reported
+    // (or zero) keeps whatever was there rather than writing a fake 0.
+    const context: ChatThreadContext | null =
+      usage.context_tokens != null && usage.context_tokens > 0
+        ? { tokens: usage.context_tokens, approximate: usage.context_approximate === true }
+        : null;
+    if (context) {
+      // The turn is already committed; a failed meter write must not turn it
+      // into an error (and a Retry would then duplicate it).
+      try {
+        setChatThreadContext(userId, thread.id, context);
+      } catch (err) {
+        console.warn("[coach] context_tokens write failed", {
+          thread_id: thread.id,
+          err: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
     addChatLog({
       user_id: userId,
       started_at: startedAt,
@@ -177,6 +203,7 @@ export async function runAndPersistCoachTurn(
       reply: presentation.reply,
       workLog,
       presentationBlocks: presentation.presentationBlocks,
+      context,
     };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
