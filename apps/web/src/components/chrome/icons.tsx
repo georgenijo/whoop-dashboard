@@ -4,6 +4,7 @@ import {
   Bell,
   ClipboardList,
   Dumbbell,
+  FileText,
   Flame,
   Gauge,
   LayoutDashboard,
@@ -31,4 +32,5 @@ export const NAV_ICONS: Record<string, LucideIcon> = {
   bell: Bell,
   menu: Menu,
   gauge: Gauge,
+  "file-text": FileText,
 };

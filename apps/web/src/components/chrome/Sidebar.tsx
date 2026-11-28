@@ -23,7 +23,10 @@ const secondary: NavItem[] = [
   { href: "/settings", label: "Settings", icon: "settings" },
 ];
 
-export default function Sidebar() {
+// Shown only when the server passes `showReport` (HEALTH_REPORT=1).
+const reportItem: NavItem = { href: "/report", label: "Health report", icon: "file-text" };
+
+export default function Sidebar({ showReport = false }: { showReport?: boolean }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const range = searchParams.get("range");
@@ -53,7 +56,7 @@ export default function Sidebar() {
           );
         })}
         <div className="sb-group-label">Intelligence</div>
-        {secondary.map((n) => {
+        {(showReport ? [...secondary.slice(0, -1), reportItem, ...secondary.slice(-1)] : secondary).map((n) => {
           const Icon = NAV_ICONS[n.icon];
           return (
             <Link
