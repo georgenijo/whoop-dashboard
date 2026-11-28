@@ -138,6 +138,26 @@ reads run.
 | `MORNING_BRIEF` | Adds a "Today" morning-brief card to the top of the Overview (`/`): readiness (recovery score, zone, vs the prior 7-day average), last night's sleep (hours vs need, performance, bed → wake), yesterday's strain and workouts, at most one "watch out" (illness signal from `lib/analytics/illness.ts`, else overtraining from `lib/analytics/ots.ts`), and one fixed-rule suggestion. Pure rules in `src/lib/analytics/morningBrief.ts`; reads via `readOverviewMorningBriefInputs` in `src/lib/db/morning-brief.ts` (existing user-scoped range readers, 30-day look-back). No AI, no network. If today's recovery is not scored yet it shows the latest scored day and says so; stale data shows the same "Last synced … · N days ago" banner as `/strain`. |
 Server-side env flags, off by default, read per request.
 
+### `GOALS_PAGE=1` — Personal Goals page (`/goals`)
+
+- **Off (default, any value other than `1`):** `/goals` returns 404 before
+  any auth or DB read, no Sidebar or BottomNav entry renders, and no other
+  page changes.
+- **On:** adds "Goals" to the Sidebar's Dashboard group and the BottomNav
+  "More" drawer. The user turns on a few weekly targets — average sleep
+  hours, average sleep performance, recovery ≥ X% on N days, workouts a week,
+  total weekly day strain, average resting HR ≤ Z — and each shows a progress
+  ring, an on track / behind / met status for the current week, the current
+  and best streak of consecutive weeks met, and a week-by-week strip. Weeks
+  start on Monday (there is no week-start setting yet); all date math is on
+  calendar dates, so DST changes can't shift a week.
+  The server does one bounded, user-scoped read (`getDailySummary` over the
+  last 90 days); the evaluation is pure (`src/lib/analytics/goals.ts`).
+  **Goals are stored only in the browser** (`localStorage` key
+  `whoop.goals.v1`, strictly validated on read; corrupt or out-of-range
+  values fall back to the defaults). No tables, migrations, server writes or
+  network calls.
+
 ### `RECORDS_PAGE=1` — Personal Records page (`/records`)
 
 - **Off (default, any value other than `1`):** `/records` returns 404 before

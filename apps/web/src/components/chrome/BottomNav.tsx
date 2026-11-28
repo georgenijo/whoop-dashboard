@@ -50,6 +50,9 @@ const compareItem: Item = { href: "/compare", label: "Compare", icon: "git-compa
 // Added to the "More" drawer only when RECORDS_PAGE=1 (the layout passes `showRecords`).
 const RECORDS_ITEM: Item = { href: "/records", label: "Records", icon: "trophy" };
 
+// Added to the "More" drawer only when GOALS_PAGE=1 (the layout passes `showGoals`).
+const GOALS_ITEM: Item = { href: "/goals", label: "Goals", icon: "flag" };
+
 export default function BottomNav({
   showWeekly = false,
   compareEnabled = false,
@@ -58,6 +61,7 @@ export default function BottomNav({
   showReport = false,
   showTrainingLoad = false,
   showDataHealth = false,
+  showGoals = false,
   showShareCard = false,
   showBaselines = false,
 }: {
@@ -68,6 +72,7 @@ export default function BottomNav({
   showReport?: boolean;
   showTrainingLoad?: boolean;
   showDataHealth?: boolean;
+  showGoals?: boolean;
   showShareCard?: boolean;
   showBaselines?: boolean;
 } = {}) {
@@ -80,6 +85,7 @@ export default function BottomNav({
     ...(showBaselines ? [BASELINES_ITEM] : []),
     ...(showAlerts ? [ALERTS_ITEM] : []),
     ...(showRecords ? [RECORDS_ITEM] : []),
+    ...(showGoals ? [GOALS_ITEM] : []),
     ...(showWeekly ? [weeklyItem] : []),
     ...(compareEnabled ? [compareItem] : []),
     ...(showReport ? [...moreItems.slice(0, -1), reportItem, ...moreItems.slice(-1)] : moreItems),

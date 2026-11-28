@@ -22,6 +22,7 @@ import { alertBadgeCount } from "@/lib/analytics/healthAlerts";
 import { isHealthReportEnabled } from "@/lib/health-report-flag";
 import { isTrainingLoadEnabled } from "@/lib/training-load-flag";
 import { isDataHealthEnabled } from "@/lib/data-health-flag";
+import { isGoalsPageEnabled } from "@/lib/goals-flag";
 import { isShareCardEnabled } from "@/lib/share-card-flag";
 import { isBaselinesPageEnabled } from "@/lib/baselines-flag";
 import "../globals.css";
@@ -109,6 +110,7 @@ export default async function RootLayout({
   const showReport = isHealthReportEnabled();
   const showTrainingLoad = isTrainingLoadEnabled();
   const showDataHealth = isDataHealthEnabled();
+  const showGoals = isGoalsPageEnabled();
   const showShareCard = isShareCardEnabled();
   const showBaselines = isBaselinesPageEnabled();
 
@@ -165,6 +167,7 @@ export default async function RootLayout({
               showReport={showReport}
               showTrainingLoad={showTrainingLoad}
               showDataHealth={showDataHealth}
+              showGoals={showGoals}
               showShareCard={showShareCard}
               showBaselines={showBaselines}
             />
@@ -189,6 +192,7 @@ export default async function RootLayout({
             showReport={showReport}
             showTrainingLoad={showTrainingLoad}
             showDataHealth={showDataHealth}
+            showGoals={showGoals}
             showShareCard={showShareCard}
             showBaselines={showBaselines}
           />
