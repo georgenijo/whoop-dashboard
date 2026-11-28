@@ -1,6 +1,6 @@
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import RecordsView, { formatRecordDate, formatRecordValue } from "./RecordsView";
+import RecordsView, { formatRecordDate, formatRecordDelta, formatRecordValue } from "./RecordsView";
 import { buildRecordBoard, RECORD_METRICS, type RecordSeries } from "@/lib/analytics/records";
 
 const T = "2026-11-27";
@@ -17,6 +17,12 @@ describe("formatters", () => {
     expect(formatRecordValue("sleepDuration", 9 * 3_600_000 + 5 * 60_000)).toBe("9h 05m");
     expect(formatRecordValue("workoutDuration", 45 * 60)).toBe("45m");
     expect(formatRecordValue("steps", 23456)).toBe("23,456");
+  });
+
+  it("formats percent-metric gaps as points, others in their own unit", () => {
+    expect(formatRecordDelta("recovery", 34.4)).toBe("34 pts");
+    expect(formatRecordDelta("sleepPerformance", 19)).toBe("19 pts");
+    expect(formatRecordDelta("hrv", 12.2)).toBe("12 ms");
   });
 
   it("formats calendar dates without shifting the day", () => {

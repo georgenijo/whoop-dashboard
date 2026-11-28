@@ -32,6 +32,13 @@ export function formatRecordValue(key: RecordMetricKey, v: number): string {
   }
 }
 
+/** A gap between two readings. Percent metrics read as points, so "+34 pts
+ *  (52%)" never prints two different percentages side by side. */
+export function formatRecordDelta(key: RecordMetricKey, v: number): string {
+  if (key === "recovery" || key === "sleepPerformance") return `${Math.round(v)} pts`;
+  return formatRecordValue(key, v);
+}
+
 /** Calendar date → "Nov 3, 2026". Formatted in UTC so the day never shifts. */
 export function formatRecordDate(date: string): string {
   const [y, m, d] = date.split("-").map(Number);
@@ -60,7 +67,7 @@ function compareText(row: RecordBoardRow): string {
   if (h.deltaVsTypical === 0) return `Right at your ${TYPICAL_WINDOW_DAYS}-day typical (${typical}, ${n}).`;
   const side = h.deltaVsTypical > 0 ? "above" : "below";
   const pct = h.deltaPctVsTypical === null ? "" : ` (${Math.abs(Math.round(h.deltaPctVsTypical))}%)`;
-  return `${formatRecordValue(row.key, Math.abs(h.deltaVsTypical))}${pct} ${side} your ${TYPICAL_WINDOW_DAYS}-day typical of ${typical} (median of ${n}).`;
+  return `${formatRecordDelta(row.key, Math.abs(h.deltaVsTypical))}${pct} ${side} your ${TYPICAL_WINDOW_DAYS}-day typical of ${typical} (median of ${n}).`;
 }
 
 function RecordTile({ row }: { row: RecordBoardRow }) {
