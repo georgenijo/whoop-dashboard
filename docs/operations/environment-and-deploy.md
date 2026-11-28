@@ -80,6 +80,7 @@ kept out of this repository.
 | `CURSOR_API_KEY` | Shared Cursor fallback is wanted | Coach |
 | `COACH_CURSOR_AGENT_BIN` | Cursor models are enabled | Absolute Cursor Agent launcher path |
 | `COACH_CURSOR_TRANSPORT` | Cursor ACP rollout is enabled | `legacy` (default) or `acp`; controls both model discovery and turns |
+| `COACH_CURSOR_MIN_AVAILABLE_MB` | Fail fast instead of spawning into a memory-pinned cgroup | Unset = off. Legacy transport only; compares against min(host `MemAvailable`, cgroup `memory.max` minus working set) and fails open when unreadable (#475-A) |
 | `COACH_CURSOR_ACP_IDLE_TTL_MS` | ACP session idle lifetime needs tuning | Default 600000 (10 minutes) |
 | `COACH_CURSOR_ACP_MAX_SESSIONS` | ACP process capacity needs tuning | Default 4 live sessions |
 | `COACH_TURN_ROUTING` | Measuring the #489 turn router | Unset/anything else = off. `shadow` records the router's lane, tool envelope, confidence, features and `router_ms` in `chat_logs.details.routing` (plus `timing.router_ms`) next to the tools the turn actually used (`observed_tools`); execution is unchanged. No enforcing mode exists yet |
