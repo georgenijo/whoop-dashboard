@@ -210,6 +210,51 @@ the same manual-clear recipe; only run it once you have actually confirmed
 on opti that nothing is still running (`fleet exec opti 'pgrep -af "next
 build|npm ci"'`).
 
+### Staged dependency install (opt-in, #524)
+
+By default, when `package-lock.json` changed, `scripts/deploy` runs `npm ci`
+in place in `apps/web`. npm deletes `node_modules` before repopulating it, so
+for the install's duration (~15s) the running `whoop-web` service lazily
+`require()`s from a tree being rebuilt, and a failed install leaves it on a
+half-populated tree.
+
+`DEPLOY_STAGED_INSTALL=1 scripts/deploy` runs `scripts/lib/staged-install.sh`
+on opti instead:
+
+1. Clear `<repo>/.deploy-state/install-staging` (left by an earlier failed or
+   killed run) and copy `package.json`, `package-lock.json` and `.npmrc` into it.
+2. Run `npm ci` there. The live `apps/web/node_modules` is untouched. A failed
+   install stops the deploy with the service still serving the old tree.
+3. Write the lockfile marker into the staged tree, then swap it in: the old
+   live tree becomes `.deploy-state/node_modules.prev` (one kept, rotated each
+   time). The swap uses `mv --exchange` (atomic) on coreutils >= 9.5. opti has
+   9.4, so there it is two renames, with the live path absent for microseconds.
+4. Build. If the build fails, the build script puts back both `.next.prev`
+   and `node_modules.prev`.
+5. Restart and verify, as before.
+
+`.deploy-state/` sits at the repo root, outside `apps/web`, because
+`apps/web/tsconfig.json` includes `**/*.ts` and excludes only `node_modules`,
+so a `node_modules.prev` inside `apps/web` would be type-checked by
+`next build`. It is gitignored. Disk cost is one extra tree (~820 MB) plus a
+second one during the install.
+
+The swap happens **before** the build, not in a stop → swap → start step after
+it. `next build` resolves `next`, esbuild and the native `better-sqlite3` from
+`apps/web/node_modules`, so it needs the new tree in place, and building in a
+separate copy would mean relocating a `.next` built elsewhere. After the swap,
+the old server process loads the new versions for any module it has not yet
+required, until the restart. That mismatch is not new: the in-place install
+already leaves the old server on new modules for the whole build, and the build
+moves `.next` aside under the running service. Staging removes the
+half-written tree and the outage after a failed install. The restart window
+does not get longer.
+
+Rollback after a staged deploy: the printed recipe adds
+`bash scripts/lib/staged-install.sh restore <apps/web> <.deploy-state>` to the
+build-level step. To make staging the default, change `DEPLOY_STAGED_INSTALL`'s
+default in `scripts/deploy` after a few opted-in deploys have succeeded.
+
 ## Refresh-only keepalive (#273)
 
 `whoop-web-refresh.timer` hits `POST /api/whoop/refresh` every 30 minutes so
