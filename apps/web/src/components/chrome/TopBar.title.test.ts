@@ -24,6 +24,10 @@ describe("titleForPath", () => {
     expect(titleForPath("/data-health")).toBe("Data health");
   });
 
+  it("titles /share/today instead of falling back to Overview", () => {
+    expect(titleForPath("/share/today")).toBe("Share today");
+  });
+
   it("titles /year instead of falling back to Overview", () => {
     expect(titleForPath("/year")).toBe("Year in Review");
   });
