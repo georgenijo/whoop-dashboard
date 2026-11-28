@@ -212,7 +212,11 @@ What it guarantees, and why each one is there:
   `require()`-ing from that tree — it 500s until a retry completes, without
   anyone having restarted anything (issue #516). The install step is skipped
   entirely when the lockfile hasn't changed, so the window only opens on
-  deploys that touch `package-lock.json`.
+  deploys that touch `package-lock.json`. Detaching does not close that window on a
+  *successful* in-place install (~15s); `DEPLOY_STAGED_INSTALL=1` (opt-in,
+  #524) runs `npm ci` in `<repo>/.deploy-state/install-staging` and renames the
+  finished tree in before the build (old tree kept as `node_modules.prev`,
+  restored if the build fails). See `docs/operations/environment-and-deploy.md`.
 - **Sha verification.** "The service is up" does not catch a restart that kept
   serving the old bundle; the deployed sha is compared against `/api/health`.
 - **Rollback recipe** printed on success and on any failure after the snapshot,
