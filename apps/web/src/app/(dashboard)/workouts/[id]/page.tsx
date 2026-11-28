@@ -17,6 +17,7 @@ import {
 } from "@/lib/analytics/similarWorkouts";
 import { isSimilarWorkoutsEnabled } from "@/lib/similar-workouts-flag";
 import { requireAuthOrSignin } from "@/lib/auth";
+import { isDayDetailEnabled } from "@/lib/day-detail-flag";
 import {
   parseHrSeries,
   recoveryRate,
@@ -269,7 +270,13 @@ export default async function WorkoutDetailPage({
             <h1>{workout.sport ?? "Workout"}</h1>
           </div>
           <div className="detail-meta">
-            {formatDate(workout.date)}
+            {isDayDetailEnabled() ? (
+              <Link href={`/day/${workout.date}`} style={{ color: "inherit" }}>
+                {formatDate(workout.date)}
+              </Link>
+            ) : (
+              formatDate(workout.date)
+            )}
             {timeRange ? (
               <>
                 <span className="sep">·</span>

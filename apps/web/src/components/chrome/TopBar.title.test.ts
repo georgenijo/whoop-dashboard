@@ -23,4 +23,9 @@ describe("titleForPath", () => {
   it("titles /year instead of falling back to Overview", () => {
     expect(titleForPath("/year")).toBe("Year in Review");
   });
+
+  it("titles /day instead of falling back to Overview", () => {
+    expect(titleForPath("/day")).toBe("Day detail");
+    expect(titleForPath("/day/2026-11-27")).toBe("Day detail");
+  });
 });

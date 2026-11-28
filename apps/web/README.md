@@ -295,3 +295,27 @@ Server-side env flags, read at request time. Default OFF; only the exact value
 `1` enables a flag.
 
 | `COMMAND_PALETTE=1` | Cmd/Ctrl-K quick-jump palette plus a search button in the desktop header. You can fuzzy-search the nav pages and quick actions ("Go to today", "Show last 30 days", …) or type a date (`2026-11-02`, `yesterday`, `last monday`, `nov 2`). A date opens a dashboard page at the smallest `?range=` window that contains it. Navigation only: no network calls, no data reads. With the flag off, the dashboard layout never references the component, so no JS ships and no key listener or button appears. Logic: `src/lib/ui/palette.ts`; UI: `src/components/chrome/CommandPalette.tsx`. |
+## Feature flag: `DAY_DETAIL=1` — Day detail page (`/day/[date]`)
+
+Server-side env flag, off by default, read per request.
+
+- **Off (default, any value other than `1`):** `/day` and `/day/<date>` return
+  404 before any auth or DB read, and no link to them renders anywhere (the
+  workout detail page's date stays plain text).
+- **On:** `/day/YYYY-MM-DD` shows everything synced for that date: recovery
+  (score + band, HRV, resting HR, respiratory rate, skin temp, SpO₂), the
+  night's sleep (filed on its wake day — duration, bed/wake time,
+  performance, efficiency, consistency, disturbances, need, stage split,
+  naps), day strain (calories, avg/max HR), that day's workouts (each linking
+  to `/workouts/<id>`), journal entries when the optional `journal` table has
+  any, and a plain-language one-line recap. Previous/next-day buttons (next is
+  disabled on today), a no-JS date picker (a GET form to `/day?date=…`)
+  listing the last 365 days that have data, and a "no data for this day"
+  state with links to the nearest earlier/later day with data. The date is
+  validated strictly (`YYYY-MM-DD`, a real calendar date, not after today in
+  the user's timezone); anything else 404s. The workout detail page's date
+  becomes a link to its day.
+- Reads go through the existing user-scoped readers only
+  (`src/lib/day-detail.ts`); the model is pure
+  (`src/lib/analytics/dayDetail.ts`). No tables, migrations, AI calls or
+  network calls.
